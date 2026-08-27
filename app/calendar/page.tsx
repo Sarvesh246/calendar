@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { addMonths, addWeeks, format, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -29,10 +29,18 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
-  const selectedItems = selectedDate ? itemsOnDay(items, selectedDate) : [];
+  const selectedItems = useMemo(
+    () => (selectedDate ? itemsOnDay(items, selectedDate) : []),
+    [items, selectedDate]
+  );
 
+  // The month/week swap and month/week navigation re-render the whole grid.
+  // Marking them as transitions keeps the tapped control responsive (no INP
+  // stall) and lets React render the new view without blocking paint.
   function step(dir: 1 | -1) {
-    setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
+    startTransition(() =>
+      setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)))
+    );
   }
 
   return (
@@ -54,7 +62,7 @@ export default function CalendarPage() {
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setAnchor(new Date())}
+              onClick={() => startTransition(() => setAnchor(new Date()))}
               className="px-2 py-1 text-[12px] font-medium text-ink-soft hover:text-ink"
             >
               Today
@@ -68,7 +76,7 @@ export default function CalendarPage() {
             {(["month", "week"] as ViewMode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => startTransition(() => setMode(m))}
                 className={cn(
                   "rounded-md px-3 py-1 text-[12.5px] font-medium capitalize transition-colors",
                   mode === m ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-ink"
@@ -88,7 +96,12 @@ export default function CalendarPage() {
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
       >
         {mode === "month" ? (
-          <MonthView anchor={anchor} items={items} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+          <MonthView
+            anchor={anchor}
+            items={items}
+            selectedDate={selectedDate}
+            onSelectDate={(d) => startTransition(() => setSelectedDate(d))}
+          />
         ) : (
           <WeekView days={days} items={items} />
         )}
