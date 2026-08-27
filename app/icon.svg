@@ -1,14 +1,81 @@
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Datebook">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7C6CFF" />
-      <stop offset="1" stop-color="#4C9BE8" />
+    <linearGradient id="tile" x1="72" y1="32" x2="452" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e1e25" />
+      <stop offset="0.52" stop-color="#0f0f13" />
+      <stop offset="1" stop-color="#08080a" />
     </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(392 74) rotate(122) scale(324 344)">
+      <stop offset="0" stop-color="#8b7cff" stop-opacity="0.36" />
+      <stop offset="0.55" stop-color="#8b7cff" stop-opacity="0.06" />
+      <stop offset="1" stop-color="#8b7cff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="card" x1="256" y1="110" x2="256" y2="414" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#35353f" />
+      <stop offset="1" stop-color="#1d1d24" />
+    </linearGradient>
+    <linearGradient id="accent" x1="150" y1="176" x2="362" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b7cff" />
+      <stop offset="1" stop-color="#6cc9ff" />
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="66" x2="0" y2="134" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#83838f" />
+      <stop offset="1" stop-color="#44444e" />
+    </linearGradient>
+    <linearGradient id="sheen" x1="256" y1="110" x2="256" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.09" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="cardShadow" x="-25%" y="-25%" width="150%" height="165%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+    <filter id="soft" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
   </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)" />
-  <rect x="14" y="16" width="36" height="34" rx="7" fill="white" fill-opacity="0.96" />
-  <rect x="14" y="16" width="36" height="10" rx="7" fill="white" fill-opacity="0.55" />
-  <rect x="21" y="10" width="4" height="10" rx="2" fill="white" />
-  <rect x="39" y="10" width="4" height="10" rx="2" fill="white" />
-  <circle cx="32" cy="37" r="6" fill="#7C6CFF" />
+
+  <!-- Tile -->
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#tile)" />
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#glow)" />
+  <rect x="0.75" y="0.75" width="510.5" height="510.5" rx="113.25" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5" />
+
+  <g transform="translate(0 8)">
+    <!-- Binding rings -->
+    <g filter="url(#cardShadow)">
+      <rect x="180" y="66" width="21" height="62" rx="10.5" fill="url(#ring)" />
+      <rect x="311" y="66" width="21" height="62" rx="10.5" fill="url(#ring)" />
+    </g>
+
+    <!-- Calendar card -->
+    <g filter="url(#cardShadow)">
+      <rect x="102" y="102" width="308" height="304" rx="44" fill="url(#card)" />
+    </g>
+    <rect x="102" y="102" width="308" height="304" rx="44" fill="url(#sheen)" />
+    <rect x="102.75" y="102.75" width="306.5" height="302.5" rx="43.25" stroke="#ffffff" stroke-opacity="0.17" stroke-width="1.5" />
+
+    <!-- Header divider + accent seam -->
+    <path d="M103 184 H409" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1.5" />
+    <rect x="148" y="180" width="216" height="6" rx="3" fill="url(#accent)" />
+
+    <!-- Day grid -->
+    <g fill="#ffffff" fill-opacity="0.22">
+      <circle cx="162" cy="240" r="12" />
+      <circle cx="219.3" cy="240" r="12" />
+      <circle cx="276.7" cy="240" r="12" />
+      <circle cx="334" cy="240" r="12" />
+
+      <circle cx="162" cy="304" r="12" />
+      <circle cx="219.3" cy="304" r="12" />
+      <circle cx="334" cy="304" r="12" />
+
+      <circle cx="162" cy="368" r="12" />
+      <circle cx="219.3" cy="368" r="12" />
+      <circle cx="276.7" cy="368" r="12" />
+      <circle cx="334" cy="368" r="12" />
+    </g>
+
+    <!-- Today -->
+    <circle cx="276.7" cy="304" r="26" fill="url(#accent)" filter="url(#soft)" opacity="0.62" />
+    <circle cx="276.7" cy="304" r="16.5" fill="url(#accent)" />
+  </g>
 </svg>
