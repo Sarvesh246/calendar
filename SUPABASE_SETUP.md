@@ -47,12 +47,29 @@ Email is enabled by default. Supabase's built-in mailer is rate-limited (a few
 per hour) — fine for personal use. For volume, set up a custom SMTP provider
 under **Authentication → Emails**.
 
+### Put the 6-digit code in the email (needed for installed PWAs)
+
+On iOS a magic **link** opens in Safari, not your home-screen app, so the session
+never reaches the PWA. The app therefore signs you in with a **code** you type
+back in — but the default email only contains the link. Add the code to it:
+
+Dashboard → **Authentication → Emails → Magic Link** → edit the template so it
+includes `{{ .Token }}`, e.g.:
+
+```html
+<h2>Sign in to Datebook</h2>
+<p>Enter this code in the app:</p>
+<p style="font-size:24px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
+<p>…or, on this device, just tap:
+   <a href="{{ .ConfirmationURL }}">Sign in</a></p>
+```
+
 ## 5. Use it
 
-Open the app → **Settings → Account & sync** → enter your email → click the link
-Supabase emails you. On first sign-in, whatever is already in this browser is
-pushed up to your account. After that, edits on any signed-in device appear
-everywhere within a second.
+Open the app → **Settings → Account & sync** → enter your email → **Send code** →
+type the 6-digit code from the email (or, on desktop, click the link). On first
+sign-in, whatever is already in this browser is pushed up to your account. After
+that, edits on any signed-in device appear everywhere within a second.
 
 Sign out to return to local-only mode; the data you had on the device before your
 first sign-in is restored.

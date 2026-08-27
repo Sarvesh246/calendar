@@ -10,8 +10,10 @@ interface AuthContextValue {
   user: User | null | undefined;
   configured: boolean;
   sending: boolean;
-  /** Send a magic-link email. Resolves on success, throws with a message on failure. */
+  /** Email a 6-digit code (and a magic link). Throws with a message on failure. */
   signInWithEmail: (email: string) => Promise<void>;
+  /** Verify the 6-digit code — completes sign-in in this context (works inside a PWA). */
+  verifyCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -20,6 +22,7 @@ const AuthContext = createContext<AuthContextValue>({
   configured: false,
   sending: false,
   signInWithEmail: async () => {},
+  verifyCode: async () => {},
   signOut: async () => {},
 });
 
@@ -69,12 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim(),
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
         });
         if (error) throw new Error(error.message);
       } finally {
         setSending(false);
       }
+    },
+    verifyCode: async (email, code) => {
+      if (!supabase) throw new Error("Cloud sync isn't configured.");
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: code.trim(),
+        type: "email",
+      });
+      if (error) throw new Error(error.message);
     },
     signOut: async () => {
       if (!supabase) return;

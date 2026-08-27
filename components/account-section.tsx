@@ -7,13 +7,15 @@ import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
-  const { user, configured, sending, signInWithEmail, signOut } = useAuth();
+  const { user, configured, sending, signInWithEmail, verifyCode, signOut } = useAuth();
   const syncStatus = useDatebookStore((s) => s.syncStatus);
   const cloudError = useDatebookStore((s) => s.cloudError);
   const connectCloud = useDatebookStore((s) => s.connectCloud);
 
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [step, setStep] = useState<"email" | "code">("email");
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!configured) {
@@ -21,7 +23,7 @@ export function AccountSection() {
       <p className="text-[13px] leading-relaxed text-ink-soft">
         Cloud sync isn&apos;t set up yet. Add your Supabase project&apos;s{" "}
         <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-        <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
+        <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>{" "}
         to <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">.env.local</code> and run the SQL in{" "}
         <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">supabase/migrations</code>. Until then your
         data stays on this device.
@@ -74,54 +76,121 @@ export function AccountSection() {
     );
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      {sent ? (
-        <p className="flex items-start gap-1.5 text-[13px] text-good">
-          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
-          Check <span className="font-medium">{email}</span> for a sign-in link. Open it on any device to sync there.
+  if (step === "code") {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="flex items-start gap-1.5 text-[13px] text-ink-soft">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-good" strokeWidth={2.5} />
+          <span>
+            Enter the 6-digit code sent to <span className="font-medium text-ink">{email}</span>. On a phone you can also
+            just tap the link in that email.
+          </span>
         </p>
-      ) : (
-        <>
-          <p className="text-[13px] leading-relaxed text-ink-soft">
-            Sign in with your email to save your calendar to the cloud and sync it across devices. Data already on this
-            device is imported on first sign-in.
-          </p>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError(null);
+            setVerifying(true);
+            try {
+              await verifyCode(email, code);
+              // onAuthStateChange takes over from here (connectCloud + re-render).
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "That code didn't work.");
+            } finally {
+              setVerifying(false);
+            }
+          }}
+          className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2"
+        >
+          <input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            placeholder="123456"
+            className="min-w-0 flex-1 bg-transparent text-[15px] tracking-[0.3em] text-ink placeholder:text-ink-faint placeholder:tracking-normal focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={verifying || code.length < 6}
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-30"
+          >
+            {verifying && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+            {verifying ? "Verifying" : "Verify"}
+          </button>
+        </form>
+        {error && <p className="text-[12.5px] text-warn">{error}</p>}
+        <div className="flex gap-3 text-[12px] text-ink-faint">
+          <button
+            onClick={() => {
+              setStep("email");
+              setCode("");
+              setError(null);
+            }}
+            className="hover:text-ink"
+          >
+            Use a different email
+          </button>
+          <button
+            onClick={async () => {
               setError(null);
               try {
                 await signInWithEmail(email);
-                setSent(true);
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Couldn't send the link.");
+                setError(err instanceof Error ? err.message : "Couldn't resend.");
               }
             }}
-            className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2"
+            className="hover:text-ink"
           >
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoCapitalize="off"
-              spellCheck={false}
-              className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={sending || !email.trim()}
-              className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-30"
-            >
-              {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
-              {sending ? "Sending" : "Send link"}
-            </button>
-          </form>
-          {error && <p className="text-[12.5px] text-warn">{error}</p>}
-        </>
-      )}
+            Resend code
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[13px] leading-relaxed text-ink-soft">
+        Sign in with your email to save your calendar to the cloud and sync it across devices. Data already on this
+        device is imported on first sign-in.
+      </p>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setError(null);
+          try {
+            await signInWithEmail(email);
+            setStep("code");
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Couldn't send the code.");
+          }
+        }}
+        className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2"
+      >
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoCapitalize="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={sending || !email.trim()}
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-30"
+        >
+          {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+          {sending ? "Sending" : "Send code"}
+        </button>
+      </form>
+      {error && <p className="text-[12.5px] text-warn">{error}</p>}
     </div>
   );
 }
