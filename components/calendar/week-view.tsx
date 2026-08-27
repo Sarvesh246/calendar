@@ -36,21 +36,43 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
           const dayAssignments = itemsOnDay(items, day).filter((i) => i.type !== "event");
           return (
             <div key={day.toISOString()} className="flex flex-col gap-1 border-l border-line p-1">
-              {dayAssignments.slice(0, 2).map((item) => {
-                const category = categories.find((c) => c.id === item.categoryId);
-                return (
-                  <span
-                    key={item.id}
-                    className="truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
-                    style={{
-                      background: `color-mix(in srgb, ${category?.color ?? "#8a8a94"} 14%, var(--surface))`,
-                      color: category?.color ?? "#8a8a94",
-                    }}
-                  >
-                    {item.title}
+              {/* Narrow screens: 7 columns leave no room for legible text, so just
+                  show colored dots — one per item, matching each item's category color. */}
+              <div className="flex flex-wrap gap-1 sm:hidden">
+                {dayAssignments.slice(0, 4).map((item) => {
+                  const category = categories.find((c) => c.id === item.categoryId);
+                  return (
+                    <span
+                      key={item.id}
+                      aria-hidden
+                      className="h-[5px] w-[5px] shrink-0 rounded-full"
+                      style={{ background: category?.color ?? "#8a8a94" }}
+                    />
+                  );
+                })}
+                {dayAssignments.length > 4 && (
+                  <span className="text-[9px] font-medium leading-none text-ink-faint">
+                    +{dayAssignments.length - 4}
                   </span>
-                );
-              })}
+                )}
+              </div>
+              <div className="hidden flex-col gap-1 sm:flex">
+                {dayAssignments.slice(0, 2).map((item) => {
+                  const category = categories.find((c) => c.id === item.categoryId);
+                  return (
+                    <span
+                      key={item.id}
+                      className="truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      style={{
+                        background: `color-mix(in srgb, ${category?.color ?? "#8a8a94"} 14%, var(--surface))`,
+                        color: category?.color ?? "#8a8a94",
+                      }}
+                    >
+                      {item.title}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
