@@ -6,6 +6,7 @@ import { ArrowUp, Bell, Check, Sparkles, Tag } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
+import { shouldAskAssistant } from "@/lib/ai-assistant";
 import { formatTime } from "@/lib/date-utils";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
@@ -28,6 +29,7 @@ export function QuickAddBar() {
   const prefill = useUIStore((s) => s.quickAddPrefill);
   const setPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
+  const askAI = useUIStore((s) => s.askAI);
 
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -47,7 +49,16 @@ export function QuickAddBar() {
   }, [prefill, setPrefill]);
 
   function submit() {
-    if (!text.trim() || phase !== "idle") return;
+    const trimmed = text.trim();
+    if (!trimmed || phase !== "idle") return;
+    // A question ("what's due friday?") or a change to something that already
+    // exists ("move my essay to sunday") goes to the assistant; only a plain
+    // new thing to remember flows through quick-add's parse-and-confirm.
+    if (shouldAskAssistant(trimmed)) {
+      askAI(trimmed);
+      reset();
+      return;
+    }
     setPhase("parsing");
     window.setTimeout(() => {
       const result = parseQuickAdd(text, categories);
@@ -99,12 +110,12 @@ export function QuickAddBar() {
           disabled={phase !== "idle"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="What do you need to remember?"
+          placeholder="Add something, or ask about your calendar…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         <button
           onClick={() => setAIDrawerOpen(true)}
-          className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink sm:flex"
+          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
         >
           Ask AI
         </button>

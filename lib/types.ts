@@ -25,6 +25,8 @@ export interface Item {
   title: string;
   description?: string;
   location?: string;
+  /** External link for the item — e.g. the Canvas assignment page from an imported feed. */
+  url?: string;
   /** ISO datetime. Events use this as the start time; assignments/tasks use it as the due time. */
   at: string;
   endAt?: string;

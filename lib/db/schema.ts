@@ -16,6 +16,7 @@ export const items = pgTable("items", {
   title: text("title").notNull(),
   description: text("description"),
   location: text("location"),
+  url: text("url"),
   at: timestamp("at", { withTimezone: true }).notNull(),
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolean("all_day").notNull().default(false),

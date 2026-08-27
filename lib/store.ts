@@ -167,7 +167,7 @@ export const useDatebookStore = create<DatebookState>()(
             status: item.status ?? draft.status,
           };
           const changed = (
-            ["title", "description", "location", "at", "endAt", "allDay", "type", "categoryId"] as const
+            ["title", "description", "location", "url", "at", "endAt", "allDay", "type", "categoryId"] as const
           ).some((k) => next[k] !== item[k]);
           if (changed) updated += 1;
           return changed ? next : item;
