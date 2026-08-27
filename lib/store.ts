@@ -70,6 +70,10 @@ interface DatebookState {
   connectCloud: (userId: string) => Promise<void>;
   /** Stop realtime sync and fall back to local (restores the pre-sign-in local data). */
   disconnectCloud: () => void;
+  /** User-triggered "Retry sync": clears every backoff timer and forces a fresh
+   *  attempt — reconnect if the session is down, otherwise re-subscribe realtime,
+   *  reconcile, and flush the write queue. */
+  retrySync: () => Promise<void>;
 }
 
 // IDs of the old seeded demo content, stripped from any store that persisted it
@@ -236,10 +240,12 @@ export const useDatebookStore = create<DatebookState>()(
       connectCloud: async (userId) => {
         if (!supabase || activeUserId === userId || connecting) return;
         connecting = true;
+        desiredUserId = userId;
         if (connectRetryTimer) {
           clearTimeout(connectRetryTimer);
           connectRetryTimer = null;
         }
+        clearFlushRetry();
         bindConnectivityListeners();
         set({ syncStatus: "connecting" });
         try {
@@ -257,7 +263,10 @@ export const useDatebookStore = create<DatebookState>()(
             applyingRemote = false;
           }
 
-          const cloud = await fetchAllForUser(supabase, userId);
+          const cloud = await withTimeout(
+            fetchAllForUser(supabase, userId),
+            "Loading your calendar"
+          );
           const local = get();
           const cloudEmpty = cloud.items.length === 0 && cloud.categories.length === 0;
           const localHasContent = local.items.length > 0 || local.categories.length > 0;
@@ -277,14 +286,29 @@ export const useDatebookStore = create<DatebookState>()(
             suspended = true;
             activeUserId = userId;
             const s = get();
-            await pushAllToCloud(supabase, userId, {
-              categories: s.categories,
-              items: s.items,
-              reminderPresets: s.reminderPresets,
-              importSources: s.importSources,
-              settings: s.settings,
-            });
-            suspended = false;
+            try {
+              await withTimeout(
+                pushAllToCloud(supabase, userId, {
+                  categories: s.categories,
+                  items: s.items,
+                  reminderPresets: s.reminderPresets,
+                  importSources: s.importSources,
+                  settings: s.settings,
+                }),
+                "Uploading your calendar"
+              );
+              suspended = false;
+            } catch (pushErr) {
+              // A partial or failed first upload must NOT roll the whole connect
+              // back — a later retry would then see a half-populated cloud, take
+              // the "cloud wins" branch below, and wipe the local data that never
+              // made it up. Instead: stay connected, keep local authoritative,
+              // and hand the entire dataset to the debounced flush (which has its
+              // own capped backoff) to finish the job.
+              suspended = false;
+              console.error("[datebook] initial upload failed; queueing for retry:", pushErr);
+              queueEntireLocalState(get());
+            }
           } else {
             set({
               items: cloud.items,
@@ -300,15 +324,23 @@ export const useDatebookStore = create<DatebookState>()(
             applyingRemote = false;
             activeUserId = userId;
             // Backfill seed rows if this account predates the DB trigger.
+            // Best-effort: a failure here shouldn't block the connect.
             if (!cloud.settings || cloud.reminderPresets.length === 0) {
               suspended = true;
-              await pushAllToCloud(supabase, userId, {
-                categories: [],
-                items: [],
-                importSources: [],
-                reminderPresets: cloud.reminderPresets.length ? [] : defaultReminderPresets,
-                settings: cloud.settings ? null : defaultSettings,
-              });
+              try {
+                await withTimeout(
+                  pushAllToCloud(supabase, userId, {
+                    categories: [],
+                    items: [],
+                    importSources: [],
+                    reminderPresets: cloud.reminderPresets.length ? [] : defaultReminderPresets,
+                    settings: cloud.settings ? null : defaultSettings,
+                  }),
+                  "Preparing your account"
+                );
+              } catch (seedErr) {
+                console.warn("[datebook] seed backfill failed (non-fatal):", seedErr);
+              }
               suspended = false;
             }
           }
@@ -316,8 +348,14 @@ export const useDatebookStore = create<DatebookState>()(
           await subscribeRealtime(userId);
           connectRetries = 0;
           connecting = false;
-          set({ syncStatus: "synced", cloudError: null });
-          if (pendingWork()) scheduleFlush();
+          if (pendingWork()) {
+            // Unsent local edits (or a retried first upload) remain — show the
+            // work in progress rather than a premature "synced".
+            set({ syncStatus: "syncing", cloudError: null });
+            scheduleFlush();
+          } else {
+            set({ syncStatus: "synced", cloudError: null });
+          }
         } catch (err) {
           // Roll back so a later retry (auto-retry below / reload / next auth
           // event) re-runs cleanly.
@@ -326,6 +364,7 @@ export const useDatebookStore = create<DatebookState>()(
           activeUserId = null;
           unsubscribeRealtime();
           clearPending();
+          clearFlushRetry();
           connecting = false;
           console.error("[datebook] cloud connect failed:", err);
           set({ syncStatus: "error", cloudError: describeError(err) });
@@ -340,10 +379,12 @@ export const useDatebookStore = create<DatebookState>()(
         }
         connectRetries = 0;
         connecting = false;
+        desiredUserId = null;
         unsubscribeRealtime();
         activeUserId = null;
         suspended = false;
         clearPending();
+        clearFlushRetry();
 
         let next = {
           items: [] as Item[],
@@ -372,6 +413,41 @@ export const useDatebookStore = create<DatebookState>()(
         applyingRemote = true;
         set({ ...next, mode: "local", userId: null, syncStatus: "idle", cloudError: null });
         applyingRemote = false;
+      },
+
+      retrySync: async () => {
+        const uid = get().userId ?? desiredUserId;
+        if (!supabase || !uid) return;
+
+        // Wipe every backoff path so one tap always makes a real attempt.
+        if (connectRetryTimer) {
+          clearTimeout(connectRetryTimer);
+          connectRetryTimer = null;
+        }
+        connectRetries = 0;
+        clearFlushRetry();
+
+        if (activeUserId === uid) {
+          // Session is live — the failure is in the realtime channel or the
+          // write queue. Rejoin, reconcile, then push whatever is pending.
+          set({ syncStatus: "syncing", cloudError: null });
+          try {
+            await subscribeRealtime(uid);
+            await catchUpFromCloud(uid);
+          } catch (err) {
+            console.warn("[datebook] retry reconcile failed:", err);
+          }
+          flushing = false;
+          if (pendingWork()) {
+            await flush();
+          } else if (useDatebookStore.getState().syncStatus !== "error") {
+            set({ syncStatus: "synced", cloudError: null });
+          }
+        } else {
+          // Session never came up (or was torn down) — start a clean connect.
+          connecting = false;
+          await get().connectCloud(uid);
+        }
       },
     }),
     {
@@ -412,6 +488,10 @@ export function useCategory(id: string | undefined) {
 let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
+// The user we WANT to be synced as — set the moment connectCloud starts, and
+// kept even while `activeUserId` is briefly null between a failed connect and
+// its retry. Lets the connectivity listeners relaunch a dead connect.
+let desiredUserId: string | null = null;
 let channel: RealtimeChannel | null = null;
 
 // Resilience: the initial cloud connect and the realtime channel both retry with
@@ -424,6 +504,30 @@ let realtimeRetries = 0;
 let realtimeRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let lastResumeAt = 0;
 let connectivityBound = false;
+
+// Any single Supabase round-trip that hangs past this is treated as a failure so
+// the backoff/retry path runs instead of the engine wedging on a pending await
+// (which would leave `connecting`/`flushing` stuck and every retry a no-op).
+const SYNC_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(p: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`${label} timed out — check your connection and retry.`)),
+      SYNC_TIMEOUT_MS
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v: string) => UUID_RE.test(v);
@@ -483,6 +587,48 @@ const pending: {
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let flushing = false;
+
+// Failed flushes retry on a capped exponential backoff rather than the 350ms
+// debounce — a permanently-rejecting write (a poison row, an RLS/schema problem)
+// used to re-fire every 350ms forever, hammering the server and pinning the UI
+// in a "syncing"⇄"error" flicker. After the cap it stops; "Retry sync" resets it.
+let flushRetries = 0;
+let flushRetryTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_MAX_RETRIES = 6;
+
+function clearFlushRetry() {
+  if (flushRetryTimer) {
+    clearTimeout(flushRetryTimer);
+    flushRetryTimer = null;
+  }
+  flushRetries = 0;
+}
+
+function scheduleFlushRetry() {
+  if (flushRetryTimer || !activeUserId) return;
+  if (flushRetries >= FLUSH_MAX_RETRIES) return; // give up until a manual retry
+  const delay = Math.min(30_000, 1000 * 2 ** flushRetries);
+  flushRetries += 1;
+  flushRetryTimer = setTimeout(() => {
+    flushRetryTimer = null;
+    void flush();
+  }, delay);
+}
+
+/** Load the whole current store into the pending queue — used when the first
+ *  post-sign-in upload fails, so the normal debounced flush finishes it. */
+function queueEntireLocalState(s: {
+  categories: Category[];
+  reminderPresets: ReminderPreset[];
+  importSources: ImportSource[];
+  items: Item[];
+}) {
+  for (const c of s.categories) pending.categories.upserts.set(c.id, c);
+  for (const r of s.reminderPresets) pending.reminderPresets.upserts.set(r.id, r);
+  for (const i of s.importSources) pending.importSources.upserts.set(i.id, i);
+  for (const it of s.items) pending.items.upserts.set(it.id, it);
+  pending.settingsDirty = true;
+}
 
 function clearPending() {
   for (const k of ["categories", "reminderPresets", "importSources", "items"] as CollKey[]) {
@@ -567,17 +713,30 @@ async function flush() {
   };
   pending.settingsDirty = false;
 
+  let ok = false;
   try {
     const knownCategoryIds = new Set(useDatebookStore.getState().categories.map((c) => c.id));
-    await pushChanges(supabase, activeUserId, batch, knownCategoryIds);
+    await withTimeout(
+      pushChanges(supabase, activeUserId, batch, knownCategoryIds),
+      "Sync"
+    );
+    clearFlushRetry();
     useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
+    ok = true;
   } catch (err) {
     requeue(batch);
     console.error("[datebook] cloud sync failed:", err);
     useDatebookStore.setState({ syncStatus: "error", cloudError: describeError(err) });
   } finally {
     flushing = false;
+  }
+
+  if (ok) {
+    // More edits landed while this batch was in flight — debounce another pass.
     if (pendingWork()) scheduleFlush();
+  } else {
+    // Back off; don't tight-loop on a write that keeps failing.
+    scheduleFlushRetry();
   }
 }
 
@@ -644,7 +803,16 @@ function applyRealtime(
 /** Re-run the initial connect after a failure, with capped exponential backoff.
  *  Past the cap the user can still force it with the "Retry sync" button. */
 function scheduleConnectRetry(userId: string) {
-  if (connectRetryTimer || !supabase || connectRetries >= 6) return;
+  if (connectRetryTimer || !supabase) return;
+  if (connectRetries >= 6) {
+    // Out of automatic retries — leave a clear call to action for the user.
+    useDatebookStore.setState((s) => ({
+      syncStatus: "error",
+      cloudError:
+        s.cloudError ?? "Couldn't reach the server. Tap “Retry sync” to try again.",
+    }));
+    return;
+  }
   const delay = Math.min(20_000, 1500 * 2 ** connectRetries);
   connectRetries += 1;
   connectRetryTimer = setTimeout(async () => {
@@ -667,7 +835,7 @@ async function catchUpFromCloud(userId: string) {
     return;
   }
   try {
-    const cloud = await fetchAllForUser(supabase, userId);
+    const cloud = await withTimeout(fetchAllForUser(supabase, userId), "Reconciling");
     if (activeUserId !== userId) return;
     applyingRemote = true;
     useDatebookStore.setState({
@@ -688,8 +856,19 @@ async function catchUpFromCloud(userId: string) {
 
 /** Rejoin the realtime channel after a drop, with capped backoff. Keeps the
  *  synced data on screen and shows a soft "connecting" rather than an error. */
+const REALTIME_MAX_RETRIES = 8;
+
 function scheduleRealtimeReconnect(userId: string) {
   if (!supabase || activeUserId !== userId || realtimeRetryTimer) return;
+  if (realtimeRetries >= REALTIME_MAX_RETRIES) {
+    // The channel won't come back on its own — stop the quiet loop and let the
+    // user force a full reconnect. Queued writes still flush independently.
+    useDatebookStore.setState({
+      syncStatus: "error",
+      cloudError: "Live sync keeps dropping. Tap “Retry sync” to reconnect.",
+    });
+    return;
+  }
   const delay = Math.min(30_000, 1000 * 2 ** realtimeRetries);
   realtimeRetries += 1;
   const st = useDatebookStore.getState().syncStatus;
@@ -757,11 +936,22 @@ function bindConnectivityListeners() {
   if (connectivityBound || typeof window === "undefined") return;
   connectivityBound = true;
   const resume = () => {
-    if (!supabase || !activeUserId) return;
+    if (!supabase) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     const now = Date.now();
     if (now - lastResumeAt < 2500) return;
     lastResumeAt = now;
+
+    // Session never came up (a failed initial connect that exhausted its
+    // retries) — relaunch it now that the tab/network is back.
+    if (!activeUserId) {
+      if (desiredUserId && !connecting) {
+        connectRetries = 0;
+        void useDatebookStore.getState().connectCloud(desiredUserId);
+      }
+      return;
+    }
+
     const uid = activeUserId;
     void (async () => {
       try {
