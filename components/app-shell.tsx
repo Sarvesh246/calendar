@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mounted = useHasMounted();
 
   return (
-    <div className="mx-auto flex w-full max-w-[1800px] gap-5 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] gap-5 px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:min-h-0 md:px-6 md:pt-4 md:pb-6">
       {!focusMode && <Sidebar />}
 
       <main className="min-w-0 flex-1">
