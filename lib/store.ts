@@ -429,15 +429,16 @@ export const useDatebookStore = create<DatebookState>()(
 
         if (activeUserId === uid) {
           // Session is live — the failure is in the realtime channel or the
-          // write queue. Rejoin, reconcile, then push whatever is pending.
+          // write queue. Rejoin (subscribeRealtime reconciles itself once the
+          // channel reports SUBSCRIBED), then push whatever is pending.
           set({ syncStatus: "syncing", cloudError: null });
           try {
             await subscribeRealtime(uid);
-            await catchUpFromCloud(uid);
           } catch (err) {
-            console.warn("[datebook] retry reconcile failed:", err);
+            console.warn("[datebook] retry resubscribe failed:", err);
           }
-          flushing = false;
+          // `flush()` guards on its own `flushing` flag, so a still-in-flight
+          // batch is left to finish rather than racing a second push.
           if (pendingWork()) {
             await flush();
           } else if (useDatebookStore.getState().syncStatus !== "error") {
@@ -854,10 +855,11 @@ async function catchUpFromCloud(userId: string) {
   }
 }
 
-/** Rejoin the realtime channel after a drop, with capped backoff. Keeps the
- *  synced data on screen and shows a soft "connecting" rather than an error. */
 const REALTIME_MAX_RETRIES = 8;
 
+/** Rejoin the realtime channel after a drop, with capped backoff. Keeps the
+ *  synced data on screen and shows a soft "connecting" while retrying; once the
+ *  cap is hit it surfaces an error with a manual-retry prompt. */
 function scheduleRealtimeReconnect(userId: string) {
   if (!supabase || activeUserId !== userId || realtimeRetryTimer) return;
   if (realtimeRetries >= REALTIME_MAX_RETRIES) {
