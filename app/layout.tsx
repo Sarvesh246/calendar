@@ -31,6 +31,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // `cover` lets the app draw into the iOS safe areas so `env(safe-area-inset-*)`
+  // resolves to real values — the bottom nav uses it to clear the home indicator.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f7f7f8" },
     { media: "(prefers-color-scheme: dark)", color: "#0b0b0d" },

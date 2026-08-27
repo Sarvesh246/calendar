@@ -282,3 +282,62 @@ body {
   border-radius: 999px;
   background: var(--ink-faint);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Interaction feedback + page-load choreography                          */
+/* ---------------------------------------------------------------------- */
+
+/* Buttons and button-like controls get a quick, tactile depress on press. */
+button,
+[role="button"],
+summary {
+  transition-property: transform, color, background-color, border-color, opacity, box-shadow;
+  transition-duration: var(--motion-micro);
+  transition-timing-function: var(--ease-standard);
+}
+
+button:not(:disabled):active,
+a:not([aria-disabled="true"]):active,
+[role="button"]:not([aria-disabled="true"]):active,
+summary:active {
+  transform: scale(0.97);
+}
+
+/* Each freshly navigated page reveals its sections with a light upward stagger.
+   `.page-shell` is the wrapper from app/template.tsx; its single child is the
+   page root, so `> * > *` targets that page's own top-level sections. */
+@keyframes content-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page-shell > * > * {
+  animation: content-rise var(--motion-emphasis) var(--ease-standard) both;
+}
+.page-shell > * > *:nth-child(1) {
+  animation-delay: 20ms;
+}
+.page-shell > * > *:nth-child(2) {
+  animation-delay: 65ms;
+}
+.page-shell > * > *:nth-child(3) {
+  animation-delay: 110ms;
+}
+.page-shell > * > *:nth-child(4) {
+  animation-delay: 150ms;
+}
+.page-shell > * > *:nth-child(5) {
+  animation-delay: 185ms;
+}
+.page-shell > * > *:nth-child(6) {
+  animation-delay: 215ms;
+}
+.page-shell > * > *:nth-child(n + 7) {
+  animation-delay: 240ms;
+}

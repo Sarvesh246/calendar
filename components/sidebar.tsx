@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   CalendarDays,
   Cloud,
@@ -112,25 +113,42 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom nav — SyncChip lives only in the desktop rail */}
-      <nav className="glass fixed inset-x-3 bottom-3 z-40 flex items-center justify-around rounded-xl px-2 py-2 md:hidden">
-        {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
-          const active = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10.5px] font-medium transition-colors",
-                active ? "text-accent" : "text-ink-faint"
-              )}
-            >
-              <Icon className="h-5 w-5" strokeWidth={1.9} />
-              {item.label}
-            </Link>
-          );
-        })}
+      {/* Mobile bottom nav — SyncChip lives only in the desktop rail.
+          The outer wrapper carries the iOS safe-area inset so the pill floats
+          clear of the home indicator; the pill itself stays a fixed height. */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.7rem)] md:hidden">
+        <div className="glass mx-auto flex max-w-md items-center justify-around rounded-2xl p-1.5">
+          {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
+            const active = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className="relative flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10.5px] font-medium transition-transform active:scale-[0.92]"
+              >
+                {active && (
+                  <motion.span
+                    layoutId="bottom-nav-active"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    className="absolute inset-0 rounded-xl bg-accent-soft"
+                  />
+                )}
+                <Icon
+                  className={cn(
+                    "relative h-5 w-5 transition-colors",
+                    active ? "text-accent" : "text-ink-faint"
+                  )}
+                  strokeWidth={1.9}
+                />
+                <span className={cn("relative transition-colors", active ? "text-accent" : "text-ink-faint")}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </>
   );

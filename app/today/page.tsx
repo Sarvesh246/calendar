@@ -33,11 +33,13 @@ function TodayDashboard() {
   const dueToday = today.filter((i) => i.type !== "event" && i.status !== "done");
   const events = today.filter((i) => i.type === "event");
 
-  const nowItem = events.find((e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt));
+  const nowItem = events.find(
+    (e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt) && e.status !== "done"
+  );
   const nextItem =
     nowItem ??
     [...items]
-      .filter((i) => new Date(i.at) > now)
+      .filter((i) => i.status !== "done" && new Date(i.at) > now)
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
 
   const intensity = workloadIntensity(today.length);
