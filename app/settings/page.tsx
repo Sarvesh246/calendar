@@ -5,6 +5,7 @@ import { Check, Plus } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { ImportCalendar } from "@/components/import-calendar";
 import { cn } from "@/lib/utils";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
 
@@ -125,6 +126,13 @@ export default function SettingsPage() {
             <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
         </div>
+      </Section>
+
+      <Section
+        title="Import from a calendar link"
+        sub="Paste a feed URL from Canvas, Google Calendar, or Outlook to pull in assignments and events — due dates, titles, and descriptions. Re-sync any time to pick up changes."
+      >
+        <ImportCalendar />
       </Section>
 
       <Section title="Default reminders" sub="Applied automatically when the quick-add bar doesn't catch a reminder itself.">
