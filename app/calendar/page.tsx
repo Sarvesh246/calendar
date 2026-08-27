@@ -37,7 +37,11 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      {/* Stack on narrow screens so the title always sits above the controls —
+          otherwise a short month name ("May 2026") leaves room for the controls
+          to ride up onto the same line while a long one ("September 2026") wraps
+          them below, so the header jumped around month to month. */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-[28px] italic text-ink">
             {mode === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
