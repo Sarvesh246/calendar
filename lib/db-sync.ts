@@ -15,6 +15,26 @@ import type {
 type Row = Record<string, unknown>;
 const iso = (v: unknown) => new Date(v as string).toISOString();
 
+/** Turn any thrown value (Error, Supabase PostgrestError object, string) into readable text. */
+export function describeError(e: unknown): string {
+  if (e == null) return "Unknown error";
+  if (typeof e === "string") return e;
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    const parts = [o.message, o.details, o.hint, o.code].filter(
+      (x): x is string => typeof x === "string" && x.length > 0
+    );
+    if (parts.length) return parts.join(" — ");
+    try {
+      return JSON.stringify(o);
+    } catch {
+      return String(o);
+    }
+  }
+  return String(e);
+}
+
 export function toCategoryRow(c: Category, userId: string): Row {
   return {
     id: c.id,
