@@ -45,6 +45,8 @@ export function MonthView({
           const selected = selectedDate && isSameDay(date, selectedDate);
           const visible = dayItems.slice(0, 3);
           const overflow = dayItems.length - visible.length;
+          const visibleDots = dayItems.slice(0, 4);
+          const dotOverflow = dayItems.length - visibleDots.length;
 
           return (
             <button
@@ -73,7 +75,27 @@ export function MonthView({
               >
                 {format(date, "d")}
               </span>
-              <div className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden">
+              {/* Narrow screens: cells are too tight for legible text, so just show
+                  colored dots — one per item, matching each item's category color. */}
+              <div className="flex flex-wrap content-start gap-1 sm:hidden">
+                {visibleDots.map((item) => {
+                  const category = categories.find((c) => c.id === item.categoryId);
+                  const color = category?.color ?? "#8a8a94";
+                  return (
+                    <span
+                      key={item.id}
+                      aria-hidden
+                      className="h-[5px] w-[5px] shrink-0 rounded-full"
+                      style={{ background: color }}
+                    />
+                  );
+                })}
+                {dotOverflow > 0 && (
+                  <span className="text-[9px] font-medium leading-none text-ink-faint">+{dotOverflow}</span>
+                )}
+              </div>
+
+              <div className="hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
                 {visible.map((item) => {
                   const category = categories.find((c) => c.id === item.categoryId);
                   const color = category?.color ?? "#8a8a94";
