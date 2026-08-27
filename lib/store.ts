@@ -8,6 +8,7 @@ import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-
 import { buildImportPlan, feedLabel, type FetchedCalendar } from "./calendar-import";
 import { supabase } from "./supabase/client";
 import {
+  describeError,
   diffCollection,
   fetchAllForUser,
   pushAllToCloud,
@@ -241,6 +242,15 @@ export const useDatebookStore = create<DatebookState>()(
             if (raw) localStorage.setItem(GUEST_BACKUP_KEY, raw);
           }
 
+          // Legacy local data (or the old default categories) may carry non-UUID
+          // ids that the Postgres `uuid` columns reject — remap them first.
+          const fixed = normalizeLocalIds(get());
+          if (fixed) {
+            applyingRemote = true;
+            set(fixed);
+            applyingRemote = false;
+          }
+
           const cloud = await fetchAllForUser(supabase, userId);
           const local = get();
           const cloudEmpty = cloud.items.length === 0 && cloud.categories.length === 0;
@@ -301,12 +311,14 @@ export const useDatebookStore = create<DatebookState>()(
           set({ syncStatus: "synced", cloudError: null });
           if (pendingWork()) scheduleFlush();
         } catch (err) {
+          // Roll back so a later retry (reload / next auth event) re-runs cleanly.
           applyingRemote = false;
           suspended = false;
-          set({
-            syncStatus: "error",
-            cloudError: err instanceof Error ? err.message : String(err),
-          });
+          activeUserId = null;
+          unsubscribeRealtime();
+          clearPending();
+          console.error("[datebook] cloud connect failed:", err);
+          set({ syncStatus: "error", cloudError: describeError(err) });
         }
       },
 
@@ -384,6 +396,46 @@ let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
 let channel: RealtimeChannel | null = null;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (v: string) => UUID_RE.test(v);
+const newId = () => nanoid();
+
+/**
+ * Categories / items / import sources land in Postgres `uuid` columns. Legacy
+ * local data (and the pre-UUID default categories) can have slug ids like
+ * "cat-personal" — remap those to real UUIDs, rewriting item.categoryId refs.
+ * Returns a partial state to `set()`, or null when nothing needed fixing.
+ */
+function normalizeLocalIds(state: {
+  categories: Category[];
+  items: Item[];
+  importSources: ImportSource[];
+}): Partial<DatebookState> | null {
+  const remap = new Map<string, string>();
+  const fix = <T extends { id: string }>(rows: T[]): T[] =>
+    rows.map((r) => {
+      if (isUuid(r.id)) return r;
+      const next = newId();
+      remap.set(r.id, next);
+      return { ...r, id: next };
+    });
+
+  const categories = fix(state.categories);
+  const importSources = fix(state.importSources);
+  const items = fix(state.items).map((it) => {
+    const mapped = it.categoryId && remap.get(it.categoryId);
+    const sourceMapped = it.sourceId && remap.get(it.sourceId);
+    if (!mapped && !sourceMapped) return it;
+    return {
+      ...it,
+      ...(mapped ? { categoryId: mapped } : {}),
+      ...(sourceMapped ? { sourceId: sourceMapped } : {}),
+    };
+  });
+
+  return remap.size > 0 ? { categories, items, importSources } : null;
+}
 
 type CollKey = "categories" | "reminderPresets" | "importSources" | "items";
 
@@ -493,10 +545,8 @@ async function flush() {
     useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
   } catch (err) {
     requeue(batch);
-    useDatebookStore.setState({
-      syncStatus: "error",
-      cloudError: err instanceof Error ? err.message : String(err),
-    });
+    console.error("[datebook] cloud sync failed:", err);
+    useDatebookStore.setState({ syncStatus: "error", cloudError: describeError(err) });
   } finally {
     flushing = false;
     if (pendingWork()) scheduleFlush();

@@ -10,6 +10,7 @@ export function AccountSection() {
   const { user, configured, sending, signInWithEmail, signOut } = useAuth();
   const syncStatus = useDatebookStore((s) => s.syncStatus);
   const cloudError = useDatebookStore((s) => s.cloudError);
+  const connectCloud = useDatebookStore((s) => s.connectCloud);
 
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -51,10 +52,24 @@ export function AccountSection() {
             Sign out
           </button>
         </div>
-        <p className="text-[12.5px] leading-relaxed text-ink-faint">
-          Your calendar is saved to your account and syncs live across every signed-in device — changes appear
-          without a refresh.
-        </p>
+        {syncStatus === "error" ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-warn/40 bg-warn/5 px-3 py-2.5">
+            <p className="text-[12.5px] leading-relaxed text-warn">
+              {cloudError ?? "Something went wrong syncing."}
+            </p>
+            <button
+              onClick={() => user && connectCloud(user.id)}
+              className="self-start rounded-md border border-line px-2.5 py-1.5 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+            >
+              Retry sync
+            </button>
+          </div>
+        ) : (
+          <p className="text-[12.5px] leading-relaxed text-ink-faint">
+            Your calendar is saved to your account and syncs live across every signed-in device — changes appear
+            without a refresh.
+          </p>
+        )}
       </div>
     );
   }
