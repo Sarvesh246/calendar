@@ -1,8 +1,8 @@
 # Cloud sync (Supabase)
 
 Datebook works fully offline with no account — data lives in your browser. Adding
-Supabase turns on **accounts** and **live cross-device sync**: sign in with a
-magic link and every open tab/device updates in real time, no refresh.
+Supabase turns on **accounts** and **live cross-device sync**: sign in with Google
+and every open tab/device updates in real time, no refresh.
 
 ## 1. Create a Supabase project
 
@@ -34,42 +34,38 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 Restart `next dev` (Next only reads `.env.local` at startup). This key is safe to
 expose to the browser — RLS is what protects the data.
 
-## 4. Auth settings
+## 4. Set up Google sign-in
 
-Dashboard → **Authentication → URL Configuration**:
+### a. Google Cloud Console
 
-- **Site URL**: your app origin (e.g. `http://localhost:3000` in dev, your real
-  domain in prod).
-- **Redirect URLs**: add every origin you'll sign in from
-  (`http://localhost:3000`, `https://your-domain`, etc.).
+1. <https://console.cloud.google.com> → create/select a project.
+2. **APIs & Services → OAuth consent screen** → External → fill in app name +
+   support email → add your email as a test user (or publish).
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID** →
+   **Web application**.
+   - **Authorized JavaScript origins**: `http://localhost:3000` and your deployed
+     origin.
+   - **Authorized redirect URI** (exactly this — it's Supabase's callback, not
+     your app):
+     `https://<YOUR-PROJECT-REF>.supabase.co/auth/v1/callback`
+4. Copy the **Client ID** and **Client secret**.
 
-Email is enabled by default. Supabase's built-in mailer is rate-limited (a few
-per hour) — fine for personal use. For volume, set up a custom SMTP provider
-under **Authentication → Emails**.
+### b. Supabase
 
-### Put the 6-digit code in the email (needed for installed PWAs)
-
-On iOS a magic **link** opens in Safari, not your home-screen app, so the session
-never reaches the PWA. The app therefore signs you in with a **code** you type
-back in — but the default email only contains the link. Add the code to it:
-
-Dashboard → **Authentication → Emails → Magic Link** → edit the template so it
-includes `{{ .Token }}`, e.g.:
-
-```html
-<h2>Sign in to Datebook</h2>
-<p>Enter this code in the app:</p>
-<p style="font-size:24px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
-<p>…or, on this device, just tap:
-   <a href="{{ .ConfirmationURL }}">Sign in</a></p>
-```
+1. Dashboard → **Authentication → Providers → Google** → enable → paste the
+   Client ID + Client secret → save.
+2. Dashboard → **Authentication → URL Configuration**:
+   - **Site URL**: your app origin (`http://localhost:3000` in dev, your domain
+     in prod).
+   - **Redirect URLs**: add every origin you sign in from — `http://localhost:3000`
+     and your deployed URL.
 
 ## 5. Use it
 
-Open the app → **Settings → Account & sync** → enter your email → **Send code** →
-type the 6-digit code from the email (or, on desktop, click the link). On first
-sign-in, whatever is already in this browser is pushed up to your account. After
-that, edits on any signed-in device appear everywhere within a second.
+Open the app → **Settings → Account & sync** → **Continue with Google**. You're
+bounced to Google and back, signed in. On first sign-in, whatever is already in
+this browser is pushed up to your account. After that, edits on any signed-in
+device appear everywhere within a second.
 
 Sign out to return to local-only mode; the data you had on the device before your
 first sign-in is restored.

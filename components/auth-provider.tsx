@@ -9,20 +9,17 @@ interface AuthContextValue {
   /** null = signed out; undefined = still resolving the initial session. */
   user: User | null | undefined;
   configured: boolean;
-  sending: boolean;
-  /** Email a 6-digit code (and a magic link). Throws with a message on failure. */
-  signInWithEmail: (email: string) => Promise<void>;
-  /** Verify the 6-digit code — completes sign-in in this context (works inside a PWA). */
-  verifyCode: (email: string, code: string) => Promise<void>;
+  signingIn: boolean;
+  /** Redirect to Google, then back to the app signed in. */
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   configured: false,
-  sending: false,
-  signInWithEmail: async () => {},
-  verifyCode: async () => {},
+  signingIn: false,
+  signInWithGoogle: async () => {},
   signOut: async () => {},
 });
 
@@ -34,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(
     isSupabaseConfigured ? undefined : null
   );
-  const [sending, setSending] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const connectCloud = useDatebookStore((s) => s.connectCloud);
   const disconnectCloud = useDatebookStore((s) => s.disconnectCloud);
   const connectedFor = useRef<string | null>(null);
@@ -65,28 +62,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextValue = {
     user,
     configured: isSupabaseConfigured,
-    sending,
-    signInWithEmail: async (email) => {
+    signingIn,
+    signInWithGoogle: async () => {
       if (!supabase) throw new Error("Cloud sync isn't configured.");
-      setSending(true);
+      setSigningIn(true);
       try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { emailRedirectTo: window.location.origin, shouldCreateUser: true },
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: window.location.origin,
+            queryParams: { prompt: "select_account" },
+          },
         });
         if (error) throw new Error(error.message);
-      } finally {
-        setSending(false);
+        // On success the browser is navigating away to Google.
+      } catch (err) {
+        setSigningIn(false);
+        throw err;
       }
-    },
-    verifyCode: async (email, code) => {
-      if (!supabase) throw new Error("Cloud sync isn't configured.");
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: code.trim(),
-        type: "email",
-      });
-      if (error) throw new Error(error.message);
     },
     signOut: async () => {
       if (!supabase) return;
