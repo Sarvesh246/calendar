@@ -34,9 +34,9 @@ export function EventCard({ item, category }: { item: Item; category: Category |
     >
       <div className="flex w-[74px] shrink-0 flex-col leading-tight">
         <span className="text-[13px] font-semibold tabular-nums cat-text">
-          {formatTime(item.at, clock24h)}
+          {item.allDay ? "All day" : formatTime(item.at, clock24h)}
         </span>
-        {item.endAt && (
+        {!item.allDay && item.endAt && (
           <span className="text-[11px] tabular-nums text-ink-faint">
             {formatTime(item.endAt, clock24h)}
           </span>
@@ -48,6 +48,11 @@ export function EventCard({ item, category }: { item: Item; category: Category |
           <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-ink-soft">
             <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
             {item.location}
+          </p>
+        )}
+        {item.description && (
+          <p className="mt-1 whitespace-pre-line text-[11.5px] leading-snug text-ink-faint line-clamp-2">
+            {item.description}
           </p>
         )}
       </div>
@@ -100,10 +105,15 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
             overdue ? "font-medium text-warn" : "text-ink-soft"
           )}
         >
-          {formatTime(item.at, clock24h)}
+          {item.allDay ? "All day" : formatTime(item.at, clock24h)}
           {overdue && " · overdue"}
           {item.status === "doing" && !overdue && " · in progress"}
         </p>
+        {item.description && (
+          <p className="mt-1 whitespace-pre-line text-[11.5px] leading-snug text-ink-faint line-clamp-2">
+            {item.description}
+          </p>
+        )}
       </div>
 
       <span

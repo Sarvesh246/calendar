@@ -4,22 +4,28 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "./nanoid";
 import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
+import { buildImportPlan, feedLabel, type FetchedCalendar } from "./calendar-import";
 import type {
-  AppearancePreset,
   Category,
-  Density,
+  ImportSource,
   Item,
   ItemStatus,
-  LandingView,
   ReminderPreset,
   UserSettings,
 } from "./types";
+
+export interface ImportResult {
+  added: number;
+  updated: number;
+  removed: number;
+}
 
 interface DatebookState {
   categories: Category[];
   items: Item[];
   reminderPresets: ReminderPreset[];
   settings: UserSettings;
+  importSources: ImportSource[];
 
   addItem: (item: Omit<Item, "id" | "createdAt">) => Item;
   updateItem: (id: string, patch: Partial<Item>) => void;
@@ -30,6 +36,11 @@ interface DatebookState {
   updateCategory: (id: string, patch: Partial<Category>) => void;
 
   updateSettings: (patch: Partial<UserSettings>) => void;
+
+  /** Merge a fetched calendar feed into the store, keyed by `url` (re-syncs in
+   *  place rather than duplicating). Returns what changed. */
+  applyImport: (url: string, feed: FetchedCalendar) => ImportResult;
+  removeImportSource: (id: string, deleteItems: boolean) => void;
 }
 
 // IDs of the old seeded demo content, stripped from any store that persisted it
@@ -55,6 +66,7 @@ export const useDatebookStore = create<DatebookState>()(
       items: defaultItems,
       reminderPresets: defaultReminderPresets,
       settings: defaultSettings,
+      importSources: [],
 
       addItem: (item) => {
         const newItem: Item = { ...item, id: nanoid(), createdAt: new Date().toISOString() };
@@ -93,6 +105,96 @@ export const useDatebookStore = create<DatebookState>()(
 
       updateSettings: (patch) => {
         set({ settings: { ...get().settings, ...patch } });
+      },
+
+      applyImport: (url, feed) => {
+        const state = get();
+        const existing = state.importSources.find((s) => s.url === url);
+        const sourceId = existing?.id ?? nanoid();
+
+        const { newCategories, drafts } = buildImportPlan(feed, state.categories, sourceId);
+        const incoming = new Map(drafts.map((d) => [d.sourceUid, d]));
+
+        let added = 0;
+        let updated = 0;
+
+        // Update items already tied to this source; leave the user's status alone.
+        const merged = state.items.map((item) => {
+          if (item.sourceId !== sourceId || !item.sourceUid) return item;
+          const draft = incoming.get(item.sourceUid);
+          if (!draft) return item;
+          const next = {
+            ...item,
+            ...draft,
+            id: item.id,
+            createdAt: item.createdAt,
+            status: item.status ?? draft.status,
+          };
+          const changed = (
+            ["title", "description", "location", "at", "endAt", "allDay", "type", "categoryId"] as const
+          ).some((k) => next[k] !== item[k]);
+          if (changed) updated += 1;
+          return changed ? next : item;
+        });
+
+        const known = new Set(
+          merged.filter((i) => i.sourceId === sourceId && i.sourceUid).map((i) => i.sourceUid)
+        );
+
+        // Drop items that vanished from the feed — but keep ones marked done.
+        const beforePrune = merged.length;
+        const pruned = merged.filter(
+          (i) =>
+            i.sourceId !== sourceId ||
+            !i.sourceUid ||
+            incoming.has(i.sourceUid) ||
+            i.status === "done"
+        );
+        const removed = beforePrune - pruned.length;
+
+        for (const draft of drafts) {
+          if (known.has(draft.sourceUid)) continue;
+          pruned.push({ ...draft, id: nanoid(), createdAt: new Date().toISOString() });
+          added += 1;
+        }
+
+        const now = new Date().toISOString();
+        const name = feed.calendarName?.trim() || existing?.name || feedLabel(url);
+        const source: ImportSource = {
+          id: sourceId,
+          url,
+          name,
+          addedAt: existing?.addedAt ?? now,
+          lastSyncedAt: now,
+          itemCount: drafts.length,
+        };
+
+        set({
+          items: pruned,
+          categories: [...state.categories, ...newCategories],
+          importSources: existing
+            ? state.importSources.map((s) => (s.id === sourceId ? source : s))
+            : [...state.importSources, source],
+        });
+
+        return { added, updated, removed };
+      },
+
+      removeImportSource: (id, deleteItems) => {
+        set((state) => {
+          const items = deleteItems
+            ? state.items.filter((i) => i.sourceId !== id)
+            : state.items.map((i) =>
+                i.sourceId === id ? { ...i, sourceId: undefined, sourceUid: undefined } : i
+              );
+          const inUse = new Set(items.map((i) => i.categoryId));
+          return {
+            importSources: state.importSources.filter((s) => s.id !== id),
+            items,
+            // Drop categories auto-created for this feed once nothing references them.
+            categories: state.categories.filter((c) => c.sourceId !== id || inUse.has(c.id)),
+          };
+        });
       },
     }),
     {
