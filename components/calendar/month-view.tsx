@@ -1,13 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
 import { isSameDay, isToday, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { monthGrid, itemsOnDay } from "@/lib/date-utils";
+import { monthGrid, groupItemsByDay, dayKey } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
 const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const NO_ITEMS: Item[] = [];
 
 export function MonthView({
   anchor,
@@ -22,7 +24,12 @@ export function MonthView({
 }) {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const categories = useDatebookStore((s) => s.categories);
-  const grid = monthGrid(anchor, weekStartsOn);
+  const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
+  const byDay = useMemo(() => groupItemsByDay(items), [items]);
+  const colorOf = useMemo(() => {
+    const m = new Map(categories.map((c) => [c.id, c.color] as const));
+    return (categoryId: string) => m.get(categoryId) ?? "#8a8a94";
+  }, [categories]);
   const labels = weekStartsOn === 0 ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
   const weeks = grid.length / 7;
 
@@ -44,7 +51,7 @@ export function MonthView({
         style={{ gridTemplateRows: `repeat(${weeks}, minmax(var(--month-row-min), 1fr))` }}
       >
         {grid.map(({ date, inMonth }) => {
-          const dayItems = itemsOnDay(items, date);
+          const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
           const today = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
           const visible = dayItems.slice(0, 3);
@@ -84,8 +91,7 @@ export function MonthView({
                   colored dots — one per item, matching each item's category color. */}
               <div className="flex flex-wrap content-start gap-1 sm:hidden">
                 {visibleDots.map((item) => {
-                  const category = categories.find((c) => c.id === item.categoryId);
-                  const color = category?.color ?? "#8a8a94";
+                  const color = colorOf(item.categoryId);
                   return (
                     <span
                       key={item.id}
@@ -102,8 +108,7 @@ export function MonthView({
 
               <div className="hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
                 {visible.map((item) => {
-                  const category = categories.find((c) => c.id === item.categoryId);
-                  const color = category?.color ?? "#8a8a94";
+                  const color = colorOf(item.categoryId);
                   return (
                     <span
                       key={item.id}

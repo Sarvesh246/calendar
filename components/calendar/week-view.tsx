@@ -1,19 +1,27 @@
 "use client";
 
+import { useMemo } from "react";
 import { format, isToday, differenceInMinutes, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { itemsOnDay } from "@/lib/date-utils";
+import { groupItemsByDay, dayKey } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
 const START_HOUR = 7;
 const END_HOUR = 22;
 const HOUR_HEIGHT = 52;
+const NO_ITEMS: Item[] = [];
 
 export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+
+  const byDay = useMemo(() => groupItemsByDay(items), [items]);
+  const colorOf = useMemo(() => {
+    const m = new Map(categories.map((c) => [c.id, c.color] as const));
+    return (categoryId: string) => m.get(categoryId) ?? "#8a8a94";
+  }, [categories]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:overflow-y-auto">
@@ -33,20 +41,19 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
       <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line">
         <div className="py-1.5 text-right text-[10px] text-ink-faint" />
         {days.map((day) => {
-          const dayAssignments = itemsOnDay(items, day).filter((i) => i.type !== "event");
+          const dayAssignments = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter((i) => i.type !== "event");
           return (
             <div key={day.toISOString()} className="flex flex-col gap-1 border-l border-line p-1">
               {/* Narrow screens: 7 columns leave no room for legible text, so just
                   show colored dots — one per item, matching each item's category color. */}
               <div className="flex flex-wrap gap-1 sm:hidden">
                 {dayAssignments.slice(0, 4).map((item) => {
-                  const category = categories.find((c) => c.id === item.categoryId);
                   return (
                     <span
                       key={item.id}
                       aria-hidden
                       className="h-[5px] w-[5px] shrink-0 rounded-full"
-                      style={{ background: category?.color ?? "#8a8a94" }}
+                      style={{ background: colorOf(item.categoryId) }}
                     />
                   );
                 })}
@@ -58,14 +65,14 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
               </div>
               <div className="hidden flex-col gap-1 sm:flex">
                 {dayAssignments.slice(0, 2).map((item) => {
-                  const category = categories.find((c) => c.id === item.categoryId);
+                  const color = colorOf(item.categoryId);
                   return (
                     <span
                       key={item.id}
                       className="truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{
-                        background: `color-mix(in srgb, ${category?.color ?? "#8a8a94"} 14%, var(--surface))`,
-                        color: category?.color ?? "#8a8a94",
+                        background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
+                        color,
                       }}
                     >
                       {item.title}
@@ -87,7 +94,7 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
           ))}
         </div>
         {days.map((day) => {
-          const dayEvents = itemsOnDay(items, day).filter((i) => i.type === "event");
+          const dayEvents = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter((i) => i.type === "event");
           return (
             <div key={day.toISOString()} className="relative border-l border-line">
               {hours.map((h) => (
@@ -100,8 +107,7 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
                 const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
                 const top = Math.max(0, (startMin / 60) * HOUR_HEIGHT);
                 const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
-                const category = categories.find((c) => c.id === item.categoryId);
-                const color = category?.color ?? "#8a8a94";
+                const color = colorOf(item.categoryId);
                 return (
                   <div
                     key={item.id}

@@ -38,6 +38,31 @@ export function itemsOnDay(items: Item[], day: Date) {
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
+/** Stable local-day key (`yyyy-MM-dd`) for bucketing/looking items up by day. */
+export function dayKey(date: Date) {
+  return format(date, "yyyy-MM-dd");
+}
+
+/**
+ * Bucket every item by its local calendar day, each bucket sorted by start time.
+ * One O(n) pass, done once per item-list change — the calendar grids then look
+ * each day up in O(1) instead of re-filtering the whole list per rendered cell
+ * (42 cells/month, 14/week), which was blocking the view-switch interaction.
+ */
+export function groupItemsByDay(items: Item[]): Map<string, Item[]> {
+  const map = new Map<string, Item[]>();
+  for (const item of items) {
+    const key = dayKey(new Date(item.at));
+    const bucket = map.get(key);
+    if (bucket) bucket.push(item);
+    else map.set(key, [item]);
+  }
+  for (const bucket of map.values()) {
+    bucket.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  }
+  return map;
+}
+
 export function dayLabel(date: Date) {
   if (isToday(date)) return "Today";
   if (isTomorrow(date)) return "Tomorrow";
