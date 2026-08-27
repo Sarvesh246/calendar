@@ -4,14 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Cloud,
+  CloudOff,
   ListChecks,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
+  RefreshCw,
   Settings,
   Sun,
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { useAuth } from "./auth-provider";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -93,6 +98,7 @@ export function Sidebar() {
         )}
 
         <div className="mt-auto flex flex-col gap-0.5">
+          <SyncChip collapsed={collapsed} />
           <Link
             href="/settings"
             className={cn(
@@ -106,7 +112,7 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — SyncChip lives only in the desktop rail */}
       <nav className="glass fixed inset-x-3 bottom-3 z-40 flex items-center justify-around rounded-xl px-2 py-2 md:hidden">
         {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
           const active = pathname === item.href;
@@ -127,5 +133,48 @@ export function Sidebar() {
         })}
       </nav>
     </>
+  );
+}
+
+function SyncChip({ collapsed }: { collapsed: boolean }) {
+  const { configured, user } = useAuth();
+  const syncStatus = useDatebookStore((s) => s.syncStatus);
+
+  if (!configured) return null;
+
+  let icon = <Cloud className="h-4 w-4 shrink-0" strokeWidth={1.9} />;
+  let label = "Sign in to sync";
+  let cls = "text-ink-soft hover:bg-surface-sunken hover:text-ink";
+
+  if (user) {
+    if (syncStatus === "syncing" || syncStatus === "connecting") {
+      icon = <RefreshCw className="h-4 w-4 shrink-0 animate-spin" strokeWidth={1.9} />;
+      label = "Syncing…";
+    } else if (syncStatus === "error") {
+      icon = <CloudOff className="h-4 w-4 shrink-0" strokeWidth={1.9} />;
+      label = "Sync error";
+      cls = "text-warn hover:bg-surface-sunken";
+    } else {
+      icon = <Cloud className="h-4 w-4 shrink-0" strokeWidth={1.9} />;
+      label = "Synced";
+      cls = "text-good hover:bg-surface-sunken";
+    }
+  } else if (user === undefined) {
+    icon = <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={1.9} />;
+    label = "…";
+  }
+
+  return (
+    <Link
+      href="/settings"
+      title={label}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium transition-colors",
+        cls
+      )}
+    >
+      {icon}
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
   );
 }
