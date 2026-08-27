@@ -81,6 +81,15 @@ function toPlainText(value: string): string {
   return text.length > 2000 ? text.slice(0, 2000).trimEnd() + "…" : text;
 }
 
+/** Pull the first http(s) link out of a raw value — Canvas often only puts the
+ *  assignment link in the HTML DESCRIPTION (`<a href="…">`), not a URL property. */
+function extractFirstUrl(value: string): string | undefined {
+  const href = /href\s*=\s*["']([^"']+)["']/i.exec(value);
+  if (href && /^https?:\/\//i.test(href[1])) return href[1].trim();
+  const bare = /https?:\/\/[^\s"'<>)\]]+/i.exec(unescapeText(value));
+  return bare ? bare[0].replace(/[.,;]+$/, "") : undefined;
+}
+
 interface DateResult {
   iso: string;
   allDay: boolean;
@@ -170,6 +179,10 @@ export function parseIcs(raw: string): ParsedCalendar {
       case "DESCRIPTION": {
         const text = toPlainText(value);
         if (text) cur.description = text;
+        if (!cur.url) {
+          const found = extractFirstUrl(value);
+          if (found) cur.url = found;
+        }
         break;
       }
       case "LOCATION": {

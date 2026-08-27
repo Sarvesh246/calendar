@@ -2,63 +2,111 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Sparkles, X } from "lucide-react";
+import { ArrowUp, Check, Sparkles, Trash2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { answerQuery, type AssistantAction, type AssistantResponse } from "@/lib/ai-assistant";
+import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
 import { motion as motionTokens } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 interface Message {
   role: "user" | "assistant";
   text: string;
   suggestions?: string[];
-  action?: AssistantAction;
+  actions?: AssistantAction[];
 }
 
 const WELCOME: Message = {
   role: "assistant",
-  text: "Ask me anything about your schedule — I can also move things around for you.",
-  suggestions: ["What's due this week?", "What's due today?", "What's my busiest day?"],
+  text: "Ask me anything about your calendar — what's due, when you're free, your busiest day — or tell me to add, move, reschedule, complete, or delete something.",
+  suggestions: ["What's on today?", "What's due this week?", "Add gym at 6pm tomorrow"],
 };
 
 export function AIDrawer() {
   const open = useUIStore((s) => s.aiDrawerOpen);
   const setOpen = useUIStore((s) => s.setAIDrawerOpen);
+  const pendingMessage = useUIStore((s) => s.aiDrawerPendingMessage);
+  const consumePendingMessage = useUIStore((s) => s.consumeAIDrawerPendingMessage);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
+  const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const reminderPresets = useDatebookStore((s) => s.reminderPresets);
+  const defaultReminderPresetIds = useDatebookStore((s) => s.settings.defaultReminderPresetIds);
+  const addItem = useDatebookStore((s) => s.addItem);
   const updateItem = useDatebookStore((s) => s.updateItem);
+  const deleteItem = useDatebookStore((s) => s.deleteItem);
 
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
+  // `${messageIndex}:${actionIndex}` → outcome
+  const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
 
-  function ask(query: string) {
-    if (!query.trim()) return;
-    setMessages((m) => [...m, { role: "user", text: query }]);
+  // A message handed over from the quick-add bar: send it once the drawer opens.
+  useEffect(() => {
+    if (!open || !pendingMessage) return;
+    const msg = consumePendingMessage();
+    if (msg) void ask(msg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pendingMessage]);
+
+  async function ask(query: string) {
+    const text = query.trim();
+    if (!text || thinking) return;
+    const history: AssistantTurn[] = messages
+      .filter((m) => m.text)
+      .map((m) => ({ role: m.role, text: m.text }));
+    setMessages((m) => [...m, { role: "user", text }]);
     setInput("");
     setThinking(true);
-    window.setTimeout(() => {
-      const response: AssistantResponse = answerQuery(query, { items, categories });
-      setMessages((m) => [...m, { role: "assistant", ...response }]);
+    try {
+      const res = await askAssistant(text, history, { items, categories, clock24h });
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: res.text, suggestions: res.suggestions, actions: res.actions },
+      ]);
+    } catch {
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: "Something went wrong reaching the assistant — try again in a moment." },
+      ]);
+    } finally {
       setThinking(false);
-    }, 500);
+    }
   }
 
-  function confirmAction(action: AssistantAction) {
-    updateItem(action.itemId, { at: action.newAt });
-    setMessages((m) => [
-      ...m,
-      { role: "assistant", text: `Done — "${action.itemTitle}" is now on ${action.toLabel}.` },
-    ]);
+  function applyAction(mi: number, ai: number) {
+    const action = messages[mi]?.actions?.[ai];
+    if (!action || resolved[`${mi}:${ai}`]) return;
+    if (action.kind === "create") {
+      let draft = action.draft;
+      if (!draft.reminders?.length) {
+        const preset = reminderPresets.find((p) => defaultReminderPresetIds.includes(p.id));
+        if (preset) {
+          draft = {
+            ...draft,
+            reminders: [
+              { id: crypto.randomUUID(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label },
+            ],
+          };
+        }
+      }
+      addItem(draft);
+    } else if (action.kind === "update") {
+      updateItem(action.itemId, action.patch);
+    } else if (action.kind === "delete") {
+      deleteItem(action.itemId);
+    }
+    setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "applied" }));
   }
 
-  function dismissAction() {
-    setMessages((m) => [...m, { role: "assistant", text: "No changes made." }]);
+  function dismissAction(mi: number, ai: number) {
+    setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "dismissed" }));
   }
 
   return (
@@ -84,8 +132,8 @@ export function AIDrawer() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3.5">
-            {messages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+            {messages.map((m, mi) => (
+              <div key={mi} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                 <div
                   className={
                     m.role === "user"
@@ -93,29 +141,50 @@ export function AIDrawer() {
                       : "max-w-[92%] space-y-2"
                   }
                 >
-                  <p className={m.role === "assistant" ? "text-[13px] text-ink" : ""}>{m.text}</p>
+                  <p
+                    className={
+                      m.role === "assistant"
+                        ? "whitespace-pre-line text-[13px] leading-relaxed text-ink"
+                        : ""
+                    }
+                  >
+                    {m.text}
+                  </p>
 
-                  {m.action && (
-                    <div className="rounded-lg border border-line bg-surface-sunken p-2.5">
-                      <p className="text-[12px] text-ink-soft">
-                        {m.action.fromLabel} <span className="text-ink-faint">→</span> {m.action.toLabel}
-                      </p>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          onClick={dismissAction}
-                          className="rounded-md px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-surface"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => confirmAction(m.action!)}
-                          className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90"
-                        >
-                          Move
-                        </button>
+                  {m.actions?.map((action, ai) => {
+                    const state = resolved[`${mi}:${ai}`];
+                    return (
+                      <div key={ai} className="rounded-lg border border-line bg-surface-sunken p-2.5">
+                        <p className="text-[12px] text-ink-soft">{action.summary}</p>
+                        {state === "applied" ? (
+                          <p className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-good">
+                            <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Done
+                          </p>
+                        ) : state === "dismissed" ? (
+                          <p className="mt-1.5 text-[12px] text-ink-faint">Dismissed</p>
+                        ) : (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => dismissAction(mi, ai)}
+                              className="rounded-md px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-surface"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => applyAction(mi, ai)}
+                              className={cn(
+                                "flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90",
+                                action.kind === "delete" ? "bg-warn" : "bg-accent"
+                              )}
+                            >
+                              {action.kind === "delete" && <Trash2 className="h-3 w-3" strokeWidth={2} />}
+                              {actionVerb(action)}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })}
 
                   {m.suggestions && m.suggestions.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -153,12 +222,12 @@ export function AIDrawer() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && ask(input)}
-              placeholder="Ask anything…"
+              placeholder="Ask or tell me to change something…"
               className="min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
             <button
               onClick={() => ask(input)}
-              disabled={!input.trim()}
+              disabled={!input.trim() || thinking}
               aria-label="Send"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
             >
@@ -169,4 +238,16 @@ export function AIDrawer() {
       )}
     </AnimatePresence>
   );
+}
+
+function actionVerb(a: AssistantAction): string {
+  if (a.kind === "create") return "Add";
+  if (a.kind === "delete") return "Delete";
+  const p = a.patch;
+  if (p.status === "done") return "Complete";
+  if (p.status === "todo" || p.status === "doing") return "Reopen";
+  if (p.at || "endAt" in p) return "Reschedule";
+  if (p.title) return "Rename";
+  if (p.categoryId) return "Recategorize";
+  return "Update";
 }

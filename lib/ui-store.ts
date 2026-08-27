@@ -5,6 +5,8 @@ import { create } from "zustand";
 interface UIState {
   commandPaletteOpen: boolean;
   aiDrawerOpen: boolean;
+  /** A message to auto-send once the AI drawer opens (from the quick-add bar). */
+  aiDrawerPendingMessage: string | null;
   focusMode: boolean;
   sidebarCollapsed: boolean;
   quickAddOpen: boolean;
@@ -13,6 +15,9 @@ interface UIState {
 
   setCommandPaletteOpen: (open: boolean) => void;
   setAIDrawerOpen: (open: boolean) => void;
+  /** Open the AI drawer and queue a message for it to answer. */
+  askAI: (message: string) => void;
+  consumeAIDrawerPendingMessage: () => string | null;
   toggleFocusMode: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setQuickAddOpen: (open: boolean) => void;
@@ -21,9 +26,10 @@ interface UIState {
   clearCategoryFilter: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   commandPaletteOpen: false,
   aiDrawerOpen: false,
+  aiDrawerPendingMessage: null,
   focusMode: false,
   sidebarCollapsed: false,
   quickAddOpen: false,
@@ -32,6 +38,12 @@ export const useUIStore = create<UIState>((set) => ({
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setAIDrawerOpen: (open) => set({ aiDrawerOpen: open }),
+  askAI: (message) => set({ aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null }),
+  consumeAIDrawerPendingMessage: () => {
+    const msg = get().aiDrawerPendingMessage;
+    if (msg !== null) set({ aiDrawerPendingMessage: null });
+    return msg;
+  },
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setQuickAddOpen: (open) => set({ quickAddOpen: open }),

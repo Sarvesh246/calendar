@@ -64,6 +64,9 @@ export function toItemRow(i: Item, userId: string): Row {
     title: i.title,
     description: i.description ?? null,
     location: i.location ?? null,
+    // Only sent when set, so a DB that hasn't run the 0002 migration (no `url`
+    // column) still round-trips every item that doesn't carry a link.
+    ...(i.url ? { url: i.url } : {}),
     at: iso(i.at),
     end_at: i.endAt ? iso(i.endAt) : null,
     all_day: i.allDay ?? false,
@@ -83,6 +86,7 @@ export function rowToItem(r: Row): Item {
     title: r.title as string,
     ...(r.description ? { description: r.description as string } : {}),
     ...(r.location ? { location: r.location as string } : {}),
+    ...(r.url ? { url: r.url as string } : {}),
     at: iso(r.at),
     ...(r.end_at ? { endAt: iso(r.end_at) } : {}),
     ...(r.all_day ? { allDay: true } : {}),

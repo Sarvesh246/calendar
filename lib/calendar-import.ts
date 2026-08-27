@@ -123,6 +123,7 @@ export function buildImportPlan(
       title: title || ev.summary || "Untitled",
       description: ev.description,
       location: ev.location,
+      url: ev.url,
       at: ev.start,
       endAt: ev.end,
       allDay: ev.allDay || undefined,
