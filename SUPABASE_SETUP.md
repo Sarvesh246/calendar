@@ -21,16 +21,18 @@ adds the tables to the realtime publication. It is safe to re-run.
 
 ## 3. Add the keys
 
-Dashboard → **Project Settings → API**. Copy **Project URL** and the **anon /
-public** key into `.env.local`:
+Dashboard → **Project Settings → API**. Copy **Project URL** and the
+**publishable** key (`sb_publishable_…`; the legacy anon JWT also works) into
+`.env.local`:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+# or, legacy:  NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
 ```
 
-Restart `next dev`. The anon key is safe to expose to the browser — RLS is what
-protects the data.
+Restart `next dev` (Next only reads `.env.local` at startup). This key is safe to
+expose to the browser — RLS is what protects the data.
 
 ## 4. Auth settings
 
