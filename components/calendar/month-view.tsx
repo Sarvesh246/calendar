@@ -35,9 +35,13 @@ export function MonthView({
           </div>
         ))}
       </div>
+      {/* The 92px row floor + scroll only applies from `sm` up, where the card
+          is height-capped and short viewports would otherwise crush the rows
+          until an event chip is clipped. On mobile the grid shows dots only and
+          has no height cap, so the floor is left at 0 to keep cells compact. */}
       <div
-        className="grid flex-1 grid-cols-7 gap-1.5 sm:min-h-0 sm:overflow-y-auto"
-        style={{ gridTemplateRows: `repeat(${weeks}, minmax(92px, 1fr))` }}
+        className="grid flex-1 grid-cols-7 gap-1.5 [--month-row-min:0px] sm:min-h-0 sm:overflow-y-auto sm:[--month-row-min:92px]"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(var(--month-row-min), 1fr))` }}
       >
         {grid.map(({ date, inMonth }) => {
           const dayItems = itemsOnDay(items, date);
@@ -63,7 +67,8 @@ export function MonthView({
               className={cn(
                 "flex min-h-[68px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
-                selected && "ring-2 ring-accent ring-offset-0",
+                // inset ring: an outset one is clipped by the grid's sm overflow
+                selected && "ring-2 ring-inset ring-accent",
                 !inMonth && "opacity-70"
               )}
             >
