@@ -32,6 +32,11 @@ interface DatebookState {
   updateSettings: (patch: Partial<UserSettings>) => void;
 }
 
+// IDs of the old seeded demo content, stripped from any store that persisted it
+// before the app switched to starting empty.
+const SAMPLE_ITEM_IDS = new Set(Array.from({ length: 12 }, (_, i) => `item-${i + 1}`));
+const SAMPLE_CATEGORY_IDS = new Set(["cat-cs", "cat-bio", "cat-club"]);
+
 const defaultSettings: UserSettings = {
   preset: "minimal",
   landingView: "today",
@@ -90,7 +95,19 @@ export const useDatebookStore = create<DatebookState>()(
         set({ settings: { ...get().settings, ...patch } });
       },
     }),
-    { name: "datebook-store" }
+    {
+      name: "datebook-store",
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<DatebookState>;
+        if (state && version < 1) {
+          state.items = (state.items ?? []).filter((i) => !SAMPLE_ITEM_IDS.has(i.id));
+          state.categories = (state.categories ?? []).filter((c) => !SAMPLE_CATEGORY_IDS.has(c.id));
+          if (state.categories.length === 0) state.categories = defaultCategories;
+        }
+        return state as DatebookState;
+      },
+    }
   )
 );
 
