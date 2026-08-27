@@ -116,7 +116,7 @@ export function Sidebar() {
       {/* Mobile bottom nav — SyncChip lives only in the desktop rail.
           The outer wrapper carries the iOS safe-area inset so the pill floats
           clear of the home indicator; the pill itself stays a fixed height. */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.7rem)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
         <div className="glass mx-auto flex max-w-md items-center justify-around rounded-2xl p-1.5">
           {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
             const active = pathname === item.href;

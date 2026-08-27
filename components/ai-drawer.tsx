@@ -69,7 +69,7 @@ export function AIDrawer() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.97 }}
           transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-          className="glass fixed bottom-4 right-4 z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl"
+          className="glass fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl"
         >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <Sparkles className="h-4 w-4 text-accent" strokeWidth={2} />

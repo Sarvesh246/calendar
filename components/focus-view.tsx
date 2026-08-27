@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
@@ -12,6 +13,15 @@ export function FocusView() {
   const items = useDatebookStore((s) => s.items);
   const cycleItemStatus = useDatebookStore((s) => s.cycleItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+
+  // Focus mode hides the nav, so Esc is the keyboard way back out.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") toggleFocusMode();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleFocusMode]);
 
   const now = new Date();
   const upcoming = [...items]
@@ -26,9 +36,10 @@ export function FocusView() {
       <button
         onClick={toggleFocusMode}
         aria-label="Exit focus"
-        className="fixed right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink-faint transition-colors hover:text-ink"
+        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-soft shadow-[var(--shadow-md)] transition-colors hover:border-line-strong hover:text-ink"
       >
-        <X className="h-4 w-4" />
+        <X className="h-4 w-4" strokeWidth={2} />
+        Exit focus
       </button>
 
       {current ? (
