@@ -24,9 +24,10 @@ export function MonthView({
   const categories = useDatebookStore((s) => s.categories);
   const grid = monthGrid(anchor, weekStartsOn);
   const labels = weekStartsOn === 0 ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
+  const weeks = grid.length / 7;
 
   return (
-    <div className="rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:p-3">
+    <div className="flex flex-col rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:p-3">
       <div className="grid grid-cols-7 gap-1.5 px-1 pb-2">
         {labels.map((l) => (
           <div key={l} className="text-center text-[11px] font-medium uppercase tracking-wider text-ink-faint">
@@ -34,7 +35,10 @@ export function MonthView({
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1.5">
+      <div
+        className="grid flex-1 grid-cols-7 gap-1.5 sm:min-h-0"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+      >
         {grid.map(({ date, inMonth }) => {
           const dayItems = itemsOnDay(items, date);
           const today = isToday(date);
@@ -55,7 +59,7 @@ export function MonthView({
                   : undefined
               }
               className={cn(
-                "flex min-h-[76px] flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-all sm:min-h-[92px] sm:p-2",
+                "flex min-h-[68px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
                 selected && "ring-2 ring-accent ring-offset-0",
                 !inMonth && "opacity-40"
@@ -63,30 +67,32 @@ export function MonthView({
             >
               <span
                 className={cn(
-                  "text-[12px] font-medium tabular-nums",
-                  today ? "text-accent" : "text-ink-soft"
+                  "shrink-0 text-[12px] font-semibold tabular-nums",
+                  today ? "text-accent" : inMonth ? "text-ink" : "text-ink-faint"
                 )}
               >
                 {format(date, "d")}
               </span>
-              <div className="flex w-full flex-col gap-0.5">
+              <div className="flex min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden">
                 {visible.map((item) => {
                   const category = categories.find((c) => c.id === item.categoryId);
+                  const color = category?.color ?? "#8a8a94";
                   return (
                     <span
                       key={item.id}
-                      className="flex items-center gap-1 truncate text-[10.5px] text-ink-soft"
+                      title={item.title}
+                      className="shrink-0 truncate rounded px-1.5 py-[2px] text-[11px] font-medium leading-tight"
+                      style={{
+                        background: `color-mix(in srgb, ${color} 18%, var(--surface))`,
+                        color: `color-mix(in srgb, ${color} 82%, var(--ink))`,
+                      }}
                     >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ background: category?.color ?? "#8a8a94" }}
-                      />
-                      <span className="truncate">{item.title}</span>
+                      {item.title}
                     </span>
                   );
                 })}
                 {overflow > 0 && (
-                  <span className="text-[10.5px] text-ink-faint">+{overflow} more</span>
+                  <span className="px-1 text-[10.5px] font-medium text-ink-soft">+{overflow} more</span>
                 )}
               </div>
             </button>

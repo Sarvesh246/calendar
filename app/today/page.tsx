@@ -46,7 +46,7 @@ function TodayDashboard() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
