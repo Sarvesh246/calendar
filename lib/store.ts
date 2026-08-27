@@ -234,7 +234,13 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       connectCloud: async (userId) => {
-        if (!supabase || activeUserId === userId) return;
+        if (!supabase || activeUserId === userId || connecting) return;
+        connecting = true;
+        if (connectRetryTimer) {
+          clearTimeout(connectRetryTimer);
+          connectRetryTimer = null;
+        }
+        bindConnectivityListeners();
         set({ syncStatus: "connecting" });
         try {
           if (typeof localStorage !== "undefined" && !localStorage.getItem(GUEST_BACKUP_KEY)) {
@@ -307,22 +313,33 @@ export const useDatebookStore = create<DatebookState>()(
             }
           }
 
-          subscribeRealtime(userId);
+          await subscribeRealtime(userId);
+          connectRetries = 0;
+          connecting = false;
           set({ syncStatus: "synced", cloudError: null });
           if (pendingWork()) scheduleFlush();
         } catch (err) {
-          // Roll back so a later retry (reload / next auth event) re-runs cleanly.
+          // Roll back so a later retry (auto-retry below / reload / next auth
+          // event) re-runs cleanly.
           applyingRemote = false;
           suspended = false;
           activeUserId = null;
           unsubscribeRealtime();
           clearPending();
+          connecting = false;
           console.error("[datebook] cloud connect failed:", err);
           set({ syncStatus: "error", cloudError: describeError(err) });
+          scheduleConnectRetry(userId);
         }
       },
 
       disconnectCloud: () => {
+        if (connectRetryTimer) {
+          clearTimeout(connectRetryTimer);
+          connectRetryTimer = null;
+        }
+        connectRetries = 0;
+        connecting = false;
         unsubscribeRealtime();
         activeUserId = null;
         suspended = false;
@@ -396,6 +413,17 @@ let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
 let channel: RealtimeChannel | null = null;
+
+// Resilience: the initial cloud connect and the realtime channel both retry with
+// backoff instead of stopping at the first failure, and a backgrounded tab
+// re-joins + reconciles when it returns to the foreground.
+let connecting = false;
+let connectRetries = 0;
+let connectRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let realtimeRetries = 0;
+let realtimeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let lastResumeAt = 0;
+let connectivityBound = false;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v: string) => UUID_RE.test(v);
@@ -613,9 +641,78 @@ function applyRealtime(
   }
 }
 
-function subscribeRealtime(userId: string) {
+/** Re-run the initial connect after a failure, with capped exponential backoff.
+ *  Past the cap the user can still force it with the "Retry sync" button. */
+function scheduleConnectRetry(userId: string) {
+  if (connectRetryTimer || !supabase || connectRetries >= 6) return;
+  const delay = Math.min(20_000, 1500 * 2 ** connectRetries);
+  connectRetries += 1;
+  connectRetryTimer = setTimeout(async () => {
+    connectRetryTimer = null;
+    if (activeUserId || connecting || !supabase) return;
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id === userId) {
+      void useDatebookStore.getState().connectCloud(userId);
+    }
+  }, delay);
+}
+
+/** Pull the full cloud snapshot and apply it — used after a realtime gap
+ *  (reconnect, or returning from the background) where change events were missed.
+ *  Local unsynced edits take priority: if any are queued we push instead. */
+async function catchUpFromCloud(userId: string) {
+  if (!supabase || activeUserId !== userId) return;
+  if (pendingWork()) {
+    scheduleFlush();
+    return;
+  }
+  try {
+    const cloud = await fetchAllForUser(supabase, userId);
+    if (activeUserId !== userId) return;
+    applyingRemote = true;
+    useDatebookStore.setState({
+      items: cloud.items,
+      categories: cloud.categories,
+      reminderPresets: cloud.reminderPresets.length
+        ? cloud.reminderPresets
+        : defaultReminderPresets,
+      importSources: cloud.importSources,
+      ...(cloud.settings ? { settings: cloud.settings } : {}),
+    });
+    applyingRemote = false;
+  } catch (err) {
+    applyingRemote = false;
+    console.warn("[datebook] catch-up pull failed:", err);
+  }
+}
+
+/** Rejoin the realtime channel after a drop, with capped backoff. Keeps the
+ *  synced data on screen and shows a soft "connecting" rather than an error. */
+function scheduleRealtimeReconnect(userId: string) {
+  if (!supabase || activeUserId !== userId || realtimeRetryTimer) return;
+  const delay = Math.min(30_000, 1000 * 2 ** realtimeRetries);
+  realtimeRetries += 1;
+  const st = useDatebookStore.getState().syncStatus;
+  if (st === "synced" || st === "idle") {
+    useDatebookStore.setState({ syncStatus: "connecting" });
+  }
+  realtimeRetryTimer = setTimeout(() => {
+    realtimeRetryTimer = null;
+    if (activeUserId === userId) void subscribeRealtime(userId);
+  }, delay);
+}
+
+async function subscribeRealtime(userId: string) {
   if (!supabase) return;
   unsubscribeRealtime();
+  // Make sure the realtime socket carries the current user's JWT before joining.
+  // Right after sign-in the token can lag the auth event; joining without it used
+  // to fail with CHANNEL_ERROR and surface a spurious sync error on first load.
+  try {
+    await supabase.realtime.setAuth();
+  } catch {
+    /* best effort — the subscribe callback retries on failure anyway */
+  }
   const ch = supabase.channel(`datebook:${userId}`);
   const tables = ["categories", "items", "reminder_presets", "import_sources", "user_settings"];
   for (const table of tables) {
@@ -626,14 +723,57 @@ function subscribeRealtime(userId: string) {
     );
   }
   ch.subscribe((status) => {
-    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-      useDatebookStore.setState({ syncStatus: "error", cloudError: "Realtime connection lost" });
+    if (channel !== ch || activeUserId !== userId) return;
+    if (status === "SUBSCRIBED") {
+      realtimeRetries = 0;
+      if (realtimeRetryTimer) {
+        clearTimeout(realtimeRetryTimer);
+        realtimeRetryTimer = null;
+      }
+      useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
+      // Any changes emitted while we were disconnected are gone — reconcile.
+      void catchUpFromCloud(userId);
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+      scheduleRealtimeReconnect(userId);
     }
   });
   channel = ch;
 }
 
 function unsubscribeRealtime() {
+  if (realtimeRetryTimer) {
+    clearTimeout(realtimeRetryTimer);
+    realtimeRetryTimer = null;
+  }
+  realtimeRetries = 0;
   if (channel && supabase) void supabase.removeChannel(channel);
   channel = null;
+}
+
+/** Rejoin realtime + reconcile when the tab returns to the foreground or the
+ *  network comes back. Mobile browsers freeze WebSockets on background and the
+ *  channel often doesn't recover on its own. Bound once, on first connect. */
+function bindConnectivityListeners() {
+  if (connectivityBound || typeof window === "undefined") return;
+  connectivityBound = true;
+  const resume = () => {
+    if (!supabase || !activeUserId) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const now = Date.now();
+    if (now - lastResumeAt < 2500) return;
+    lastResumeAt = now;
+    const uid = activeUserId;
+    void (async () => {
+      try {
+        await supabase.realtime.setAuth();
+      } catch {
+        /* ignore */
+      }
+      await subscribeRealtime(uid);
+      void catchUpFromCloud(uid);
+    })();
+  };
+  document.addEventListener("visibilitychange", resume);
+  window.addEventListener("online", resume);
+  window.addEventListener("focus", resume);
 }
