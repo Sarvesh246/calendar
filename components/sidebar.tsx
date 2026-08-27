@@ -26,8 +26,12 @@ const NAV = [
   { href: "/agenda", label: "Agenda", icon: ListChecks },
 ];
 
+// The bottom nav adds Settings as a fourth destination.
+const MOBILE_NAV = [...NAV, { href: "/settings", label: "Settings", icon: Settings }];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const mobileActiveIndex = MOBILE_NAV.findIndex((i) => i.href === pathname);
   const categories = useDatebookStore((s) => s.categories);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
@@ -115,10 +119,28 @@ export function Sidebar() {
 
       {/* Mobile bottom nav — SyncChip lives only in the desktop rail.
           The outer wrapper carries the iOS safe-area inset so the pill floats
-          clear of the home indicator; the pill itself stays a fixed height. */}
+          clear of the home indicator; the pill itself stays a fixed height.
+
+          The active pill is one element positioned by the active tab's index
+          and animated on `x`. An earlier version gave each tab its own
+          `layoutId` span that mounted/unmounted on navigation — framer then had
+          to match across a changing DOM, and a disturbed measurement (the
+          press-scale on the parent `<Link>`, a mid-transition route change)
+          made it lurch in from the bottom instead of sliding across. A single
+          transform-animated element has nothing to mismeasure. */}
       <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
-        <div className="glass mx-auto flex max-w-md items-center justify-around rounded-2xl p-1.5">
-          {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map((item) => {
+        <div className="glass relative mx-auto flex max-w-md items-stretch rounded-2xl p-1.5">
+          {mobileActiveIndex >= 0 && (
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
+              style={{ width: `calc((100% - 0.75rem) / ${MOBILE_NAV.length})` }}
+              initial={false}
+              animate={{ x: `${mobileActiveIndex * 100}%` }}
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+            />
+          )}
+          {MOBILE_NAV.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
@@ -126,23 +148,13 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className="relative flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10.5px] font-medium transition-transform active:scale-[0.92]"
+                className="relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10.5px] font-medium transition-transform active:scale-[0.92]"
               >
-                {active && (
-                  <motion.span
-                    layoutId="bottom-nav-active"
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    className="absolute inset-0 rounded-xl bg-accent-soft"
-                  />
-                )}
                 <Icon
-                  className={cn(
-                    "relative h-5 w-5 transition-colors",
-                    active ? "text-accent" : "text-ink-faint"
-                  )}
+                  className={cn("h-5 w-5 transition-colors", active ? "text-accent" : "text-ink-faint")}
                   strokeWidth={1.9}
                 />
-                <span className={cn("relative transition-colors", active ? "text-accent" : "text-ink-faint")}>
+                <span className={cn("transition-colors", active ? "text-accent" : "text-ink-faint")}>
                   {item.label}
                 </span>
               </Link>

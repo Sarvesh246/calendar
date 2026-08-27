@@ -36,8 +36,8 @@ export function MonthView({
         ))}
       </div>
       <div
-        className="grid flex-1 grid-cols-7 gap-1.5 sm:min-h-0"
-        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+        className="grid flex-1 grid-cols-7 gap-1.5 sm:min-h-0 sm:overflow-y-auto"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(92px, 1fr))` }}
       >
         {grid.map(({ date, inMonth }) => {
           const dayItems = itemsOnDay(items, date);
@@ -64,7 +64,7 @@ export function MonthView({
                 "flex min-h-[68px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
                 selected && "ring-2 ring-accent ring-offset-0",
-                !inMonth && "opacity-40"
+                !inMonth && "opacity-70"
               )}
             >
               <span

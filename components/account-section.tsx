@@ -10,7 +10,7 @@ export function AccountSection() {
   const { user, configured, signingIn, signInWithGoogle, signOut } = useAuth();
   const syncStatus = useDatebookStore((s) => s.syncStatus);
   const cloudError = useDatebookStore((s) => s.cloudError);
-  const connectCloud = useDatebookStore((s) => s.connectCloud);
+  const retrySync = useDatebookStore((s) => s.retrySync);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +56,7 @@ export function AccountSection() {
               {cloudError ?? "Something went wrong syncing."}
             </p>
             <button
-              onClick={() => user && connectCloud(user.id)}
+              onClick={() => retrySync()}
               className="self-start rounded-md border border-line px-2.5 py-1.5 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
             >
               Retry sync
