@@ -33,7 +33,7 @@ export function Sidebar() {
       {/* Desktop floating sidebar */}
       <aside
         className={cn(
-          "sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 flex-col gap-1 self-start rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-sm)] transition-[width] duration-200 md:flex",
+          "sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-sm)] transition-[width] duration-200 md:flex",
           collapsed ? "w-[68px]" : "w-[220px]"
         )}
       >

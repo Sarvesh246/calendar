@@ -16,8 +16,8 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)]">
-      <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line">
+    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:overflow-y-auto">
+      <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
         <div />
         {days.map((day) => (
           <div key={day.toISOString()} className={cn("border-l border-line px-2 py-2 text-center", isToday(day) && "bg-accent-soft")}>

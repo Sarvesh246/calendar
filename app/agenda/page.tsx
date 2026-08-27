@@ -41,7 +41,7 @@ export default function AgendaPage() {
   const isEmpty = overdue.length === 0 && groups.length === 0;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8">
       <header>
         <h1 className="font-display text-[28px] italic text-ink">Agenda</h1>
         <p className="mt-1 text-[13.5px] text-ink-soft">Everything ahead, one day at a time.</p>
