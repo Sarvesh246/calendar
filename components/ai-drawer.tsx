@@ -17,8 +17,8 @@ interface Message {
 
 const WELCOME: Message = {
   role: "assistant",
-  text: "Ask me anything about your schedule — I can also move things around for you.",
-  suggestions: ["What's due this week?", "What's due today?", "What's my busiest day?"],
+  text: "Ask me anything about your schedule, or tell me to add, move, rename, complete, or delete something.",
+  suggestions: ["What's due this week?", "What's next?", "Add homework due Friday at 5pm"],
 };
 
 export function AIDrawer() {
@@ -26,7 +26,9 @@ export function AIDrawer() {
   const setOpen = useUIStore((s) => s.setAIDrawerOpen);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
+  const addItem = useDatebookStore((s) => s.addItem);
   const updateItem = useDatebookStore((s) => s.updateItem);
+  const deleteItem = useDatebookStore((s) => s.deleteItem);
 
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
@@ -50,11 +52,35 @@ export function AIDrawer() {
   }
 
   function confirmAction(action: AssistantAction) {
-    updateItem(action.itemId, { at: action.newAt });
-    setMessages((m) => [
-      ...m,
-      { role: "assistant", text: `Done — "${action.itemTitle}" is now on ${action.toLabel}.` },
-    ]);
+    let confirmation: string;
+    switch (action.kind) {
+      case "create": {
+        addItem(action.draft);
+        confirmation = `Added "${action.draft.title}".`;
+        break;
+      }
+      case "reschedule": {
+        updateItem(action.itemId, { at: action.newAt });
+        confirmation = `Done — "${action.itemTitle}" moved.`;
+        break;
+      }
+      case "rename": {
+        updateItem(action.itemId, { title: action.newTitle });
+        confirmation = `Renamed to "${action.newTitle}".`;
+        break;
+      }
+      case "status": {
+        updateItem(action.itemId, { status: action.newStatus });
+        confirmation = `"${action.itemTitle}" updated.`;
+        break;
+      }
+      case "delete": {
+        deleteItem(action.itemId);
+        confirmation = `Deleted "${action.itemTitle}".`;
+        break;
+      }
+    }
+    setMessages((m) => [...m, { role: "assistant", text: confirmation }]);
   }
 
   function dismissAction() {
@@ -97,9 +123,7 @@ export function AIDrawer() {
 
                   {m.action && (
                     <div className="rounded-lg border border-line bg-surface-sunken p-2.5">
-                      <p className="text-[12px] text-ink-soft">
-                        {m.action.fromLabel} <span className="text-ink-faint">→</span> {m.action.toLabel}
-                      </p>
+                      <p className="text-[12px] text-ink-soft">{m.action.preview}</p>
                       <div className="mt-2 flex gap-2">
                         <button
                           onClick={dismissAction}
@@ -109,9 +133,13 @@ export function AIDrawer() {
                         </button>
                         <button
                           onClick={() => confirmAction(m.action!)}
-                          className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90"
+                          className={
+                            m.action.kind === "delete"
+                              ? "rounded-md bg-warn px-2.5 py-1 text-[12px] font-medium text-white hover:opacity-90"
+                              : "rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90"
+                          }
                         >
-                          Move
+                          {m.action.confirmLabel}
                         </button>
                       </div>
                     </div>
