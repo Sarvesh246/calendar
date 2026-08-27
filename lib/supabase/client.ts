@@ -3,10 +3,14 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Supabase's newer "publishable" key (sb_publishable_…) or the legacy anon JWT —
+// both are browser-safe and gated by row-level security.
+const key =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-/** True when the two public env vars are set — the app runs in local-only mode otherwise. */
-export const isSupabaseConfigured = Boolean(url && anonKey);
+/** True when the URL + key env vars are set — the app runs in local-only mode otherwise. */
+export const isSupabaseConfigured = Boolean(url && key);
 
 /**
  * Browser Supabase client. Sessions live in localStorage and the magic-link
@@ -14,7 +18,7 @@ export const isSupabaseConfigured = Boolean(url && anonKey);
  * `null` when Supabase isn't configured, so callers must guard.
  */
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(url as string, anonKey as string, {
+  ? createClient(url as string, key as string, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
