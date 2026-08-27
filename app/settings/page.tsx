@@ -6,6 +6,7 @@ import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { ImportCalendar } from "@/components/import-calendar";
+import { AccountSection } from "@/components/account-section";
 import { cn } from "@/lib/utils";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
 
@@ -26,6 +27,10 @@ export default function SettingsPage() {
         <h1 className="font-display text-[28px] italic text-ink">Settings</h1>
         <p className="mt-1 text-[13.5px] text-ink-soft">Make Datebook feel like yours.</p>
       </header>
+
+      <Section title="Account &amp; sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
+        <AccountSection />
+      </Section>
 
       <Section title="Appearance" sub="Pick a starting point — every color in the app derives from this.">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
