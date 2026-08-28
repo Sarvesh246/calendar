@@ -364,6 +364,10 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+  /* Safety net: a stray wide child must never make the whole page pan
+     sideways. `clip` (not `hidden`) doesn't create a scroll container, so
+     `position: sticky` on the desktop sidebar keeps working. */
+  overflow-x: clip;
 }
 
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
