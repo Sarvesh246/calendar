@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ExternalLink, MapPin, Tag, Trash2 } from "lucide-react";
@@ -10,7 +10,7 @@ import { formatTime, isOverdue } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import type { Category, Item } from "@/lib/types";
+import type { Category, Item, ItemStatus } from "@/lib/types";
 
 function useClock24h() {
   return useDatebookStore((s) => s.settings.clock24h);
@@ -25,14 +25,131 @@ export function ItemCard({ item, category }: { item: Item; category: Category | 
 }
 
 /* ------------------------------------------------------------------ */
-/* Shared expand/collapse detail panel                                 */
+/* Status controls                                                     */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABEL: Record<string, string> = {
-  todo: "To do",
-  doing: "In progress",
-  done: "Done",
+const STATUS_CYCLE: ItemStatus[] = ["todo", "doing", "done"];
+
+const NEXT_ACTION: Record<ItemStatus, string> = {
+  todo: "Mark in progress",
+  doing: "Mark complete",
+  done: "Mark to do",
 };
+
+function StatusCycleButton({
+  status,
+  color,
+  onCycle,
+}: {
+  status: ItemStatus;
+  color: string;
+  onCycle: () => void;
+}) {
+  const prevStatus = useRef(status);
+  const [checkBurst, setCheckBurst] = useState(false);
+
+  useEffect(() => {
+    if (status === "done" && prevStatus.current !== "done") {
+      setCheckBurst(true);
+    }
+    prevStatus.current = status;
+  }, [status]);
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length];
+        haptic(next === "done" ? "success" : "light");
+        onCycle();
+      }}
+      aria-label={NEXT_ACTION[status]}
+      title={NEXT_ACTION[status]}
+      style={{ "--cat": color } as React.CSSProperties}
+      className="press-none flex h-11 w-11 shrink-0 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+    >
+      <span
+        className={cn(
+          "relative flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
+          status === "todo" && "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent",
+          status === "doing" && "status-doing-ring border-accent bg-[conic-gradient(from_200deg,var(--accent)_0deg,var(--accent)_180deg,transparent_180deg)]",
+          status === "done" && "border-good bg-good"
+        )}
+      >
+        <AnimatePresence initial={false}>
+          {status === "done" && (
+            <motion.span
+              key="check"
+              initial={checkBurst ? { scale: 0, opacity: 0 } : false}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={motionTokens.springSnappy}
+              onAnimationComplete={() => setCheckBurst(false)}
+            >
+              <Check className="h-3 w-3 text-white" strokeWidth={3} />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </span>
+    </button>
+  );
+}
+
+function StatusSegmented({
+  value,
+  onChange,
+  layoutScope,
+}: {
+  value: ItemStatus;
+  onChange: (status: ItemStatus) => void;
+  layoutScope: string;
+}) {
+  const options: { value: ItemStatus; label: string }[] = [
+    { value: "todo", label: "To do" },
+    { value: "doing", label: "In progress" },
+    { value: "done", label: "Done" },
+  ];
+
+  return (
+    <div
+      className="flex w-full items-center gap-0.5 rounded-lg border border-line bg-surface-sunken p-0.5"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              haptic(opt.value === "done" ? "success" : "light");
+              onChange(opt.value);
+            }}
+            className={cn(
+              "relative min-h-9 flex-1 rounded-md px-2 text-[12px] font-medium transition-colors",
+              active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId={`item-status-pill-${layoutScope}`}
+                className="absolute inset-0 rounded-md bg-accent"
+                transition={motionTokens.spring}
+              />
+            )}
+            <span className="relative z-[1]">{opt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared expand/collapse detail panel                                 */
+/* ------------------------------------------------------------------ */
 
 function linkLabel(url: string): string {
   try {
@@ -56,7 +173,7 @@ function DetailRow({
   return (
     <div className="flex gap-2.5">
       <span className="mt-0.5 shrink-0 text-ink-faint">{icon}</span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">{label}</p>
         <div className="mt-0.5 text-[12.5px] text-ink-soft">{children}</div>
       </div>
@@ -73,14 +190,15 @@ function ItemDetails({
   category: Category | undefined;
   clock24h: boolean;
 }) {
+  const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const isEvent = item.type === "event";
   const timeLabel = item.allDay
     ? "All day"
     : isEvent
-    ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
-    : `Due ${formatTime(item.at, clock24h)}`;
+      ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
+      : `Due ${formatTime(item.at, clock24h)}`;
 
   return (
     <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
@@ -111,8 +229,14 @@ function ItemDetails({
 
       {!isEvent && item.status && (
         <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
-          {STATUS_LABEL[item.status] ?? item.status}
-          {isOverdue(item) && <span className="text-warn"> · overdue</span>}
+          <StatusSegmented
+            value={item.status}
+            layoutScope={item.id}
+            onChange={(status) => setItemStatus(item.id, status)}
+          />
+          {isOverdue(item) && item.status !== "done" && (
+            <p className="mt-1.5 text-warn">Overdue</p>
+          )}
         </DetailRow>
       )}
 
@@ -153,7 +277,6 @@ function ItemDetails({
 
 function ItemActions({ item }: { item: Item }) {
   const deleteItem = useDatebookStore((s) => s.deleteItem);
-  const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const [confirm, setConfirm] = useState(false);
 
   return (
@@ -162,15 +285,6 @@ function ItemActions({ item }: { item: Item }) {
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      {item.status && item.status !== "done" && (
-        <button
-          type="button"
-          onClick={() => setItemStatus(item.id, item.status === "doing" ? "todo" : "doing")}
-          className="min-h-11 rounded-lg border border-line px-3 text-[12.5px] font-medium text-ink-soft"
-        >
-          {item.status === "doing" ? "Mark to do" : "In progress"}
-        </button>
-      )}
       {confirm ? (
         <>
           <span className="text-[12.5px] text-warn">Delete this?</span>
@@ -228,8 +342,6 @@ function useExpandable(itemId: string) {
   return { expanded, toggle, keyToggle };
 }
 
-/** The detail panel both cards reveal on expand — animates in and, unlike the
- *  old inline block, back out. Honours reduced-motion via the MotionConfig. */
 function ExpandPanel({ open, children }: { open: boolean; children: React.ReactNode }) {
   return (
     <AnimatePresence initial={false}>
@@ -246,6 +358,29 @@ function ExpandPanel({ open, children }: { open: boolean; children: React.ReactN
       )}
     </AnimatePresence>
   );
+}
+
+function useCompleteStyle(done: boolean) {
+  const [styled, setStyled] = useState(done);
+
+  useEffect(() => {
+    if (!done) {
+      setStyled(false);
+      return;
+    }
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setStyled(true);
+      return;
+    }
+    const delayMs = Math.round(motionTokens.standard * 1000);
+    const t = window.setTimeout(() => setStyled(true), delayMs);
+    return () => window.clearTimeout(t);
+  }, [done]);
+
+  return styled;
 }
 
 /* ------------------------------------------------------------------ */
@@ -317,11 +452,13 @@ export function EventCard({ item, category }: { item: Item; category: Category |
 
 export function AssignmentCard({ item, category }: { item: Item; category: Category | undefined }) {
   const clock24h = useClock24h();
-  const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
+  const cycleItemStatus = useDatebookStore((s) => s.cycleItemStatus);
   const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const color = category?.color ?? "#8a8a94";
-  const done = item.status === "done";
+  const status = item.status ?? "todo";
+  const done = status === "done";
   const overdue = isOverdue(item);
+  const showCompleteStyle = useCompleteStyle(done);
   const { expanded, toggle, keyToggle } = useExpandable(item.id);
 
   return (
@@ -335,50 +472,39 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       onKeyDown={keyToggle}
       className={cn(
         "cursor-pointer rounded-lg border border-line bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        done && "opacity-60"
+        showCompleteStyle && "opacity-60"
       )}
     >
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            haptic("success");
-            toggleItemDone(item.id);
-          }}
-          aria-label={done ? "Mark incomplete" : "Mark complete"}
-          style={{ "--cat": color } as React.CSSProperties}
-          className="flex h-11 w-11 shrink-0 items-center justify-center"
-        >
-          <span
-            className={cn(
-              "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
-              done ? "border-good bg-good" : "cat-ring border-[color-mix(in_srgb,var(--cat)_55%,transparent)]"
-            )}
-          >
-            <motion.span
-              initial={false}
-              animate={{ scale: done ? 1 : 0, opacity: done ? 1 : 0 }}
-              transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
-            >
-              <Check className="h-3 w-3 text-white" strokeWidth={3} />
-            </motion.span>
-          </span>
-        </button>
+        <StatusCycleButton
+          status={status}
+          color={color}
+          onCycle={() => cycleItemStatus(item.id)}
+        />
 
         <div className="min-w-0 flex-1">
-          <p className={cn("line-clamp-2 break-words text-[14px] font-medium text-ink", done && "line-through")}>
+          <motion.p
+            animate={{
+              opacity: showCompleteStyle ? 0.85 : 1,
+            }}
+            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            className={cn(
+              "line-clamp-2 break-words text-[14px] font-medium text-ink",
+              showCompleteStyle && "line-through"
+            )}
+          >
             {item.title}
-          </p>
+          </motion.p>
           <p
             className={cn(
               "mt-0.5 truncate text-[12px]",
-              overdue ? "font-medium text-warn" : "text-ink-soft"
+              overdue && status !== "done" ? "font-medium text-warn" : "text-ink-soft"
             )}
           >
             {item.allDay ? "All day" : formatTime(item.at, clock24h)}
-            {overdue && " · overdue"}
-            {item.status === "doing" && !overdue && " · in progress"}
+            {overdue && status !== "done" && " · overdue"}
+            {status === "doing" && !overdue && " · in progress"}
+            {status === "done" && " · done"}
           </p>
           {!expanded && item.description && (
             <p className="mt-1 whitespace-pre-line text-[11.5px] leading-snug text-ink-faint line-clamp-2">

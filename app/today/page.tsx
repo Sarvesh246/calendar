@@ -59,16 +59,16 @@ function TodayDashboard() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-[var(--page-gap)]">
-      <header className="flex items-start justify-between gap-4">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-[var(--page-gap)]">
+      <header className="flex items-start justify-between gap-3 sm:gap-4">
         <div>
           <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
           <h1 className="font-display mt-0.5 text-[34px] italic leading-none text-ink sm:text-[40px]">
             {format(now, "EEEE")}
           </h1>
-          <p className="mt-1 text-[15px] text-ink-soft">{format(now, "MMMM d")} · {greeting.sub}</p>
+          <p className="mt-1 text-[14px] text-ink-soft sm:text-[15px]">{format(now, "MMMM d")} · {greeting.sub}</p>
 
-          <div className="mt-4 flex items-center gap-2.5">
+          <div className="mt-3 flex items-center gap-2 sm:mt-4 sm:gap-2.5">
             <div className="flex gap-[3px]">
               {segments.map((filled, i) => (
                 <span
@@ -135,7 +135,7 @@ function intensityClass(intensity: number) {
 
 function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <p className="mb-2.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint sm:mb-2.5">
       {icon}
       {children}
     </p>

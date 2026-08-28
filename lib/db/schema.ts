@@ -52,7 +52,21 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 
 export const userSettings = pgTable("user_settings", {
   id: integer("id").primaryKey().default(1),
-  preset: text("preset", { enum: ["minimal", "midnight", "paper", "aurora", "mono"] })
+  preset: text("preset", {
+    enum: [
+      "minimal",
+      "midnight",
+      "paper",
+      "aurora",
+      "mono",
+      "noir",
+      "sakura",
+      "evergreen",
+      "slate",
+      "ember",
+      "frost",
+    ],
+  })
     .notNull()
     .default("minimal"),
   landingView: text("landing_view", { enum: ["today", "calendar", "agenda"] })

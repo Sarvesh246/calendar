@@ -199,7 +199,7 @@ export function AIDrawer() {
       <div
         onClick={() => setOpen(false)}
         className={cn(
-          "absolute inset-0 bg-black/35 backdrop-blur-[2px]",
+          "overlay-scrim absolute inset-0 backdrop-blur-[2px]",
           open
             ? "animate-[overlay-in_200ms_ease-out]"
             : "animate-[overlay-out_180ms_ease-in_forwards]"

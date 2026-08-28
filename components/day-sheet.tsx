@@ -35,7 +35,7 @@ export function DaySheet({
         exit={{ opacity: 0 }}
         transition={{ duration: motionTokens.standard }}
         onClick={onClose}
-        className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"
+        className="overlay-scrim absolute inset-0 backdrop-blur-[2px]"
       />
       <motion.div
         role="dialog"

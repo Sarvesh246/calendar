@@ -46,6 +46,147 @@ interface Ctx {
   clock24h: boolean;
 }
 
+/** Compact facts pre-computed for the model and offline heuristics. */
+export interface AssistantDigest {
+  dueToday: DigestEntry[];
+  dueThisWeek: DigestEntry[];
+  dueByNextSunday: DigestEntry[];
+  overdue: DigestEntry[];
+  inProgress: DigestEntry[];
+  completedLast7Days: { count: number; titles: string[] };
+  nextEvent?: DigestEntry;
+}
+
+export interface DigestEntry {
+  id: string;
+  title: string;
+  type: Item["type"];
+  status?: ItemStatus;
+  at: string;
+  categoryName?: string;
+}
+
+const WEEKDAY_SHORT: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/** Local calendar day as yyyy-MM-dd in an IANA timezone. */
+export function zonedDateKey(instant: Date | string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(instant));
+}
+
+function zonedWeekday(instant: Date | string, timeZone: string): number {
+  const w =
+    new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" })
+      .formatToParts(new Date(instant))
+      .find((p) => p.type === "weekday")?.value ?? "Sun";
+  return WEEKDAY_SHORT[w] ?? 0;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function nextSundayDateKey(now: Date, timeZone: string): string {
+  const todayKey = zonedDateKey(now, timeZone);
+  const dow = zonedWeekday(now, timeZone);
+  return addDaysToDateKey(todayKey, dow === 0 ? 0 : 7 - dow);
+}
+
+function categoryNameFor(id: string | undefined, categories: Pick<Category, "id" | "name">[]): string | undefined {
+  if (!id) return undefined;
+  return categories.find((c) => c.id === id)?.name;
+}
+
+function isOpenWork(item: Item): boolean {
+  return item.type !== "event" && item.status !== "done";
+}
+
+function isOverdueOpen(item: Item, now: Date, timeZone: string): boolean {
+  if (!isOpenWork(item)) return false;
+  const at = new Date(item.at);
+  if (item.allDay) return zonedDateKey(at, timeZone) < zonedDateKey(now, timeZone);
+  return at.getTime() < now.getTime();
+}
+
+function toDigestEntry(item: Item, categories: Pick<Category, "id" | "name">[]): DigestEntry {
+  return {
+    id: item.id,
+    title: item.title,
+    type: item.type,
+    status: item.status,
+    at: item.at,
+    categoryName: categoryNameFor(item.categoryId, categories),
+  };
+}
+
+/** Pre-compute schedule facts so the model and offline engine share one source of truth. */
+export function buildAssistantDigest(
+  items: Item[],
+  categories: Pick<Category, "id" | "name">[],
+  nowIso: string,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+): AssistantDigest {
+  const now = new Date(nowIso);
+  const todayKey = zonedDateKey(now, timeZone);
+  const weekEndKey = addDaysToDateKey(todayKey, 6);
+  const sundayKey = nextSundayDateKey(now, timeZone);
+  const completedSinceKey = addDaysToDateKey(todayKey, -6);
+
+  const openWork = items.filter(isOpenWork).sort((a, b) => +new Date(a.at) - +new Date(b.at));
+  const dueToday = openWork.filter((i) => zonedDateKey(i.at, timeZone) === todayKey);
+  const dueThisWeek = openWork.filter((i) => {
+    const k = zonedDateKey(i.at, timeZone);
+    return k >= todayKey && k <= weekEndKey;
+  });
+  const dueByNextSunday = openWork.filter((i) => zonedDateKey(i.at, timeZone) <= sundayKey);
+  const overdue = openWork.filter((i) => isOverdueOpen(i, now, timeZone));
+  const inProgress = openWork.filter((i) => i.status === "doing");
+
+  const completed = items
+    .filter(
+      (i) =>
+        i.type !== "event" &&
+        i.status === "done" &&
+        zonedDateKey(i.at, timeZone) >= completedSinceKey &&
+        zonedDateKey(i.at, timeZone) <= todayKey
+    )
+    .sort((a, b) => +new Date(b.at) - +new Date(a.at));
+
+  const nextEvent = items
+    .filter((i) => i.type === "event" && new Date(i.at).getTime() >= now.getTime())
+    .sort((a, b) => +new Date(a.at) - +new Date(b.at))[0];
+
+  return {
+    dueToday: dueToday.map((i) => toDigestEntry(i, categories)),
+    dueThisWeek: dueThisWeek.map((i) => toDigestEntry(i, categories)),
+    dueByNextSunday: dueByNextSunday.map((i) => toDigestEntry(i, categories)),
+    overdue: overdue.map((i) => toDigestEntry(i, categories)),
+    inProgress: inProgress.map((i) => toDigestEntry(i, categories)),
+    completedLast7Days: {
+      count: completed.length,
+      titles: completed.slice(0, 12).map((i) => i.title),
+    },
+    nextEvent: nextEvent ? toDigestEntry(nextEvent, categories) : undefined,
+  };
+}
+
+function asksAboutCompletedWork(q: string): boolean {
+  return /\b(finished|completed|complete|did i finish|what did i|have i finished|checked off|done with)\b/.test(q);
+}
+
 const STARTER_SUGGESTIONS = [
   "What's on today?",
   "What's due this week?",
@@ -182,7 +323,11 @@ export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
   const raw = query.trim();
   const q = raw.toLowerCase();
   const fmtTime = (iso: string) => format(new Date(iso), ctx.clock24h ? "HH:mm" : "h:mm a");
-  const open = ctx.items.filter((i) => i.type !== "event" && i.status !== "done");
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = new Date();
+  const digest = buildAssistantDigest(ctx.items, ctx.categories, now.toISOString(), tz);
+  const open = ctx.items.filter(isOpenWork);
+  const wantsCompleted = asksAboutCompletedWork(q);
 
   /* --- mutations ------------------------------------------------- */
 
@@ -294,12 +439,21 @@ export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
   /* --- questions ----------------------------------------------- */
 
   if (/\b(overdue|late|behind|past due)\b/.test(q)) {
-    const od = ctx.items
-      .filter((i) => i.type !== "event" && i.status !== "done" && new Date(i.at).getTime() < Date.now() && !isToday(new Date(i.at)))
-      .sort((a, b) => +new Date(a.at) - +new Date(b.at));
+    const od = digest.overdue;
     return {
-      text: od.length === 0 ? "Nothing overdue — you're on top of it." : `${od.length} overdue: ${list(od)}.`,
+      text: od.length === 0 ? "Nothing overdue — you're on top of it." : `${od.length} overdue: ${digestList(od)}.`,
       suggestions: ["What's due this week?", "What's on today?"],
+    };
+  }
+
+  if (wantsCompleted && !/\b(add|create|move|delete|mark|rename)\b/.test(q)) {
+    const { count, titles } = digest.completedLast7Days;
+    if (count === 0) return { text: "Nothing completed in the last 7 days.", suggestions: ["What's due this week?"] };
+    const listed = titles.slice(0, 8).map((t) => `**${t}**`).join(", ");
+    const more = count > titles.length ? ` (+${count - titles.length} more)` : "";
+    return {
+      text: `You finished **${count}** item${count === 1 ? "" : "s"} in the last 7 days: ${listed}${more}.`,
+      suggestions: ["What's on today?", "What's due this week?"],
     };
   }
 
@@ -333,19 +487,59 @@ export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
       return rangeAnswer("this weekend", isToday(sat) ? sat : sat, addDays(sat, 2), ctx);
     }
     const d = resolveDate(key);
-    if (d) return dayAnswer(d, ctx, fmtTime);
+    if (d) return dayAnswer(d, ctx, fmtTime, wantsCompleted);
   }
 
   if (/due (this week|soon)|this week/.test(q)) return rangeAnswer("this week", startOfDay(new Date()), addDays(startOfDay(new Date()), 7), ctx);
   if (/next week/.test(q)) return rangeAnswer("next week", addWeeks(startOfDay(new Date()), 1), addWeeks(addDays(startOfDay(new Date()), 7), 1), ctx);
-  if (/due today|what'?s? (due )?today|today/.test(q)) return dayAnswer(new Date(), ctx, fmtTime);
-  if (/tomorrow/.test(q)) return dayAnswer(addDays(new Date(), 1), ctx, fmtTime);
+  if (/due today|what'?s? (due )?today|today/.test(q)) return dayAnswer(new Date(), ctx, fmtTime, wantsCompleted);
+  if (/tomorrow/.test(q)) return dayAnswer(addDays(new Date(), 1), ctx, fmtTime, wantsCompleted);
 
   if (/how many|count|number of/.test(q)) {
-    const events = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(new Date())).length;
+    const wantsEvents = /\bevents?\b/.test(q);
+    const wantsWork = /\b(assignments?|tasks?|homework|due|left|outstanding|open)\b/.test(q);
+    const bySunday = /\b(by|before|through|until)\s+sunday\b|\bdue\s+by\s+sunday\b/.test(q);
+    const thisWeek = /\bthis week\b/.test(q) && !bySunday;
+    const todayBound = /\btoday\b/.test(q) && !thisWeek && !bySunday;
+
+    if (wantsEvents && !wantsWork) {
+      const events = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(now)).length;
+      return {
+        text: `You have **${events}** upcoming event${events === 1 ? "" : "s"}.`,
+        suggestions: ["What's on today?", "What's due this week?"],
+      };
+    }
+
+    let pool: DigestEntry[];
+    let label: string;
+    if (bySunday) {
+      pool = digest.dueByNextSunday;
+      label = "due by Sunday";
+    } else if (thisWeek) {
+      pool = digest.dueThisWeek;
+      label = "due this week";
+    } else if (todayBound) {
+      pool = digest.dueToday;
+      label = "due today";
+    } else if (wantsWork) {
+      pool = open.map((i) => toDigestEntry(i, ctx.categories));
+      label = "open";
+    } else {
+      const events = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(now)).length;
+      return {
+        text: `You have **${open.length}** open task${open.length === 1 ? "" : "s"} and **${events}** upcoming event${events === 1 ? "" : "s"}.`,
+        suggestions: ["What's due this week?", "What's my busiest day?"],
+      };
+    }
+
+    const n = pool.length;
+    const kind = /\bassignments?\b/.test(q) ? "assignment" : /\btasks?\b/.test(q) ? "task" : "item";
     return {
-      text: `You have ${open.length} open task${open.length === 1 ? "" : "s"} and ${events} upcoming event${events === 1 ? "" : "s"}.`,
-      suggestions: ["What's due this week?", "What's my busiest day?"],
+      text:
+        n === 0
+          ? `Nothing ${label}.`
+          : `**${n}** ${kind}${n === 1 ? "" : "s"} ${label}${n <= 8 ? `: ${digestList(pool)}` : ""}.`,
+      suggestions: ["What's on today?", "What's due this week?"],
     };
   }
 
@@ -429,6 +623,13 @@ function list(items: Item[]): string {
   return items.slice(0, 8).map((i) => `${i.title} (${dayPhrase(new Date(i.at))})`).join(", ");
 }
 
+function digestList(entries: DigestEntry[]): string {
+  return entries
+    .slice(0, 8)
+    .map((i) => `${i.title} (${dayPhrase(new Date(i.at))})`)
+    .join(", ");
+}
+
 function miss(q: string): AssistantResponse {
   return {
     text: `I couldn't find anything matching “${q.trim().replace(/[?.]+$/, "")}” on your calendar.`,
@@ -436,15 +637,28 @@ function miss(q: string): AssistantResponse {
   };
 }
 
-function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string): AssistantResponse {
+function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string, wantsCompleted = false): AssistantResponse {
   const on = ctx.items
-    .filter((i) => isSameDay(new Date(i.at), day))
+    .filter((i) => {
+      if (!isSameDay(new Date(i.at), day)) return false;
+      if (i.type === "event") return true;
+      if (wantsCompleted) return i.status === "done";
+      return i.status !== "done";
+    })
     .sort((a, b) => +new Date(a.at) - +new Date(b.at));
   const label = isToday(day) ? "today" : isTomorrow(day) ? "tomorrow" : format(day, "EEEE, MMM d");
-  if (on.length === 0) return { text: `Nothing on ${label}.`, suggestions: ["What's due this week?"] };
+  if (on.length === 0) {
+    return {
+      text: wantsCompleted ? `Nothing completed on ${label}.` : `Nothing on ${label}.`,
+      suggestions: ["What's due this week?"],
+    };
+  }
   return {
     text: `${cap(label)}: ${on
-      .map((i) => `${i.title}${i.allDay ? " (all day)" : i.type === "event" ? ` at ${fmtTime(i.at)}` : ` (due ${fmtTime(i.at)})`}`)
+      .map((i) => {
+        if (i.status === "done") return `**${i.title}** (done)`;
+        return `${i.title}${i.allDay ? " (all day)" : i.type === "event" ? ` at ${fmtTime(i.at)}` : ` (due ${fmtTime(i.at)})`}`;
+      })
       .join(", ")}.`,
     suggestions: ["What about tomorrow?", "What's my busiest day?"],
   };

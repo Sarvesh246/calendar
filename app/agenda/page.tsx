@@ -56,7 +56,7 @@ export default function AgendaPage() {
 
       {overdue.length > 0 && (
         <section>
-          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-warn">
+          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-warn backdrop-blur-sm">
             Overdue · {overdue.length}
           </p>
           <div className="flex flex-col gap-2">
@@ -72,7 +72,7 @@ export default function AgendaPage() {
         const showDate = label === "Today" || label === "Tomorrow";
         return (
         <section key={group.date.toISOString()}>
-          <p className="mb-2.5 flex items-baseline gap-2 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 flex items-baseline gap-2 bg-surface-base/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-ink-faint backdrop-blur-sm">
             {label}
             {showDate && (
               <span className="normal-case tracking-normal text-ink-faint/70">

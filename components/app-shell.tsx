@@ -31,15 +31,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         "mx-auto flex w-full max-w-[1800px] gap-5 px-4",
         focusMode
           ? "min-h-dvh pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "min-h-dvh pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:min-h-0 md:px-6 md:pt-4 md:pb-6"
+          : "min-h-dvh pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
 
-      <main className="min-w-0 flex-1">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {!focusMode && (
           <>
-            <div className="mb-3 flex items-center gap-2.5 md:mb-5">
+            <div className="mb-2.5 flex shrink-0 items-center gap-2.5 md:mb-5">
               {/* min-w-0 so the bar yields space to the fixed-width search button
                   instead of pushing it off the right edge on narrow screens. */}
               <div className="min-w-0 flex-1">
