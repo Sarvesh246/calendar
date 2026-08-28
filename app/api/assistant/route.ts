@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildAssistantDigest } from "@/lib/ai-assistant";
 import type { Item, ItemStatus, ItemType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -23,6 +24,7 @@ interface SlimItem {
   allDay?: boolean;
   status?: ItemStatus;
   categoryId?: string;
+  categoryName?: string;
   location?: string;
   description?: string;
   url?: string;
@@ -121,6 +123,18 @@ function systemPrompt(body: ReqBody): string {
     hour: "numeric", minute: "2-digit", timeZone: tz,
   }).format(now);
 
+  const catById = new Map(body.categories.map((c) => [c.id, c.name]));
+  const digest = buildAssistantDigest(
+    body.items.map((i) => ({
+      ...i,
+      categoryId: i.categoryId ?? "",
+      createdAt: body.now,
+    })),
+    body.categories,
+    body.now,
+    tz
+  );
+
   // Keep the payload bounded (latency): nearest ~180 items to "now", trimmed
   // descriptions.
   const items = [...body.items]
@@ -131,6 +145,7 @@ function systemPrompt(body: ReqBody): string {
     .slice(0, 180)
     .map((i) => ({
       ...i,
+      categoryName: i.categoryId ? catById.get(i.categoryId) : undefined,
       description: i.description ? i.description.slice(0, 180) : undefined,
     }));
 
@@ -142,10 +157,22 @@ The user's full calendar is below as JSON.
 CATEGORIES (id → name): ${JSON.stringify(body.categories)}
 ITEMS: ${JSON.stringify(items)}
 
-Item shape: type is "event" (something happening at a time — class, meeting, appointment), "assignment" (due-dated coursework: ${ASSIGNMENT_WORDS}), or "task" (a to-do). "at" is the start time for events and the due time for assignments/tasks. "status" (todo/doing/done) applies to assignments and tasks only. "categoryId" maps to a CATEGORY name — for imported coursework that name IS the class/course. "url" (when present) is a link to the source page (e.g. the Canvas assignment); "description" and "location" carry any extra detail the feed provided.
+PRE-COMPUTED DIGEST (authoritative — prefer this over re-deriving counts from ITEMS when they disagree):
+${JSON.stringify(digest)}
+
+Item shape: type is "event" (something happening at a time — class, meeting, appointment), "assignment" (due-dated coursework: ${ASSIGNMENT_WORDS}), or "task" (a to-do). "at" is the start time for events and the due time for assignments/tasks. "status" (todo/doing/done) applies to assignments and tasks only. "categoryId" / "categoryName" map to the class/course. "url" (when present) is a link to the source page (e.g. the Canvas assignment); "description" and "location" carry any extra detail the feed provided.
+
+STATUS & DUE SEMANTICS — follow strictly:
+- "done" means finished. A done item is NEVER overdue, NEVER "still due", and NEVER counted in "how many do I have left", "how many due", "due by Sunday", or similar open-work questions unless the user explicitly asks about completed/finished work.
+- "doing" means in progress — it still counts as open work.
+- "todo" (or unset status) with a due datetime in the past = overdue (unless done).
+- "Due by Sunday" / "due this week" / "what's left" = open assignments and tasks only (status todo or doing), NOT events.
+- Events are not assignments — never mix events into due-counts or overdue lists unless the user asks about events specifically.
+- When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST.
+- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off.
 
 YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when the user clearly asks you to.
-1. ANSWER a question (this is the common case — a chatbot about their calendar). Triggers: "what/when/where/how many/how much/do I have/is there/am I free/show me/list/tell me/which/what's it for/what class…". Answer precisely from the ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Do maths yourself (counts, gaps, busiest day, free windows, time until X). If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.
+1. ANSWER a question (this is the common case — a chatbot about their calendar). Triggers: "what/when/where/how many/how much/do I have/is there/am I free/show me/list/tell me/which/what's it for/what class…". Answer precisely from the DIGEST and ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Use the DIGEST for counts and date-bounded lists. If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.
 2. CHANGE the calendar. Triggers: "add/create/schedule/put/new/set up/block off/remind me to/move/reschedule/push/bump/rename/retitle/change/mark/complete/finish/check off/reopen/delete/remove/cancel/clear…". Return one action per change in "actions". Never claim it's done — the user taps to confirm each action in the UI. Still write a short natural "reply" describing what you're proposing.
 A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action).
 

@@ -50,17 +50,13 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Stack on narrow screens so the title always sits above the controls —
-          otherwise a short month name ("May 2026") leaves room for the controls
-          to ride up onto the same line while a long one ("September 2026") wraps
-          them below, so the header jumped around month to month. */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-[28px] italic text-ink">
-            {mode === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
-          </h1>
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h1 className="font-display text-[22px] italic leading-tight text-ink sm:text-[28px]">
+          {mode === "month"
+            ? format(anchor, "MMMM yyyy")
+            : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
+        </h1>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
@@ -112,6 +108,7 @@ export default function CalendarPage() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:gap-4"
       >
         {mode === "month" ? (
           <MonthView
@@ -124,31 +121,31 @@ export default function CalendarPage() {
         ) : (
           <WeekView days={days} items={items} onSelectDate={selectDate} />
         )}
-      </motion.div>
 
-      <AnimatePresence>
-        {selectedDate && (
-          <motion.div
-            key="desktop-day"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="glass hidden rounded-xl p-4 md:block"
-          >
-            <p className="mb-3 text-[13px] font-medium text-ink">{dayLabel(selectedDate)}</p>
-            {selectedItems.length === 0 ? (
-              <EmptyState title="Nothing scheduled." sub={`Free day on ${format(selectedDate, "MMM d")}.`} />
-            ) : (
-              <div className="flex flex-col gap-2">
-                {selectedItems.map((item) => (
-                  <SelectedItemRow key={item.id} item={item} />
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {selectedDate && (
+            <motion.aside
+              key="desktop-day"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 12 }}
+              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+              className="glass hidden min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-xl p-4 md:flex"
+            >
+              <p className="mb-3 shrink-0 text-[13px] font-medium text-ink">{dayLabel(selectedDate)}</p>
+              {selectedItems.length === 0 ? (
+                <EmptyState title="Nothing scheduled." sub={`Free day on ${format(selectedDate, "MMM d")}.`} />
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain">
+                  {selectedItems.map((item) => (
+                    <SelectedItemRow key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       <AnimatePresence>
         {selectedDate && (

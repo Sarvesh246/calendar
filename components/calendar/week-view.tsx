@@ -62,7 +62,7 @@ export function WeekView({
     <>
       <MobileWeekPager days={days} byDay={byDay} />
 
-      <div className="hidden overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] md:block md:h-[calc(100dvh-11.5rem)] md:overflow-y-auto">
+      <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] md:flex md:overflow-y-auto">
         <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
           <div />
           {days.map((day) => (
@@ -86,25 +86,38 @@ export function WeekView({
             const dayAssignments = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter(
               (i) => i.type !== "event" || i.allDay
             );
+            const visible = dayAssignments.slice(0, 2);
+            const overflow = dayAssignments.length - visible.length;
+            const hiddenTitles = dayAssignments
+              .slice(2)
+              .map((i) => i.title)
+              .join(", ");
             return (
               <div key={day.toISOString()} className="flex flex-col gap-1 border-l border-line p-1">
-                {dayAssignments.slice(0, 2).map((item) => {
+                {visible.map((item) => {
                   const color = colorOf(item.categoryId);
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => onSelectDate?.(day)}
-                      className="truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
-                      style={{
-                        background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
-                        color,
-                      }}
+                      className="cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium"
+                      style={{ "--cat": color } as React.CSSProperties}
                     >
                       {item.title}
                     </button>
                   );
                 })}
+                {overflow > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectDate?.(day)}
+                    title={hiddenTitles}
+                    className="truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium text-ink-soft"
+                  >
+                    +{overflow}
+                  </button>
+                )}
               </div>
             );
           })}

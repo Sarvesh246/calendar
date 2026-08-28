@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
+import { motion } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
@@ -9,6 +10,7 @@ import { ImportCalendar } from "@/components/import-calendar";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { cn } from "@/lib/utils";
+import { motion as motionTokens } from "@/lib/motion";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -61,6 +63,7 @@ export default function SettingsPage() {
       <Section title="Layout & display">
         <Row label="Default view">
           <Segmented
+            segmentId="landing-view"
             value={settings.landingView}
             options={[
               { value: "today", label: "Today" },
@@ -72,6 +75,7 @@ export default function SettingsPage() {
         </Row>
         <Row label="Density">
           <Segmented
+            segmentId="density"
             value={settings.density}
             options={[
               { value: "compact", label: "Compact" },
@@ -86,6 +90,7 @@ export default function SettingsPage() {
         </Row>
         <Row label="Week starts on">
           <Segmented
+            segmentId="week-starts"
             value={String(settings.weekStartsOn)}
             options={[
               { value: "0", label: "Sunday" },
@@ -94,13 +99,13 @@ export default function SettingsPage() {
             onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
           />
         </Row>
-        <Row label="24-hour clock">
+        <Row label="24-hour clock" horizontal>
           <ToggleSwitch checked={settings.clock24h} onChange={(v) => updateSettings({ clock24h: v })} label="24-hour clock" />
         </Row>
-        <Row label="Show location on event cards">
+        <Row label="Show location on event cards" horizontal>
           <ToggleSwitch checked={settings.showLocation} onChange={(v) => updateSettings({ showLocation: v })} label="Show location" />
         </Row>
-        <Row label="Show category dots">
+        <Row label="Show category dots" horizontal>
           <ToggleSwitch checked={settings.showCategoryDot} onChange={(v) => updateSettings({ showCategoryDot: v })} label="Show category dots" />
         </Row>
       </Section>
@@ -273,9 +278,23 @@ function Section({
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({
+  label,
+  children,
+  horizontal = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  horizontal?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div
+      className={cn(
+        horizontal
+          ? "flex flex-row items-center justify-between gap-4"
+          : "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      )}
+    >
       <span className="text-[13.5px] text-ink">{label}</span>
       {children}
     </div>
@@ -283,28 +302,41 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function Segmented({
+  segmentId,
   value,
   options,
   onChange,
 }: {
+  segmentId: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
   return (
     <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 sm:w-auto">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            "min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
-            value === opt.value ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-ink"
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "relative min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
+              active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId={`settings-segment-${segmentId}`}
+                className="absolute inset-0 rounded-md bg-accent"
+                transition={motionTokens.spring}
+              />
+            )}
+            <span className="relative z-[1]">{opt.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -320,10 +352,13 @@ function PresetCard({
 }) {
   const meta = presetMeta[preset];
   return (
-    <button
+    <motion.button
+      type="button"
+      layout
       onClick={onSelect}
+      transition={motionTokens.spring}
       className={cn(
-        "flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-all",
+        "flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-[border-color,box-shadow]",
         active ? "border-accent shadow-[var(--shadow-sm)]" : "border-line hover:border-line-strong"
       )}
     >
@@ -339,6 +374,6 @@ function PresetCard({
         </p>
         <p className="mt-0.5 text-[11.5px] leading-snug text-ink-soft">{meta.description}</p>
       </div>
-    </button>
+    </motion.button>
   );
 }

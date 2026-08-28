@@ -1,19 +1,27 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
 export function CategoryChips() {
+  const pathname = usePathname();
   const categories = useDatebookStore((s) => s.categories);
   const filter = useUIStore((s) => s.categoryFilter);
   const toggle = useUIStore((s) => s.toggleCategoryFilter);
   const clear = useUIStore((s) => s.clearCategoryFilter);
+  const onCalendar = pathname === "/calendar";
 
   if (categories.length === 0) return null;
 
   return (
-    <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+    <div
+      className={cn(
+        "-mx-4 flex shrink-0 gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden",
+        onCalendar ? "mb-2" : "mb-4"
+      )}
+    >
       <button
         type="button"
         onClick={clear}
