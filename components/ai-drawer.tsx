@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
+import { AssistantMarkdown } from "@/lib/markdown";
 import { ViewportLayer } from "@/components/viewport-layer";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,7 @@ interface Message {
   text: string;
   suggestions?: string[];
   actions?: AssistantAction[];
+  degraded?: boolean;
 }
 
 const WELCOME: Message = {
@@ -40,9 +42,12 @@ export function AIDrawer() {
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [queued, setQueued] = useState<string | null>(null);
   // `${messageIndex}:${actionIndex}` → outcome
   const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inFlight = useRef(false);
 
   // Keep the sheet mounted through its exit animation, then drop it. The enter/
   // exit visuals are pure CSS keyframes (see globals.css) — framer's
@@ -63,37 +68,93 @@ export function AIDrawer() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
 
+  // "Still working…" nudge so a slow reply doesn't look frozen.
+  useEffect(() => {
+    if (!thinking) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSlow(false);
+      return;
+    }
+    const t = setTimeout(() => setSlow(true), 9000);
+    return () => clearTimeout(t);
+  }, [thinking]);
+
+  // The engine: whenever the last message is an unanswered user turn, send it.
+  // Keeps sending decoupled from the click handlers, so a queued follow-up or a
+  // retry just appends a user turn and this picks it up.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "user" || inFlight.current) return;
+    inFlight.current = true;
+    setThinking(true);
+    const history: AssistantTurn[] = messages
+      .slice(1, -1) // drop the static welcome and the pending user turn
+      .filter((m) => m.text)
+      .map((m) => ({ role: m.role, text: m.text }));
+    askAssistant(last.text, history, { items, categories, clock24h })
+      .then((res) =>
+        setMessages((m) => [
+          ...m,
+          {
+            role: "assistant",
+            text: res.text,
+            suggestions: res.suggestions,
+            actions: res.actions,
+            degraded: res.degraded,
+          },
+        ])
+      )
+      .catch(() =>
+        setMessages((m) => [
+          ...m,
+          {
+            role: "assistant",
+            text: "Something went wrong reaching the assistant.",
+            degraded: true,
+          },
+        ])
+      )
+      .finally(() => {
+        inFlight.current = false;
+        setThinking(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
+  // Flush a queued follow-up once the current reply lands.
+  useEffect(() => {
+    if (thinking || inFlight.current || !queued) return;
+    const q = queued;
+    setQueued(null);
+    setMessages((m) => [...m, { role: "user", text: q }]);
+  }, [thinking, queued]);
+
   // A message handed over from the quick-add bar: send it once the drawer opens.
   useEffect(() => {
     if (!open || !pendingMessage) return;
     const msg = consumePendingMessage();
-    if (msg) void ask(msg);
+    if (msg) ask(msg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pendingMessage]);
 
-  async function ask(query: string) {
+  function ask(query: string) {
     const text = query.trim();
-    if (!text || thinking) return;
-    const history: AssistantTurn[] = messages
-      .filter((m) => m.text)
-      .map((m) => ({ role: m.role, text: m.text }));
-    setMessages((m) => [...m, { role: "user", text }]);
+    if (!text) return;
     setInput("");
-    setThinking(true);
-    try {
-      const res = await askAssistant(text, history, { items, categories, clock24h });
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: res.text, suggestions: res.suggestions, actions: res.actions },
-      ]);
-    } catch {
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: "Something went wrong reaching the assistant — try again in a moment." },
-      ]);
-    } finally {
-      setThinking(false);
+    if (inFlight.current || thinking) {
+      setQueued(text);
+      return;
     }
+    setMessages((m) => [...m, { role: "user", text }]);
+  }
+
+  function retry(mi: number) {
+    if (inFlight.current) return;
+    const userMsg = messages[mi - 1];
+    if (userMsg?.role !== "user") return;
+    // Drop the failed reply (and anything after); the engine effect re-sends the
+    // user turn that's now last.
+    setMessages((m) => m.slice(0, mi));
   }
 
   function applyAction(mi: number, ai: number) {
@@ -174,19 +235,25 @@ export function AIDrawer() {
                 <div
                   className={
                     m.role === "user"
-                      ? "max-w-[85%] rounded-lg bg-accent px-3 py-2 text-[13px] text-accent-ink"
+                      ? "max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink"
                       : "max-w-[92%] space-y-2"
                   }
                 >
-                  <p
-                    className={
-                      m.role === "assistant"
-                        ? "whitespace-pre-line text-[13px] leading-relaxed text-ink"
-                        : ""
-                    }
-                  >
-                    {m.text}
-                  </p>
+                  {m.role === "assistant" ? (
+                    <AssistantMarkdown text={m.text} />
+                  ) : (
+                    m.text
+                  )}
+
+                  {m.degraded && (
+                    <button
+                      onClick={() => retry(mi)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-ink-faint transition-colors hover:text-accent"
+                    >
+                      <RotateCw className="h-3 w-3" strokeWidth={2} />
+                      Offline answer · retry
+                    </button>
+                  )}
 
                   {m.actions?.map((action, ai) => {
                     const state = resolved[`${mi}:${ai}`];
@@ -241,42 +308,52 @@ export function AIDrawer() {
             ))}
 
             {thinking && (
-              <div className="flex items-center gap-1 px-1">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-duration:1s]"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
+              <div className="flex items-center gap-2 px-1">
+                <div className="flex items-center gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-duration:1s]"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+                {slow && <span className="text-[11px] text-ink-faint">Still working…</span>}
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-line p-2.5">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && ask(input)}
-              onFocus={() => {
-                // Once the keyboard has opened and the drawer resettled, pin the
-                // conversation to the latest message so it isn't left scrolled up
-                // behind the shorter viewport.
-                setTimeout(() => {
-                  scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-                }, 300);
-              }}
-              placeholder="Ask or tell me to change something…"
-              className="min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
-            />
-            <button
-              onClick={() => ask(input)}
-              disabled={!input.trim() || thinking}
-              aria-label="Send"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
-            >
-              <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
-            </button>
+          <div className="border-t border-line p-2.5">
+            {queued && (
+              <p className="mb-1.5 px-1 text-[11px] text-ink-faint">
+                Queued — sending after this reply
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && ask(input)}
+                onFocus={() => {
+                  // Once the keyboard has opened and the drawer resettled, pin the
+                  // conversation to the latest message so it isn't left scrolled up
+                  // behind the shorter viewport.
+                  setTimeout(() => {
+                    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+                  }, 300);
+                }}
+                placeholder="Ask or tell me to change something…"
+                className="min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+              />
+              <button
+                onClick={() => ask(input)}
+                disabled={!input.trim()}
+                aria-label="Send"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+              >
+                <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+            </div>
           </div>
       </div>
     </ViewportLayer>
