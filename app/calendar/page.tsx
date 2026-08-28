@@ -89,23 +89,26 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <motion.div
-        key={mode}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-      >
-        {mode === "month" ? (
-          <MonthView
-            anchor={anchor}
-            items={items}
-            selectedDate={selectedDate}
-            onSelectDate={(d) => startTransition(() => setSelectedDate(d))}
-          />
-        ) : (
-          <WeekView days={days} items={items} />
-        )}
-      </motion.div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={mode}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+        >
+          {mode === "month" ? (
+            <MonthView
+              anchor={anchor}
+              items={items}
+              selectedDate={selectedDate}
+              onSelectDate={(d) => startTransition(() => setSelectedDate(d))}
+            />
+          ) : (
+            <WeekView days={days} items={items} />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedDate && (

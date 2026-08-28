@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ExternalLink, MapPin, Tag } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -159,6 +159,26 @@ function useExpandable() {
   return { expanded, toggle, keyToggle };
 }
 
+/** The detail panel both cards reveal on expand — animates in and, unlike the
+ *  old inline block, back out. Honours reduced-motion via the MotionConfig. */
+function ExpandPanel({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          key="panel"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Event                                                               */
 /* ------------------------------------------------------------------ */
@@ -216,15 +236,9 @@ export function EventCard({ item, category }: { item: Item; category: Category |
         />
       </div>
 
-      {expanded && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        >
-          <ItemDetails item={item} category={category} clock24h={clock24h} />
-        </motion.div>
-      )}
+      <ExpandPanel open={expanded}>
+        <ItemDetails item={item} category={category} clock24h={clock24h} />
+      </ExpandPanel>
     </motion.div>
   );
 }
@@ -314,15 +328,9 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
         />
       </div>
 
-      {expanded && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        >
-          <ItemDetails item={item} category={category} clock24h={clock24h} />
-        </motion.div>
-      )}
+      <ExpandPanel open={expanded}>
+        <ItemDetails item={item} category={category} clock24h={clock24h} />
+      </ExpandPanel>
     </motion.div>
   );
 }
