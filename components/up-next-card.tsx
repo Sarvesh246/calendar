@@ -20,9 +20,8 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const started = now >= start;
-  const progress = end
-    ? Math.min(1, Math.max(0, differenceInMinutes(now, start) / differenceInMinutes(end, start)))
-    : 0;
+  const totalMin = end ? differenceInMinutes(end, start) : 0;
+  const progress = totalMin > 0 ? Math.min(1, Math.max(0, differenceInMinutes(now, start) / totalMin)) : 0;
 
   return (
     <div

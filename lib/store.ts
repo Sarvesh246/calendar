@@ -249,7 +249,11 @@ export const useDatebookStore = create<DatebookState>()(
         bindConnectivityListeners();
         set({ syncStatus: "connecting" });
         try {
-          if (typeof localStorage !== "undefined" && !localStorage.getItem(GUEST_BACKUP_KEY)) {
+          // Snapshot the current guest data so signing out restores it. Keyed on
+          // "am I still local?" rather than "does a backup already exist?" — the
+          // old check meant a *second* guest session (after one sign-out) was
+          // never re-captured, so its edits were lost on the next sign-out.
+          if (typeof localStorage !== "undefined" && get().mode === "local") {
             const raw = localStorage.getItem("datebook-store");
             if (raw) localStorage.setItem(GUEST_BACKUP_KEY, raw);
           }
@@ -413,6 +417,10 @@ export const useDatebookStore = create<DatebookState>()(
         applyingRemote = true;
         set({ ...next, mode: "local", userId: null, syncStatus: "idle", cloudError: null });
         applyingRemote = false;
+
+        // Drop the consumed snapshot so the next sign-in re-captures whatever the
+        // user does as a guest from here, instead of restoring this stale copy.
+        if (typeof localStorage !== "undefined") localStorage.removeItem(GUEST_BACKUP_KEY);
       },
 
       retrySync: async () => {
@@ -791,7 +799,18 @@ function applyRealtime(
       nextArr = current.filter((x) => x.id !== id);
       if (nextArr.length === current.length) return;
     } else {
-      const model = REALTIME_MAP[key](payload.new as Record<string, unknown>);
+      let model: { id: string };
+      try {
+        // Defensive: if a table somehow isn't REPLICA IDENTITY FULL, an UPDATE
+        // payload carries only the changed columns and the mapper's date coercion
+        // throws on the missing `at`/`created_at`. Fall back to a full reconcile
+        // rather than letting the row get half-written or the callback throw.
+        model = REALTIME_MAP[key](payload.new as Record<string, unknown>);
+        if (!model.id) throw new Error("realtime row missing id");
+      } catch {
+        if (activeUserId) void catchUpFromCloud(activeUserId);
+        return;
+      }
       const idx = current.findIndex((x) => x.id === model.id);
       nextArr = idx === -1 ? [...current, model] : current.map((x, i) => (i === idx ? model : x));
     }

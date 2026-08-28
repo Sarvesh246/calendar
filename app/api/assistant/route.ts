@@ -51,6 +51,8 @@ interface RawAction {
   categoryId?: string;
   status?: ItemStatus;
   clearEndAt?: boolean;
+  clearLocation?: boolean;
+  clearDescription?: boolean;
 }
 
 /** Store-ready action the client can apply directly. */
@@ -86,11 +88,14 @@ const RESPONSE_SCHEMA = {
           categoryId: { type: "STRING" },
           status: { type: "STRING", enum: ["todo", "doing", "done"] },
           clearEndAt: { type: "BOOLEAN" },
+          clearLocation: { type: "BOOLEAN" },
+          clearDescription: { type: "BOOLEAN" },
         },
         required: ["kind", "summary"],
         propertyOrdering: [
           "kind", "summary", "itemId", "title", "itemType", "at", "endAt",
           "allDay", "location", "description", "categoryId", "status", "clearEndAt",
+          "clearLocation", "clearDescription",
         ],
       },
     },
@@ -143,7 +148,7 @@ A single message can do both (e.g. "what's Friday look like? move the 3pm to Sat
 
 ACTION RULES:
 - create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit). Choose itemType by meaning. If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date).
-- update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay" as needed.
+- update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay" as needed. Send "location"/"description" ONLY when giving a new value; to remove one entirely set "clearLocation": true / "clearDescription": true. Never send an empty string for a field you don't want changed.
 - delete: set "itemId".
 - If the user's target is ambiguous (multiple plausible items) or missing, return NO actions and ask a short clarifying question in "reply".
 - "summary" (required on every action) is one plain sentence for a confirmation card, e.g. 'Move "Bio lab report" to Fri Aug 29, 11:59 PM' or 'Add event "Dentist" on Wed Sep 3, 2:00–3:00 PM'.
@@ -227,10 +232,25 @@ function normalizeActions(
         patch.categoryId = a.categoryId;
       if (a.status === "todo" || a.status === "doing" || a.status === "done")
         patch.status = a.status;
-      if (typeof a.location === "string") patch.location = a.location.trim() || undefined;
-      if (typeof a.description === "string") patch.description = a.description.trim() || undefined;
-      if (typeof a.allDay === "boolean") patch.allDay = a.allDay;
-      if (a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task")
+      // Only ever clear a field when the model explicitly asked to (clearLocation/
+      // clearDescription). A bare empty string is treated as "unchanged" — the
+      // model routinely echoes every schema field, and honouring "" here used to
+      // silently wipe a saved address/notes on an unrelated reschedule.
+      if (a.clearLocation) patch.location = undefined;
+      else if (typeof a.location === "string" && a.location.trim() && a.location.trim() !== target.location)
+        patch.location = a.location.trim();
+      if (a.clearDescription) patch.description = undefined;
+      else if (
+        typeof a.description === "string" &&
+        a.description.trim() &&
+        a.description.trim() !== target.description
+      )
+        patch.description = a.description.trim();
+      if (typeof a.allDay === "boolean" && a.allDay !== Boolean(target.allDay)) patch.allDay = a.allDay;
+      if (
+        (a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task") &&
+        a.itemType !== target.type
+      )
         patch.type = a.itemType;
 
       if (Object.keys(patch).length === 0) continue;

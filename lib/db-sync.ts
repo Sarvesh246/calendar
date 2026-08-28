@@ -297,6 +297,7 @@ export function diffCollection<T extends { id: string }>(
   const nextIds = new Set(next.map((x) => x.id));
   const upserts = next.filter((x) => {
     const before = prevById.get(x.id);
+    if (before === x) return false; // same object reference — untouched by the last set()
     return !before || JSON.stringify(before) !== JSON.stringify(x);
   });
   const deletes = prev.filter((x) => !nextIds.has(x.id)).map((x) => x.id);

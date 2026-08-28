@@ -7,6 +7,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
 import { shouldAskAssistant } from "@/lib/ai-assistant";
+import { nanoid } from "@/lib/nanoid";
 import { formatTime } from "@/lib/date-utils";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
@@ -79,14 +80,14 @@ export function QuickAddBar() {
       reminders: parsed.reminderMinutesBefore
         ? [
             {
-              id: crypto.randomUUID(),
+              id: nanoid(),
               itemId: "",
               offsetMinutes: parsed.reminderMinutesBefore,
               label: parsed.reminderLabel ?? "Reminder",
             },
           ]
         : preset
-        ? [{ id: crypto.randomUUID(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label }]
+        ? [{ id: nanoid(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label }]
         : undefined,
     });
     reset();

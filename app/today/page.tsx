@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { Minimize2 } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyCategoryFilter } from "@/lib/filters";
-import { itemsOnDay, timeOfDayGreeting, workloadIntensity } from "@/lib/date-utils";
+import { dayKey, itemsOnDay, timeOfDayGreeting, workloadIntensity } from "@/lib/date-utils";
 import { UpNextCard } from "@/components/up-next-card";
 import { AssignmentCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
@@ -25,10 +25,18 @@ function TodayDashboard() {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const items = useMemo(() => applyCategoryFilter(allItems, categoryFilter), [allItems, categoryFilter]);
 
-  const now = new Date();
-  const today = useMemo(() => itemsOnDay(items, now), [items]);
-  const tomorrow = useMemo(() => itemsOnDay(items, addDays(now, 1)), [items]);
-  const greeting = timeOfDayGreeting();
+  // Re-tick every minute so "Due today", "Up next", the greeting, and the
+  // day rollover stay live on a page that's routinely left open for hours.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dk = dayKey(now);
+  const today = useMemo(() => itemsOnDay(items, now), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tomorrow = useMemo(() => itemsOnDay(items, addDays(now, 1)), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const greeting = timeOfDayGreeting(now);
 
   const dueToday = today.filter((i) => i.type !== "event" && i.status !== "done");
   const events = today.filter((i) => i.type === "event");
@@ -36,11 +44,14 @@ function TodayDashboard() {
   const nowItem = events.find(
     (e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt) && e.status !== "done"
   );
-  const nextItem =
-    nowItem ??
-    [...items]
-      .filter((i) => i.status !== "done" && new Date(i.at) > now)
-      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
+  const nextItem = useMemo(
+    () =>
+      nowItem ??
+      [...items]
+        .filter((i) => i.status !== "done" && new Date(i.at) > now)
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0],
+    [items, now, nowItem]
+  );
 
   const intensity = workloadIntensity(today.length);
   const segments = Array.from({ length: 10 }, (_, i) => i < today.length);
