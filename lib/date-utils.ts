@@ -21,6 +21,67 @@ export function formatTime(iso: string, clock24h: boolean) {
   return format(new Date(iso), clock24h ? "HH:mm" : "h:mm a");
 }
 
+/** Offset of `timeZone` at `instant`, in milliseconds east of UTC. */
+function tzOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const num = (type: Intl.DateTimeFormatPartTypes) =>
+    parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+  let hour = num("hour");
+  if (hour === 24) hour = 0;
+  const asUTC = Date.UTC(
+    num("year"),
+    num("month") - 1,
+    num("day"),
+    hour,
+    num("minute"),
+    num("second")
+  );
+  return asUTC - instant.getTime();
+}
+
+/** Convert a wall-clock time in `timeZone` to a UTC ISO string. */
+export function wallTimeInZoneToIso(
+  dateKey: string,
+  hour: number,
+  minute: number,
+  timeZone: string
+): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const utcGuess = Date.UTC(y, m - 1, d, hour, minute, 0);
+  const offset1 = tzOffsetMs(new Date(utcGuess), timeZone);
+  const instant = new Date(utcGuess - offset1);
+  const offset2 = tzOffsetMs(instant, timeZone);
+  return new Date(utcGuess - offset2).toISOString();
+}
+
+export function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function toDateInputValue(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return format(d, "yyyy-MM-dd");
+}
+
+export function datetimeLocalToIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 export function monthGrid(anchor: Date, weekStartsOn: 0 | 1) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn });
   const end = endOfWeek(endOfMonth(anchor), { weekStartsOn });

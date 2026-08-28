@@ -1,5 +1,7 @@
 import { nanoid } from "./nanoid";
 import { parseIcs, type IcsEvent } from "./ics";
+import { snapshotFrom } from "./source-snapshot";
+import { authHeaders } from "./auth-headers";
 import type { Category, Item, ItemType } from "./types";
 
 export interface FetchedCalendar {
@@ -42,7 +44,7 @@ export function feedLabel(url: string): string {
 export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
   const res = await fetch("/api/import-calendar", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders(),
     body: JSON.stringify({ url }),
   });
   let data: { ok?: boolean; error?: string; text?: string };
@@ -52,6 +54,7 @@ export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
     throw new Error("The import service returned an unexpected response.");
   }
   if (!res.ok || !data.ok || typeof data.text !== "string") {
+    if (res.status === 429) throw new Error("Too many import requests. Try again in a minute.");
     throw new Error(data.error ?? "Import failed.");
   }
   const { name, events } = parseIcs(data.text);
@@ -115,20 +118,22 @@ export function buildImportPlan(
     seen.add(ev.uid);
     const { title, course } = splitCourse(ev.summary);
     const type = detectType(ev);
-    drafts.push({
+    const draft: ImportedDraft = {
       sourceId,
       sourceUid: ev.uid,
       categoryId: resolveCategory(course),
       type,
       title: title || ev.summary || "Untitled",
-      description: ev.description,
-      location: ev.location,
-      url: ev.url,
       at: ev.start,
-      endAt: ev.end,
-      allDay: ev.allDay || undefined,
-      status: type === "event" ? undefined : "todo",
-    });
+      ...(ev.description ? { description: ev.description } : {}),
+      ...(ev.location ? { location: ev.location } : {}),
+      ...(ev.url ? { url: ev.url } : {}),
+      ...(ev.end ? { endAt: ev.end } : {}),
+      ...(ev.allDay ? { allDay: true } : {}),
+      ...(type !== "event" ? { status: "todo" as const } : {}),
+    };
+    draft.sourceSnapshot = snapshotFrom(draft);
+    drafts.push(draft);
   }
 
   return { newCategories, drafts };

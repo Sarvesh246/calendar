@@ -28,10 +28,12 @@ export function DaySheet({
   date,
   items,
   onClose,
+  onAdd,
 }: {
   date: Date;
   items: Item[];
   onClose: () => void;
+  onAdd?: () => void;
 }) {
   const visible = useBelowLg();
   useLockBodyScroll(visible);
@@ -107,6 +109,15 @@ export function DaySheet({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+          {onAdd && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft"
+            >
+              Add to this day
+            </button>
+          )}
           {items.length === 0 ? (
             <EmptyState title="Nothing scheduled." sub={`Free day on ${format(date, "MMM d")}.`} />
           ) : (

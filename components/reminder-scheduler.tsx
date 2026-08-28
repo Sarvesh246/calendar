@@ -17,6 +17,7 @@ import {
  */
 export function ReminderScheduler() {
   const items = useDatebookStore((s) => s.items);
+  const clock24h = useDatebookStore((s) => s.settings.clock24h);
 
   useEffect(() => {
     void ensureReminderWorker();
@@ -27,12 +28,16 @@ export function ReminderScheduler() {
       disarmReminders();
       return;
     }
-    armReminders(items);
+    armReminders(items, clock24h);
 
-    const interval = setInterval(() => armReminders(useDatebookStore.getState().items), 10 * 60_000);
+    const interval = setInterval(() => {
+      const s = useDatebookStore.getState();
+      armReminders(s.items, s.settings.clock24h);
+    }, 10 * 60_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        armReminders(useDatebookStore.getState().items);
+        const s = useDatebookStore.getState();
+        armReminders(s.items, s.settings.clock24h);
       }
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -42,7 +47,7 @@ export function ReminderScheduler() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [items]);
+  }, [items, clock24h]);
 
   return null;
 }

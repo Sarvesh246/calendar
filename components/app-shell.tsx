@@ -8,6 +8,8 @@ import { CommandPalette } from "./command-palette";
 import { AIDrawer } from "./ai-drawer";
 import { ReminderScheduler } from "./reminder-scheduler";
 import { CategoryChips } from "./category-chips";
+import { UndoToast } from "./undo-toast";
+import { FeedSync } from "./feed-sync";
 import { useUIStore } from "@/lib/ui-store";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
@@ -71,6 +73,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <CommandPalette />
           <AIDrawer />
           <ReminderScheduler />
+          <UndoToast />
+          <FeedSync />
         </>
       )}
     </div>

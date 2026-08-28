@@ -18,6 +18,12 @@ export interface Reminder {
   label: string; // e.g. "1 day before"
 }
 
+/** Last imported values for a feed item — used so a re-sync keeps local edits. */
+export type SourceSnapshot = Pick<
+  Item,
+  "title" | "description" | "location" | "url" | "at" | "endAt" | "allDay" | "type" | "categoryId"
+>;
+
 export interface Item {
   id: string;
   categoryId: string;
@@ -32,12 +38,16 @@ export interface Item {
   endAt?: string;
   allDay?: boolean;
   status?: ItemStatus; // assignments/tasks only
+  /** Set when the item was marked done (not the due date). */
+  completedAt?: string;
   reminders?: Reminder[];
   createdAt: string;
   /** Set when the item came from an imported calendar feed (see ImportSource.id). */
   sourceId?: string;
   /** The feed's own UID for this event — used to match on re-sync instead of duplicating. */
   sourceUid?: string;
+  /** Feed field values from the last sync; local edits to those fields are preserved. */
+  sourceSnapshot?: SourceSnapshot;
 }
 
 /** A subscribed calendar feed (Canvas, Google, Outlook, …) the items were imported from. */
@@ -79,5 +89,6 @@ export interface UserSettings {
   clock24h: boolean;
   showLocation: boolean;
   showCategoryDot: boolean;
+  hideCompleted: boolean;
   defaultReminderPresetIds: string[];
 }

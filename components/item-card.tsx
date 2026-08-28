@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { format } from "date-fns";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ExternalLink, MapPin, Tag, Trash2 } from "lucide-react";
+import { Check, ChevronDown, MapPin } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { formatTime, isOverdue } from "@/lib/date-utils";
@@ -11,6 +10,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus } from "@/lib/types";
+import { ItemEditor } from "@/components/item-editor";
 
 function useClock24h() {
   return useDatebookStore((s) => s.settings.clock24h);
@@ -152,36 +152,6 @@ function StatusSegmented({
 /* Shared expand/collapse detail panel                                 */
 /* ------------------------------------------------------------------ */
 
-function linkLabel(url: string): string {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, "");
-    if (/instructure\.com|canvas/.test(host)) return "Open in Canvas";
-    return `Open on ${host}`;
-  } catch {
-    return "Open link";
-  }
-}
-
-function DetailRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex gap-2.5">
-      <span className="mt-0.5 shrink-0 text-ink-faint">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">{label}</p>
-        <div className="mt-0.5 text-[12.5px] text-ink-soft">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 function ItemDetails({
   item,
   category,
@@ -191,133 +161,13 @@ function ItemDetails({
   category: Category | undefined;
   clock24h: boolean;
 }) {
-  const setItemStatus = useDatebookStore((s) => s.setItemStatus);
-  const start = new Date(item.at);
-  const end = item.endAt ? new Date(item.endAt) : null;
-  const isEvent = item.type === "event";
-  const timeLabel = item.allDay
-    ? "All day"
-    : isEvent
-      ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
-      : `Due ${formatTime(item.at, clock24h)}`;
-
   return (
-    <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
-      <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Class">
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: category?.color ?? "#8a8a94" }}
-          />
-          {category?.name ?? "Uncategorized"}
-        </span>
-      </DetailRow>
-
-      <DetailRow
-        icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />}
-        label={isEvent ? "When" : "Due"}
-      >
-        {format(start, "EEEE, MMMM d, yyyy")}
-        <span className="text-ink-faint"> · </span>
-        {timeLabel}
-      </DetailRow>
-
-      {item.location && (
-        <DetailRow icon={<MapPin className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Location">
-          {item.location}
-        </DetailRow>
-      )}
-
-      {!isEvent && (
-        <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
-          <StatusSegmented
-            value={item.status ?? "todo"}
-            layoutScope={item.id}
-            onChange={(status) => setItemStatus(item.id, status)}
-          />
-          {isOverdue(item) && item.status !== "done" && (
-            <p className="mt-1.5 text-warn">Overdue</p>
-          )}
-        </DetailRow>
-      )}
-
-      {item.reminders && item.reminders.length > 0 && (
-        <DetailRow icon={<Bell className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Reminders">
-          {item.reminders.map((r) => r.label).join(", ")}
-        </DetailRow>
-      )}
-
-      {item.description && (
-        <DetailRow
-          icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          label="Details"
-        >
-          <p className="max-h-56 overflow-y-auto whitespace-pre-line leading-relaxed text-ink-soft">
-            {item.description}
-          </p>
-        </DetailRow>
-      )}
-
-      {item.url && (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md border border-line px-3 py-2 text-[12.5px] font-medium text-accent transition-colors hover:border-accent"
-        >
-          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-          {linkLabel(item.url)}
-        </a>
-      )}
-
-      <ItemActions item={item} />
-    </div>
-  );
-}
-
-function ItemActions({ item }: { item: Item }) {
-  const deleteItem = useDatebookStore((s) => s.deleteItem);
-  const [confirm, setConfirm] = useState(false);
-
-  return (
-    <div
-      className="flex flex-wrap items-center gap-2"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      {confirm ? (
-        <>
-          <span className="text-[12.5px] text-warn">Delete this?</span>
-          <button
-            type="button"
-            onClick={() => {
-              haptic("warn");
-              deleteItem(item.id);
-            }}
-            className="min-h-11 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirm(false)}
-            className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft"
-          >
-            Keep
-          </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirm(true)}
-          className="ml-auto flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-warn"
-        >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-          Delete
-        </button>
-      )}
-    </div>
+    <ItemEditor
+      item={item}
+      category={category}
+      clock24h={clock24h}
+      StatusSegmented={StatusSegmented}
+    />
   );
 }
 

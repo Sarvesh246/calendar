@@ -26,7 +26,7 @@ export function NotificationToggle() {
     setPermission(result);
     if (result === "granted") {
       await ensureReminderWorker();
-      armReminders(useDatebookStore.getState().items);
+      armReminders(useDatebookStore.getState().items, useDatebookStore.getState().settings.clock24h);
     }
     setBusy(false);
   }
@@ -46,7 +46,7 @@ export function NotificationToggle() {
     return (
       <p className="flex items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
         <Check className="h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
-        Notifications on — reminders will alert you while Datebook is open, and catch up on missed ones when you return.
+        Notifications on — reminders fire while Datebook is open and catch up when you return. With push keys configured, they can also arrive when the app is closed.
       </p>
     );
   }

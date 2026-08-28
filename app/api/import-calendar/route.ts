@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clientKey, getRequestUser, rateLimit, tooMany } from "@/lib/api-guard";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,9 @@ function isBlockedHost(host: string): boolean {
   }
   if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\./.test(h)) return true; // CGNAT
+  if (/^::ffff:(127\.|10\.|192\.168\.|169\.254\.)/i.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
   if (/^(0|fc|fd)[0-9a-f]*:/.test(h)) return true; // unique-local / unspecified IPv6
   return false;
 }
@@ -38,6 +42,13 @@ function normalize(input: string): URL | null {
 }
 
 export async function POST(request: Request) {
+  const user = await getRequestUser(request);
+  const ip = clientKey(request);
+  const limitKey = user ? `import:user:${user.id}` : `import:ip:${ip}`;
+  if (!rateLimit(limitKey, user ? 30 : 12, 60 * 60 * 1000) || !rateLimit(`${limitKey}:burst`, 4, 60_000)) {
+    return tooMany();
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -105,8 +116,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "That calendar is too large to import." }, { status: 413 });
   }
 
-  const text = await res.text();
-  if (text.length > MAX_BYTES) {
+  const text = await readLimited(res, MAX_BYTES);
+  if (text == null) {
     return NextResponse.json({ ok: false, error: "That calendar is too large to import." }, { status: 413 });
   }
   if (!/BEGIN:VCALENDAR/i.test(text)) {
@@ -119,4 +130,32 @@ export async function POST(request: Request) {
   // Return the raw feed and let the client parse it — floating and all-day dates
   // must resolve in the viewer's timezone, not this server's.
   return NextResponse.json({ ok: true, text });
+}
+
+async function readLimited(res: Response, maxBytes: number): Promise<string | null> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const text = await res.text();
+    return text.length > maxBytes ? null : text;
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }

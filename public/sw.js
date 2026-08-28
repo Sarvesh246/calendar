@@ -3,7 +3,22 @@
 // be shown from registration.showNotification() (which keeps working when the
 // tab is backgrounded on mobile) and so tapping one focuses the app.
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("push", (event) => {
+  let data = { title: "Datebook", body: "You have a reminder." };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    /* ignore */
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      tag: data.tag || "datebook-push",
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+    })
+  );
+});
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());

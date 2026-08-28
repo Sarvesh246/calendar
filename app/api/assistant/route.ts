@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { buildAssistantDigest } from "@/lib/ai-assistant";
+import { buildAssistantDigest, zonedDateKey } from "@/lib/ai-assistant";
+import { wallTimeInZoneToIso } from "@/lib/date-utils";
+import { clientKey, getRequestUser, rateLimit, tooMany } from "@/lib/api-guard";
 import type { Item, ItemStatus, ItemType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -171,7 +173,7 @@ STATUS & DUE SEMANTICS — follow strictly:
 - "Due by Sunday" = open assignments and tasks whose due date is on or before the coming calendar Sunday (today if today is Sunday). "Due this week" = open work from today through the end of the user's calendar week (week starts ${body.weekStartsOn === 1 ? "Monday" : "Sunday"}). Neither includes events.
 - Events are not assignments — never mix events into due-counts or overdue lists unless the user asks about events specifically.
 - When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST.
-- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off. That list is items marked done whose *due date* fell in the last 7 local days (there is no separate completed-at timestamp).
+- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off. Prefer items with a completed-at timestamp; otherwise the due date is used.
 
 YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when the user clearly asks you to.
 1. ANSWER a question (this is the common case — a chatbot about their calendar). Triggers: "what/when/where/how many/how much/do I have/is there/am I free/show me/list/tell me/which/what's it for/what class…". Answer precisely from the DIGEST and ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Use the DIGEST for counts and date-bounded lists. If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.
@@ -225,7 +227,7 @@ function normalizeActions(
         a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task"
           ? a.itemType
           : "task";
-      const at = validIso(a.at) ?? defaultAt(type, body.now);
+      const at = validIso(a.at) ?? defaultAt(type, body.now, body.timeZone || "UTC");
       const draft: Omit<Item, "id" | "createdAt"> = {
         title,
         type,
@@ -324,11 +326,9 @@ function validIso(v: unknown): string | undefined {
   return Number.isNaN(+d) ? undefined : d.toISOString();
 }
 
-function defaultAt(type: ItemType, nowIso: string): string {
-  const d = new Date(nowIso);
-  if (type === "event") d.setHours(12, 0, 0, 0);
-  else d.setHours(23, 59, 0, 0);
-  return d.toISOString();
+function defaultAt(type: ItemType, nowIso: string, timeZone = "UTC"): string {
+  const key = zonedDateKey(nowIso, timeZone);
+  return wallTimeInZoneToIso(key, type === "event" ? 12 : 23, type === "event" ? 0 : 59, timeZone);
 }
 
 function fuzzyFind(items: SlimItem[], q: string): SlimItem | undefined {
@@ -352,6 +352,13 @@ function fuzzyFind(items: SlimItem[], q: string): SlimItem | undefined {
 export async function POST(request: Request) {
   if (!KEY) {
     return NextResponse.json({ error: "assistant-not-configured" }, { status: 200 });
+  }
+
+  const user = await getRequestUser(request);
+  const ip = clientKey(request);
+  const limitKey = user ? `assistant:user:${user.id}` : `assistant:ip:${ip}`;
+  if (!rateLimit(limitKey, user ? 60 : 20, 60 * 60 * 1000) || !rateLimit(`${limitKey}:burst`, 8, 60_000)) {
+    return tooMany();
   }
 
   let body: ReqBody;

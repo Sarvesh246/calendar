@@ -13,6 +13,8 @@ interface UIState {
   quickAddPrefill: string | null;
   categoryFilter: string[] | null;
   focusedItemId: string | null;
+  quickAddDateKey: string | null;
+  calendarFocusDate: string | null;
 
   setCommandPaletteOpen: (open: boolean) => void;
   setAIDrawerOpen: (open: boolean) => void;
@@ -26,6 +28,8 @@ interface UIState {
   toggleCategoryFilter: (id: string) => void;
   clearCategoryFilter: () => void;
   setFocusedItemId: (id: string | null) => void;
+  setQuickAddDateKey: (key: string | null) => void;
+  setCalendarFocusDate: (key: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -38,6 +42,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   quickAddPrefill: null,
   categoryFilter: null,
   focusedItemId: null,
+  quickAddDateKey: null,
+  calendarFocusDate: null,
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setAIDrawerOpen: (open) => set({ aiDrawerOpen: open }),
@@ -59,4 +65,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
   clearCategoryFilter: () => set({ categoryFilter: null }),
   setFocusedItemId: (id) => set({ focusedItemId: id }),
+  setQuickAddDateKey: (key) => set({ quickAddDateKey: key }),
+  setCalendarFocusDate: (key) => set({ calendarFocusDate: key }),
 }));

@@ -1,7 +1,6 @@
 // Minimal iCalendar (RFC 5545) reader — enough to import event/assignment feeds
-// from Canvas, Google Calendar, Outlook, and similar. It deliberately ignores
-// recurrence (RRULE), VTODO, and VTIMEZONE: Canvas assignment feeds emit one
-// VEVENT per due date, which is the case that matters here.
+// from Canvas, Google Calendar, Outlook, and similar. Recurring events (RRULE
+// DAILY/WEEKLY/MONTHLY) are expanded into concrete instances; VTODO is ignored.
 //
 // Pure module — no Node or browser APIs — so the API route (server) and the
 // settings UI (client, type-only) can both import it.
@@ -17,6 +16,13 @@ export interface IcsEvent {
   /** ISO datetime string, when the feed provides DTEND. */
   end?: string;
   allDay: boolean;
+}
+
+interface RawEvent extends IcsEvent {
+  rrule?: string;
+  exdates: string[];
+  recurrenceId?: string;
+  cancelled?: boolean;
 }
 
 export interface ParsedCalendar {
@@ -129,13 +135,15 @@ function parseDate(value: string, params: Record<string, string>): DateResult | 
   return isNaN(fallback.getTime()) ? null : { iso: fallback.toISOString(), allDay: false };
 }
 
+type CurEvent = Partial<RawEvent> & { _start?: DateResult; _end?: DateResult };
+
 export function parseIcs(raw: string): ParsedCalendar {
   const lines = unfold(raw);
   let name: string | null = null;
-  const events: IcsEvent[] = [];
+  const rawEvents: RawEvent[] = [];
 
   let inEvent = false;
-  let cur: Partial<IcsEvent> & { _start?: DateResult; _end?: DateResult } = {};
+  let cur: CurEvent = {};
 
   for (const line of lines) {
     const parsed = parseLine(line);
@@ -144,13 +152,13 @@ export function parseIcs(raw: string): ParsedCalendar {
 
     if (key === "BEGIN" && value === "VEVENT") {
       inEvent = true;
-      cur = {};
+      cur = { exdates: [] };
       continue;
     }
     if (key === "END" && value === "VEVENT") {
       inEvent = false;
       if (cur.uid && cur.summary && cur._start) {
-        events.push({
+        rawEvents.push({
           uid: cur.uid,
           summary: cur.summary,
           description: cur.description,
@@ -159,6 +167,10 @@ export function parseIcs(raw: string): ParsedCalendar {
           start: cur._start.iso,
           end: cur._end?.iso,
           allDay: cur._start.allDay,
+          rrule: cur.rrule,
+          exdates: cur.exdates ?? [],
+          recurrenceId: cur.recurrenceId,
+          cancelled: cur.cancelled,
         });
       }
       continue;
@@ -199,8 +211,255 @@ export function parseIcs(raw: string): ParsedCalendar {
       case "DTEND":
         cur._end = parseDate(value, params) ?? undefined;
         break;
+      case "RRULE":
+        cur.rrule = value.trim();
+        break;
+      case "EXDATE": {
+        for (const piece of value.split(",")) {
+          const p = parseDate(piece.trim(), params);
+          if (p) (cur.exdates ??= []).push(p.iso);
+        }
+        break;
+      }
+      case "RECURRENCE-ID": {
+        const rec = parseDate(value, params);
+        if (rec) cur.recurrenceId = rec.iso;
+        break;
+      }
+      case "STATUS":
+        if (/^cancelled$/i.test(value.trim())) cur.cancelled = true;
+        break;
     }
   }
 
-  return { name, events };
+  return { name, events: flattenRecurrence(rawEvents) };
+}
+
+const WEEKDAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+const MAX_OCCURRENCES = 200;
+const HORIZON_MS = 18 * 30 * 24 * 60 * 60 * 1000;
+
+function dayKeyIso(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function parseRRule(raw: string): {
+  freq: "DAILY" | "WEEKLY" | "MONTHLY" | null;
+  interval: number;
+  count?: number;
+  until?: Date;
+  byday: number[] | null;
+} {
+  const parts: Record<string, string> = {};
+  for (const piece of raw.split(";")) {
+    const eq = piece.indexOf("=");
+    if (eq === -1) continue;
+    parts[piece.slice(0, eq).toUpperCase()] = piece.slice(eq + 1).toUpperCase();
+  }
+  const freqRaw = parts.FREQ;
+  const freq =
+    freqRaw === "DAILY" || freqRaw === "WEEKLY" || freqRaw === "MONTHLY" ? freqRaw : null;
+  const interval = Math.max(1, parseInt(parts.INTERVAL || "1", 10) || 1);
+  const count = parts.COUNT ? parseInt(parts.COUNT, 10) : undefined;
+  let until: Date | undefined;
+  if (parts.UNTIL) {
+    const d = parseDate(parts.UNTIL, {});
+    if (d) until = new Date(d.iso);
+  }
+  let byday: number[] | null = null;
+  if (parts.BYDAY) {
+    byday = parts.BYDAY.split(",")
+      .map((tok) => WEEKDAY[tok.replace(/^-?\d+/, "")])
+      .filter((n): n is number => n !== undefined);
+    if (byday.length === 0) byday = null;
+  }
+  return { freq, interval, count: Number.isFinite(count) ? count : undefined, until, byday };
+}
+
+function addDaysLocal(d: Date, n: number): Date {
+  const next = new Date(d.getTime());
+  next.setDate(next.getDate() + n);
+  return next;
+}
+
+function addMonthsLocal(d: Date, n: number): Date {
+  const next = new Date(d.getTime());
+  const day = next.getDate();
+  next.setMonth(next.getMonth() + n, 1);
+  const last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(day, last));
+  return next;
+}
+
+function weeksBetween(a: Date, b: Date): number {
+  const ms = startOfLocalWeek(b).getTime() - startOfLocalWeek(a).getTime();
+  return Math.round(ms / (7 * 24 * 60 * 60 * 1000));
+}
+
+function startOfLocalWeek(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+/** Expand RRULE series into concrete instances. Horizon is ~18 months from now. */
+export function expandRRule(
+  startIso: string,
+  rrule: string,
+  exdates: string[] = [],
+  horizon = new Date(Date.now() + HORIZON_MS)
+): string[] {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return [startIso];
+  const rule = parseRRule(rrule);
+  if (!rule.freq) return [startIso];
+  const until = rule.until && rule.until.getTime() < horizon.getTime() ? rule.until : horizon;
+  const exclude = new Set(exdates.map(dayKeyIso));
+  const out: string[] = [];
+  const max = Math.min(MAX_OCCURRENCES, rule.count ?? MAX_OCCURRENCES);
+  let generated = 0;
+
+  const take = (d: Date) => {
+    if (d.getTime() > until.getTime()) return false;
+    generated += 1;
+    if (!exclude.has(dayKeyIso(d.toISOString()))) out.push(d.toISOString());
+    return generated < max;
+  };
+
+  if (rule.freq === "DAILY") {
+    for (let d = new Date(start); generated < max && d.getTime() <= until.getTime(); d = addDaysLocal(d, rule.interval)) {
+      if (!take(d)) break;
+    }
+    return out.length ? out : [startIso];
+  }
+
+  if (rule.freq === "WEEKLY") {
+    const days = rule.byday ?? [start.getDay()];
+    for (
+      let d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      d.getTime() <= until.getTime() + 86400000;
+      d = addDaysLocal(d, 1)
+    ) {
+      d.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+      if (d.getTime() < start.getTime() - 1000) continue;
+      if (!days.includes(d.getDay())) continue;
+      if (rule.interval > 1 && weeksBetween(start, d) % rule.interval !== 0) continue;
+      if (!take(new Date(d))) break;
+    }
+    return out.length ? out : [startIso];
+  }
+
+  for (let d = new Date(start); generated < max && d.getTime() <= until.getTime(); d = addMonthsLocal(d, rule.interval)) {
+    if (!take(d)) break;
+  }
+  return out.length ? out : [startIso];
+}
+
+function flattenRecurrence(raw: RawEvent[]): IcsEvent[] {
+  const exceptions = new Map<string, RawEvent>();
+  for (const ev of raw) {
+    if (ev.recurrenceId) exceptions.set(`${ev.uid}::${dayKeyIso(ev.recurrenceId)}`, ev);
+  }
+
+  const toPublic = (ev: RawEvent, start: string, uid: string): IcsEvent => {
+    const duration =
+      ev.end && ev.start ? new Date(ev.end).getTime() - new Date(ev.start).getTime() : 0;
+    const end =
+      duration > 0
+        ? new Date(new Date(start).getTime() + duration).toISOString()
+        : ev.end && start === ev.start
+          ? ev.end
+          : undefined;
+    return {
+      uid,
+      summary: ev.summary,
+      description: ev.description,
+      location: ev.location,
+      url: ev.url,
+      start,
+      end,
+      allDay: ev.allDay,
+    };
+  };
+
+  const out: IcsEvent[] = [];
+  for (const ev of raw) {
+    if (ev.cancelled && !ev.recurrenceId) continue;
+    if (ev.recurrenceId) {
+      if (ev.cancelled) continue;
+      out.push(toPublic(ev, ev.start, `${ev.uid}::${dayKeyIso(ev.recurrenceId)}`));
+      continue;
+    }
+    if (!ev.rrule) {
+      out.push(toPublic(ev, ev.start, ev.uid));
+      continue;
+    }
+    const starts = expandRRule(ev.start, ev.rrule, ev.exdates);
+    for (const start of starts) {
+      const exKey = `${ev.uid}::${dayKeyIso(start)}`;
+      if (exceptions.has(exKey)) continue;
+      out.push(toPublic(ev, start, `${ev.uid}::${dayKeyIso(start)}`));
+    }
+  }
+  return out;
+}
+
+function icsEscape(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+}
+
+function utcStamp(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+}
+
+function dateStamp(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+}
+
+/** Build a vCalendar from local items (one VEVENT each — recurrences already expanded). */
+export function serializeIcs(
+  items: {
+    id: string;
+    title: string;
+    at: string;
+    endAt?: string;
+    allDay?: boolean;
+    description?: string;
+    location?: string;
+    url?: string;
+    sourceUid?: string;
+  }[],
+  calendarName = "Datebook"
+): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Datebook//EN",
+    `X-WR-CALNAME:${icsEscape(calendarName)}`,
+    "CALSCALE:GREGORIAN",
+  ];
+  const now = utcStamp(new Date());
+  for (const item of items) {
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${(item.sourceUid || item.id).replace(/\s/g, "")}@datebook`);
+    lines.push(`DTSTAMP:${now}`);
+    if (item.allDay) {
+      lines.push(`DTSTART;VALUE=DATE:${dateStamp(item.at)}`);
+      if (item.endAt) lines.push(`DTEND;VALUE=DATE:${dateStamp(item.endAt)}`);
+    } else {
+      lines.push(`DTSTART:${utcStamp(new Date(item.at))}`);
+      if (item.endAt) lines.push(`DTEND:${utcStamp(new Date(item.endAt))}`);
+    }
+    lines.push(`SUMMARY:${icsEscape(item.title)}`);
+    if (item.description) lines.push(`DESCRIPTION:${icsEscape(item.description)}`);
+    if (item.location) lines.push(`LOCATION:${icsEscape(item.location)}`);
+    if (item.url) lines.push(`URL:${item.url}`);
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
 }

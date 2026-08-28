@@ -104,9 +104,9 @@ function markFired(key: string): void {
 
 /* --- notification rendering ------------------------------------- */
 
-function reminderBody(item: Item): string {
+function reminderBody(item: Item, clock24h: boolean): string {
   const at = new Date(item.at);
-  const when = format(at, "EEE, MMM d · h:mm a");
+  const when = format(at, clock24h ? "EEE, MMM d · HH:mm" : "EEE, MMM d · h:mm a");
   if (item.allDay) {
     const day = isToday(at) ? "today" : format(at, "EEE, MMM d");
     return item.type === "event" ? `All day ${day}` : `Due ${day}`;
@@ -114,11 +114,11 @@ function reminderBody(item: Item): string {
   return item.type === "event" ? `Starts ${when}` : `Due ${when}`;
 }
 
-async function showReminder(item: Item, label: string): Promise<void> {
+async function showReminder(item: Item, label: string, clock24h: boolean): Promise<void> {
   if (notificationPermission() !== "granted") return;
   const title = item.type === "event" ? item.title : `Due soon — ${item.title}`;
   const options: NotificationOptions & { tag: string } = {
-    body: `${label} · ${reminderBody(item)}`,
+    body: `${label} · ${reminderBody(item, clock24h)}`,
     tag: `datebook-${item.id}`,
     icon: "/icon.svg",
     badge: "/icon.svg",
@@ -151,7 +151,7 @@ function clearTimers(): void {
  * next 24h. Idempotent — call it on load, whenever items change, on an interval,
  * and when a tab returns to the foreground.
  */
-export function armReminders(items: Item[]): void {
+export function armReminders(items: Item[], clock24h = false): void {
   if (notificationPermission() !== "granted") {
     clearTimers();
     return;
@@ -177,7 +177,7 @@ export function armReminders(items: Item[]): void {
         // ones lapse silently so reopening after a trip isn't an alert storm.
         if (delay > -CATCH_UP_GRACE_MS && at > now - 60 * 60_000) {
           markFired(key);
-          void showReminder(item, r.label);
+          void showReminder(item, r.label, clock24h);
         } else {
           markFired(key);
         }
@@ -190,7 +190,7 @@ export function armReminders(items: Item[]): void {
         setTimeout(() => {
           timers.delete(key);
           markFired(key);
-          void showReminder(item, r.label);
+          void showReminder(item, r.label, clock24h);
         }, delay)
       );
     }

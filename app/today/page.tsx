@@ -6,13 +6,14 @@ import { addDays, format } from "date-fns";
 import { Minimize2 } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { applyCategoryFilter } from "@/lib/filters";
-import { dayKey, itemsOnDay, timeOfDayGreeting, workloadIntensity } from "@/lib/date-utils";
+import { applyItemFilters } from "@/lib/filters";
+import { dayKey, isOverdue, itemsOnDay, timeOfDayGreeting, workloadIntensity } from "@/lib/date-utils";
 import { UpNextCard } from "@/components/up-next-card";
-import { AssignmentCard } from "@/components/item-card";
+import { AssignmentCard, ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { FocusView } from "@/components/focus-view";
 import { cn } from "@/lib/utils";
+import type { Item } from "@/lib/types";
 
 export default function TodayPage() {
   const focusMode = useUIStore((s) => s.focusMode);
@@ -23,10 +24,12 @@ export default function TodayPage() {
 function TodayDashboard() {
   const allItems = useDatebookStore((s) => s.items);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
-  const items = useMemo(() => applyCategoryFilter(allItems, categoryFilter), [allItems, categoryFilter]);
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const items = useMemo(
+    () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
+    [allItems, categoryFilter, hideCompleted]
+  );
 
-  // Re-tick every minute so "Due today", "Up next", the greeting, and the
-  // day rollover stay live on a page that's routinely left open for hours.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -38,11 +41,18 @@ function TodayDashboard() {
   const tomorrow = useMemo(() => itemsOnDay(items, addDays(now, 1)), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const greeting = timeOfDayGreeting(now);
 
-  const dueToday = today.filter((i) => i.type !== "event" && i.status !== "done");
+  const overdue = useMemo(
+    () =>
+      items
+        .filter(isOverdue)
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
+    [items]
+  );
+  const dueToday = today.filter((i) => i.type !== "event" && i.status !== "done" && !isOverdue(i));
   const events = today.filter((i) => i.type === "event");
 
   const nowItem = events.find(
-    (e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt) && e.status !== "done"
+    (e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt)
   );
   const nextItem = useMemo(
     () =>
@@ -53,10 +63,12 @@ function TodayDashboard() {
     [items, now, nowItem]
   );
 
-  const intensity = workloadIntensity(today.length);
-  const segments = Array.from({ length: 10 }, (_, i) => i < today.length);
+  const intensity = workloadIntensity(overdue.length + dueToday.length + events.length);
+  const barCount = Math.min(10, overdue.length + dueToday.length + events.length);
+  const segments = Array.from({ length: 10 }, (_, i) => i < barCount);
   const nextItemCategory = useCategory(nextItem?.categoryId);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
+  const updateSettings = useDatebookStore((s) => s.updateSettings);
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-[var(--page-gap)]">
@@ -66,7 +78,9 @@ function TodayDashboard() {
           <h1 className="font-display mt-0.5 text-[34px] italic leading-none text-ink sm:text-[40px]">
             {format(now, "EEEE")}
           </h1>
-          <p className="mt-1 text-[14px] text-ink-soft sm:text-[15px]">{format(now, "MMMM d")} · {greeting.sub}</p>
+          <p className="mt-1 text-[14px] text-ink-soft sm:text-[15px]">
+            {format(now, "MMMM d")} · {greeting.sub}
+          </p>
 
           <div className="mt-3 flex items-center gap-2 sm:mt-4 sm:gap-2.5">
             <div className="flex gap-[3px]">
@@ -81,17 +95,27 @@ function TodayDashboard() {
               ))}
             </div>
             <span className="text-[12.5px] text-ink-faint">
-              {today.length} thing{today.length === 1 ? "" : "s"} today
+              {overdue.length + dueToday.length + events.length} thing
+              {overdue.length + dueToday.length + events.length === 1 ? "" : "s"} on your plate
             </span>
           </div>
         </div>
-        <button
-          onClick={toggleFocusMode}
-          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
-        >
-          <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-          Focus
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <button
+            onClick={toggleFocusMode}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+          >
+            <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+            Focus
+          </button>
+          <button
+            type="button"
+            onClick={() => updateSettings({ hideCompleted: !hideCompleted })}
+            className="text-[12px] font-medium text-ink-faint hover:text-ink"
+          >
+            {hideCompleted ? "Show completed" : "Hide completed"}
+          </button>
+        </div>
       </header>
 
       {nextItem && (
@@ -99,6 +123,30 @@ function TodayDashboard() {
           <UpNextCard item={nextItem} category={nextItemCategory} />
         </section>
       )}
+
+      {overdue.length > 0 && (
+        <section>
+          <SectionLabel>Overdue · {overdue.length}</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {overdue.map((item) => (
+              <ItemRow key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <SectionLabel>Today&apos;s schedule</SectionLabel>
+        {events.length === 0 ? (
+          <EmptyState title="No events today." sub="Classes and meetings will show up here." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {events.map((item) => (
+              <ItemRow key={item.id} item={item} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <section>
         <SectionLabel>Due today</SectionLabel>
@@ -133,13 +181,17 @@ function intensityClass(intensity: number) {
   return ["bg-surface-sunken", "bg-good", "bg-accent", "bg-warn", "bg-warn"][intensity] ?? "bg-accent";
 }
 
-function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint sm:mb-2.5">
-      {icon}
       {children}
     </p>
   );
+}
+
+function ItemRow({ item }: { item: Item }) {
+  const category = useCategory(item.categoryId);
+  return <ItemCard item={item} category={category} />;
 }
 
 function AssignmentCardRow({ itemId }: { itemId: string }) {

@@ -9,6 +9,7 @@ import { ToggleSwitch } from "@/components/toggle-switch";
 import { ImportCalendar } from "@/components/import-calendar";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
+import { serializeIcs } from "@/lib/ics";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   const categories = useDatebookStore((s) => s.categories);
   const addCategory = useDatebookStore((s) => s.addCategory);
   const updateCategory = useDatebookStore((s) => s.updateCategory);
+  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
 
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -108,6 +110,9 @@ export default function SettingsPage() {
         <Row label="Show category dots" horizontal>
           <ToggleSwitch checked={settings.showCategoryDot} onChange={(v) => updateSettings({ showCategoryDot: v })} label="Show category dots" />
         </Row>
+        <Row label="Hide completed items" horizontal>
+          <ToggleSwitch checked={settings.hideCompleted} onChange={(v) => updateSettings({ hideCompleted: v })} label="Hide completed" />
+        </Row>
       </Section>
 
       <Section title="Categories" sub="Each category's color drives its cards, chips, and calendar dots.">
@@ -126,6 +131,23 @@ export default function SettingsPage() {
                 onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
                 className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink focus:outline-none"
               />
+              {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
+              <button
+                type="button"
+                onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+                className="text-[12px] font-medium text-ink-faint hover:text-ink"
+              >
+                {cat.archived ? "Unarchive" : "Archive"}
+              </button>
+              {categories.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => deleteCategory(cat.id)}
+                  className="text-[12px] font-medium text-warn"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -162,6 +184,25 @@ export default function SettingsPage() {
         sub="Paste a feed URL from Canvas, Google Calendar, or Outlook to pull in assignments and events — due dates, titles, and descriptions. Re-sync any time to pick up changes."
       >
         <ImportCalendar />
+      </Section>
+
+      <Section title="Export" sub="Download your calendar as an .ics file you can open in Google Calendar, Outlook, or Apple Calendar.">
+        <button
+          type="button"
+          onClick={() => {
+            const items = useDatebookStore.getState().items;
+            const blob = new Blob([serializeIcs(items)], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "datebook.ics";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="self-start rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          Download .ics
+        </button>
       </Section>
 
       <Section
