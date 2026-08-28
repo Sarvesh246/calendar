@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function CommandPalette() {
   const router = useRouter();
@@ -25,8 +24,6 @@ export function CommandPalette() {
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
-
-  useScrollLock(open);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -71,7 +68,7 @@ export function CommandPalette() {
 
       <Command.List
         // Shrink to fit above the on-screen keyboard so results aren't hidden.
-        style={{ maxHeight: "max(140px, calc(60vh - var(--keyboard-inset, 0px)))" }}
+        style={{ maxHeight: "max(140px, calc(var(--visible-height, 100dvh) - 14rem))" }}
         className="overflow-y-auto p-2"
       >
         <Command.Empty className="px-3 py-6 text-center text-[13px] text-ink-faint">

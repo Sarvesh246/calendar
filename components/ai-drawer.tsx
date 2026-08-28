@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Check, Sparkles, Trash2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
-import { motion as motionTokens } from "@/lib/motion";
-import { useScrollLock } from "@/lib/use-scroll-lock";
+import { ViewportLayer } from "@/components/viewport-layer";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -46,9 +44,20 @@ export function AIDrawer() {
   const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Pin the page while the drawer is open so iOS doesn't pan it under the
-  // keyboard (which otherwise stacks with the drawer's own keyboard offset).
-  useScrollLock(open);
+  // Keep the sheet mounted through its exit animation, then drop it. The enter/
+  // exit visuals are pure CSS keyframes (see globals.css) — framer's
+  // AnimatePresence has been unreliable here and an invisible-but-mounted drawer
+  // is worse than a plain one.
+  const [present, setPresent] = useState(open);
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPresent(true);
+      return;
+    }
+    const t = setTimeout(() => setPresent(false), 190);
+    return () => clearTimeout(t);
+  }, [open]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -119,26 +128,34 @@ export function AIDrawer() {
     setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "dismissed" }));
   }
 
+  if (!present) return null;
+
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, y: 16, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.97 }}
-          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-          style={{
-            // Ride just above the on-screen keyboard instead of being hidden
-            // behind it, and cap the height to what's actually visible so the
-            // input and the latest messages stay on screen. The page itself is
-            // frozen (useScrollLock) so this offset is the only thing moving.
-            bottom: "calc(env(safe-area-inset-bottom) + 0.75rem + var(--keyboard-inset, 0px))",
-            height: "70dvh",
-            maxHeight:
-              "min(560px, calc(100dvh - env(safe-area-inset-top) - 1.75rem - var(--keyboard-inset, 0px)))",
-          }}
-          className="glass fixed right-4 z-50 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl transition-[bottom,max-height] duration-200 ease-out"
-        >
+    <ViewportLayer className="z-50">
+      <div
+        onClick={() => setOpen(false)}
+        className={cn(
+          "absolute inset-0 bg-black/35 backdrop-blur-[2px]",
+          open
+            ? "animate-[overlay-in_200ms_ease-out]"
+            : "animate-[overlay-out_180ms_ease-in_forwards]"
+        )}
+      />
+      <div
+        style={{
+          // Anchored to the bottom of the ViewportLayer (which tracks the
+          // visible area above the keyboard) — the sheet always sits just above
+          // the keyboard with its top clear of the notch.
+          maxHeight: "min(560px, calc(100% - env(safe-area-inset-top) - 1.25rem))",
+          height: "70dvh",
+        }}
+        className={cn(
+          "glass absolute inset-x-3 bottom-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-2xl",
+          open
+            ? "animate-[sheet-in_220ms_var(--ease-standard)]"
+            : "animate-[sheet-out_180ms_ease-in_forwards]"
+        )}
+      >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <Sparkles className="h-4 w-4 text-accent" strokeWidth={2} />
             <span className="text-[13.5px] font-semibold text-ink">Datebook Assistant</span>
@@ -151,7 +168,7 @@ export function AIDrawer() {
             </button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3.5">
+          <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3.5">
             {messages.map((m, mi) => (
               <div key={mi} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                 <div
@@ -226,11 +243,10 @@ export function AIDrawer() {
             {thinking && (
               <div className="flex items-center gap-1 px-1">
                 {[0, 1, 2].map((i) => (
-                  <motion.span
+                  <span
                     key={i}
-                    className="h-1.5 w-1.5 rounded-full bg-ink-faint"
-                    animate={{ opacity: [0.3, 1, 0.3] }}
-                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-duration:1s]"
+                    style={{ animationDelay: `${i * 0.15}s` }}
                   />
                 ))}
               </div>
@@ -262,9 +278,8 @@ export function AIDrawer() {
               <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
             </button>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      </div>
+    </ViewportLayer>
   );
 }
 
