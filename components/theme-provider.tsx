@@ -7,7 +7,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const preset = useDatebookStore((s) => s.settings.preset);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-preset", preset);
+    // The settings UI already flips this attribute synchronously on click for an
+    // instant repaint; this effect is the reconciler for the other paths
+    // (first load, a preset change synced from another device). Skip the DOM
+    // write when it's already correct so it can't trigger a redundant recalc.
+    if (document.documentElement.getAttribute("data-preset") !== preset) {
+      document.documentElement.setAttribute("data-preset", preset);
+    }
   }, [preset]);
 
   return <>{children}</>;

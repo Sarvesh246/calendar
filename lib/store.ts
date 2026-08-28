@@ -785,7 +785,15 @@ function applyRealtime(
   try {
     if (table === "user_settings") {
       if (payload.eventType !== "DELETE" && payload.new) {
-        useDatebookStore.setState({ settings: rowToSettings(payload.new) });
+        const incoming = rowToSettings(payload.new);
+        const current = useDatebookStore.getState().settings;
+        // The echo of our own settings write lands ~half a second later; applying
+        // an identical value would re-commit the store (and re-run the theme
+        // recalc) for nothing — visible as a stutter while flicking through
+        // appearance presets.
+        if (JSON.stringify(incoming) !== JSON.stringify(current)) {
+          useDatebookStore.setState({ settings: incoming });
+        }
       }
       return;
     }

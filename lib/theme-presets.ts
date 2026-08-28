@@ -29,6 +29,48 @@ export const presetMeta: Record<
     description: "Black and white, category colors used sparingly.",
     swatch: ["#000000", "#0a0a0a", "#ffffff"],
   },
+  noir: {
+    label: "Noir",
+    description: "Warm near-black with a brass accent — editorial.",
+    swatch: ["#0c0b0a", "#16140f", "#c9a24a"],
+  },
+  sakura: {
+    label: "Sakura",
+    description: "Soft warm white with a rose blush.",
+    swatch: ["#fdf2f4", "#fffafb", "#c2456b"],
+  },
+  evergreen: {
+    label: "Evergreen",
+    description: "Deep forest dark with a mint accent.",
+    swatch: ["#0a0f0c", "#101713", "#57c98b"],
+  },
+  slate: {
+    label: "Slate",
+    description: "Cool grey, steel-blue accent, crisp.",
+    swatch: ["#eef1f4", "#ffffff", "#3d6ea5"],
+  },
+  ember: {
+    label: "Ember",
+    description: "Charcoal with a warm coral glow.",
+    swatch: ["#100d0c", "#1a1513", "#f0704a"],
+  },
+  frost: {
+    label: "Frost",
+    description: "Pale arctic blue, glacier accent, airy.",
+    swatch: ["#eef4f8", "#ffffff", "#2b8fb8"],
+  },
 };
 
-export const presetOrder: AppearancePreset[] = ["minimal", "midnight", "paper", "aurora", "mono"];
+export const presetOrder: AppearancePreset[] = [
+  "minimal",
+  "midnight",
+  "paper",
+  "aurora",
+  "mono",
+  "noir",
+  "sakura",
+  "evergreen",
+  "slate",
+  "ember",
+  "frost",
+];
