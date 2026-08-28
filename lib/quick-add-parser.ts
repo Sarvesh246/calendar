@@ -1,4 +1,5 @@
-import { addDays, nextDay, setHours, setMinutes, startOfDay, type Day } from "date-fns";
+import { addDays, setHours, setMinutes, startOfDay, type Day } from "date-fns";
+import { thisOrNextWeekday } from "./date-utils";
 import type { Category, ItemType } from "./types";
 
 export interface ParsedQuickAdd {
@@ -100,7 +101,7 @@ export function parseQuickAdd(raw: string, categories: Category[]): ParsedQuickA
     for (const [name, dow] of Object.entries(WEEKDAYS)) {
       const re = new RegExp(`\\b${name}\\b`, "i");
       if (re.test(text)) {
-        base = nextDay(startOfDay(new Date()), dow);
+        base = thisOrNextWeekday(dow);
         matchedDate = true;
         text = text.replace(re, "").trim();
         break;

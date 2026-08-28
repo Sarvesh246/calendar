@@ -289,7 +289,10 @@ export const useDatebookStore = create<DatebookState>()(
             "Loading your calendar"
           );
           const local = get();
-          const cloudEmpty = cloud.items.length === 0 && cloud.categories.length === 0;
+          // Categories alone (seed rows from another device) are not "user data".
+          // Treating them as a populated cloud would take the replace branch and
+          // wipe local items the first time someone signs in.
+          const cloudEmpty = cloud.items.length === 0;
           const localHasContent = local.items.length > 0 || local.categories.length > 0;
 
           applyingRemote = true;
@@ -875,13 +878,19 @@ function scheduleConnectRetry(userId: string) {
  *  Local unsynced edits take priority: if any are queued we push instead. */
 async function catchUpFromCloud(userId: string) {
   if (!supabase || activeUserId !== userId) return;
-  if (pendingWork()) {
+  // `flush()` drains `pending` at start, so `pendingWork()` is false while
+  // those writes are still in flight. Skip catch-up until flush finishes.
+  if (pendingWork() || flushing) {
     scheduleFlush();
     return;
   }
   try {
     const cloud = await withTimeout(fetchAllForUser(supabase, userId), "Reconciling");
     if (activeUserId !== userId) return;
+    if (pendingWork() || flushing) {
+      scheduleFlush();
+      return;
+    }
     applyingRemote = true;
     useDatebookStore.setState({
       items: cloud.items,
@@ -955,7 +964,11 @@ async function subscribeRealtime(userId: string) {
         clearTimeout(realtimeRetryTimer);
         realtimeRetryTimer = null;
       }
-      useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
+      const busy = pendingWork() || flushing;
+      useDatebookStore.setState({
+        syncStatus: busy ? "syncing" : "synced",
+        cloudError: null,
+      });
       // Any changes emitted while we were disconnected are gone — reconcile.
       void catchUpFromCloud(userId);
     } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {

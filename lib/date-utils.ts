@@ -4,13 +4,16 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  getDay,
   isSameMonth,
   isToday,
   isTomorrow,
   isYesterday,
+  nextDay,
   startOfDay,
   startOfMonth,
   startOfWeek,
+  type Day,
 } from "date-fns";
 import type { Item } from "./types";
 
@@ -104,18 +107,60 @@ export function dayLabel(date: Date) {
   return format(date, "EEEE, MMMM d");
 }
 
-export function relativeDueLabel(iso: string) {
+export function relativeDueLabel(iso: string, opts?: { allDay?: boolean }) {
   const date = new Date(iso);
+  const past = date.getTime() < Date.now();
+  const overdue = past && !(opts?.allDay && isToday(date));
+  if (overdue) {
+    if (isToday(date)) return "Overdue";
+    if (isYesterday(date)) return "Overdue — was due yesterday";
+    return `Overdue — was due ${format(date, "MMM d")}`;
+  }
   if (isToday(date)) return "Due today";
   if (isTomorrow(date)) return "Due tomorrow";
-  if (isYesterday(date)) return "Overdue — was due yesterday";
-  if (date.getTime() < Date.now()) return `Overdue — was due ${format(date, "MMM d")}`;
   return `Due ${format(date, "EEE, MMM d")}`;
 }
 
 export function isOverdue(item: Item) {
   if (item.type === "event" || item.status === "done") return false;
-  return new Date(item.at).getTime() < Date.now() && !isToday(new Date(item.at));
+  const at = new Date(item.at);
+  if (item.allDay) return !isToday(at) && at.getTime() < Date.now();
+  return at.getTime() < Date.now();
+}
+
+/** "Monday" means today when today is Monday; otherwise the next that weekday. */
+export function thisOrNextWeekday(dow: Day, from = new Date()) {
+  const today = startOfDay(from);
+  if (getDay(today) === dow) return today;
+  return nextDay(today, dow);
+}
+
+/**
+ * Focus / "what's next": an event happening now, else the next future item,
+ * else the oldest incomplete overdue assignment.
+ */
+export function focusQueue(items: Item[], now = new Date()): { current?: Item; next?: Item } {
+  const open = items.filter((i) => i.status !== "done");
+  const happening = open.find(
+    (e) =>
+      e.type === "event" &&
+      e.endAt &&
+      new Date(e.at).getTime() <= now.getTime() &&
+      now.getTime() <= new Date(e.endAt).getTime()
+  );
+  const upcoming = open
+    .filter((i) => i.id !== happening?.id && new Date(i.at).getTime() >= now.getTime())
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const overdue = open
+    .filter(
+      (i) =>
+        i.type !== "event" &&
+        i.id !== happening?.id &&
+        new Date(i.at).getTime() < now.getTime()
+    )
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const ordered = happening ? [happening, ...upcoming, ...overdue] : [...upcoming, ...overdue];
+  return { current: ordered[0], next: ordered[1] };
 }
 
 export function timeOfDayGreeting(date = new Date()) {
