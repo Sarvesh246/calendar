@@ -35,6 +35,7 @@ create table if not exists public.items (
   title       text not null,
   description text,
   location    text,
+  url         text,
   at          timestamptz not null,
   end_at      timestamptz,
   all_day     boolean not null default false,
@@ -45,6 +46,9 @@ create table if not exists public.items (
   source_uid  text,
   updated_at  timestamptz not null default now()
 );
+-- `create table if not exists` above is a no-op on an account created before the
+-- `url` column existed, so add it explicitly too (see 0002). Idempotent.
+alter table public.items add column if not exists url text;
 create index if not exists items_user_idx on public.items(user_id);
 create index if not exists items_user_at_idx on public.items(user_id, at);
 
@@ -164,3 +168,9 @@ begin
     end;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- tell PostgREST to refresh its cached schema, so columns added by a re-run
+-- (e.g. items.url) are usable immediately instead of after PGRST204 errors
+-- ---------------------------------------------------------------------------
+notify pgrst, 'reload schema';

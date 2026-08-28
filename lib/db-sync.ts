@@ -15,6 +15,22 @@ import type {
 type Row = Record<string, unknown>;
 const iso = (v: unknown) => new Date(v as string).toISOString();
 
+// Set once if the account's `items` table predates migration 0002 (no `url`
+// column). PostgREST then rejects any write that carries `url` with PGRST204;
+// we strip the column and keep syncing everything else rather than wedging.
+// Links come back automatically once the migration is run.
+let itemUrlColumnMissing = false;
+
+function isMissingUrlColumn(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return e?.code === "PGRST204" && (e?.message ?? "").includes("'url'");
+}
+
+function stripUrl(rows: Row[]): Row[] {
+  for (const r of rows) delete r.url;
+  return rows;
+}
+
 /** Turn any thrown value (Error, Supabase PostgrestError object, string) into readable text. */
 export function describeError(e: unknown): string {
   if (e == null) return "Unknown error";
@@ -194,6 +210,27 @@ async function upsertRows(supabase: SupabaseClient, table: string, rows: Row[], 
   if (error) throw error;
 }
 
+/** Upsert into `items`, tolerating an account whose schema is missing the 0002
+ *  `url` column: on the first PGRST204 we drop `url` and retry, then omit it for
+ *  the rest of the session so the sync engine doesn't get stuck on it. */
+async function upsertItemRows(supabase: SupabaseClient, rows: Row[]) {
+  if (rows.length === 0) return;
+  if (itemUrlColumnMissing) stripUrl(rows);
+  const { error } = await supabase.from("items").upsert(rows);
+  if (!error) return;
+  if (!itemUrlColumnMissing && isMissingUrlColumn(error)) {
+    itemUrlColumnMissing = true;
+    console.warn(
+      "[datebook] items.url column not found — run supabase/migrations/0002_item_url.sql. " +
+        "Syncing without item links until then."
+    );
+    const { error: retryError } = await supabase.from("items").upsert(stripUrl(rows));
+    if (retryError) throw retryError;
+    return;
+  }
+  throw error;
+}
+
 async function deleteRows(supabase: SupabaseClient, table: string, ids: string[], userId: string) {
   if (ids.length === 0) return;
   const { error } = await supabase.from(table).delete().eq("user_id", userId).in("id", ids);
@@ -224,9 +261,8 @@ export async function pushAllToCloud(
     "user_id,id"
   );
   await upsertRows(supabase, "import_sources", s.importSources.map((x) => toImportSourceRow(x, userId)));
-  await upsertRows(
+  await upsertItemRows(
     supabase,
-    "items",
     sanitizeItemRows(s.items.map((x) => toItemRow(x, userId)), knownCategoryIds)
   );
   if (s.settings) {
@@ -269,9 +305,8 @@ export async function pushChanges(
     "import_sources",
     c.importSources.upserts.map((x) => toImportSourceRow(x, userId))
   );
-  await upsertRows(
+  await upsertItemRows(
     supabase,
-    "items",
     sanitizeItemRows(c.items.upserts.map((x) => toItemRow(x, userId)), knownCategoryIds)
   );
 

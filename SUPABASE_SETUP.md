@@ -17,7 +17,14 @@ Dashboard → **SQL Editor** → **New query** → paste the contents of
 This creates the tables (`items`, `categories`, `reminder_presets`,
 `import_sources`, `user_settings`), enables row-level security so each account
 only sees its own data, seeds default reminder presets for every new account, and
-adds the tables to the realtime publication. It is safe to re-run.
+adds the tables to the realtime publication. It is safe to re-run — and re-running
+the latest version is exactly how you pick up later columns.
+
+> **Seeing `Could not find the 'url' column of 'items' in the schema cache`
+> (PGRST204)?** Your project was created before the `items.url` column existed.
+> Re-run `0001_init.sql` (it now includes the column and a schema-cache reload),
+> or run just [`supabase/migrations/0002_item_url.sql`](supabase/migrations/0002_item_url.sql).
+> The app keeps syncing everything except item links until you do.
 
 ## 3. Add the keys
 
