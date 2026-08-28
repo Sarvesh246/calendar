@@ -63,6 +63,14 @@ export function MonthView({
             <button
               key={date.toISOString()}
               onClick={() => onSelectDate(date)}
+              aria-pressed={selected ?? false}
+              aria-label={
+                `${format(date, "EEEE, MMMM d")}` +
+                (today ? ", today" : "") +
+                (dayItems.length
+                  ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
+                  : ", nothing scheduled")
+              }
               style={
                 today
                   ? ({

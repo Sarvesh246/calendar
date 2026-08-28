@@ -6,7 +6,6 @@ import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { formatTime, relativeDueLabel } from "@/lib/date-utils";
-import { cn } from "@/lib/utils";
 
 export function FocusView() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
@@ -23,7 +22,6 @@ export function FocusView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleFocusMode]);
 
-  const now = new Date();
   const upcoming = [...items]
     .filter((i) => i.status !== "done")
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());

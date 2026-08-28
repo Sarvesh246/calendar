@@ -6,6 +6,7 @@ import { ArrowUp, Check, Sparkles, Trash2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
+import { nanoid } from "@/lib/nanoid";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +92,7 @@ export function AIDrawer() {
           draft = {
             ...draft,
             reminders: [
-              { id: crypto.randomUUID(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label },
+              { id: nanoid(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label },
             ],
           };
         }
