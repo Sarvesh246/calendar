@@ -1,0 +1,198 @@
+"use client";
+
+import { format } from "date-fns";
+import type { Item } from "./types";
+
+/* ------------------------------------------------------------------ */
+/* Local reminder delivery                                             */
+/* ------------------------------------------------------------------ */
+/* There is no push server, so reminders fire from the page: every     */
+/* reminder due within the next 24h is scheduled with setTimeout while */
+/* a tab is alive, and any that came due while every tab was closed    */
+/* are delivered on the next load (within a grace window, so we don't  */
+/* dump a week of stale alerts at once). A minimal service worker      */
+/* (public/sw.js) handles the notification click; when it's in control */
+/* we route through registration.showNotification so alerts survive a  */
+/* backgrounded tab on mobile, where `new Notification()` throws.      */
+
+const FIRED_KEY = "datebook-reminders-fired";
+const SCHEDULE_WINDOW_MS = 24 * 60 * 60 * 1000; // only arm timers this far out
+const CATCH_UP_GRACE_MS = 12 * 60 * 60 * 1000; // deliver misses newer than this
+const PRUNE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+
+export function notificationsSupported(): boolean {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+export function notificationPermission(): NotificationPermission | "unsupported" {
+  return notificationsSupported() ? Notification.permission : "unsupported";
+}
+
+export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+  if (!notificationsSupported()) return "unsupported";
+  if (Notification.permission !== "default") return Notification.permission;
+  try {
+    return await Notification.requestPermission();
+  } catch {
+    return Notification.permission;
+  }
+}
+
+let promptedThisSession = false;
+
+/**
+ * Call from the click handler that attaches a reminder to a new item: if the
+ * user hasn't decided about notifications yet, ask now (a natural moment, and a
+ * real user gesture). No-op once decided or once asked this session.
+ */
+export async function maybePromptForReminders(getItems: () => Item[]): Promise<void> {
+  if (promptedThisSession || notificationPermission() !== "default") return;
+  promptedThisSession = true;
+  const result = await requestNotificationPermission();
+  if (result === "granted") {
+    await ensureReminderWorker();
+    armReminders(getItems());
+  }
+}
+
+/** Register the click-handling service worker. Safe to call repeatedly. */
+export async function ensureReminderWorker(): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  } catch {
+    /* SW is an enhancement here — fall back to page-context Notification */
+  }
+}
+
+/* --- fired-key bookkeeping --------------------------------------- */
+
+function reminderKey(itemId: string, reminderId: string, offsetMinutes: number): string {
+  return `${itemId}:${reminderId || `o${offsetMinutes}`}`;
+}
+
+function readFired(): Record<string, number> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(FIRED_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    const cutoff = Date.now() - PRUNE_AFTER_MS;
+    let changed = false;
+    for (const [k, t] of Object.entries(parsed)) {
+      if (typeof t !== "number" || t < cutoff) {
+        delete parsed[k];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(FIRED_KEY, JSON.stringify(parsed));
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function markFired(key: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const fired = readFired();
+    fired[key] = Date.now();
+    localStorage.setItem(FIRED_KEY, JSON.stringify(fired));
+  } catch {
+    /* storage full / disabled — worst case the reminder repeats once */
+  }
+}
+
+/* --- notification rendering ------------------------------------- */
+
+function reminderBody(item: Item): string {
+  const when = format(new Date(item.at), "EEE, MMM d · h:mm a");
+  if (item.type === "event") return item.allDay ? "All day today" : `Starts ${when}`;
+  return item.allDay ? "Due today" : `Due ${when}`;
+}
+
+async function showReminder(item: Item, label: string): Promise<void> {
+  if (notificationPermission() !== "granted") return;
+  const title = item.type === "event" ? item.title : `Due soon — ${item.title}`;
+  const options: NotificationOptions & { tag: string } = {
+    body: `${label} · ${reminderBody(item)}`,
+    tag: `datebook-${item.id}`,
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+  };
+  try {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.showNotification(title, options);
+        return;
+      }
+    }
+    new Notification(title, options);
+  } catch {
+    /* mobile without an active SW, or the tab was torn down mid-await */
+  }
+}
+
+/* --- scheduling ------------------------------------------------- */
+
+let timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearTimers(): void {
+  for (const t of timers.values()) clearTimeout(t);
+  timers = new Map();
+}
+
+/**
+ * (Re)compute every pending reminder and arm a timer for the ones due within the
+ * next 24h. Idempotent — call it on load, whenever items change, on an interval,
+ * and when a tab returns to the foreground.
+ */
+export function armReminders(items: Item[]): void {
+  if (notificationPermission() !== "granted") {
+    clearTimers();
+    return;
+  }
+  clearTimers();
+  const now = Date.now();
+  const fired = readFired();
+
+  for (const item of items) {
+    if (!item.reminders?.length) continue;
+    if (item.status === "done") continue;
+    const at = new Date(item.at).getTime();
+    if (Number.isNaN(at)) continue;
+
+    for (const r of item.reminders) {
+      const key = reminderKey(item.id, r.id, r.offsetMinutes);
+      if (fired[key]) continue;
+      const fireAt = at - r.offsetMinutes * 60_000;
+      const delay = fireAt - now;
+
+      if (delay <= 0) {
+        // Came due while the app was closed. Deliver recent misses once; let old
+        // ones lapse silently so reopening after a trip isn't an alert storm.
+        if (delay > -CATCH_UP_GRACE_MS && at > now - 60 * 60_000) {
+          markFired(key);
+          void showReminder(item, r.label);
+        } else {
+          markFired(key);
+        }
+        continue;
+      }
+      if (delay > SCHEDULE_WINDOW_MS) continue; // a later re-arm will catch it
+
+      timers.set(
+        key,
+        setTimeout(() => {
+          timers.delete(key);
+          markFired(key);
+          void showReminder(item, r.label);
+        }, delay)
+      );
+    }
+  }
+}
+
+export function disarmReminders(): void {
+  clearTimers();
+}

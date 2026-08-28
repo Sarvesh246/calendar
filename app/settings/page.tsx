@@ -7,6 +7,7 @@ import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { ImportCalendar } from "@/components/import-calendar";
 import { AccountSection } from "@/components/account-section";
+import { NotificationToggle } from "@/components/notification-toggle";
 import { cn } from "@/lib/utils";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
 
@@ -140,7 +141,19 @@ export default function SettingsPage() {
         <ImportCalendar />
       </Section>
 
-      <Section title="Default reminders" sub="Applied automatically when the quick-add bar doesn't catch a reminder itself.">
+      <Section
+        title="Reminders"
+        sub="Datebook alerts you before an event starts or an assignment is due. Reminders fire while the app is open and catch up on anything missed when you reopen it."
+      >
+        <NotificationToggle />
+        <div className="mt-1">
+          <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">
+            Applied by default
+          </p>
+          <p className="mt-0.5 text-[13px] text-ink-soft">
+            Added automatically when the quick-add bar doesn&apos;t catch a reminder itself.
+          </p>
+        </div>
         <div className="flex flex-col gap-1.5">
           {reminderPresets.map((rp) => {
             const active = settings.defaultReminderPresetIds.includes(rp.id);

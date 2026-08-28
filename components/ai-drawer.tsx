@@ -7,6 +7,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
 import { nanoid } from "@/lib/nanoid";
+import { maybePromptForReminders } from "@/lib/reminders";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -98,6 +99,9 @@ export function AIDrawer() {
         }
       }
       addItem(draft);
+      if (draft.reminders?.length) {
+        void maybePromptForReminders(() => useDatebookStore.getState().items);
+      }
     } else if (action.kind === "update") {
       updateItem(action.itemId, action.patch);
     } else if (action.kind === "delete") {

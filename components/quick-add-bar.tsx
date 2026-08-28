@@ -8,6 +8,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
 import { shouldAskAssistant } from "@/lib/ai-assistant";
 import { nanoid } from "@/lib/nanoid";
+import { maybePromptForReminders } from "@/lib/reminders";
 import { formatTime } from "@/lib/date-utils";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
@@ -71,6 +72,7 @@ export function QuickAddBar() {
   function confirm() {
     if (!parsed) return;
     const preset = reminderPresets.find((p) => defaultReminderPresetIds.includes(p.id));
+    const willHaveReminder = Boolean(parsed.reminderMinutesBefore || preset);
     addItem({
       title: parsed.title,
       type: parsed.type,
@@ -90,6 +92,7 @@ export function QuickAddBar() {
         ? [{ id: nanoid(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label }]
         : undefined,
     });
+    if (willHaveReminder) void maybePromptForReminders(() => useDatebookStore.getState().items);
     reset();
   }
 
