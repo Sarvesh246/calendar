@@ -167,6 +167,9 @@
   --motion-standard: 200ms;
   --motion-emphasis: 350ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Height the on-screen keyboard is currently covering, published by
+     useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
+  --keyboard-inset: 0px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -179,6 +182,21 @@
 }
 
 * { box-sizing: border-box; }
+
+/* iOS Safari zooms the whole page in whenever a focused field renders text
+   smaller than 16px — which scales the fixed chrome (quick-add bar, AI drawer,
+   command palette) and knocks the layout around. Guarantee >=16px for every
+   text-entry control on touch-sized screens; the finer desktop type is kept
+   above 768px. The :not() chain outweighs the Tailwind size utilities on their
+   own, so this needs no !important. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: 16px;
+  }
+}
 
 html, body { height: 100%; }
 

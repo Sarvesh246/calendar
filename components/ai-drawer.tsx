@@ -122,7 +122,16 @@ export function AIDrawer() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.97 }}
           transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-          className="glass fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl"
+          style={{
+            // Ride above the on-screen keyboard instead of being hidden behind
+            // it; cap the height to what's actually visible so the input and the
+            // latest messages stay on screen.
+            bottom: "calc(env(safe-area-inset-bottom) + 1rem + var(--keyboard-inset, 0px))",
+            height: "70vh",
+            maxHeight:
+              "min(560px, calc(100dvh - env(safe-area-inset-top) - 2rem - var(--keyboard-inset, 0px)))",
+          }}
+          className="glass fixed right-4 z-50 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl transition-[bottom] duration-200 ease-out"
         >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <Sparkles className="h-4 w-4 text-accent" strokeWidth={2} />
@@ -227,6 +236,14 @@ export function AIDrawer() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && ask(input)}
+              onFocus={() => {
+                // Once the keyboard has opened and the drawer resettled, pin the
+                // conversation to the latest message so it isn't left scrolled up
+                // behind the shorter viewport.
+                setTimeout(() => {
+                  scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+                }, 300);
+              }}
               placeholder="Ask or tell me to change something…"
               className="min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
