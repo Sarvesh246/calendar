@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function CommandPalette() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export function CommandPalette() {
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
+
+  useScrollLock(open);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
