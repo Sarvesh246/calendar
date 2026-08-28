@@ -36,6 +36,7 @@ interface ReqBody {
   now: string;
   timeZone?: string;
   clock24h?: boolean;
+  weekStartsOn?: 0 | 1;
   items: SlimItem[];
   categories: { id: string; name: string }[];
 }
@@ -132,7 +133,8 @@ function systemPrompt(body: ReqBody): string {
     })),
     body.categories,
     body.now,
-    tz
+    tz,
+    body.weekStartsOn === 1 ? 1 : 0
   );
 
   // Keep the payload bounded (latency): nearest ~180 items to "now", trimmed
@@ -166,10 +168,10 @@ STATUS & DUE SEMANTICS — follow strictly:
 - "done" means finished. A done item is NEVER overdue, NEVER "still due", and NEVER counted in "how many do I have left", "how many due", "due by Sunday", or similar open-work questions unless the user explicitly asks about completed/finished work.
 - "doing" means in progress — it still counts as open work.
 - "todo" (or unset status) with a due datetime in the past = overdue (unless done).
-- "Due by Sunday" / "due this week" / "what's left" = open assignments and tasks only (status todo or doing), NOT events.
+- "Due by Sunday" = open assignments and tasks whose due date is on or before the coming calendar Sunday (today if today is Sunday). "Due this week" = open work from today through the end of the user's calendar week (week starts ${body.weekStartsOn === 1 ? "Monday" : "Sunday"}). Neither includes events.
 - Events are not assignments — never mix events into due-counts or overdue lists unless the user asks about events specifically.
 - When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST.
-- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off.
+- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off. That list is items marked done whose *due date* fell in the last 7 local days (there is no separate completed-at timestamp).
 
 YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when the user clearly asks you to.
 1. ANSWER a question (this is the common case — a chatbot about their calendar). Triggers: "what/when/where/how many/how much/do I have/is there/am I free/show me/list/tell me/which/what's it for/what class…". Answer precisely from the DIGEST and ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Use the DIGEST for counts and date-bounded lists. If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.

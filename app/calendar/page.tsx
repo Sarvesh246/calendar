@@ -108,7 +108,7 @@ export default function CalendarPage() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:gap-4"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row lg:gap-4"
       >
         {mode === "month" ? (
           <MonthView
@@ -130,7 +130,7 @@ export default function CalendarPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 12 }}
               transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              className="glass hidden min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-xl p-4 md:flex"
+              className="glass hidden min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex"
             >
               <p className="mb-3 shrink-0 text-[13px] font-medium text-ink">{dayLabel(selectedDate)}</p>
               {selectedItems.length === 0 ? (

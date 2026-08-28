@@ -44,6 +44,7 @@ interface Ctx {
   items: Item[];
   categories: Category[];
   clock24h: boolean;
+  weekStartsOn?: 0 | 1;
 }
 
 /** Compact facts pre-computed for the model and offline heuristics. */
@@ -105,6 +106,14 @@ function nextSundayDateKey(now: Date, timeZone: string): string {
   return addDaysToDateKey(todayKey, dow === 0 ? 0 : 7 - dow);
 }
 
+/** Last day of the user's calendar week as yyyy-MM-dd (Sat if week starts Sun, Sun if week starts Mon). */
+function endOfCalendarWeekKey(now: Date, timeZone: string, weekStartsOn: 0 | 1): string {
+  const todayKey = zonedDateKey(now, timeZone);
+  const dow = zonedWeekday(now, timeZone);
+  const weekEndDow = weekStartsOn === 0 ? 6 : 0;
+  return addDaysToDateKey(todayKey, (weekEndDow - dow + 7) % 7);
+}
+
 function categoryNameFor(id: string | undefined, categories: Pick<Category, "id" | "name">[]): string | undefined {
   if (!id) return undefined;
   return categories.find((c) => c.id === id)?.name;
@@ -137,11 +146,12 @@ export function buildAssistantDigest(
   items: Item[],
   categories: Pick<Category, "id" | "name">[],
   nowIso: string,
-  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+  weekStartsOn: 0 | 1 = 0
 ): AssistantDigest {
   const now = new Date(nowIso);
   const todayKey = zonedDateKey(now, timeZone);
-  const weekEndKey = addDaysToDateKey(todayKey, 6);
+  const weekEndKey = endOfCalendarWeekKey(now, timeZone, weekStartsOn);
   const sundayKey = nextSundayDateKey(now, timeZone);
   const completedSinceKey = addDaysToDateKey(todayKey, -6);
 
@@ -241,6 +251,7 @@ export async function askAssistant(
         now: new Date().toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         clock24h: ctx.clock24h,
+        weekStartsOn: ctx.weekStartsOn ?? 0,
         items: ctx.items.map((i) => ({
           id: i.id,
           title: i.title,
@@ -325,7 +336,7 @@ export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
   const fmtTime = (iso: string) => format(new Date(iso), ctx.clock24h ? "HH:mm" : "h:mm a");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const now = new Date();
-  const digest = buildAssistantDigest(ctx.items, ctx.categories, now.toISOString(), tz);
+  const digest = buildAssistantDigest(ctx.items, ctx.categories, now.toISOString(), tz, ctx.weekStartsOn ?? 0);
   const open = ctx.items.filter(isOpenWork);
   const wantsCompleted = asksAboutCompletedWork(q);
 

@@ -62,6 +62,7 @@ function DayCellChips({
   items: Item[];
   colorOf: (categoryId: string) => string;
 }) {
+  const density = useDatebookStore((s) => s.settings.density);
   const ref = useRef<HTMLDivElement>(null);
   const [fitCount, setFitCount] = useState(() => Math.min(3, items.length));
 
@@ -77,7 +78,7 @@ function DayCellChips({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [items.length]);
+  }, [items.length, density]);
 
   const visible = items.slice(0, fitCount);
   const overflow = items.length - fitCount;

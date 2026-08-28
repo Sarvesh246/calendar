@@ -28,15 +28,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-[1800px] gap-5 px-4",
+        "mx-auto flex h-dvh w-full max-w-[1800px] gap-5 overflow-hidden px-4",
         focusMode
-          ? "min-h-dvh pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "min-h-dvh pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6"
+          ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
+          : "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <main
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          pathname === "/calendar" ? "overflow-hidden" : "overflow-y-auto"
+        )}
+      >
         {!focusMode && (
           <>
             <div className="mb-2.5 flex shrink-0 items-center gap-2.5 md:mb-5">

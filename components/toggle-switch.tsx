@@ -4,8 +4,6 @@ import { motion } from "framer-motion";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-const THUMB_TRAVEL = 20;
-
 export function ToggleSwitch({
   checked,
   onChange,
@@ -32,7 +30,7 @@ export function ToggleSwitch({
       <motion.span
         aria-hidden
         className="pointer-events-none block h-6 w-6 rounded-full bg-surface-elevated shadow-[var(--shadow-sm)] ring-1 ring-line"
-        animate={{ x: checked ? THUMB_TRAVEL : 0 }}
+        animate={{ x: checked ? 24 : 0 }}
         transition={motionTokens.spring}
       />
     </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
 import { format } from "date-fns";
@@ -12,6 +12,18 @@ import { EmptyState } from "@/components/empty-state";
 import { motion as motionTokens } from "@/lib/motion";
 import type { Item } from "@/lib/types";
 
+function useBelowLg() {
+  const [below, setBelow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setBelow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return below;
+}
+
 export function DaySheet({
   date,
   items,
@@ -21,14 +33,25 @@ export function DaySheet({
   items: Item[];
   onClose: () => void;
 }) {
-  useLockBodyScroll(true);
+  const visible = useBelowLg();
+  useLockBodyScroll(visible);
   const dragControls = useDragControls();
   const closeGuard = useRef(false);
+  const headingId = useId();
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
 
+  useEffect(() => {
+    if (!visible) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible, onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50 lg:hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -40,7 +63,7 @@ export function DaySheet({
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label={label}
+        aria-labelledby={headingId}
         initial={{ y: 28, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 28, opacity: 0 }}
@@ -62,7 +85,7 @@ export function DaySheet({
           <span aria-hidden className="h-1 w-10 rounded-full bg-line-strong" />
           <div className="flex w-full items-start justify-between gap-3 px-4 pb-2 pt-3">
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-ink">{label}</p>
+              <p id={headingId} className="text-[15px] font-semibold text-ink">{label}</p>
               {showDate && (
                 <p className="mt-0.5 text-[12.5px] text-ink-faint">{format(date, "EEEE, MMMM d")}</p>
               )}
