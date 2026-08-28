@@ -7,6 +7,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
 import { shouldAskAssistant } from "@/lib/ai-assistant";
+import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
 import { formatTime } from "@/lib/date-utils";
@@ -30,6 +31,8 @@ export function QuickAddBar() {
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
   const prefill = useUIStore((s) => s.quickAddPrefill);
   const setPrefill = useUIStore((s) => s.setQuickAddPrefill);
+  const dateKey = useUIStore((s) => s.quickAddDateKey);
+  const setDateKey = useUIStore((s) => s.setQuickAddDateKey);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const askAI = useUIStore((s) => s.askAI);
 
@@ -50,6 +53,10 @@ export function QuickAddBar() {
     }
   }, [prefill, setPrefill]);
 
+  useEffect(() => {
+    if (dateKey) inputRef.current?.focus();
+  }, [dateKey]);
+
   function submit() {
     const trimmed = text.trim();
     if (!trimmed || phase !== "idle") return;
@@ -63,7 +70,8 @@ export function QuickAddBar() {
     }
     setPhase("parsing");
     window.setTimeout(() => {
-      const result = parseQuickAdd(text, categories);
+      const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
+      const result = parseQuickAdd(text, categories, anchor ? { anchor } : undefined);
       setParsed(result);
       setPhase("preview");
     }, 550);
@@ -71,26 +79,27 @@ export function QuickAddBar() {
 
   function confirm() {
     if (!parsed) return;
-    const preset = reminderPresets.find((p) => defaultReminderPresetIds.includes(p.id));
-    const willHaveReminder = Boolean(parsed.reminderMinutesBefore || preset);
+    const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
+    const reminders = parsed.reminderMinutesBefore
+      ? [
+          {
+            id: nanoid(),
+            itemId: "",
+            offsetMinutes: parsed.reminderMinutesBefore,
+            label: parsed.reminderLabel ?? "Reminder",
+          },
+        ]
+      : defaults.length
+        ? defaults
+        : undefined;
+    const willHaveReminder = Boolean(reminders?.length);
     addItem({
       title: parsed.title,
       type: parsed.type,
       categoryId: parsed.categoryId ?? categories[0]?.id,
       at: parsed.at.toISOString(),
       status: parsed.type === "event" ? undefined : "todo",
-      reminders: parsed.reminderMinutesBefore
-        ? [
-            {
-              id: nanoid(),
-              itemId: "",
-              offsetMinutes: parsed.reminderMinutesBefore,
-              label: parsed.reminderLabel ?? "Reminder",
-            },
-          ]
-        : preset
-        ? [{ id: nanoid(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label }]
-        : undefined,
+      reminders,
     });
     if (willHaveReminder) void maybePromptForReminders(() => useDatebookStore.getState().items);
     reset();
@@ -100,6 +109,7 @@ export function QuickAddBar() {
     setText("");
     setParsed(null);
     setPhase("idle");
+    setDateKey(null);
   }
 
   const category = categories.find((c) => c.id === parsed?.categoryId);
@@ -117,7 +127,7 @@ export function QuickAddBar() {
           enterKeyHint="go"
           autoComplete="off"
           autoCorrect="off"
-          placeholder="Add or ask anything…"
+          placeholder={dateKey ? `Add something on ${dateKey}…` : "Add or ask anything…"}
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         <button

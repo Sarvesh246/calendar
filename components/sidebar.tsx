@@ -84,7 +84,7 @@ export function Sidebar() {
             <p className="px-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
               Categories
             </p>
-            {categories.map((cat) => {
+            {categories.filter((c) => !c.archived).map((cat) => {
               const active = categoryFilter?.includes(cat.id) ?? false;
               return (
                 <button

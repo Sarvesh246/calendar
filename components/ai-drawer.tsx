@@ -5,8 +5,8 @@ import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
-import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
+import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { ViewportLayer } from "@/components/viewport-layer";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
@@ -165,14 +165,9 @@ export function AIDrawer() {
     if (action.kind === "create") {
       let draft = action.draft;
       if (!draft.reminders?.length) {
-        const preset = reminderPresets.find((p) => defaultReminderPresetIds.includes(p.id));
-        if (preset) {
-          draft = {
-            ...draft,
-            reminders: [
-              { id: nanoid(), itemId: "", offsetMinutes: preset.offsetMinutes, label: preset.label },
-            ],
-          };
+        const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
+        if (defaults.length) {
+          draft = { ...draft, reminders: defaults };
         }
       }
       addItem(draft);

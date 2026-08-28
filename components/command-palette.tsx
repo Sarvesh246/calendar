@@ -16,6 +16,9 @@ import {
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
+import { dayKey, isOverdue } from "@/lib/date-utils";
+import { isToday } from "date-fns";
+import type { Item } from "@/lib/types";
 
 export function CommandPalette() {
   const router = useRouter();
@@ -26,6 +29,7 @@ export function CommandPalette() {
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
+  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   useLockBodyScroll(open);
 
   useEffect(() => {
@@ -47,6 +51,22 @@ export function CommandPalette() {
   function createNew() {
     setQuickAddPrefill("");
     setOpen(false);
+  }
+
+  function openItem(item: Item) {
+    setFocusedItemId(item.id);
+    setOpen(false);
+    const at = new Date(item.at);
+    if (isOverdue(item)) {
+      router.push("/agenda");
+      return;
+    }
+    if (isToday(at)) {
+      router.push("/today");
+      return;
+    }
+    setCalendarFocusDate(dayKey(at));
+    router.push("/calendar");
   }
 
   return (
@@ -117,16 +137,16 @@ export function CommandPalette() {
 
         {items.length > 0 && (
           <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-            {items.slice(0, 30).map((item) => {
+            {[...items]
+              .sort((a, b) => Math.abs(+new Date(a.at) - Date.now()) - Math.abs(+new Date(b.at) - Date.now()))
+              .slice(0, 250)
+              .map((item) => {
               const category = categories.find((c) => c.id === item.categoryId);
               return (
                 <Command.Item
                   key={item.id}
-                  value={item.title}
-                  onSelect={() => {
-                    setFocusedItemId(item.id);
-                    go("/agenda");
-                  }}
+                  value={`${item.title} ${item.description ?? ""} ${item.location ?? ""} ${category?.name ?? ""}`}
+                  onSelect={() => openItem(item)}
                   className="cmdk-row min-h-11"
                 >
                   <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />

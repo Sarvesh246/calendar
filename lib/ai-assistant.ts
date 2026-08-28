@@ -166,13 +166,12 @@ export function buildAssistantDigest(
   const inProgress = openWork.filter((i) => i.status === "doing");
 
   const completed = items
-    .filter(
-      (i) =>
-        i.type !== "event" &&
-        i.status === "done" &&
-        zonedDateKey(i.at, timeZone) >= completedSinceKey &&
-        zonedDateKey(i.at, timeZone) <= todayKey
-    )
+    .filter((i) => {
+      if (i.type === "event" || i.status !== "done") return false;
+      const when = i.completedAt ?? i.at;
+      const k = zonedDateKey(when, timeZone);
+      return k >= completedSinceKey && k <= todayKey;
+    })
     .sort((a, b) => +new Date(b.at) - +new Date(a.at));
 
   const nextEvent = items
@@ -241,9 +240,10 @@ export async function askAssistant(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45_000);
   try {
+    const { authHeaders } = await import("./auth-headers");
     const res = await fetch("/api/assistant", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders(),
       signal: controller.signal,
       body: JSON.stringify({
         message,

@@ -6,6 +6,7 @@ import { useDatebookStore, useCategory } from "@/lib/store";
 import { groupItemsByDay, dayKey, dayLabel } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { cn } from "@/lib/utils";
+import { assignOverlapColumns } from "@/lib/event-layout";
 import type { Item } from "@/lib/types";
 
 const DEFAULT_START_HOUR = 7;
@@ -140,14 +141,25 @@ export function WeekView({
                 {hours.map((h) => (
                   <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line" />
                 ))}
-                {dayEvents.map((item) => {
+                {assignOverlapColumns(
+                  dayEvents.map((item) => {
+                    const start = new Date(item.at);
+                    const dayStart = startOfDay(start);
+                    const startMin = differenceInMinutes(start, dayStart) - startHour * 60;
+                    const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
+                    return {
+                      item,
+                      startMin,
+                      endMin: startMin + Math.max(20, durationMin),
+                      durationMin,
+                    };
+                  })
+                ).map(({ item, startMin, durationMin, col, colCount }) => {
                   const start = new Date(item.at);
-                  const dayStart = startOfDay(start);
-                  const startMin = differenceInMinutes(start, dayStart) - startHour * 60;
-                  const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
                   const top = Math.max(0, (startMin / 60) * HOUR_HEIGHT);
                   const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
                   const color = colorOf(item.categoryId);
+                  const widthPct = 100 / colCount;
                   return (
                     <button
                       key={item.id}
@@ -156,10 +168,12 @@ export function WeekView({
                       style={{
                         top,
                         height,
+                        left: `calc(${col * widthPct}% + 4px)`,
+                        width: `calc(${widthPct}% - 8px)`,
                         background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
                         borderLeft: `2.5px solid ${color}`,
                       }}
-                      className="absolute left-1 right-1 overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight"
+                      className="absolute overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight"
                     >
                       <p className="truncate font-medium" style={{ color }}>
                         {item.title}

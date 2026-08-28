@@ -13,7 +13,8 @@ export function CategoryChips() {
   const clear = useUIStore((s) => s.clearCategoryFilter);
   const onCalendar = pathname === "/calendar";
 
-  if (categories.length === 0) return null;
+  const visible = categories.filter((c) => !c.archived);
+  if (visible.length === 0) return null;
 
   return (
     <div
@@ -32,7 +33,7 @@ export function CategoryChips() {
       >
         All
       </button>
-      {categories.map((cat) => {
+      {visible.map((cat) => {
         const active = filter?.includes(cat.id) ?? false;
         return (
           <button

@@ -25,15 +25,20 @@ function iso(v: unknown): string {
 // column). PostgREST then rejects any write that carries `url` with PGRST204;
 // we strip the column and keep syncing everything else rather than wedging.
 // Links come back automatically once the migration is run.
-let itemUrlColumnMissing = false;
+const STRIPPABLE_ITEM_COLS = ["url", "completed_at", "source_snapshot"] as const;
+const strippedItemCols = new Set<string>();
 
-function isMissingUrlColumn(error: unknown): boolean {
+function missingColumn(error: unknown): string | null {
   const e = error as { code?: string; message?: string } | null;
-  return e?.code === "PGRST204" && (e?.message ?? "").includes("'url'");
+  if (e?.code !== "PGRST204") return null;
+  const msg = e.message ?? "";
+  return STRIPPABLE_ITEM_COLS.find((col) => msg.includes(`'${col}'`)) ?? null;
 }
 
-function stripUrl(rows: Row[]): Row[] {
-  for (const r of rows) delete r.url;
+function stripItemCols(rows: Row[]): Row[] {
+  for (const r of rows) {
+    for (const col of strippedItemCols) delete r[col];
+  }
   return rows;
 }
 
@@ -94,6 +99,8 @@ export function toItemRow(i: Item, userId: string): Row {
     all_day: i.allDay ?? false,
     status: i.status ?? null,
     reminders: i.reminders ?? [],
+    completed_at: i.completedAt ? iso(i.completedAt) : null,
+    source_snapshot: i.sourceSnapshot ?? null,
     created_at: iso(i.createdAt),
     source_id: i.sourceId ?? null,
     source_uid: i.sourceUid ?? null,
@@ -114,9 +121,13 @@ export function rowToItem(r: Row): Item {
     ...(r.all_day ? { allDay: true } : {}),
     ...(r.status ? { status: r.status as Item["status"] } : {}),
     ...(reminders && reminders.length ? { reminders } : {}),
+    ...(r.completed_at ? { completedAt: iso(r.completed_at) } : {}),
     createdAt: iso(r.created_at),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
     ...(r.source_uid ? { sourceUid: r.source_uid as string } : {}),
+    ...(r.source_snapshot && typeof r.source_snapshot === "object"
+      ? { sourceSnapshot: r.source_snapshot as Item["sourceSnapshot"] }
+      : {}),
   };
 }
 
@@ -159,6 +170,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     clock_24h: s.clock24h,
     show_location: s.showLocation,
     show_category_dot: s.showCategoryDot,
+    hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
   };
 }
@@ -171,6 +183,7 @@ export function rowToSettings(r: Row): UserSettings {
     clock24h: Boolean(r.clock_24h),
     showLocation: Boolean(r.show_location),
     showCategoryDot: Boolean(r.show_category_dot),
+    hideCompleted: Boolean(r.hide_completed),
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
   };
 }
@@ -230,16 +243,16 @@ async function upsertRows(supabase: SupabaseClient, table: string, rows: Row[], 
  *  the rest of the session so the sync engine doesn't get stuck on it. */
 async function upsertItemRows(supabase: SupabaseClient, rows: Row[]) {
   if (rows.length === 0) return;
-  if (itemUrlColumnMissing) stripUrl(rows);
+  stripItemCols(rows);
   const { error } = await supabase.from("items").upsert(rows);
   if (!error) return;
-  if (!itemUrlColumnMissing && isMissingUrlColumn(error)) {
-    itemUrlColumnMissing = true;
+  const col = missingColumn(error);
+  if (col) {
+    strippedItemCols.add(col);
     console.warn(
-      "[datebook] items.url column not found — run supabase/migrations/0002_item_url.sql. " +
-        "Syncing without item links until then."
+      `[datebook] items.${col} column not found — run supabase/migrations. Syncing without it until then.`
     );
-    const { error: retryError } = await supabase.from("items").upsert(stripUrl(rows));
+    const { error: retryError } = await supabase.from("items").upsert(stripItemCols(rows));
     if (retryError) throw retryError;
     return;
   }

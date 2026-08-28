@@ -6,6 +6,7 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/
 import { nanoid } from "./nanoid";
 import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
 import { buildImportPlan, feedLabel, type FetchedCalendar } from "./calendar-import";
+import { mergeImportedItem, importedFieldsChanged } from "./source-snapshot";
 import { supabase } from "./supabase/client";
 import {
   describeError,
@@ -60,8 +61,12 @@ interface DatebookState {
 
   addCategory: (category: Omit<Category, "id">) => Category;
   updateCategory: (id: string, patch: Partial<Category>) => void;
+  deleteCategory: (id: string) => void;
 
   updateSettings: (patch: Partial<UserSettings>) => void;
+
+  lastDeleted: Item | null;
+  restoreLastDeleted: () => void;
 
   /** Merge a fetched calendar feed into the store, keyed by `url` (re-syncs in
    *  place rather than duplicating). Returns what changed. */
@@ -91,6 +96,7 @@ const defaultSettings: UserSettings = {
   clock24h: false,
   showLocation: true,
   showCategoryDot: true,
+  hideCompleted: false,
   defaultReminderPresetIds: ["rp-night"],
 };
 
@@ -104,6 +110,7 @@ export const useDatebookStore = create<DatebookState>()(
       reminderPresets: defaultReminderPresets,
       settings: defaultSettings,
       importSources: [],
+      lastDeleted: null,
 
       mode: "local",
       userId: null,
@@ -111,17 +118,38 @@ export const useDatebookStore = create<DatebookState>()(
       cloudError: null,
 
       addItem: (item) => {
-        const newItem: Item = { ...item, id: nanoid(), createdAt: new Date().toISOString() };
+        const newItem: Item = {
+          ...item,
+          id: nanoid(),
+          createdAt: new Date().toISOString(),
+          reminders: item.reminders?.map((r) => ({ ...r, itemId: r.itemId || "" })),
+        };
+        if (newItem.reminders) {
+          newItem.reminders = newItem.reminders.map((r) => ({ ...r, itemId: newItem.id }));
+        }
         set({ items: [...get().items, newItem] });
         return newItem;
       },
 
       updateItem: (id, patch) => {
-        set({ items: get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
+        set({
+          items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
+        });
       },
 
       deleteItem: (id) => {
-        set({ items: get().items.filter((i) => i.id !== id) });
+        const item = get().items.find((i) => i.id === id) ?? null;
+        set({ items: get().items.filter((i) => i.id !== id), lastDeleted: item });
+      },
+
+      restoreLastDeleted: () => {
+        const item = get().lastDeleted;
+        if (!item) return;
+        if (get().items.some((i) => i.id === item.id)) {
+          set({ lastDeleted: null });
+          return;
+        }
+        set({ items: [...get().items, item], lastDeleted: null });
       },
 
       cycleItemStatus: (id) => {
@@ -131,7 +159,7 @@ export const useDatebookStore = create<DatebookState>()(
             if (i.id !== id || i.type === "event") return i;
             const current = i.status ?? "todo";
             const next = order[(order.indexOf(current) + 1) % order.length];
-            return { ...i, status: next };
+            return mergeItem(i, { status: next });
           }),
         });
       },
@@ -139,7 +167,7 @@ export const useDatebookStore = create<DatebookState>()(
       setItemStatus: (id, status) => {
         set({
           items: get().items.map((i) =>
-            i.id === id && i.type !== "event" ? { ...i, status } : i
+            i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
           ),
         });
       },
@@ -149,7 +177,7 @@ export const useDatebookStore = create<DatebookState>()(
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
             const current = i.status ?? "todo";
-            return { ...i, status: current === "done" ? "todo" : "done" };
+            return mergeItem(i, { status: current === "done" ? "todo" : "done" });
           }),
         });
       },
@@ -162,6 +190,17 @@ export const useDatebookStore = create<DatebookState>()(
 
       updateCategory: (id, patch) => {
         set({ categories: get().categories.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+      },
+
+      deleteCategory: (id) => {
+        const cats = get().categories;
+        if (cats.length <= 1) return;
+        const fallback = cats.find((c) => c.id !== id);
+        if (!fallback) return;
+        set({
+          categories: cats.filter((c) => c.id !== id),
+          items: get().items.map((i) => (i.categoryId === id ? { ...i, categoryId: fallback.id } : i)),
+        });
       },
 
       updateSettings: (patch) => {
@@ -179,23 +218,15 @@ export const useDatebookStore = create<DatebookState>()(
         let added = 0;
         let updated = 0;
 
-        // Update items already tied to this source; leave the user's status alone.
+        // Update items already tied to this source; leave the user's status and
+        // any locally edited feed fields alone.
         const merged = state.items.map((item) => {
           if (item.sourceId !== sourceId || !item.sourceUid) return item;
           const draft = incoming.get(item.sourceUid);
           if (!draft) return item;
-          const next = {
-            ...item,
-            ...draft,
-            id: item.id,
-            createdAt: item.createdAt,
-            status: item.status ?? draft.status,
-          };
-          const changed = (
-            ["title", "description", "location", "url", "at", "endAt", "allDay", "type", "categoryId"] as const
-          ).some((k) => next[k] !== item[k]);
-          if (changed) updated += 1;
-          return changed ? next : item;
+          const next = mergeImportedItem(item, draft);
+          if (importedFieldsChanged(item, next)) updated += 1;
+          return next;
         });
 
         const known = new Set(
@@ -439,7 +470,7 @@ export const useDatebookStore = create<DatebookState>()(
         }
 
         applyingRemote = true;
-        set({ ...next, mode: "local", userId: null, syncStatus: "idle", cloudError: null });
+        set({ ...next, lastDeleted: null, mode: "local", userId: null, syncStatus: "idle", cloudError: null });
         applyingRemote = false;
 
         // Drop the consumed snapshot so the next sign-in re-captures whatever the
@@ -485,7 +516,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 1,
+      version: 2,
       partialize: (s) => ({
         categories: s.categories,
         items: s.items,
@@ -500,6 +531,9 @@ export const useDatebookStore = create<DatebookState>()(
           state.categories = (state.categories ?? []).filter((c) => !SAMPLE_CATEGORY_IDS.has(c.id));
           if (state.categories.length === 0) state.categories = defaultCategories;
         }
+        if (state?.settings && state.settings.hideCompleted === undefined) {
+          state.settings = { ...state.settings, hideCompleted: false };
+        }
         return state as DatebookState;
       },
     }
@@ -508,6 +542,22 @@ export const useDatebookStore = create<DatebookState>()(
 
 export function useCategory(id: string | undefined) {
   return useDatebookStore((s) => s.categories.find((c) => c.id === id));
+}
+
+function mergeItem(item: Item, patch: Partial<Item>): Item {
+  const next: Item = { ...item, ...patch };
+  if ("endAt" in patch && patch.endAt === undefined) delete next.endAt;
+  if ("location" in patch && !patch.location) delete next.location;
+  if ("description" in patch && !patch.description) delete next.description;
+  if ("reminders" in patch && !patch.reminders?.length) delete next.reminders;
+  if (patch.status !== undefined && item.type !== "event") {
+    if (patch.status === "done") {
+      if (item.status !== "done") next.completedAt = patch.completedAt ?? new Date().toISOString();
+    } else {
+      delete next.completedAt;
+    }
+  }
+  return next;
 }
 
 /* ================================================================== */

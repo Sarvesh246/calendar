@@ -1,13 +1,13 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { addMonths, addWeeks, format, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { addMonths, addWeeks, format, parseISO, startOfWeek } from "date-fns";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { applyCategoryFilter } from "@/lib/filters";
-import { itemsOnDay, dayLabel, weekDays } from "@/lib/date-utils";
+import { applyItemFilters } from "@/lib/filters";
+import { dayKey, itemsOnDay, dayLabel, weekDays } from "@/lib/date-utils";
 import { MonthView } from "@/components/calendar/month-view";
 import { WeekView } from "@/components/calendar/week-view";
 import { DaySheet } from "@/components/day-sheet";
@@ -22,12 +22,34 @@ type ViewMode = "month" | "week";
 export default function CalendarPage() {
   const allItems = useDatebookStore((s) => s.items);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
-  const items = useMemo(() => applyCategoryFilter(allItems, categoryFilter), [allItems, categoryFilter]);
+  const items = useMemo(
+    () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
+    [allItems, categoryFilter, hideCompleted]
+  );
+  const calendarFocusDate = useUIStore((s) => s.calendarFocusDate);
+  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
+  const setQuickAddDateKey = useUIStore((s) => s.setQuickAddDateKey);
+  const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
 
   const [mode, setMode] = useState<ViewMode>("month");
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (!calendarFocusDate) return;
+    const d = parseISO(calendarFocusDate);
+    if (Number.isNaN(d.getTime())) {
+      setCalendarFocusDate(null);
+      return;
+    }
+    startTransition(() => {
+      setAnchor(d);
+      setSelectedDate(d);
+    });
+    setCalendarFocusDate(null);
+  }, [calendarFocusDate, setCalendarFocusDate]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const selectedItems = useMemo(
@@ -133,6 +155,17 @@ export default function CalendarPage() {
               className="glass hidden min-h-0 w-72 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex"
             >
               <p className="mb-3 shrink-0 text-[13px] font-medium text-ink">{dayLabel(selectedDate)}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickAddDateKey(dayKey(selectedDate));
+                  setQuickAddPrefill("");
+                }}
+                className="mb-3 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[12.5px] font-medium text-ink-soft hover:border-line-strong hover:text-ink"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                Add to this day
+              </button>
               {selectedItems.length === 0 ? (
                 <EmptyState title="Nothing scheduled." sub={`Free day on ${format(selectedDate, "MMM d")}.`} />
               ) : (
@@ -154,6 +187,11 @@ export default function CalendarPage() {
             date={selectedDate}
             items={selectedItems}
             onClose={() => setSelectedDate(null)}
+            onAdd={() => {
+              setQuickAddDateKey(dayKey(selectedDate));
+              setQuickAddPrefill("");
+              setSelectedDate(null);
+            }}
           />
         )}
       </AnimatePresence>

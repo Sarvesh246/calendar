@@ -30,7 +30,11 @@ const ASSIGNMENT_HINTS = [
  * as the eventual server action — swap the body for a Gemini function-calling
  * call without touching any call sites.
  */
-export function parseQuickAdd(raw: string, categories: Category[]): ParsedQuickAdd {
+export function parseQuickAdd(
+  raw: string,
+  categories: Category[],
+  opts?: { anchor?: Date }
+): ParsedQuickAdd {
   let text = raw.trim();
   const confidence = { date: false, category: false, reminder: false };
 
@@ -85,10 +89,10 @@ export function parseQuickAdd(raw: string, categories: Category[]): ParsedQuickA
   const type: ItemType = isAssignment ? "assignment" : "event";
 
   // --- date/time ---
-  let base = startOfDay(new Date());
+  let base = startOfDay(opts?.anchor ?? new Date());
   let hour = isAssignment ? 23 : 12;
   let minute = isAssignment ? 59 : 0;
-  let matchedDate = false;
+  let matchedDate = Boolean(opts?.anchor);
 
   if (/\btomorrow\b/i.test(text)) {
     base = addDays(base, 1);
