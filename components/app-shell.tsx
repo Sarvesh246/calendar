@@ -28,7 +28,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="min-w-0 flex-1">
         {!focusMode && (
           <div className="mb-5 flex items-center gap-2.5">
-            <div className="flex-1">
+            {/* min-w-0 so the bar yields space to the fixed-width search button
+                instead of pushing it off the right edge on narrow screens. */}
+            <div className="min-w-0 flex-1">
               <QuickAddBar />
             </div>
             <button

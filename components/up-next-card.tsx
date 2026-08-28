@@ -41,15 +41,15 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
           {started ? "Happening now" : "Up next"}
         </p>
         <div className="mt-2 flex items-baseline justify-between gap-3">
-          <h3 className="text-[17px] font-semibold text-ink">{item.title}</h3>
+          <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{item.title}</h3>
           <span className="shrink-0 text-[12px] tabular-nums text-ink-soft">
             {!started && formatDistanceToNowStrict(start, { addSuffix: false })}
           </span>
         </div>
         <div className="mt-1 flex items-center gap-3 text-[13px] text-ink-soft">
           <span className="tabular-nums cat-text font-medium">
-            {formatTime(item.at, clock24h)}
-            {end && ` – ${formatTime(item.endAt!, clock24h)}`}
+            {item.allDay ? "All day" : formatTime(item.at, clock24h)}
+            {!item.allDay && end && ` – ${formatTime(item.endAt!, clock24h)}`}
           </span>
           {item.location && (
             <span className="flex items-center gap-1 truncate">
@@ -57,7 +57,7 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
             </span>
           )}
         </div>
-        {end && (
+        {!item.allDay && end && (
           <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
             <div
               className="h-full rounded-full transition-[width] duration-500 ease-out"

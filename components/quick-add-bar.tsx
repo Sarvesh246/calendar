@@ -114,7 +114,7 @@ export function QuickAddBar() {
           disabled={phase !== "idle"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="Add something, or ask about your calendar…"
+          placeholder="Add or ask anything…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         <button

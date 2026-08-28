@@ -214,7 +214,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-medium text-ink">{item.title}</p>
+          <p className="line-clamp-2 break-words text-[14px] font-medium text-ink">{item.title}</p>
           {showLocation && item.location && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-ink-soft">
               <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
@@ -293,7 +293,7 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-[14px] font-medium text-ink", done && "line-through")}>
+          <p className={cn("line-clamp-2 break-words text-[14px] font-medium text-ink", done && "line-through")}>
             {item.title}
           </p>
           <p

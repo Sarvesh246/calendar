@@ -34,7 +34,7 @@ export function MonthView({
   const weeks = grid.length / 7;
 
   return (
-    <div className="flex flex-col rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:p-3">
+    <div className="flex h-[calc(100dvh-18.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-[400px] flex-col rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:p-3">
       <div className="grid grid-cols-7 gap-1.5 px-1 pb-2">
         {labels.map((l) => (
           <div key={l} className="text-center text-[11px] font-medium uppercase tracking-wider text-ink-faint">
@@ -42,12 +42,12 @@ export function MonthView({
           </div>
         ))}
       </div>
-      {/* The 92px row floor + scroll only applies from `sm` up, where the card
-          is height-capped and short viewports would otherwise crush the rows
-          until an event chip is clipped. On mobile the grid shows dots only and
-          has no height cap, so the floor is left at 0 to keep cells compact. */}
+      {/* Rows share the capped card height evenly (`1fr`) so the grid fills the
+          viewport instead of leaving a dead band above the nav. The 92px floor
+          + scroll kicks in from `sm`, where cells hold text chips and a short
+          window would otherwise crush them; mobile shows dots and just flexes. */}
       <div
-        className="grid flex-1 grid-cols-7 gap-1.5 [--month-row-min:0px] sm:min-h-0 sm:overflow-y-auto sm:[--month-row-min:92px]"
+        className="grid min-h-0 flex-1 grid-cols-7 gap-1.5 overflow-y-auto [--month-row-min:0px] sm:[--month-row-min:92px]"
         style={{ gridTemplateRows: `repeat(${weeks}, minmax(var(--month-row-min), 1fr))` }}
       >
         {grid.map(({ date, inMonth }) => {
@@ -80,7 +80,7 @@ export function MonthView({
                   : undefined
               }
               className={cn(
-                "flex min-h-[68px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
+                "flex min-h-[56px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
                 // inset ring: an outset one is clipped by the grid's sm overflow
                 selected && "ring-2 ring-inset ring-accent",
