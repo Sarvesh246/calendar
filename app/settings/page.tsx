@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Plus } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
@@ -22,6 +22,13 @@ export default function SettingsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#7C6CFF");
 
+  // Paint the theme this frame — the store write and the debounced cloud sync
+  // catch up after, and don't need to gate the visual change.
+  const applyPreset = (preset: AppearancePreset) => {
+    document.documentElement.setAttribute("data-preset", preset);
+    updateSettings({ preset });
+  };
+
   return (
     <div className="flex max-w-[640px] flex-col gap-10">
       <header>
@@ -33,14 +40,19 @@ export default function SettingsPage() {
         <AccountSection />
       </Section>
 
-      <Section title="Appearance" sub="Pick a starting point — every color in the app derives from this.">
+      <Section
+        title="Appearance"
+        sub="Pick a starting point — every color in the app derives from this."
+        collapsible
+        storageKey="appearance"
+      >
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {presetOrder.map((preset) => (
             <PresetCard
               key={preset}
               preset={preset}
               active={settings.preset === preset}
-              onSelect={() => updateSettings({ preset })}
+              onSelect={() => applyPreset(preset)}
             />
           ))}
         </div>
@@ -183,12 +195,74 @@ export default function SettingsPage() {
   );
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
-  return (
-    <section>
+function Section({
+  title,
+  sub,
+  children,
+  collapsible = false,
+  storageKey,
+}: {
+  title: string;
+  sub?: string;
+  children: React.ReactNode;
+  collapsible?: boolean;
+  storageKey?: string;
+}) {
+  const key = storageKey ? `datebook-section:${storageKey}` : null;
+  const [open, setOpen] = useState(() => {
+    if (!collapsible || !key) return true;
+    try {
+      return localStorage.getItem(key) !== "0";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggle = () =>
+    setOpen((prev) => {
+      const next = !prev;
+      if (key) {
+        try {
+          localStorage.setItem(key, next ? "1" : "0");
+        } catch {
+          /* storage disabled — collapse still works, it just won't persist */
+        }
+      }
+      return next;
+    });
+
+  const heading = (
+    <>
       <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
       {sub && <p className="mt-0.5 text-[13px] text-ink-soft">{sub}</p>}
-      <div className="mt-3.5 flex flex-col gap-3">{children}</div>
+    </>
+  );
+
+  return (
+    <section>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="group flex w-full items-start justify-between gap-3 text-left"
+        >
+          <span className="min-w-0">{heading}</span>
+          <ChevronDown
+            className={cn(
+              "mt-1 h-4 w-4 shrink-0 text-ink-faint transition-transform group-hover:text-ink",
+              !open && "-rotate-90"
+            )}
+            strokeWidth={2}
+          />
+        </button>
+      ) : (
+        heading
+      )}
+
+      {(!collapsible || open) && (
+        <div className="mt-3.5 flex flex-col gap-3">{children}</div>
+      )}
     </section>
   );
 }

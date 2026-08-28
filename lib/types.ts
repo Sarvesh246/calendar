@@ -50,7 +50,18 @@ export interface ImportSource {
   itemCount: number;
 }
 
-export type AppearancePreset = "minimal" | "midnight" | "paper" | "aurora" | "mono";
+export type AppearancePreset =
+  | "minimal"
+  | "midnight"
+  | "paper"
+  | "aurora"
+  | "mono"
+  | "noir"
+  | "sakura"
+  | "evergreen"
+  | "slate"
+  | "ember"
+  | "frost";
 export type LandingView = "today" | "calendar" | "agenda";
 export type Density = "compact" | "comfortable" | "spacious";
 
