@@ -6,11 +6,12 @@ import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { formatTime, relativeDueLabel } from "@/lib/date-utils";
+import { haptic } from "@/lib/haptic";
 
 export function FocusView() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
   const items = useDatebookStore((s) => s.items);
-  const cycleItemStatus = useDatebookStore((s) => s.cycleItemStatus);
+  const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
 
   // Focus mode hides the nav, so Esc is the keyboard way back out.
@@ -34,7 +35,7 @@ export function FocusView() {
       <button
         onClick={toggleFocusMode}
         aria-label="Exit focus"
-        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-soft shadow-[var(--shadow-md)] transition-colors hover:border-line-strong hover:text-ink"
+        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft shadow-[var(--shadow-md)] transition-colors hover:border-line-strong hover:text-ink"
       >
         <X className="h-4 w-4" strokeWidth={2} />
         Exit focus
@@ -48,7 +49,7 @@ export function FocusView() {
                 {currentCategory.name}
               </p>
             )}
-            <h1 className="font-display mt-2 max-w-[26ch] text-[36px] italic leading-tight text-ink">
+            <h1 className="font-display mt-2 max-w-[26ch] text-[32px] italic leading-tight text-ink sm:text-[36px]">
               {current.title}
             </h1>
             <p className="mt-2 text-[15px] text-ink-soft">
@@ -58,8 +59,11 @@ export function FocusView() {
 
           {current.type !== "event" && (
             <button
-              onClick={() => cycleItemStatus(current.id)}
-              className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13.5px] font-medium text-accent-ink transition-opacity hover:opacity-90"
+              onClick={() => {
+                haptic("success");
+                setItemStatus(current.id, "done");
+              }}
+              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink transition-opacity hover:opacity-90"
             >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Mark complete

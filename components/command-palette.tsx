@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 
 export function CommandPalette() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export function CommandPalette() {
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
+  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
+  useLockBodyScroll(open);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -52,7 +55,8 @@ export function CommandPalette() {
       onOpenChange={setOpen}
       label="Command palette"
       overlayClassName="fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]"
-      className="glass fixed left-1/2 top-[18vh] z-50 w-[92vw] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-xl"
+      className="glass fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-xl"
+      style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
     >
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
         <Sparkles className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
@@ -61,7 +65,7 @@ export function CommandPalette() {
           placeholder="Search Datebook…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
-        <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">
+        <kbd className="hidden rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-faint sm:inline">
           esc
         </kbd>
       </div>
@@ -76,19 +80,19 @@ export function CommandPalette() {
         </Command.Empty>
 
         <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          <Command.Item onSelect={createNew} className="cmdk-row">
+          <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
             <Plus className="h-4 w-4" strokeWidth={1.75} /> New item
           </Command.Item>
         </Command.Group>
 
         <Command.Group heading="Navigate" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          <Command.Item onSelect={() => go("/today")} className="cmdk-row">
+          <Command.Item onSelect={() => go("/today")} className="cmdk-row min-h-11">
             <Sun className="h-4 w-4" strokeWidth={1.75} /> Today
           </Command.Item>
-          <Command.Item onSelect={() => go("/calendar")} className="cmdk-row">
+          <Command.Item onSelect={() => go("/calendar")} className="cmdk-row min-h-11">
             <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Calendar
           </Command.Item>
-          <Command.Item onSelect={() => go("/agenda")} className="cmdk-row">
+          <Command.Item onSelect={() => go("/agenda")} className="cmdk-row min-h-11">
             <ListChecks className="h-4 w-4" strokeWidth={1.75} /> Agenda
           </Command.Item>
         </Command.Group>
@@ -99,7 +103,7 @@ export function CommandPalette() {
               setAIDrawerOpen(true);
               setOpen(false);
             }}
-            className="cmdk-row"
+            className="cmdk-row min-h-11"
           >
             <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask Gemini
           </Command.Item>
@@ -108,11 +112,11 @@ export function CommandPalette() {
               setAIDrawerOpen(true);
               setOpen(false);
             }}
-            className="cmdk-row"
+            className="cmdk-row min-h-11"
           >
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import syllabus
           </Command.Item>
-          <Command.Item onSelect={() => go("/settings")} className="cmdk-row">
+          <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Settings className="h-4 w-4" strokeWidth={1.75} /> Settings
           </Command.Item>
         </Command.Group>
@@ -122,7 +126,15 @@ export function CommandPalette() {
             {items.slice(0, 30).map((item) => {
               const category = categories.find((c) => c.id === item.categoryId);
               return (
-                <Command.Item key={item.id} value={item.title} onSelect={() => go("/agenda")} className="cmdk-row">
+                <Command.Item
+                  key={item.id}
+                  value={item.title}
+                  onSelect={() => {
+                    setFocusedItemId(item.id);
+                    go("/agenda");
+                  }}
+                  className="cmdk-row min-h-11"
+                >
                   <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                   <span className="truncate">{item.title}</span>
                   {category && (

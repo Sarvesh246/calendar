@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { isSameDay, isToday, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { monthGrid, groupItemsByDay, dayKey } from "@/lib/date-utils";
@@ -16,13 +16,16 @@ export function MonthView({
   items,
   selectedDate,
   onSelectDate,
+  onSwipeMonth,
 }: {
   anchor: Date;
   items: Item[];
   selectedDate: Date | null;
   onSelectDate: (date: Date) => void;
+  onSwipeMonth?: (dir: 1 | -1) => void;
 }) {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
+  const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const categories = useDatebookStore((s) => s.categories);
   const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
@@ -32,9 +35,25 @@ export function MonthView({
   }, [categories]);
   const labels = weekStartsOn === 0 ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
   const weeks = grid.length / 7;
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+
+  function onTouchStart(e: React.TouchEvent) {
+    swipeStart.current = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (swipeStart.current == null || !onSwipeMonth) return;
+    const dx = e.changedTouches[0].clientX - swipeStart.current.x;
+    const dy = e.changedTouches[0].clientY - swipeStart.current.y;
+    swipeStart.current = null;
+    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) onSwipeMonth(dx < 0 ? 1 : -1);
+  }
 
   return (
-    <div className="flex h-[calc(100dvh-18.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-[400px] flex-col rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:p-3">
+    <div
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      className="flex h-[calc(100dvh-18.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-[400px] flex-col rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:p-3"
+    >
       <div className="grid grid-cols-7 gap-1.5 px-1 pb-2">
         {labels.map((l) => (
           <div key={l} className="text-center text-[11px] font-medium uppercase tracking-wider text-ink-faint">
@@ -80,7 +99,7 @@ export function MonthView({
                   : undefined
               }
               className={cn(
-                "flex min-h-[56px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-all sm:min-h-0 sm:p-2",
+                "press-none flex min-h-[56px] flex-col items-stretch gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-colors sm:min-h-0 sm:p-2",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
                 // inset ring: an outset one is clipped by the grid's sm overflow
                 selected && "ring-2 ring-inset ring-accent",
@@ -98,19 +117,23 @@ export function MonthView({
               {/* Narrow screens: cells are too tight for legible text, so just show
                   colored dots — one per item, matching each item's category color. */}
               <div className="flex flex-wrap content-start gap-1 sm:hidden">
-                {visibleDots.map((item) => {
-                  const color = colorOf(item.categoryId);
-                  return (
-                    <span
-                      key={item.id}
-                      aria-hidden
-                      className="h-[5px] w-[5px] shrink-0 rounded-full"
-                      style={{ background: color }}
-                    />
-                  );
-                })}
-                {dotOverflow > 0 && (
+                {showCategoryDot &&
+                  visibleDots.map((item) => {
+                    const color = colorOf(item.categoryId);
+                    return (
+                      <span
+                        key={item.id}
+                        aria-hidden
+                        className="h-[5px] w-[5px] shrink-0 rounded-full"
+                        style={{ background: color }}
+                      />
+                    );
+                  })}
+                {showCategoryDot && dotOverflow > 0 && (
                   <span className="text-[9px] font-medium leading-none text-ink-faint">+{dotOverflow}</span>
+                )}
+                {!showCategoryDot && dayItems.length > 0 && (
+                  <span className="h-[5px] w-[5px] rounded-full bg-ink-faint" />
                 )}
               </div>
 

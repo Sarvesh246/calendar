@@ -36,7 +36,7 @@ export default function SettingsPage() {
         <p className="mt-1 text-[13.5px] text-ink-soft">Make Datebook feel like yours.</p>
       </header>
 
-      <Section title="Account &amp; sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
+      <Section title="Account & sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
         <AccountSection />
       </Section>
 
@@ -78,7 +78,10 @@ export default function SettingsPage() {
               { value: "comfortable", label: "Comfortable" },
               { value: "spacious", label: "Spacious" },
             ]}
-            onChange={(v) => updateSettings({ density: v as Density })}
+            onChange={(v) => {
+              document.documentElement.setAttribute("data-density", v);
+              updateSettings({ density: v as Density });
+            }}
           />
         </Row>
         <Row label="Week starts on">
@@ -96,6 +99,9 @@ export default function SettingsPage() {
         </Row>
         <Row label="Show location on event cards">
           <ToggleSwitch checked={settings.showLocation} onChange={(v) => updateSettings({ showLocation: v })} label="Show location" />
+        </Row>
+        <Row label="Show category dots">
+          <ToggleSwitch checked={settings.showCategoryDot} onChange={(v) => updateSettings({ showCategoryDot: v })} label="Show category dots" />
         </Row>
       </Section>
 
@@ -138,7 +144,7 @@ export default function SettingsPage() {
               addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
               setNewCategoryName("");
             }}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
             aria-label="Add category"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -269,7 +275,7 @@ function Section({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className="text-[13.5px] text-ink">{label}</span>
       {children}
     </div>
@@ -286,13 +292,13 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+    <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 sm:w-auto">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors",
+            "min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
             value === opt.value ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-ink"
           )}
         >

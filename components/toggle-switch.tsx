@@ -10,14 +10,14 @@ export function ToggleSwitch({ checked, onChange, label }: { checked: boolean; o
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+        "relative h-7 w-12 shrink-0 rounded-full transition-colors",
         checked ? "bg-accent" : "bg-surface-sunken"
       )}
     >
       <span
         className={cn(
-          "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
-          checked ? "translate-x-[18px]" : "translate-x-0.5"
+          "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-[22px]" : "translate-x-0.5"
         )}
       />
     </button>
