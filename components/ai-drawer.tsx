@@ -34,6 +34,7 @@ export function AIDrawer() {
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
   const defaultReminderPresetIds = useDatebookStore((s) => s.settings.defaultReminderPresetIds);
   const addItem = useDatebookStore((s) => s.addItem);
@@ -92,7 +93,7 @@ export function AIDrawer() {
       .slice(1, -1) // drop the static welcome and the pending user turn
       .filter((m) => m.text)
       .map((m) => ({ role: m.role, text: m.text }));
-    askAssistant(last.text, history, { items, categories, clock24h })
+    askAssistant(last.text, history, { items, categories, clock24h, weekStartsOn })
       .then((res) =>
         setMessages((m) => [
           ...m,

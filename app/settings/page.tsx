@@ -322,9 +322,10 @@ function Segmented({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "relative min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
+              "press-none relative min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
               active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
             )}
+            aria-pressed={active}
           >
             {active && (
               <motion.span

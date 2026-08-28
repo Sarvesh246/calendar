@@ -128,8 +128,9 @@ export const useDatebookStore = create<DatebookState>()(
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
-            if (i.id !== id || !i.status) return i;
-            const next = order[(order.indexOf(i.status) + 1) % order.length];
+            if (i.id !== id || i.type === "event") return i;
+            const current = i.status ?? "todo";
+            const next = order[(order.indexOf(current) + 1) % order.length];
             return { ...i, status: next };
           }),
         });
@@ -137,15 +138,18 @@ export const useDatebookStore = create<DatebookState>()(
 
       setItemStatus: (id, status) => {
         set({
-          items: get().items.map((i) => (i.id === id && i.status ? { ...i, status } : i)),
+          items: get().items.map((i) =>
+            i.id === id && i.type !== "event" ? { ...i, status } : i
+          ),
         });
       },
 
       toggleItemDone: (id) => {
         set({
           items: get().items.map((i) => {
-            if (i.id !== id || !i.status) return i;
-            return { ...i, status: i.status === "done" ? "todo" : "done" };
+            if (i.id !== id || i.type === "event") return i;
+            const current = i.status ?? "todo";
+            return { ...i, status: current === "done" ? "todo" : "done" };
           }),
         });
       },

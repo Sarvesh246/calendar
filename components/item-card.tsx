@@ -127,8 +127,9 @@ function StatusSegmented({
               haptic(opt.value === "done" ? "success" : "light");
               onChange(opt.value);
             }}
+            aria-pressed={active}
             className={cn(
-              "relative min-h-9 flex-1 rounded-md px-2 text-[12px] font-medium transition-colors",
+              "press-none relative min-h-9 flex-1 rounded-md px-2 text-[12px] font-medium transition-colors",
               active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
             )}
           >
@@ -227,10 +228,10 @@ function ItemDetails({
         </DetailRow>
       )}
 
-      {!isEvent && item.status && (
+      {!isEvent && (
         <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
           <StatusSegmented
-            value={item.status}
+            value={item.status ?? "todo"}
             layoutScope={item.id}
             onChange={(status) => setItemStatus(item.id, status)}
           />
@@ -403,7 +404,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
       aria-expanded={expanded}
       onClick={toggle}
       onKeyDown={keyToggle}
-      className="cat-surface cursor-pointer rounded-lg px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="press-none cat-surface cursor-pointer rounded-lg px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="flex items-center gap-3">
         <div className="flex w-[74px] shrink-0 flex-col leading-tight">
@@ -471,7 +472,7 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "cursor-pointer rounded-lg border border-line bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        "press-none cursor-pointer rounded-lg border border-line bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         showCompleteStyle && "opacity-60"
       )}
     >
