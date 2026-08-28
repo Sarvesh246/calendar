@@ -13,7 +13,13 @@ import type {
 /* ------------------------------------------------------------------ */
 
 type Row = Record<string, unknown>;
-const iso = (v: unknown) => new Date(v as string).toISOString();
+function iso(v: unknown): string {
+  const d = new Date(v as string);
+  if (Number.isNaN(d.getTime())) {
+    throw new RangeError(`Invalid timestamp: ${String(v)}`);
+  }
+  return d.toISOString();
+}
 
 // Set once if the account's `items` table predates migration 0002 (no `url`
 // column). PostgREST then rejects any write that carries `url` with PGRST204;
@@ -197,7 +203,16 @@ export async function fetchAllForUser(
   }
   return {
     categories: (c.data ?? []).map(rowToCategory),
-    items: (i.data ?? []).map(rowToItem),
+    items: (i.data ?? [])
+      .map((row) => {
+        try {
+          return rowToItem(row);
+        } catch (err) {
+          console.warn("[datebook] skipping corrupt item row", (row as Row).id, err);
+          return null;
+        }
+      })
+      .filter((item): item is Item => item !== null),
     reminderPresets: (rp.data ?? []).map(rowToPreset),
     importSources: (is.data ?? []).map(rowToImportSource),
     settings: us.data ? rowToSettings(us.data) : null,

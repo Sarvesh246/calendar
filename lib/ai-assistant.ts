@@ -13,6 +13,7 @@ import {
   setMinutes,
   startOfDay,
 } from "date-fns";
+import { thisOrNextWeekday } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
 import type { Category, Item, ItemStatus } from "./types";
 
@@ -393,7 +394,7 @@ function resolveDate(text: string): Date | null {
   const nextWd = t.match(/^next\s+(\w+)/);
   if (nextWd && WEEKDAYS[nextWd[1]] !== undefined) return addDays(nextDay(today, WEEKDAYS[nextWd[1]]), 7);
   for (const [name, dow] of Object.entries(WEEKDAYS)) {
-    if (new RegExp(`^${name}\\b`).test(t)) return nextDay(today, dow);
+    if (new RegExp(`^${name}\\b`).test(t)) return thisOrNextWeekday(dow, today);
   }
   for (const fmt of ["MMMM d", "MMM d", "M/d", "MM/dd", "yyyy-MM-dd", "d MMMM", "d MMM"]) {
     const d = parse(t, fmt, new Date());

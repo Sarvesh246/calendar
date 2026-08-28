@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { formatTime, relativeDueLabel } from "@/lib/date-utils";
+import { focusQueue, formatTime, relativeDueLabel } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 
 export function FocusView() {
@@ -23,11 +23,7 @@ export function FocusView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleFocusMode]);
 
-  const upcoming = [...items]
-    .filter((i) => i.status !== "done")
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  const current = upcoming[0];
-  const next = upcoming[1];
+  const { current, next } = focusQueue(items);
   const currentCategory = useCategory(current?.categoryId);
 
   return (
@@ -53,7 +49,7 @@ export function FocusView() {
               {current.title}
             </h1>
             <p className="mt-2 text-[15px] text-ink-soft">
-              {current.type === "event" ? formatTime(current.at, clock24h) : relativeDueLabel(current.at)}
+              {current.type === "event" ? formatTime(current.at, clock24h) : relativeDueLabel(current.at, { allDay: current.allDay })}
             </p>
           </div>
 

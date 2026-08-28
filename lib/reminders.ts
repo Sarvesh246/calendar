@@ -1,6 +1,6 @@
 "use client";
 
-import { format } from "date-fns";
+import { format, isToday } from "date-fns";
 import type { Item } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -105,9 +105,13 @@ function markFired(key: string): void {
 /* --- notification rendering ------------------------------------- */
 
 function reminderBody(item: Item): string {
-  const when = format(new Date(item.at), "EEE, MMM d · h:mm a");
-  if (item.type === "event") return item.allDay ? "All day today" : `Starts ${when}`;
-  return item.allDay ? "Due today" : `Due ${when}`;
+  const at = new Date(item.at);
+  const when = format(at, "EEE, MMM d · h:mm a");
+  if (item.allDay) {
+    const day = isToday(at) ? "today" : format(at, "EEE, MMM d");
+    return item.type === "event" ? `All day ${day}` : `Due ${day}`;
+  }
+  return item.type === "event" ? `Starts ${when}` : `Due ${when}`;
 }
 
 async function showReminder(item: Item, label: string): Promise<void> {

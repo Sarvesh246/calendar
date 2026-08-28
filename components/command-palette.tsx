@@ -107,13 +107,7 @@ export function CommandPalette() {
           >
             <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask Gemini
           </Command.Item>
-          <Command.Item
-            onSelect={() => {
-              setAIDrawerOpen(true);
-              setOpen(false);
-            }}
-            className="cmdk-row min-h-11"
-          >
+          <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import syllabus
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
