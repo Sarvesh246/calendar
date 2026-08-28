@@ -29,6 +29,9 @@ export interface AssistantResponse {
   text: string;
   suggestions?: string[];
   actions?: AssistantAction[];
+  /** True when the network assistant couldn't be reached and this is the
+   *  offline heuristic answer — the UI offers a retry. */
+  degraded?: boolean;
 }
 
 export interface AssistantTurn {
@@ -81,10 +84,15 @@ export async function askAssistant(
   history: AssistantTurn[],
   ctx: Ctx
 ): Promise<AssistantResponse> {
+  // Hard ceiling so a hung request can never wedge the chat — the server does
+  // its own 30s abort on the model call, this is the outer safety net.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
   try {
     const res = await fetch("/api/assistant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         message,
         history: history.slice(-10),
@@ -116,11 +124,29 @@ export async function askAssistant(
           actions: sanitizeActions(data.actions, ctx),
         };
       }
+      if (data.error === "assistant-busy") {
+        return {
+          text: "The assistant's a bit overloaded right now — give it a few seconds and tap retry.",
+          degraded: true,
+        };
+      }
     }
   } catch {
-    /* offline / server error — fall through to the local engine */
+    /* offline / timeout / server error — fall through to the local engine */
+  } finally {
+    clearTimeout(timer);
   }
-  return localAnswer(message, ctx);
+
+  // A local guess at a *change* is risky (it could create a junk item), so only
+  // fall back to the offline heuristic for questions. For change requests, be
+  // honest and let the user retry.
+  if (COMMAND_VERBS.test(message.trim()) || /^(add|create|schedule|new|set up|book|block off|remind me to)\b/i.test(message.trim())) {
+    return {
+      text: "I couldn't reach the assistant just now. Tap retry, or add it straight from the quick-add bar.",
+      degraded: true,
+    };
+  }
+  return { ...localAnswer(message, ctx), degraded: true };
 }
 
 /** Defensive pass over server actions before the store applies them. */

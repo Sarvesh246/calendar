@@ -8,6 +8,8 @@ const KEY = process.env.GEMINI_API_KEY;
 const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /* ------------------------------------------------------------------ */
 /* Request / wire types                                                */
 /* ------------------------------------------------------------------ */
@@ -119,16 +121,17 @@ function systemPrompt(body: ReqBody): string {
     hour: "numeric", minute: "2-digit", timeZone: tz,
   }).format(now);
 
-  // Keep the payload bounded: nearest ~250 items to "now", trimmed descriptions.
+  // Keep the payload bounded (latency): nearest ~180 items to "now", trimmed
+  // descriptions.
   const items = [...body.items]
     .sort(
       (a, b) =>
         Math.abs(+new Date(a.at) - +now) - Math.abs(+new Date(b.at) - +now)
     )
-    .slice(0, 250)
+    .slice(0, 180)
     .map((i) => ({
       ...i,
-      description: i.description ? i.description.slice(0, 240) : undefined,
+      description: i.description ? i.description.slice(0, 180) : undefined,
     }));
 
   return `You are the assistant built into "Datebook", a personal calendar and task app. You help the signed-in user with ANYTHING about their own schedule: their events, assignments/coursework, tasks, deadlines, workload, free time, and what's coming up.
@@ -154,7 +157,16 @@ ACTION RULES:
 - "summary" (required on every action) is one plain sentence for a confirmation card, e.g. 'Move "Bio lab report" to Fri Aug 29, 11:59 PM' or 'Add event "Dentist" on Wed Sep 3, 2:00–3:00 PM'.
 - Resolve all relative dates ("tomorrow", "next Friday", "in 2 weeks", "the 14th") against the current date above.
 
-"suggestions": optionally 2-3 very short follow-up prompts the user might tap next.
+"suggestions": optionally 2-3 very short follow-up prompts the user might tap next. Make them specific to THIS conversation, not generic.
+
+REPLY STYLE — this renders in a narrow chat bubble on a phone:
+- Keep it short: 1-3 sentences, or a bullet list. No preamble, no "Sure!", no restating the question.
+- Use **bold** ONLY for item titles, dates, times, and counts. Never bold whole sentences.
+- When listing 3+ items, use "- " bullets, one item per line: "- **Bio lab report** — due Fri, 11:59 PM".
+- No headings, no tables. Plain, friendly, direct.
+- Format every time for a ${body.clock24h ? "24-hour" : "12-hour"} clock. Use short weekday+date ("Fri, Aug 29"), not ISO, in the reply text.
+- A long imported title may be shortened naturally in prose as long as it stays recognisable.
+- Treat the conversation so far as context — a terse follow-up like "how about sunday?" or "and next week?" refers to the previous question.
 
 Reply ONLY with JSON matching the schema. "reply" is always present.`;
 }
@@ -325,45 +337,71 @@ export async function POST(request: Request) {
   body.items = Array.isArray(body.items) ? body.items : [];
   body.categories = Array.isArray(body.categories) ? body.categories : [];
 
-  const contents = [
-    ...(body.history ?? [])
-      .filter((m) => m && typeof m.text === "string" && m.text.trim())
-      .slice(-10)
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.text }],
-      })),
-    { role: "user", parts: [{ text: body.message }] },
-  ];
+  // Gemini requires `contents` to start with a `user` turn and to alternate
+  // roles. Build history defensively: drop the leading assistant greeting(s) and
+  // collapse any accidental same-role run (keeping the latest of the run).
+  const turns: { role: "user" | "model"; parts: { text: string }[] }[] = [];
+  for (const m of (body.history ?? []).slice(-10)) {
+    if (!m || typeof m.text !== "string" || !m.text.trim()) continue;
+    const role = m.role === "assistant" ? "model" : "user";
+    if (turns.length === 0 && role === "model") continue; // no leading model turn
+    const prev = turns[turns.length - 1];
+    if (prev && prev.role === role) prev.parts = [{ text: m.text }];
+    else turns.push({ role, parts: [{ text: m.text }] });
+  }
+  const lastTurn = turns[turns.length - 1];
+  if (lastTurn && lastTurn.role === "user") lastTurn.parts.push({ text: body.message });
+  else turns.push({ role: "user", parts: [{ text: body.message }] });
+  const contents = turns;
 
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt(body) }] },
+    contents,
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
+      // Structured extraction, not open reasoning — keep the "thinking" pass
+      // light so replies come back quickly.
+      thinkingConfig: { thinkingLevel: "low" },
+    },
+  });
+
+  // Gemini flash returns a transient 503 ("high demand") or 429 fairly often;
+  // a couple of quick retries usually clear it and are far better UX than
+  // dropping straight to the offline heuristic.
+  const TRANSIENT = new Set([429, 500, 503]);
   let data: unknown;
-  try {
-    const r = await fetch(`${ENDPOINT(MODEL)}?key=${KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt(body) }] },
-        contents,
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          // Structured extraction, not open reasoning — keep the "thinking" pass
-          // light so replies come back quickly.
-          thinkingConfig: { thinkingLevel: "low" },
-        },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!r.ok) {
-      const detail = await r.text().catch(() => "");
-      console.error("[assistant] Gemini error", r.status, detail.slice(0, 500));
-      return NextResponse.json({ error: "assistant-upstream" }, { status: 200 });
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(400 * attempt + Math.random() * 300);
+    let r: Response;
+    try {
+      r = await fetch(`${ENDPOINT(MODEL)}?key=${KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        signal: AbortSignal.timeout(13_000),
+      });
+    } catch (err) {
+      lastStatus = 0;
+      console.error("[assistant] request failed (attempt", attempt + 1 + ")", err);
+      continue;
     }
-    data = await r.json();
-  } catch (err) {
-    console.error("[assistant] request failed", err);
-    return NextResponse.json({ error: "assistant-unreachable" }, { status: 200 });
+    if (r.ok) {
+      data = await r.json();
+      break;
+    }
+    lastStatus = r.status;
+    const detail = await r.text().catch(() => "");
+    console.error("[assistant] Gemini error", r.status, detail.slice(0, 300));
+    if (!TRANSIENT.has(r.status)) break;
+  }
+  if (data === undefined) {
+    return NextResponse.json(
+      { error: lastStatus === 429 || lastStatus === 503 ? "assistant-busy" : "assistant-unreachable" },
+      { status: 200 }
+    );
   }
 
   const textOut: string =
