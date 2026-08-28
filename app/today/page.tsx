@@ -59,11 +59,11 @@ function TodayDashboard() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-[var(--page-gap)]">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
-          <h1 className="font-display mt-0.5 text-[40px] italic leading-none text-ink">
+          <h1 className="font-display mt-0.5 text-[34px] italic leading-none text-ink sm:text-[40px]">
             {format(now, "EEEE")}
           </h1>
           <p className="mt-1 text-[15px] text-ink-soft">{format(now, "MMMM d")} · {greeting.sub}</p>
@@ -87,7 +87,7 @@ function TodayDashboard() {
         </div>
         <button
           onClick={toggleFocusMode}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
         >
           <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
           Focus

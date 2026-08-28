@@ -2,9 +2,19 @@
 
 import { useEffect } from "react";
 import { useDatebookStore } from "@/lib/store";
+import { presetThemeColor } from "@/lib/theme-presets";
+import type { AppearancePreset } from "@/lib/types";
+
+function applyThemeColor(preset: AppearancePreset) {
+  const color = presetThemeColor[preset];
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    meta.setAttribute("content", color);
+  }
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const preset = useDatebookStore((s) => s.settings.preset);
+  const density = useDatebookStore((s) => s.settings.density);
 
   useEffect(() => {
     // The settings UI already flips this attribute synchronously on click for an
@@ -14,7 +24,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (document.documentElement.getAttribute("data-preset") !== preset) {
       document.documentElement.setAttribute("data-preset", preset);
     }
+    applyThemeColor(preset);
   }, [preset]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (root.getAttribute("data-density") !== density) {
+      root.setAttribute("data-density", density);
+    }
+  }, [density]);
 
   return <>{children}</>;
 }
@@ -26,8 +44,19 @@ export const themeInitScript = `
     var raw = localStorage.getItem("datebook-store");
     if (!raw) return;
     var parsed = JSON.parse(raw);
-    var preset = parsed && parsed.state && parsed.state.settings && parsed.state.settings.preset;
+    var settings = parsed && parsed.state && parsed.state.settings;
+    var preset = settings && settings.preset;
+    var density = settings && settings.density;
     if (preset) document.documentElement.setAttribute("data-preset", preset);
+    if (density) document.documentElement.setAttribute("data-density", density);
+    if (preset) {
+      var colors = ${JSON.stringify(presetThemeColor)};
+      var color = colors[preset];
+      if (color) {
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", color);
+      }
+    }
   } catch (e) {}
 })();
 `;

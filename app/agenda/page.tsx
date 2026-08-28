@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { addDays, format, isSameDay, startOfDay } from "date-fns";
+import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyCategoryFilter } from "@/lib/filters";
-import { dayLabel, isOverdue } from "@/lib/date-utils";
+import { dayLabel, isOverdue, itemOccupiesDay } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import type { Item } from "@/lib/types";
@@ -31,7 +31,7 @@ export default function AgendaPage() {
     for (let i = 0; i < HORIZON_DAYS; i++) {
       const date = addDays(today, i);
       const dayItems = items
-        .filter((it) => isSameDay(new Date(it.at), date) && !isOverdue(it))
+        .filter((it) => itemOccupiesDay(it, date) && !isOverdue(it))
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
       if (dayItems.length > 0) result.push({ date, items: dayItems });
     }
@@ -41,7 +41,7 @@ export default function AgendaPage() {
   const isEmpty = overdue.length === 0 && groups.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-[var(--page-gap)]">
       <header>
         <h1 className="font-display text-[28px] italic text-ink">Agenda</h1>
         <p className="mt-1 text-[13.5px] text-ink-soft">Everything ahead, one day at a time.</p>

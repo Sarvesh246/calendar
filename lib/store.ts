@@ -55,6 +55,8 @@ interface DatebookState {
   updateItem: (id: string, patch: Partial<Item>) => void;
   deleteItem: (id: string) => void;
   cycleItemStatus: (id: string) => void;
+  setItemStatus: (id: string, status: ItemStatus) => void;
+  toggleItemDone: (id: string) => void;
 
   addCategory: (category: Omit<Category, "id">) => Category;
   updateCategory: (id: string, patch: Partial<Category>) => void;
@@ -129,6 +131,21 @@ export const useDatebookStore = create<DatebookState>()(
             if (i.id !== id || !i.status) return i;
             const next = order[(order.indexOf(i.status) + 1) % order.length];
             return { ...i, status: next };
+          }),
+        });
+      },
+
+      setItemStatus: (id, status) => {
+        set({
+          items: get().items.map((i) => (i.id === id && i.status ? { ...i, status } : i)),
+        });
+      },
+
+      toggleItemDone: (id) => {
+        set({
+          items: get().items.map((i) => {
+            if (i.id !== id || !i.status) return i;
+            return { ...i, status: i.status === "done" ? "todo" : "done" };
           }),
         });
       },

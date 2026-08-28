@@ -120,6 +120,14 @@ export function parseQuickAdd(raw: string, categories: Category[]): ParsedQuickA
     minute = m;
     confidence.date = true;
     text = text.replace(timeMatch[0], "").trim();
+  } else {
+    const t24 = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (t24) {
+      hour = parseInt(t24[1], 10);
+      minute = parseInt(t24[2], 10);
+      confidence.date = true;
+      text = text.replace(t24[0], "").trim();
+    }
   }
 
   const at = setMinutes(setHours(base, hour), minute);

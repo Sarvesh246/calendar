@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ExternalLink, MapPin, Tag } from "lucide-react";
+import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ExternalLink, MapPin, Tag, Trash2 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
+import { useUIStore } from "@/lib/ui-store";
 import { formatTime, isOverdue } from "@/lib/date-utils";
+import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
@@ -137,18 +139,85 @@ function ItemDetails({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex w-fit items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-accent transition-colors hover:border-accent"
+          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md border border-line px-3 py-2 text-[12.5px] font-medium text-accent transition-colors hover:border-accent"
         >
           <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
           {linkLabel(item.url)}
         </a>
       )}
+
+      <ItemActions item={item} />
     </div>
   );
 }
 
-function useExpandable() {
+function ItemActions({ item }: { item: Item }) {
+  const deleteItem = useDatebookStore((s) => s.deleteItem);
+  const setItemStatus = useDatebookStore((s) => s.setItemStatus);
+  const [confirm, setConfirm] = useState(false);
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {item.status && item.status !== "done" && (
+        <button
+          type="button"
+          onClick={() => setItemStatus(item.id, item.status === "doing" ? "todo" : "doing")}
+          className="min-h-11 rounded-lg border border-line px-3 text-[12.5px] font-medium text-ink-soft"
+        >
+          {item.status === "doing" ? "Mark to do" : "In progress"}
+        </button>
+      )}
+      {confirm ? (
+        <>
+          <span className="text-[12.5px] text-warn">Delete this?</span>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("warn");
+              deleteItem(item.id);
+            }}
+            className="min-h-11 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirm(false)}
+            className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft"
+          >
+            Keep
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirm(true)}
+          className="ml-auto flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-warn"
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+          Delete
+        </button>
+      )}
+    </div>
+  );
+}
+
+function useExpandable(itemId: string) {
+  const focusedItemId = useUIStore((s) => s.focusedItemId);
+  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (focusedItemId === itemId) {
+      setExpanded(true);
+      setFocusedItemId(null);
+    }
+  }, [focusedItemId, itemId, setFocusedItemId]);
+
   const toggle = () => setExpanded((v) => !v);
   const keyToggle = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -187,12 +256,11 @@ export function EventCard({ item, category }: { item: Item; category: Category |
   const clock24h = useClock24h();
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const color = category?.color ?? "#8a8a94";
-  const { expanded, toggle, keyToggle } = useExpandable();
+  const { expanded, toggle, keyToggle } = useExpandable(item.id);
 
   return (
     <motion.div
       layout
-      whileHover={{ y: -2 }}
       transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
@@ -200,7 +268,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
       aria-expanded={expanded}
       onClick={toggle}
       onKeyDown={keyToggle}
-      className="cat-surface cursor-pointer rounded-lg px-4 py-3 shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="cat-surface cursor-pointer rounded-lg px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="flex items-center gap-3">
         <div className="flex w-[74px] shrink-0 flex-col leading-tight">
@@ -249,16 +317,16 @@ export function EventCard({ item, category }: { item: Item; category: Category |
 
 export function AssignmentCard({ item, category }: { item: Item; category: Category | undefined }) {
   const clock24h = useClock24h();
-  const cycleItemStatus = useDatebookStore((s) => s.cycleItemStatus);
+  const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
+  const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const color = category?.color ?? "#8a8a94";
   const done = item.status === "done";
   const overdue = isOverdue(item);
-  const { expanded, toggle, keyToggle } = useExpandable();
+  const { expanded, toggle, keyToggle } = useExpandable(item.id);
 
   return (
     <motion.div
       layout
-      whileHover={{ y: -1 }}
       transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
       role="button"
       tabIndex={0}
@@ -266,30 +334,36 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "cursor-pointer rounded-lg border border-line bg-surface px-4 py-3 shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        "cursor-pointer rounded-lg border border-line bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         done && "opacity-60"
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
-            cycleItemStatus(item.id);
+            haptic("success");
+            toggleItemDone(item.id);
           }}
           aria-label={done ? "Mark incomplete" : "Mark complete"}
           style={{ "--cat": color } as React.CSSProperties}
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-            done ? "border-good bg-good" : "cat-ring border-[color-mix(in_srgb,var(--cat)_55%,transparent)]"
-          )}
+          className="flex h-11 w-11 shrink-0 items-center justify-center"
         >
-          <motion.span
-            initial={false}
-            animate={{ scale: done ? 1 : 0, opacity: done ? 1 : 0 }}
-            transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          <span
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
+              done ? "border-good bg-good" : "cat-ring border-[color-mix(in_srgb,var(--cat)_55%,transparent)]"
+            )}
           >
-            <Check className="h-3 w-3 text-white" strokeWidth={3} />
-          </motion.span>
+            <motion.span
+              initial={false}
+              animate={{ scale: done ? 1 : 0, opacity: done ? 1 : 0 }}
+              transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+            >
+              <Check className="h-3 w-3 text-white" strokeWidth={3} />
+            </motion.span>
+          </span>
         </button>
 
         <div className="min-w-0 flex-1">
@@ -313,7 +387,7 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
           )}
         </div>
 
-        {!expanded && (
+        {showCategoryDot && !expanded && (
           <span
             style={{ "--cat": color } as React.CSSProperties}
             className="cat-dot h-1.5 w-1.5 shrink-0 rounded-full"

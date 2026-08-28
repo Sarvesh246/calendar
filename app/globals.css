@@ -327,6 +327,21 @@
   /* Height the on-screen keyboard is currently covering, published by
      useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
   --keyboard-inset: 0px;
+  --page-gap: 2rem;
+  --card-pad-y: 0.75rem;
+  --card-pad-x: 1rem;
+}
+
+:root[data-density="compact"] {
+  --page-gap: 1.25rem;
+  --card-pad-y: 0.5rem;
+  --card-pad-x: 0.75rem;
+}
+
+:root[data-density="spacious"] {
+  --page-gap: 2.5rem;
+  --card-pad-y: 1.05rem;
+  --card-pad-x: 1.2rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -355,19 +370,46 @@
   }
 }
 
-html, body { height: 100%; }
+html {
+  height: 100%;
+  background-color: var(--surface-base);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
 
 body {
+  min-height: 100%;
+  min-height: 100dvh;
   background-color: var(--surface-base);
   background-image: var(--ambient);
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
   /* Safety net: a stray wide child must never make the whole page pan
      sideways. `clip` (not `hidden`) doesn't create a scroll container, so
      `position: sticky` on the desktop sidebar keeps working. */
   overflow-x: clip;
+  overscroll-behavior-y: none;
+}
+
+/* iOS Safari paints `background-attachment: fixed` as a separate layer that
+   jitters with the address bar. Scroll-attached is stable on phones. */
+@media (max-width: 767px) {
+  body { background-attachment: scroll; }
+}
+
+html.scroll-locked,
+html.scroll-locked body {
+  overflow: hidden;
+}
+
+/* Kill the 300ms tap delay / accidental double-tap zoom on controls without
+   blocking pan on the page itself. */
+button, a, [role="button"], summary, input, textarea, select, label {
+  touch-action: manipulation;
 }
 
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
@@ -433,6 +475,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
   border-radius: var(--radius-md);
   padding: 8px 10px;
   font-size: 13.5px;
@@ -480,6 +523,12 @@ a:not([aria-disabled="true"]):active,
 [role="button"]:not([aria-disabled="true"]):active,
 summary:active {
   transform: scale(0.97);
+}
+
+button.press-none:active,
+a.press-none:active,
+[role="button"].press-none:active {
+  transform: none;
 }
 
 /* Each freshly navigated page reveals its sections with a light upward stagger.

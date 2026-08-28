@@ -12,6 +12,7 @@ interface UIState {
   quickAddOpen: boolean;
   quickAddPrefill: string | null;
   categoryFilter: string[] | null;
+  focusedItemId: string | null;
 
   setCommandPaletteOpen: (open: boolean) => void;
   setAIDrawerOpen: (open: boolean) => void;
@@ -24,6 +25,7 @@ interface UIState {
   setQuickAddPrefill: (text: string | null) => void;
   toggleCategoryFilter: (id: string) => void;
   clearCategoryFilter: () => void;
+  setFocusedItemId: (id: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -35,6 +37,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   quickAddOpen: false,
   quickAddPrefill: null,
   categoryFilter: null,
+  focusedItemId: null,
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setAIDrawerOpen: (open) => set({ aiDrawerOpen: open }),
@@ -55,4 +58,5 @@ export const useUIStore = create<UIState>((set, get) => ({
       return { categoryFilter: next.length === 0 ? null : next };
     }),
   clearCategoryFilter: () => set({ categoryFilter: null }),
+  setFocusedItemId: (id) => set({ focusedItemId: id }),
 }));

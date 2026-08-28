@@ -9,6 +9,7 @@ import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { ViewportLayer } from "@/components/viewport-layer";
+import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -189,6 +190,8 @@ export function AIDrawer() {
     setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "dismissed" }));
   }
 
+  useLockBodyScroll(present);
+
   if (!present) return null;
 
   return (
@@ -223,7 +226,7 @@ export function AIDrawer() {
             <button
               onClick={() => setOpen(false)}
               aria-label="Close assistant"
-              className="ml-auto rounded-md p-1 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
             >
               <X className="h-4 w-4" />
             </button>
@@ -343,13 +346,14 @@ export function AIDrawer() {
                   }, 300);
                 }}
                 placeholder="Ask or tell me to change something…"
-                className="min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+                enterKeyHint="send"
+                className="min-h-11 min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
               />
               <button
                 onClick={() => ask(input)}
                 disabled={!input.trim()}
                 aria-label="Send"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
               >
                 <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
               </button>

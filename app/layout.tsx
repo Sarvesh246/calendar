@@ -28,7 +28,13 @@ export const metadata: Metadata = {
   title: "Datebook",
   description: "A personal calendar and assignment tracker.",
   manifest: "/manifest.json",
+  applicationName: "Datebook",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Datebook" },
+  formatDetection: { telephone: false, date: false, address: false, email: false },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: "/icon.svg",
+  },
 };
 
 export const viewport: Viewport = {

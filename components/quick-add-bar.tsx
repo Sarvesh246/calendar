@@ -114,20 +114,27 @@ export function QuickAddBar() {
           disabled={phase !== "idle"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
+          enterKeyHint="go"
+          autoComplete="off"
+          autoCorrect="off"
           placeholder="Add or ask anything…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         <button
+          type="button"
           onClick={() => setAIDrawerOpen(true)}
-          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+          aria-label="Ask AI"
+          className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink sm:px-2 sm:py-1"
         >
-          Ask AI
+          <Sparkles className="h-3.5 w-3.5 sm:hidden" strokeWidth={1.9} />
+          <span className="hidden sm:inline">Ask AI</span>
         </button>
         <button
+          type="button"
           onClick={submit}
           disabled={!text.trim() || phase !== "idle"}
           aria-label="Add"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30 sm:h-7 sm:w-7"
         >
           <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
         </button>
@@ -140,7 +147,7 @@ export function QuickAddBar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-xl p-4"
+            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-xl p-4"
           >
             <p className="mb-2.5 text-[13px] text-ink-soft">Understanding…</p>
             <div className="flex flex-col gap-1.5">
@@ -166,7 +173,7 @@ export function QuickAddBar() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-xl p-4"
+            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-xl p-4"
           >
             <p className="text-[15px] font-semibold text-ink">{parsed.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -193,14 +200,14 @@ export function QuickAddBar() {
             <div className="mt-3.5 flex justify-end gap-2">
               <button
                 onClick={reset}
-                className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken"
+                className="min-h-11 rounded-lg px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken"
               >
                 Cancel
               </button>
               <button
                 onClick={confirm}
                 className={cn(
-                  "rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90"
+                  "min-h-11 rounded-lg bg-accent px-4 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90"
                 )}
               >
                 Add

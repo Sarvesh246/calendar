@@ -10,6 +10,7 @@ import { applyCategoryFilter } from "@/lib/filters";
 import { itemsOnDay, dayLabel, weekDays } from "@/lib/date-utils";
 import { MonthView } from "@/components/calendar/month-view";
 import { WeekView } from "@/components/calendar/week-view";
+import { DaySheet } from "@/components/day-sheet";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { motion as motionTokens } from "@/lib/motion";
@@ -38,9 +39,14 @@ export default function CalendarPage() {
   // Marking them as transitions keeps the tapped control responsive (no INP
   // stall) and lets React render the new view without blocking paint.
   function step(dir: 1 | -1) {
-    startTransition(() =>
-      setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)))
-    );
+    startTransition(() => {
+      setSelectedDate(null);
+      setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
+    });
+  }
+
+  function selectDate(d: Date) {
+    startTransition(() => setSelectedDate(d));
   }
 
   return (
@@ -58,16 +64,27 @@ export default function CalendarPage() {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
-            <button onClick={() => step(-1)} aria-label="Previous" className="rounded-md p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink">
+            <button
+              type="button"
+              onClick={() => step(-1)}
+              aria-label="Previous"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
-              onClick={() => startTransition(() => setAnchor(new Date()))}
-              className="px-2 py-1 text-[12px] font-medium text-ink-soft hover:text-ink"
+              type="button"
+              onClick={() => startTransition(() => { setAnchor(new Date()); setSelectedDate(new Date()); })}
+              className="h-9 px-2.5 text-[12.5px] font-medium text-ink-soft hover:text-ink"
             >
               Today
             </button>
-            <button onClick={() => step(1)} aria-label="Next" className="rounded-md p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink">
+            <button
+              type="button"
+              onClick={() => step(1)}
+              aria-label="Next"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -76,9 +93,10 @@ export default function CalendarPage() {
             {(["month", "week"] as ViewMode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => startTransition(() => setMode(m))}
+                type="button"
+                onClick={() => startTransition(() => { setMode(m); setSelectedDate(null); })}
                 className={cn(
-                  "rounded-md px-3 py-1 text-[12.5px] font-medium capitalize transition-colors",
+                  "h-9 rounded-md px-3.5 text-[12.5px] font-medium capitalize transition-colors",
                   mode === m ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-ink"
                 )}
               >
@@ -100,21 +118,23 @@ export default function CalendarPage() {
             anchor={anchor}
             items={items}
             selectedDate={selectedDate}
-            onSelectDate={(d) => startTransition(() => setSelectedDate(d))}
+            onSelectDate={selectDate}
+            onSwipeMonth={step}
           />
         ) : (
-          <WeekView days={days} items={items} />
+          <WeekView days={days} items={items} onSelectDate={selectDate} />
         )}
       </motion.div>
 
       <AnimatePresence>
         {selectedDate && (
           <motion.div
+            key="desktop-day"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="glass rounded-xl p-4"
+            className="glass hidden rounded-xl p-4 md:block"
           >
             <p className="mb-3 text-[13px] font-medium text-ink">{dayLabel(selectedDate)}</p>
             {selectedItems.length === 0 ? (
@@ -127,6 +147,17 @@ export default function CalendarPage() {
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedDate && (
+          <DaySheet
+            key={selectedDate.toISOString()}
+            date={selectedDate}
+            items={selectedItems}
+            onClose={() => setSelectedDate(null)}
+          />
         )}
       </AnimatePresence>
     </div>

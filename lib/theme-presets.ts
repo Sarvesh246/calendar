@@ -61,6 +61,21 @@ export const presetMeta: Record<
   },
 };
 
+/** Surface-base color for `theme-color` / the iOS status bar chrome. */
+export const presetThemeColor: Record<AppearancePreset, string> = {
+  minimal: "#f7f7f8",
+  midnight: "#0b0b0d",
+  paper: "#f6efe2",
+  aurora: "#f5f3ff",
+  mono: "#000000",
+  noir: "#0c0b0a",
+  sakura: "#fdf2f4",
+  evergreen: "#0a0f0c",
+  slate: "#eef1f4",
+  ember: "#100d0c",
+  frost: "#eef4f8",
+};
+
 export const presetOrder: AppearancePreset[] = [
   "minimal",
   "midnight",

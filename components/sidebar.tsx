@@ -18,6 +18,7 @@ import {
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
+import { haptic } from "@/lib/haptic";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -148,7 +149,8 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className="relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10.5px] font-medium transition-transform active:scale-[0.92]"
+                onClick={() => haptic("light")}
+                className="relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
               >
                 <Icon
                   className={cn("h-5 w-5 transition-colors", active ? "text-accent" : "text-ink-faint")}

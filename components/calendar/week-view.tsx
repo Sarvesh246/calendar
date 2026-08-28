@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, isToday, isSameDay, differenceInMinutes, startOfDay } from "date-fns";
-import { useDatebookStore } from "@/lib/store";
-import { groupItemsByDay, dayKey } from "@/lib/date-utils";
+import { useDatebookStore, useCategory } from "@/lib/store";
+import { groupItemsByDay, dayKey, dayLabel } from "@/lib/date-utils";
+import { ItemCard } from "@/components/item-card";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -37,7 +38,15 @@ function hourWindow(days: Date[], byDay: Map<string, Item[]>) {
   return { startHour: clampHour(start), endHour: clampHour(Math.max(end, start + 1)) };
 }
 
-export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
+export function WeekView({
+  days,
+  items,
+  onSelectDate,
+}: {
+  days: Date[];
+  items: Item[];
+  onSelectDate?: (date: Date) => void;
+}) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
 
@@ -50,118 +59,187 @@ export function WeekView({ days, items }: { days: Date[]; items: Item[] }) {
   }, [categories]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] sm:h-[calc(100dvh-11.5rem)] sm:overflow-y-auto">
-      <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
-        <div />
-        {days.map((day) => (
-          <div key={day.toISOString()} className={cn("border-l border-line px-2 py-2 text-center", isToday(day) && "bg-accent-soft")}>
-            <p className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">{format(day, "EEE")}</p>
-            <p className={cn("text-[15px] font-medium tabular-nums", isToday(day) ? "text-accent" : "text-ink")}>
-              {format(day, "d")}
-            </p>
-          </div>
-        ))}
-      </div>
+    <>
+      <MobileWeekPager days={days} byDay={byDay} />
 
-      {/* all-day / assignment rail */}
-      <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line">
-        <div className="py-1.5 text-right text-[10px] text-ink-faint" />
-        {days.map((day) => {
-          const dayAssignments = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter(
-            (i) => i.type !== "event" || i.allDay
-          );
-          return (
-            <div key={day.toISOString()} className="flex flex-col gap-1 border-l border-line p-1">
-              {/* Narrow screens: 7 columns leave no room for legible text, so just
-                  show colored dots — one per item, matching each item's category color. */}
-              <div className="flex flex-wrap gap-1 sm:hidden">
-                {dayAssignments.slice(0, 4).map((item) => {
-                  return (
-                    <span
-                      key={item.id}
-                      aria-hidden
-                      className="h-[5px] w-[5px] shrink-0 rounded-full"
-                      style={{ background: colorOf(item.categoryId) }}
-                    />
-                  );
-                })}
-                {dayAssignments.length > 4 && (
-                  <span className="text-[9px] font-medium leading-none text-ink-faint">
-                    +{dayAssignments.length - 4}
-                  </span>
-                )}
-              </div>
-              <div className="hidden flex-col gap-1 sm:flex">
+      <div className="hidden overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] md:block md:h-[calc(100dvh-11.5rem)] md:overflow-y-auto">
+        <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
+          <div />
+          {days.map((day) => (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => onSelectDate?.(day)}
+              className={cn("border-l border-line px-2 py-2 text-center", isToday(day) && "bg-accent-soft")}
+            >
+              <p className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">{format(day, "EEE")}</p>
+              <p className={cn("text-[15px] font-medium tabular-nums", isToday(day) ? "text-accent" : "text-ink")}>
+                {format(day, "d")}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line">
+          <div className="py-1.5 text-right text-[10px] text-ink-faint" />
+          {days.map((day) => {
+            const dayAssignments = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter(
+              (i) => i.type !== "event" || i.allDay
+            );
+            return (
+              <div key={day.toISOString()} className="flex flex-col gap-1 border-l border-line p-1">
                 {dayAssignments.slice(0, 2).map((item) => {
                   const color = colorOf(item.categoryId);
                   return (
-                    <span
+                    <button
                       key={item.id}
-                      className="truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      type="button"
+                      onClick={() => onSelectDate?.(day)}
+                      className="truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium"
                       style={{
                         background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
                         color,
                       }}
                     >
                       {item.title}
-                    </span>
+                    </button>
                   );
                 })}
               </div>
-            </div>
+            );
+          })}
+        </div>
+
+        <div className="relative grid grid-cols-[48px_repeat(7,1fr)]">
+          <div>
+            {hours.map((h) => (
+              <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line pr-2 text-right text-[10px] text-ink-faint">
+                {format(new Date(0, 0, 0, h), clock24h ? "HH:00" : "h a")}
+              </div>
+            ))}
+          </div>
+          {days.map((day) => {
+            const dayEvents = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter(
+              (i) => i.type === "event" && !i.allDay
+            );
+            return (
+              <div key={day.toISOString()} className="relative border-l border-line">
+                {hours.map((h) => (
+                  <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line" />
+                ))}
+                {dayEvents.map((item) => {
+                  const start = new Date(item.at);
+                  const dayStart = startOfDay(start);
+                  const startMin = differenceInMinutes(start, dayStart) - startHour * 60;
+                  const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
+                  const top = Math.max(0, (startMin / 60) * HOUR_HEIGHT);
+                  const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
+                  const color = colorOf(item.categoryId);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onSelectDate?.(day)}
+                      style={{
+                        top,
+                        height,
+                        background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
+                        borderLeft: `2.5px solid ${color}`,
+                      }}
+                      className="absolute left-1 right-1 overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight"
+                    >
+                      <p className="truncate font-medium" style={{ color }}>
+                        {item.title}
+                      </p>
+                      {height > 32 && (
+                        <p className="truncate text-ink-faint">{format(start, clock24h ? "HH:mm" : "h:mm a")}</p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileWeekPager({
+  days,
+  byDay,
+}: {
+  days: Date[];
+  byDay: Map<string, Item[]>;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(() => Math.max(0, days.findIndex((d) => isToday(d))));
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const idx = days.findIndex((d) => isToday(d));
+    if (idx < 0) return;
+    el.scrollTo({ left: el.clientWidth * idx, behavior: "instant" });
+    setPage(idx);
+  }, [days]);
+
+  return (
+    <div className="md:hidden">
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const next = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+          setPage((p) => (p === next ? p : next));
+        }}
+        className="-mx-4 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {days.map((day) => {
+          const dayItems = byDay.get(dayKey(day)) ?? NO_ITEMS;
+          const label = dayLabel(day);
+          return (
+            <section
+              key={day.toISOString()}
+              className="w-full shrink-0 snap-start px-4"
+            >
+              <div className="mb-3 flex items-baseline justify-between">
+                <p className="text-[15px] font-semibold text-ink">{label}</p>
+                <p className="text-[12.5px] text-ink-faint">{format(day, "MMM d")}</p>
+              </div>
+              {dayItems.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[13px] text-ink-faint">
+                  Nothing scheduled.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {dayItems.map((item) => (
+                    <WeekDayItem key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
+            </section>
           );
         })}
       </div>
-
-      <div className="relative grid grid-cols-[48px_repeat(7,1fr)]">
-        <div>
-          {hours.map((h) => (
-            <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line pr-2 text-right text-[10px] text-ink-faint">
-              {format(new Date(0, 0, 0, h), clock24h ? "HH:00" : "h a")}
-            </div>
-          ))}
-        </div>
-        {days.map((day) => {
-          const dayEvents = (byDay.get(dayKey(day)) ?? NO_ITEMS).filter(
-            (i) => i.type === "event" && !i.allDay
-          );
-          return (
-            <div key={day.toISOString()} className="relative border-l border-line">
-              {hours.map((h) => (
-                <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line" />
-              ))}
-              {dayEvents.map((item) => {
-                const start = new Date(item.at);
-                const dayStart = startOfDay(start);
-                const startMin = differenceInMinutes(start, dayStart) - startHour * 60;
-                const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
-                const top = Math.max(0, (startMin / 60) * HOUR_HEIGHT);
-                const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
-                const color = colorOf(item.categoryId);
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      top,
-                      height,
-                      background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
-                      borderLeft: `2.5px solid ${color}`,
-                    }}
-                    className="absolute left-1 right-1 overflow-hidden rounded-md px-1.5 py-1 text-[10.5px] leading-tight"
-                  >
-                    <p className="truncate font-medium" style={{ color }}>
-                      {item.title}
-                    </p>
-                    {height > 32 && (
-                      <p className="truncate text-ink-faint">{format(start, clock24h ? "HH:mm" : "h:mm a")}</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+      <div className="mt-3 flex justify-center gap-1.5">
+        {days.map((day, i) => (
+          <span
+            key={day.toISOString()}
+            aria-hidden
+            className={cn(
+              "h-1.5 rounded-full transition-all",
+              i === page ? "w-4 bg-accent" : "w-1.5 bg-line-strong"
+            )}
+          />
+        ))}
       </div>
     </div>
   );
+}
+
+function WeekDayItem({ item }: { item: Item }) {
+  const category = useCategory(item.categoryId);
+  return <ItemCard item={item} category={category} />;
 }

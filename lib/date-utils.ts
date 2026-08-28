@@ -4,11 +4,11 @@ import {
   endOfMonth,
   endOfWeek,
   format,
-  isSameDay,
   isSameMonth,
   isToday,
   isTomorrow,
   isYesterday,
+  startOfDay,
   startOfMonth,
   startOfWeek,
 } from "date-fns";
@@ -32,9 +32,40 @@ export function weekDays(anchor: Date, weekStartsOn: 0 | 1) {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
+/**
+ * Inclusive local calendar-day span for an item. RFC 5545 all-day DTEND is
+ * exclusive; timed events that end exactly at midnight of a later day follow
+ * the same convention (Google/Outlook). Caps at 366 days so a corrupt endAt
+ * can't explode the month grid.
+ */
+export function itemDaySpan(item: Item): { start: Date; last: Date } {
+  const start = startOfDay(new Date(item.at));
+  if (!item.endAt) return { start, last: start };
+  const end = new Date(item.endAt);
+  if (Number.isNaN(end.getTime())) return { start, last: start };
+  let last = startOfDay(end);
+  const exclusive =
+    Boolean(item.allDay) ||
+    (end.getHours() === 0 &&
+      end.getMinutes() === 0 &&
+      end.getSeconds() === 0 &&
+      end.getTime() !== new Date(item.at).getTime());
+  if (exclusive) last = addDays(last, -1);
+  if (last < start) last = start;
+  const max = addDays(start, 365);
+  if (last > max) last = max;
+  return { start, last };
+}
+
+export function itemOccupiesDay(item: Item, day: Date) {
+  const { start, last } = itemDaySpan(item);
+  const key = startOfDay(day).getTime();
+  return key >= start.getTime() && key <= last.getTime();
+}
+
 export function itemsOnDay(items: Item[], day: Date) {
   return items
-    .filter((i) => isSameDay(new Date(i.at), day))
+    .filter((i) => itemOccupiesDay(i, day))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
@@ -52,10 +83,13 @@ export function dayKey(date: Date) {
 export function groupItemsByDay(items: Item[]): Map<string, Item[]> {
   const map = new Map<string, Item[]>();
   for (const item of items) {
-    const key = dayKey(new Date(item.at));
-    const bucket = map.get(key);
-    if (bucket) bucket.push(item);
-    else map.set(key, [item]);
+    const { start, last } = itemDaySpan(item);
+    for (let d = start; d.getTime() <= last.getTime(); d = addDays(d, 1)) {
+      const key = dayKey(d);
+      const bucket = map.get(key);
+      if (bucket) bucket.push(item);
+      else map.set(key, [item]);
+    }
   }
   for (const bucket of map.values()) {
     bucket.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
