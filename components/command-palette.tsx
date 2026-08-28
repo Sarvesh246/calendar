@@ -66,7 +66,11 @@ export function CommandPalette() {
         </kbd>
       </div>
 
-      <Command.List className="max-h-[50vh] overflow-y-auto p-2">
+      <Command.List
+        // Shrink to fit above the on-screen keyboard so results aren't hidden.
+        style={{ maxHeight: "max(140px, calc(60vh - var(--keyboard-inset, 0px)))" }}
+        className="overflow-y-auto p-2"
+      >
         <Command.Empty className="px-3 py-6 text-center text-[13px] text-ink-faint">
           No results.
         </Command.Empty>

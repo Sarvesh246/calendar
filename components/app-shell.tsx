@@ -8,10 +8,13 @@ import { AIDrawer } from "./ai-drawer";
 import { ReminderScheduler } from "./reminder-scheduler";
 import { useUIStore } from "@/lib/ui-store";
 import { useHasMounted } from "@/lib/use-has-mounted";
+import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const focusMode = useUIStore((s) => s.focusMode);
+
+  useKeyboardInset();
 
   // Several views render "live" time-relative text (countdowns, "today"). Gating
   // real content behind a client-only mount avoids server/client clock drift
