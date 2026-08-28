@@ -23,19 +23,18 @@ function isTypingTarget(el: Element | null): boolean {
 }
 
 /**
- * Publishes the on-screen keyboard's height as the `--keyboard-inset` CSS
- * variable on <html>.
+ * Publishes, on `<html>`:
+ *  - `--keyboard-inset`: the slice of the layout viewport currently hidden below
+ *    the visible area — the keyboard **plus** any distance iOS has panned the
+ *    page up to reveal the focused field. Anything anchored to the bottom can add
+ *    this to stay glued just above the keyboard no matter how iOS shifts things.
+ *  - `--visible-height`: the height actually visible above the keyboard.
  *
- * iOS Safari doesn't shrink the layout viewport when the virtual keyboard opens
- * (it only shrinks the *visual* viewport), so `position: fixed` UI anchored to
- * the bottom — the AI drawer, the command palette — would sit behind the
- * keyboard. Reading `var(--keyboard-inset)` lets that chrome lift itself clear so
- * the field you're typing in, and what you're typing, stay visible.
- *
- * The height is measured as how far `visualViewport` shrinks *from its own
- * resting size* (recaptured whenever nothing is focused), so a constant
- * visual/layout-viewport offset — browser UI, a hardware keyboard, dev tools —
- * never registers as a keyboard.
+ * iOS never shrinks the layout viewport for the keyboard (only the *visual*
+ * viewport), and it also scrolls the visual viewport — so `document.
+ * documentElement.clientHeight - visualViewport.height - visualViewport.offsetTop`
+ * is the honest "how much is hidden right now" figure, self-correcting for the
+ * pan. It's clamped to 0 unless a text field is focused.
  */
 export function useKeyboardInset() {
   useEffect(() => {
@@ -43,19 +42,16 @@ export function useKeyboardInset() {
     const root = document.documentElement;
     if (!vv) return;
 
-    let resting = vv.height;
     let raf = 0;
-
     const apply = () => {
       raf = 0;
+      root.style.setProperty("--visible-height", `${Math.round(vv.height)}px`);
       if (!isTypingTarget(document.activeElement)) {
-        resting = vv.height; // keep the baseline fresh across rotation / toolbar changes
         root.style.setProperty("--keyboard-inset", "0px");
         return;
       }
-      const shrink = resting - vv.height;
-      if (shrink < 0) resting = vv.height; // viewport grew past the baseline — re-anchor
-      root.style.setProperty("--keyboard-inset", `${shrink > 40 ? Math.round(shrink) : 0}px`);
+      const hidden = root.clientHeight - vv.height - vv.offsetTop;
+      root.style.setProperty("--keyboard-inset", `${hidden > 1 ? Math.round(hidden) : 0}px`);
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(apply);

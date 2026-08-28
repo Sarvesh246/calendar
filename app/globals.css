@@ -520,3 +520,19 @@ summary:active {
 .page-shell > * > *:nth-child(n + 7) {
   animation-delay: 240ms;
 }
+
+/* Assistant sheet + backdrop — pure CSS enter/exit so visibility never rides on
+   a JS animation library. `sheet-out` uses `forwards` so it holds the hidden
+   state until React unmounts it. */
+@keyframes sheet-in {
+  from { opacity: 0; translate: 0 16px; scale: 0.985; }
+}
+@keyframes sheet-out {
+  to { opacity: 0; translate: 0 16px; scale: 0.985; }
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+}
+@keyframes overlay-out {
+  to { opacity: 0; }
+}
