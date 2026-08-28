@@ -9,6 +9,7 @@ import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
 import { motion as motionTokens } from "@/lib/motion";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -44,6 +45,10 @@ export function AIDrawer() {
   // `${messageIndex}:${actionIndex}` → outcome
   const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Pin the page while the drawer is open so iOS doesn't pan it under the
+  // keyboard (which otherwise stacks with the drawer's own keyboard offset).
+  useScrollLock(open);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -123,15 +128,16 @@ export function AIDrawer() {
           exit={{ opacity: 0, y: 16, scale: 0.97 }}
           transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
           style={{
-            // Ride above the on-screen keyboard instead of being hidden behind
-            // it; cap the height to what's actually visible so the input and the
-            // latest messages stay on screen.
-            bottom: "calc(env(safe-area-inset-bottom) + 1rem + var(--keyboard-inset, 0px))",
-            height: "70vh",
+            // Ride just above the on-screen keyboard instead of being hidden
+            // behind it, and cap the height to what's actually visible so the
+            // input and the latest messages stay on screen. The page itself is
+            // frozen (useScrollLock) so this offset is the only thing moving.
+            bottom: "calc(env(safe-area-inset-bottom) + 0.75rem + var(--keyboard-inset, 0px))",
+            height: "70dvh",
             maxHeight:
-              "min(560px, calc(100dvh - env(safe-area-inset-top) - 2rem - var(--keyboard-inset, 0px)))",
+              "min(560px, calc(100dvh - env(safe-area-inset-top) - 1.75rem - var(--keyboard-inset, 0px)))",
           }}
-          className="glass fixed right-4 z-50 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl transition-[bottom] duration-200 ease-out"
+          className="glass fixed right-4 z-50 flex w-[92vw] max-w-[380px] flex-col overflow-hidden rounded-xl transition-[bottom,max-height] duration-200 ease-out"
         >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <Sparkles className="h-4 w-4 text-accent" strokeWidth={2} />
