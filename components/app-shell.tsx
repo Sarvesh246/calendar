@@ -12,7 +12,6 @@ import { UndoToast } from "./undo-toast";
 import { FeedSync } from "./feed-sync";
 import { MergeCloudDialog } from "./merge-cloud-dialog";
 import { ConflictToast } from "./conflict-toast";
-import { ViewportDebug } from "./viewport-debug";
 import { useUIStore } from "@/lib/ui-store";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
@@ -22,6 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const focusMode = useUIStore((s) => s.focusMode);
   const pathname = usePathname();
+  const fillViewport = pathname === "/calendar";
 
   useKeyboardInset();
 
@@ -33,22 +33,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        // `min-h-dvh` on mobile keeps iOS standalone PWAs tall enough that
-        // `position: fixed` bottom chrome anchors to the screen, not a short
-        // document. `h-dvh overflow-hidden` keeps scroll inside `<main>`.
-        "mx-auto flex h-dvh min-h-dvh w-full max-w-[1800px] gap-5 overflow-hidden px-4 md:min-h-0",
+        "mx-auto flex w-full max-w-[1800px] gap-5 px-4",
+        // Only the calendar locks to the viewport, so its month grid always
+        // fits without page scroll. Every other route scrolls the *document*
+        // rather than an inner container. That distinction is the whole ball
+        // game on an iOS standalone PWA: an inner scroller lives inside this
+        // shell's safe-area padding, so its content is clipped at hard edges
+        // well short of the screen — the page reads as a square floating in
+        // the middle of the display, with the fixed nav stranded below it.
+        // Scrolling the document instead lets content run right up to the
+        // screen edges and pass behind the translucent nav.
+        fillViewport ? "h-dvh overflow-hidden" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:px-6 md:pt-4 md:pb-6"
+          : "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:min-h-0 md:px-6 md:pt-4 md:pb-6"
       )}
     >
-      <ViewportDebug />
       {!focusMode && <Sidebar />}
 
+      {/* No `overflow-x` here on the scrolling routes: pairing a hidden axis
+          with a visible one silently promotes the visible axis to `auto`,
+          which would recreate the inner scroller. `body` already carries
+          `overflow-x: clip` as the sideways-pan safety net. */}
       <main
         className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden",
-          pathname === "/calendar" ? "overflow-hidden" : "overflow-y-auto overscroll-y-contain"
+          "flex min-w-0 flex-1 flex-col",
+          fillViewport && "min-h-0 overflow-hidden"
         )}
       >
         {!focusMode && (
