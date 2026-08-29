@@ -5,7 +5,7 @@ import type { Item, Reminder } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const WINDOW_MS = 12 * 60 * 1000; // cron is */10; overlap a little so we don't miss
+const WINDOW_MS = 25 * 60 * 1000; // GitHub Actions runs ~every 10m and can be late
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
