@@ -31,6 +31,13 @@ export const metadata: Metadata = {
   applicationName: "Datebook",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Datebook" },
   formatDetection: { telephone: false, date: false, address: false, email: false },
+  // Next 16's `appleWebApp.capable` only emits the standard
+  // `mobile-web-app-capable` tag now, not the Apple-prefixed one. iOS ties
+  // `apple-mobile-web-app-status-bar-style` (translucent status bar, safe-area
+  // insets) to `apple-mobile-web-app-capable` being present, so without this
+  // the home-screen app renders with the OS reserving its own status-bar
+  // strip instead of the page drawing edge-to-edge under it.
+  other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: "/icon.svg",
