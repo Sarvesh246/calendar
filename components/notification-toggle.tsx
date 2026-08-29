@@ -10,6 +10,7 @@ import {
   notificationPermission,
   requestNotificationPermission,
 } from "@/lib/reminders";
+import { subscribePush, vapidPublicKey } from "@/lib/push-client";
 
 export function NotificationToggle() {
   const mounted = useHasMounted();
@@ -27,6 +28,7 @@ export function NotificationToggle() {
     if (result === "granted") {
       await ensureReminderWorker();
       armReminders(useDatebookStore.getState().items, useDatebookStore.getState().settings.clock24h);
+      void subscribePush();
     }
     setBusy(false);
   }
@@ -46,7 +48,10 @@ export function NotificationToggle() {
     return (
       <p className="flex items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
         <Check className="h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
-        Notifications on — reminders fire while Datebook is open and catch up when you return. With push keys configured, they can also arrive when the app is closed.
+        Notifications on — reminders fire while Datebook is open and catch up when you return.
+        {vapidPublicKey()
+          ? " Closed-app alerts are on for this signed-in browser."
+          : " Closed-app push needs VAPID keys on the server — until then, keep a tab open or reopen to catch up."}
       </p>
     );
   }

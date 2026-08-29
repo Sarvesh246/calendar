@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { AlignLeft, Bell, CalendarClock, Check, ExternalLink, MapPin, Tag, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlignLeft, Bell, CalendarClock, Check, ExternalLink, MapPin, Repeat, Tag, Trash2 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import {
   datetimeLocalToIso,
@@ -13,7 +13,8 @@ import {
 import { haptic } from "@/lib/haptic";
 import { nanoid } from "@/lib/nanoid";
 import { cn } from "@/lib/utils";
-import type { Category, Item, ItemStatus, ItemType, Reminder } from "@/lib/types";
+import type { Category, Item, ItemStatus, ItemType, Reminder, RepeatFreq } from "@/lib/types";
+import { repeatLabel } from "@/lib/repeat";
 
 function linkLabel(url: string): string {
   try {
@@ -65,9 +66,20 @@ export function ItemEditor({
 }) {
   const updateItem = useDatebookStore((s) => s.updateItem);
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
+  const setItemRepeat = useDatebookStore((s) => s.setItemRepeat);
   const allCategories = useDatebookStore((s) => s.categories);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
   const categories = allCategories.filter((c) => !c.archived);
+  const [title, setTitle] = useState(item.title);
+  const [location, setLocation] = useState(item.location ?? "");
+  const [description, setDescription] = useState(item.description ?? "");
+  const [customOffset, setCustomOffset] = useState("30");
+
+  useEffect(() => {
+    setTitle(item.title);
+    setLocation(item.location ?? "");
+    setDescription(item.description ?? "");
+  }, [item.id, item.title, item.location, item.description]);
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const isEvent = item.type === "event";
@@ -105,10 +117,12 @@ export function ItemEditor({
 
       <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
         <input
-          defaultValue={item.title}
-          onBlur={(e) => {
-            const title = e.target.value.trim();
-            if (title && title !== item.title) patch({ title });
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            const next = title.trim();
+            if (next && next !== item.title) patch({ title: next });
+            else setTitle(item.title);
           }}
           className={FIELD}
         />
@@ -202,11 +216,12 @@ export function ItemEditor({
 
       <DetailRow icon={<MapPin className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Location">
         <input
-          defaultValue={item.location ?? ""}
+          value={location}
           placeholder="Optional"
-          onBlur={(e) => {
-            const location = e.target.value.trim() || undefined;
-            if (location !== item.location) patch({ location });
+          onChange={(e) => setLocation(e.target.value)}
+          onBlur={() => {
+            const next = location.trim() || undefined;
+            if (next !== item.location) patch({ location: next });
           }}
           className={FIELD}
         />
@@ -241,17 +256,74 @@ export function ItemEditor({
               </button>
             );
           })}
+          <div className="mt-1 flex items-center gap-1.5">
+            <input
+              type="number"
+              min={1}
+              value={customOffset}
+              onChange={(e) => setCustomOffset(e.target.value)}
+              className={cn(FIELD, "mt-0 w-20")}
+              aria-label="Custom reminder minutes"
+            />
+            <span className="text-[12px] text-ink-faint">min before</span>
+            <button
+              type="button"
+              onClick={() => {
+                const n = parseInt(customOffset, 10);
+                if (!Number.isFinite(n) || n < 1) return;
+                const current = item.reminders ?? [];
+                if (current.some((r) => r.offsetMinutes === n)) return;
+                patch({
+                  reminders: [
+                    ...current,
+                    { id: nanoid(), itemId: item.id, offsetMinutes: n, label: `${n} min before` },
+                  ],
+                });
+              }}
+              className="rounded-md border border-line px-2 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink"
+            >
+              Add
+            </button>
+          </div>
         </div>
       </DetailRow>
 
+      {!item.sourceId && (
+        <DetailRow icon={<Repeat className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Repeat">
+          <select
+            value={item.repeat?.freq ?? ""}
+            onChange={(e) => {
+              const v = e.target.value as RepeatFreq | "";
+              if (!v) setItemRepeat(item.id, undefined);
+              else {
+                setItemRepeat(item.id, {
+                  freq: v,
+                  ...(v === "weekly" ? { byDay: [new Date(item.at).getDay()] } : {}),
+                });
+              }
+            }}
+            className={FIELD}
+          >
+            <option value="">Does not repeat</option>
+            <option value="daily">Every day</option>
+            <option value="weekly">Every week</option>
+            <option value="monthly">Every month</option>
+          </select>
+          {item.repeat && (
+            <p className="mt-1 text-[11.5px] text-ink-faint">{repeatLabel(item.repeat)}</p>
+          )}
+        </DetailRow>
+      )}
+
       <DetailRow icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Details">
         <textarea
-          defaultValue={item.description ?? ""}
+          value={description}
           rows={3}
           placeholder="Notes"
-          onBlur={(e) => {
-            const description = e.target.value.trim() || undefined;
-            if (description !== item.description) patch({ description });
+          onChange={(e) => setDescription(e.target.value)}
+          onBlur={() => {
+            const next = description.trim() || undefined;
+            if (next !== item.description) patch({ description: next });
           }}
           className={cn(FIELD, "resize-y")}
         />
@@ -276,6 +348,7 @@ export function ItemEditor({
 
 function ItemActions({ item }: { item: Item }) {
   const deleteItem = useDatebookStore((s) => s.deleteItem);
+  const deleteSeries = useDatebookStore((s) => s.deleteSeries);
   const [confirm, setConfirm] = useState(false);
 
   return (
@@ -293,6 +366,18 @@ function ItemActions({ item }: { item: Item }) {
           >
             Delete
           </button>
+          {item.repeatId && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic("warn");
+                deleteSeries(item.repeatId!);
+              }}
+              className="min-h-11 rounded-lg border border-warn px-3 text-[12.5px] font-medium text-warn"
+            >
+              Delete series
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setConfirm(false)}

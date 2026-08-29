@@ -7,11 +7,13 @@ import { Minimize2 } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
-import { dayKey, isOverdue, itemsOnDay, timeOfDayGreeting, workloadIntensity } from "@/lib/date-utils";
+import { dayKey, isOverdue, itemsOnDay, timeOfDayGreeting, weekWorkload, workloadIntensity } from "@/lib/date-utils";
 import { UpNextCard } from "@/components/up-next-card";
 import { AssignmentCard, ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { FocusView } from "@/components/focus-view";
+import { OnboardingCard } from "@/components/onboarding-card";
+import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -25,6 +27,7 @@ function TodayDashboard() {
   const allItems = useDatebookStore((s) => s.items);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
     [allItems, categoryFilter, hideCompleted]
@@ -72,6 +75,8 @@ function TodayDashboard() {
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-[var(--page-gap)]">
+      <OnboardingCard />
+      <FeedHealthBanner />
       <header className="flex items-start justify-between gap-3 sm:gap-4">
         <div>
           <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
@@ -99,6 +104,7 @@ function TodayDashboard() {
               {overdue.length + dueToday.length + events.length === 1 ? "" : "s"} on your plate
             </span>
           </div>
+          <WeekHeat items={items} weekStartsOn={weekStartsOn} />
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <button
@@ -179,6 +185,31 @@ function TodayDashboard() {
 
 function intensityClass(intensity: number) {
   return ["bg-surface-sunken", "bg-good", "bg-accent", "bg-warn", "bg-warn"][intensity] ?? "bg-accent";
+}
+
+function WeekHeat({
+  items,
+  weekStartsOn,
+}: {
+  items: Item[];
+  weekStartsOn: 0 | 1;
+}) {
+  const days = weekWorkload(items, new Date(), weekStartsOn);
+  return (
+    <div className="mt-3 flex gap-1">
+      {days.map((d) => (
+        <div key={d.date.toISOString()} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
+            {format(d.date, "EEEEE")}
+          </span>
+          <span
+            className={cn("h-1.5 w-full rounded-full", intensityClass(d.intensity))}
+            title={`${format(d.date, "EEE")} · ${d.count} open`}
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {

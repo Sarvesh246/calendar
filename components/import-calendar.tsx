@@ -45,7 +45,9 @@ export function ImportCalendar() {
       const { added, updated, removed } = applyImport(feedUrl, feed);
       setStatus({ kind: "success", message: summarize(added, updated, removed) });
     } catch (err) {
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Re-sync failed." });
+      const message = err instanceof Error ? err.message : "Re-sync failed.";
+      useDatebookStore.getState().markImportError(feedUrl, message);
+      setStatus({ kind: "error", message });
     } finally {
       setSyncingId(null);
     }
@@ -103,6 +105,9 @@ export function ImportCalendar() {
                     {source.itemCount} item{source.itemCount === 1 ? "" : "s"} · synced{" "}
                     {formatDistanceToNow(new Date(source.lastSyncedAt), { addSuffix: true })}
                   </p>
+                  {source.lastError && (
+                    <p className="mt-0.5 text-[12px] text-warn">{source.lastError}</p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button

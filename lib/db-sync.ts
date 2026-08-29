@@ -25,7 +25,7 @@ function iso(v: unknown): string {
 // column). PostgREST then rejects any write that carries `url` with PGRST204;
 // we strip the column and keep syncing everything else rather than wedging.
 // Links come back automatically once the migration is run.
-const STRIPPABLE_ITEM_COLS = ["url", "completed_at", "source_snapshot"] as const;
+const STRIPPABLE_ITEM_COLS = ["url", "completed_at", "source_snapshot", "repeat", "repeat_id"] as const;
 const strippedItemCols = new Set<string>();
 
 function missingColumn(error: unknown): string | null {
@@ -104,6 +104,8 @@ export function toItemRow(i: Item, userId: string): Row {
     created_at: iso(i.createdAt),
     source_id: i.sourceId ?? null,
     source_uid: i.sourceUid ?? null,
+    ...(i.repeat ? { repeat: i.repeat } : {}),
+    ...(i.repeatId ? { repeat_id: i.repeatId } : {}),
   };
 }
 export function rowToItem(r: Row): Item {
@@ -128,6 +130,8 @@ export function rowToItem(r: Row): Item {
     ...(r.source_snapshot && typeof r.source_snapshot === "object"
       ? { sourceSnapshot: r.source_snapshot as Item["sourceSnapshot"] }
       : {}),
+    ...(r.repeat && typeof r.repeat === "object" ? { repeat: r.repeat as Item["repeat"] } : {}),
+    ...(r.repeat_id ? { repeatId: r.repeat_id as string } : {}),
   };
 }
 
@@ -147,6 +151,7 @@ export function toImportSourceRow(s: ImportSource, userId: string): Row {
     added_at: iso(s.addedAt),
     last_synced_at: iso(s.lastSyncedAt),
     item_count: s.itemCount,
+    last_error: s.lastError ?? null,
   };
 }
 export function rowToImportSource(r: Row): ImportSource {
@@ -157,6 +162,7 @@ export function rowToImportSource(r: Row): ImportSource {
     addedAt: iso(r.added_at),
     lastSyncedAt: iso(r.last_synced_at),
     itemCount: r.item_count as number,
+    ...(r.last_error ? { lastError: r.last_error as string } : {}),
   };
 }
 
@@ -172,6 +178,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     show_category_dot: s.showCategoryDot,
     hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
+    onboarding_dismissed: s.onboardingDismissed ?? false,
   };
 }
 export function rowToSettings(r: Row): UserSettings {
@@ -185,6 +192,7 @@ export function rowToSettings(r: Row): UserSettings {
     showCategoryDot: Boolean(r.show_category_dot),
     hideCompleted: Boolean(r.hide_completed),
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
+    ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
   };
 }
 

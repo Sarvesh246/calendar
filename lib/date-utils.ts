@@ -240,3 +240,13 @@ export function workloadIntensity(count: number) {
   if (count <= 6) return 3;
   return 4;
 }
+
+/** Per-day open-item counts for the next 7 local days starting at `from`. */
+export function weekWorkload(items: Item[], from = new Date(), weekStartsOn: 0 | 1 = 0) {
+  const start = startOfWeek(startOfDay(from), { weekStartsOn });
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(start, i);
+    const count = itemsOnDay(items, date).filter((it) => it.status !== "done").length;
+    return { date, count, intensity: workloadIntensity(count), isToday: isToday(date) };
+  });
+}

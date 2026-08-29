@@ -31,7 +31,10 @@ export default function CalendarPage() {
   const calendarFocusDate = useUIStore((s) => s.calendarFocusDate);
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   const setQuickAddDateKey = useUIStore((s) => s.setQuickAddDateKey);
+  const setQuickAddTime = useUIStore((s) => s.setQuickAddTime);
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
+  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
+  const updateItem = useDatebookStore((s) => s.updateItem);
 
   const [mode, setMode] = useState<ViewMode>("month");
   const [anchor, setAnchor] = useState(() => new Date());
@@ -141,7 +144,23 @@ export default function CalendarPage() {
             onSwipeMonth={step}
           />
         ) : (
-          <WeekView days={days} items={items} onSelectDate={selectDate} />
+          <WeekView
+            days={days}
+            items={items}
+            onSelectDate={selectDate}
+            onSelectItem={(item, day) => {
+              setFocusedItemId(item.id);
+              selectDate(day);
+            }}
+            onCreateAt={(day, hour, minute) => {
+              setQuickAddDateKey(dayKey(day));
+              setQuickAddTime({ hour, minute });
+              setQuickAddPrefill("");
+            }}
+            onReschedule={(id, at, endAt) =>
+              updateItem(id, endAt ? { at, endAt } : { at })
+            }
+          />
         )}
 
         <AnimatePresence>

@@ -1,51 +1,34 @@
 import { NextResponse } from "next/server";
-import { clientKey, getRequestUser, rateLimit, tooMany } from "@/lib/api-guard";
+import {
+  clientKey,
+  durableHourlyLimit,
+  getRequestUser,
+  rateLimit,
+  sameOrigin,
+  tooMany,
+} from "@/lib/api-guard";
+import { assertPublicHostname, isBlockedHost, normalizeFeedInput } from "@/lib/ssrf";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 12_000;
-
-/** Block loopback / link-local / private ranges so the feed URL can't be used to
- *  probe internal services (basic SSRF hardening). */
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
-  if (
-    h === "localhost" ||
-    h.endsWith(".localhost") ||
-    h.endsWith(".local") ||
-    h.endsWith(".internal") ||
-    h === "0.0.0.0" ||
-    h === "::1"
-  ) {
-    return true;
-  }
-  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
-  if (/^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\./.test(h)) return true; // CGNAT
-  if (/^::ffff:(127\.|10\.|192\.168\.|169\.254\.)/i.test(h)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
-  if (/^(0|fc|fd)[0-9a-f]*:/.test(h)) return true; // unique-local / unspecified IPv6
-  return false;
-}
-
-function normalize(input: string): URL | null {
-  const trimmed = input.trim().replace(/^webcal:\/\//i, "https://");
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-  return url;
-}
+const MAX_REDIRECTS = 5;
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "That request wasn't allowed." }, { status: 403 });
+  }
+
   const user = await getRequestUser(request);
   const ip = clientKey(request);
   const limitKey = user ? `import:user:${user.id}` : `import:ip:${ip}`;
-  if (!rateLimit(limitKey, user ? 30 : 12, 60 * 60 * 1000) || !rateLimit(`${limitKey}:burst`, 4, 60_000)) {
+  const hourly = user ? 30 : 12;
+  if (
+    !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
+    !rateLimit(`${limitKey}:burst`, 4, 60_000) ||
+    !(await durableHourlyLimit(limitKey, hourly))
+  ) {
     return tooMany();
   }
 
@@ -60,48 +43,78 @@ export async function POST(request: Request) {
   if (typeof rawUrl !== "string" || !rawUrl.trim()) {
     return NextResponse.json({ ok: false, error: "Paste a calendar feed URL." }, { status: 400 });
   }
+  if (rawUrl.length > 2048) {
+    return NextResponse.json({ ok: false, error: "That link is too long." }, { status: 400 });
+  }
 
-  const url = normalize(rawUrl);
-  if (!url) {
+  const start = normalizeFeedInput(rawUrl);
+  if (!start) {
     return NextResponse.json(
       { ok: false, error: "That doesn't look like a valid http(s) or webcal link." },
       { status: 400 }
     );
   }
-  if (isBlockedHost(url.hostname)) {
-    return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
-  }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-  let res: Response;
+  let current = start;
+  let res: Response | null = null;
   try {
-    res = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Datebook calendar import",
-        Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8",
-      },
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    const aborted = err instanceof Error && err.name === "AbortError";
-    return NextResponse.json(
-      { ok: false, error: aborted ? "The feed took too long to respond." : "Couldn't reach that URL." },
-      { status: 502 }
-    );
-  }
-  clearTimeout(timer);
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      if (isBlockedHost(current.hostname)) {
+        return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
+      }
+      try {
+        await assertPublicHostname(current.hostname);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "";
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              reason === "unresolved-host"
+                ? "Couldn't look up that host."
+                : "That address isn't allowed.",
+          },
+          { status: 400 }
+        );
+      }
 
-  // Re-check after any redirects.
-  try {
-    if (isBlockedHost(new URL(res.url).hostname)) {
-      return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        res = await fetch(current, {
+          redirect: "manual",
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "Datebook calendar import",
+            Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8",
+          },
+        });
+      } catch (err) {
+        const aborted = err instanceof Error && err.name === "AbortError";
+        return NextResponse.json(
+          { ok: false, error: aborted ? "The feed took too long to respond." : "Couldn't reach that URL." },
+          { status: 502 }
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get("location");
+        if (!loc || hop === MAX_REDIRECTS) {
+          return NextResponse.json({ ok: false, error: "The feed redirected too many times." }, { status: 502 });
+        }
+        current = new URL(loc, current);
+        continue;
+      }
+      break;
     }
   } catch {
-    /* keep original url */
+    return NextResponse.json({ ok: false, error: "Couldn't reach that URL." }, { status: 502 });
+  }
+
+  if (!res) {
+    return NextResponse.json({ ok: false, error: "Couldn't reach that URL." }, { status: 502 });
   }
 
   if (!res.ok) {
@@ -127,8 +140,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Return the raw feed and let the client parse it — floating and all-day dates
-  // must resolve in the viewer's timezone, not this server's.
   return NextResponse.json({ ok: true, text });
 }
 

@@ -117,12 +117,17 @@ function reminderBody(item: Item, clock24h: boolean): string {
 async function showReminder(item: Item, label: string, clock24h: boolean): Promise<void> {
   if (notificationPermission() !== "granted") return;
   const title = item.type === "event" ? item.title : `Due soon — ${item.title}`;
-  const options: NotificationOptions & { tag: string } = {
+  const options: NotificationOptions & { tag: string; data?: { itemId: string } } = {
     body: `${label} · ${reminderBody(item, clock24h)}`,
     tag: `datebook-${item.id}`,
     icon: "/icon.svg",
     badge: "/icon.svg",
-  };
+    data: { itemId: item.id },
+    actions: [
+      { action: "open", title: "Open" },
+      { action: "snooze", title: "Snooze 15 min" },
+    ],
+  } as NotificationOptions & { tag: string };
   try {
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.getRegistration();

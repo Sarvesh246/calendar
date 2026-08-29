@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOverdue, itemDaySpan, itemOccupiesDay, wallTimeInZoneToIso } from "./date-utils";
+import { isOverdue, itemDaySpan, itemOccupiesDay, wallTimeInZoneToIso, weekWorkload } from "./date-utils";
 import type { Item } from "./types";
 
 const base = (over: Partial<Item> = {}): Item => ({
@@ -63,5 +63,12 @@ describe("wallTimeInZoneToIso", () => {
     const minute = parts.find((p) => p.type === "minute")?.value;
     expect(hour === "23" || hour === "11").toBe(true);
     expect(minute).toBe("59");
+  });
+});
+
+describe("weekWorkload", () => {
+  it("returns 7 days", () => {
+    const days = weekWorkload([], new Date("2026-08-28T12:00:00"), 0);
+    expect(days).toHaveLength(7);
   });
 });

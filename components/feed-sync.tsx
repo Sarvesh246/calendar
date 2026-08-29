@@ -24,7 +24,9 @@ export function FeedSync() {
             const feed = await fetchCalendarFeed(source.url);
             applyImport(source.url, feed);
           } catch (err) {
-            console.warn("[datebook] feed sync failed", source.name, err);
+            const message = err instanceof Error ? err.message : "Re-sync failed.";
+            useDatebookStore.getState().markImportError(source.url, message);
+            console.warn("[datebook] feed sync failed", source.name);
           }
         }
       } finally {

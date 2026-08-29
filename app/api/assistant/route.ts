@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
-import { buildAssistantDigest, zonedDateKey } from "@/lib/ai-assistant";
-import { wallTimeInZoneToIso } from "@/lib/date-utils";
-import { clientKey, getRequestUser, rateLimit, tooMany } from "@/lib/api-guard";
-import type { Item, ItemStatus, ItemType } from "@/lib/types";
+import { buildAssistantDigest } from "@/lib/ai-assistant";
+import {
+  MAX_ASSISTANT_BODY,
+  MAX_ASSISTANT_ITEMS,
+  MAX_ASSISTANT_MESSAGE,
+  clientKey,
+  durableHourlyLimit,
+  getRequestUser,
+  rateLimit,
+  sameOrigin,
+  tooMany,
+} from "@/lib/api-guard";
+import {
+  isPureQuestion,
+  normalizeActions,
+  type AssistantReqBody as ReqBody,
+} from "@/lib/assistant-actions";
 
 export const runtime = "nodejs";
 
@@ -12,61 +25,6 @@ const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/* ------------------------------------------------------------------ */
-/* Request / wire types                                                */
-/* ------------------------------------------------------------------ */
-
-interface SlimItem {
-  id: string;
-  title: string;
-  type: ItemType;
-  at: string;
-  endAt?: string;
-  allDay?: boolean;
-  status?: ItemStatus;
-  categoryId?: string;
-  categoryName?: string;
-  location?: string;
-  description?: string;
-  url?: string;
-}
-
-interface ReqBody {
-  message: string;
-  history?: { role: "user" | "assistant"; text: string }[];
-  now: string;
-  timeZone?: string;
-  clock24h?: boolean;
-  weekStartsOn?: 0 | 1;
-  items: SlimItem[];
-  categories: { id: string; name: string }[];
-}
-
-/** Raw action shape Gemini emits (flat — unions don't round-trip cleanly). */
-interface RawAction {
-  kind?: "create" | "update" | "delete";
-  summary?: string;
-  itemId?: string;
-  title?: string;
-  itemType?: ItemType;
-  at?: string;
-  endAt?: string;
-  allDay?: boolean;
-  location?: string;
-  description?: string;
-  categoryId?: string;
-  status?: ItemStatus;
-  clearEndAt?: boolean;
-  clearLocation?: boolean;
-  clearDescription?: boolean;
-}
-
-/** Store-ready action the client can apply directly. */
-type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt"> }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item> }
-  | { kind: "delete"; summary: string; itemId: string; itemTitle: string };
 
 /* ------------------------------------------------------------------ */
 /* Gemini response schema                                              */
@@ -203,149 +161,6 @@ Reply ONLY with JSON matching the schema. "reply" is always present.`;
 }
 
 /* ------------------------------------------------------------------ */
-/* Validation / normalisation of model output                          */
-/* ------------------------------------------------------------------ */
-
-function normalizeActions(
-  raw: unknown,
-  body: ReqBody
-): AssistantAction[] {
-  if (!Array.isArray(raw)) return [];
-  const byId = new Map(body.items.map((i) => [i.id, i]));
-  const catIds = new Set(body.categories.map((c) => c.id));
-  const defaultCat = body.categories[0]?.id ?? "";
-  const out: AssistantAction[] = [];
-
-  for (const a of raw as RawAction[]) {
-    if (!a || typeof a !== "object") continue;
-    const summary = typeof a.summary === "string" && a.summary.trim() ? a.summary.trim() : "";
-
-    if (a.kind === "create") {
-      const title = typeof a.title === "string" ? a.title.trim() : "";
-      if (!title) continue;
-      const type: ItemType =
-        a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task"
-          ? a.itemType
-          : "task";
-      const at = validIso(a.at) ?? defaultAt(type, body.now, body.timeZone || "UTC");
-      const draft: Omit<Item, "id" | "createdAt"> = {
-        title,
-        type,
-        categoryId: a.categoryId && catIds.has(a.categoryId) ? a.categoryId : defaultCat,
-        at,
-      };
-      const endAt = validIso(a.endAt);
-      if (endAt && +new Date(endAt) > +new Date(at)) draft.endAt = endAt;
-      if (a.allDay === true) draft.allDay = true;
-      if (typeof a.location === "string" && a.location.trim()) draft.location = a.location.trim();
-      if (typeof a.description === "string" && a.description.trim())
-        draft.description = a.description.trim();
-      if (type !== "event") draft.status = a.status ?? "todo";
-      out.push({ kind: "create", summary: summary || `Add “${title}”`, draft });
-      continue;
-    }
-
-    if (a.kind === "update" || a.kind === "delete") {
-      const target =
-        (a.itemId && byId.get(a.itemId)) ||
-        (a.title ? fuzzyFind(body.items, a.title) : undefined);
-      if (!target) continue;
-
-      if (a.kind === "delete") {
-        out.push({
-          kind: "delete",
-          summary: summary || `Delete “${target.title}”`,
-          itemId: target.id,
-          itemTitle: target.title,
-        });
-        continue;
-      }
-
-      const patch: Partial<Item> = {};
-      const at = validIso(a.at);
-      if (at) patch.at = at;
-      if (a.clearEndAt) patch.endAt = undefined;
-      else {
-        const endAt = validIso(a.endAt);
-        if (endAt) patch.endAt = endAt;
-      }
-      if (typeof a.title === "string" && a.title.trim() && a.title.trim() !== target.title)
-        patch.title = a.title.trim();
-      if (a.categoryId && catIds.has(a.categoryId) && a.categoryId !== target.categoryId)
-        patch.categoryId = a.categoryId;
-      if (a.status === "todo" || a.status === "doing" || a.status === "done")
-        patch.status = a.status;
-      // Only ever clear a field when the model explicitly asked to (clearLocation/
-      // clearDescription). A bare empty string is treated as "unchanged" — the
-      // model routinely echoes every schema field, and honouring "" here used to
-      // silently wipe a saved address/notes on an unrelated reschedule.
-      if (a.clearLocation) patch.location = undefined;
-      else if (typeof a.location === "string" && a.location.trim() && a.location.trim() !== target.location)
-        patch.location = a.location.trim();
-      if (a.clearDescription) patch.description = undefined;
-      else if (
-        typeof a.description === "string" &&
-        a.description.trim() &&
-        a.description.trim() !== target.description
-      )
-        patch.description = a.description.trim();
-      if (typeof a.allDay === "boolean" && a.allDay !== Boolean(target.allDay)) patch.allDay = a.allDay;
-      if (
-        (a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task") &&
-        a.itemType !== target.type
-      )
-        patch.type = a.itemType;
-
-      if (Object.keys(patch).length === 0) continue;
-      out.push({
-        kind: "update",
-        summary: summary || `Update “${target.title}”`,
-        itemId: target.id,
-        itemTitle: target.title,
-        patch,
-      });
-    }
-  }
-  return out.slice(0, 8);
-}
-
-/** True when the message reads as a pure question with no request to change
- *  anything — used to suppress spurious "create" actions from the model. */
-function isPureQuestion(message: string): boolean {
-  const t = message.trim().toLowerCase();
-  if (!t) return false;
-  const mutation =
-    /\b(add|create|schedule|new|set up|book|block off|remind me to|move|reschedule|push|bump|shift|rename|retitle|change|mark|complete|finish|check off|reopen|delete|remove|cancel|clear)\b/;
-  if (mutation.test(t)) return false;
-  return t.endsWith("?") || /^(what|when|where|which|who|why|how|do i|did i|have i|am i|is there|are there|will i|can you|could you|should i|show me|list|tell me)\b/.test(t);
-}
-
-function validIso(v: unknown): string | undefined {
-  if (typeof v !== "string" || !v.trim()) return undefined;
-  const d = new Date(v);
-  return Number.isNaN(+d) ? undefined : d.toISOString();
-}
-
-function defaultAt(type: ItemType, nowIso: string, timeZone = "UTC"): string {
-  const key = zonedDateKey(nowIso, timeZone);
-  return wallTimeInZoneToIso(key, type === "event" ? 12 : 23, type === "event" ? 0 : 59, timeZone);
-}
-
-function fuzzyFind(items: SlimItem[], q: string): SlimItem | undefined {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return undefined;
-  return (
-    items.find((i) => i.title.toLowerCase() === needle) ||
-    items.find((i) => i.title.toLowerCase().includes(needle)) ||
-    items.find((i) => needle.includes(i.title.toLowerCase())) ||
-    items.find((i) => {
-      const w = needle.split(/\s+/).filter((t) => t.length > 2);
-      return w.length > 0 && w.every((t) => i.title.toLowerCase().includes(t));
-    })
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Handler                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -353,25 +168,40 @@ export async function POST(request: Request) {
   if (!KEY) {
     return NextResponse.json({ error: "assistant-not-configured" }, { status: 200 });
   }
+  if (!sameOrigin(request)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const user = await getRequestUser(request);
   const ip = clientKey(request);
   const limitKey = user ? `assistant:user:${user.id}` : `assistant:ip:${ip}`;
-  if (!rateLimit(limitKey, user ? 60 : 20, 60 * 60 * 1000) || !rateLimit(`${limitKey}:burst`, 8, 60_000)) {
+  const hourly = user ? 60 : 20;
+  if (
+    !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
+    !rateLimit(`${limitKey}:burst`, 8, 60_000) ||
+    !(await durableHourlyLimit(limitKey, hourly))
+  ) {
     return tooMany();
   }
 
+  const rawText = await request.text();
+  if (rawText.length > MAX_ASSISTANT_BODY) {
+    return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
+  }
   let body: ReqBody;
   try {
-    body = (await request.json()) as ReqBody;
+    body = JSON.parse(rawText) as ReqBody;
   } catch {
     return NextResponse.json({ error: "bad-request" }, { status: 400 });
   }
   if (!body?.message?.trim()) {
     return NextResponse.json({ error: "empty-message" }, { status: 400 });
   }
-  body.items = Array.isArray(body.items) ? body.items : [];
-  body.categories = Array.isArray(body.categories) ? body.categories : [];
+  if (body.message.length > MAX_ASSISTANT_MESSAGE) {
+    return NextResponse.json({ error: "message-too-long" }, { status: 400 });
+  }
+  body.items = Array.isArray(body.items) ? body.items.slice(0, MAX_ASSISTANT_ITEMS) : [];
+  body.categories = Array.isArray(body.categories) ? body.categories.slice(0, 80) : [];
 
   // Gemini requires `contents` to start with a `user` turn and to alternate
   // roles. Build history defensively: drop the leading assistant greeting(s) and

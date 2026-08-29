@@ -8,6 +8,8 @@ import { applyItemFilters } from "@/lib/filters";
 import { dayLabel, isOverdue, itemOccupiesDay } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
+import { OnboardingCard } from "@/components/onboarding-card";
+import { FeedHealthBanner } from "@/components/feed-health-banner";
 import type { Item } from "@/lib/types";
 
 const HORIZON_DAYS = 120;
@@ -66,11 +68,16 @@ export default function AgendaPage() {
       </header>
 
       {isEmpty && (
-        <EmptyState
-          title="Nothing on the horizon."
-          sub="Add something with the quick-add bar above whenever you're ready."
-        />
+        <>
+          <OnboardingCard />
+          <FeedHealthBanner />
+          <EmptyState
+            title="Nothing on the horizon."
+            sub="Add something with the quick-add bar above whenever you're ready."
+          />
+        </>
       )}
+      {!isEmpty && <FeedHealthBanner />}
 
       {overdue.length > 0 && (
         <section>

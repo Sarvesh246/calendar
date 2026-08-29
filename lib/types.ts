@@ -1,5 +1,16 @@
 export type ItemType = "event" | "assignment" | "task";
 export type ItemStatus = "todo" | "doing" | "done";
+export type RepeatFreq = "daily" | "weekly" | "monthly";
+
+export interface RepeatRule {
+  freq: RepeatFreq;
+  /** 1 = every period. Capped at 30 when expanding. */
+  interval?: number;
+  /** 0 = Sunday … 6 = Saturday. Weekly only. */
+  byDay?: number[];
+  /** ISO datetime — last occurrence is on or before this instant. */
+  until?: string;
+}
 
 export interface Category {
   id: string;
@@ -42,6 +53,10 @@ export interface Item {
   completedAt?: string;
   reminders?: Reminder[];
   createdAt: string;
+  /** Recurrence for a user-created series. Copied onto every expanded instance. */
+  repeat?: RepeatRule;
+  /** Shared id for every instance in a user-created series. */
+  repeatId?: string;
   /** Set when the item came from an imported calendar feed (see ImportSource.id). */
   sourceId?: string;
   /** The feed's own UID for this event — used to match on re-sync instead of duplicating. */
@@ -58,6 +73,8 @@ export interface ImportSource {
   addedAt: string;
   lastSyncedAt: string;
   itemCount: number;
+  /** Set when the last background or manual sync failed. Cleared on success. */
+  lastError?: string;
 }
 
 export type AppearancePreset =
@@ -91,4 +108,6 @@ export interface UserSettings {
   showCategoryDot: boolean;
   hideCompleted: boolean;
   defaultReminderPresetIds: string[];
+  /** Hide the first-run empty-state card. */
+  onboardingDismissed?: boolean;
 }

@@ -131,6 +131,7 @@ function SyncLine({ status, error }: { status: string; error: string | null }) {
     syncing: { icon: <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={2} />, label: "Syncing…", cls: "text-ink-faint" },
     synced: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Synced", cls: "text-good" },
     error: { icon: <CloudOff className="h-3 w-3" strokeWidth={2} />, label: error ?? "Sync error", cls: "text-warn" },
+    merge: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Choose how to merge…", cls: "text-ink" },
     idle: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Ready", cls: "text-ink-faint" },
   };
   const s = map[status] ?? map.idle;

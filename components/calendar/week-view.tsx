@@ -43,10 +43,16 @@ export function WeekView({
   days,
   items,
   onSelectDate,
+  onSelectItem,
+  onCreateAt,
+  onReschedule,
 }: {
   days: Date[];
   items: Item[];
   onSelectDate?: (date: Date) => void;
+  onSelectItem?: (item: Item, day: Date) => void;
+  onCreateAt?: (day: Date, hour: number, minute: number) => void;
+  onReschedule?: (id: string, at: string, endAt?: string) => void;
 }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
@@ -101,7 +107,10 @@ export function WeekView({
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => onSelectDate?.(day)}
+                      onClick={() => {
+                        if (onSelectItem) onSelectItem(item, day);
+                        else onSelectDate?.(day);
+                      }}
                       className="cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium"
                       style={{ "--cat": color } as React.CSSProperties}
                     >
@@ -139,7 +148,14 @@ export function WeekView({
             return (
               <div key={day.toISOString()} className="relative border-l border-line">
                 {hours.map((h) => (
-                  <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line" />
+                  <button
+                    key={h}
+                    type="button"
+                    aria-label={`Add at ${h}:00`}
+                    onClick={() => onCreateAt?.(day, h, 0)}
+                    style={{ height: HOUR_HEIGHT }}
+                    className="block w-full border-b border-line hover:bg-accent-soft/40"
+                  />
                 ))}
                 {assignOverlapColumns(
                   dayEvents.map((item) => {
@@ -161,27 +177,23 @@ export function WeekView({
                   const color = colorOf(item.categoryId);
                   const widthPct = 100 / colCount;
                   return (
-                    <button
+                    <TimedBlock
                       key={item.id}
-                      type="button"
-                      onClick={() => onSelectDate?.(day)}
-                      style={{
-                        top,
-                        height,
-                        left: `calc(${col * widthPct}% + 4px)`,
-                        width: `calc(${widthPct}% - 8px)`,
-                        background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
-                        borderLeft: `2.5px solid ${color}`,
+                      item={item}
+                      day={day}
+                      top={top}
+                      height={height}
+                      color={color}
+                      widthPct={widthPct}
+                      col={col}
+                      clock24h={clock24h}
+                      startHour={startHour}
+                      onSelect={() => {
+                        if (onSelectItem) onSelectItem(item, day);
+                        else onSelectDate?.(day);
                       }}
-                      className="absolute overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight"
-                    >
-                      <p className="truncate font-medium" style={{ color }}>
-                        {item.title}
-                      </p>
-                      {height > 32 && (
-                        <p className="truncate text-ink-faint">{format(start, clock24h ? "HH:mm" : "h:mm a")}</p>
-                      )}
-                    </button>
+                      onReschedule={onReschedule}
+                    />
                   );
                 })}
               </div>
@@ -190,6 +202,102 @@ export function WeekView({
         </div>
       </div>
     </>
+  );
+}
+
+function TimedBlock({
+  item,
+  top,
+  height,
+  color,
+  widthPct,
+  col,
+  clock24h,
+  onSelect,
+  onReschedule,
+}: {
+  item: Item;
+  day: Date;
+  top: number;
+  height: number;
+  color: string;
+  widthPct: number;
+  col: number;
+  clock24h: boolean;
+  startHour: number;
+  onSelect: () => void;
+  onReschedule?: (id: string, at: string, endAt?: string) => void;
+}) {
+  const start = new Date(item.at);
+  const drag = useRef<{ y: number; moved: boolean } | null>(null);
+  const [dy, setDy] = useState(0);
+
+  function snapMinutes(px: number) {
+    const raw = (px / HOUR_HEIGHT) * 60;
+    return Math.round(raw / 15) * 15;
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!onReschedule) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { y: e.clientY, moved: false };
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!drag.current) return;
+    const delta = e.clientY - drag.current.y;
+    if (Math.abs(delta) > 6) drag.current.moved = true;
+    setDy(delta);
+  }
+
+  function onPointerUp() {
+    const d = drag.current;
+    drag.current = null;
+    const minutes = snapMinutes(dy);
+    setDy(0);
+    if (!d) return;
+    if (!d.moved) {
+      onSelect();
+      return;
+    }
+    if (!onReschedule || minutes === 0) return;
+    const nextStart = new Date(start.getTime() + minutes * 60_000);
+    const nextEnd = item.endAt
+      ? new Date(new Date(item.endAt).getTime() + minutes * 60_000).toISOString()
+      : undefined;
+    onReschedule(item.id, nextStart.toISOString(), nextEnd);
+  }
+
+  return (
+    <button
+      type="button"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        drag.current = null;
+        setDy(0);
+      }}
+      onClick={(e) => {
+        if (drag.current?.moved) e.preventDefault();
+      }}
+      style={{
+        top: top + dy,
+        height,
+        left: `calc(${col * widthPct}% + 4px)`,
+        width: `calc(${widthPct}% - 8px)`,
+        background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
+        borderLeft: `2.5px solid ${color}`,
+      }}
+      className="absolute z-[1] cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight active:cursor-grabbing"
+    >
+      <p className="truncate font-medium" style={{ color }}>
+        {item.title}
+      </p>
+      {height > 32 && (
+        <p className="truncate text-ink-faint">{format(start, clock24h ? "HH:mm" : "h:mm a")}</p>
+      )}
+    </button>
   );
 }
 
