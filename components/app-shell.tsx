@@ -12,6 +12,7 @@ import { UndoToast } from "./undo-toast";
 import { FeedSync } from "./feed-sync";
 import { MergeCloudDialog } from "./merge-cloud-dialog";
 import { ConflictToast } from "./conflict-toast";
+import { ViewportDebug } from "./viewport-debug";
 import { useUIStore } from "@/lib/ui-store";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           : "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:px-6 md:pt-4 md:pb-6"
       )}
     >
+      <ViewportDebug />
       {!focusMode && <Sidebar />}
 
       <main
