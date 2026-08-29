@@ -60,7 +60,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full md:overflow-visible">
+      <body className="min-h-full">
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
         </Script>

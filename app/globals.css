@@ -394,21 +394,8 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Mobile PWA: lock the document to the visual viewport so (a) iOS standalone
-   anchors `position: fixed` chrome to the screen bottom instead of a short
-   document, and (b) scroll stays inside `<main>` rather than the whole page. */
+/* Mobile PWA: scroll-attached background (fixed jitters with the iOS address bar). */
 @media (max-width: 767px) {
-  html,
-  body {
-    height: 100dvh;
-    max-height: 100dvh;
-    overflow: hidden;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /* iOS Safari paints `background-attachment: fixed` as a separate layer that
-     jitters with the address bar. Scroll-attached is stable on phones. */
   body {
     background-attachment: scroll;
   }
