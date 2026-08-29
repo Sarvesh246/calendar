@@ -128,10 +128,19 @@ export function CommandPalette() {
             <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask Gemini
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
-            <Upload className="h-4 w-4" strokeWidth={1.75} /> Import syllabus
+            <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Settings className="h-4 w-4" strokeWidth={1.75} /> Settings
+          </Command.Item>
+        </Command.Group>
+
+        <Command.Group heading="Shortcuts" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+          <Command.Item disabled className="cmdk-row min-h-9 text-ink-faint">
+            ⌘K · search
+          </Command.Item>
+          <Command.Item disabled className="cmdk-row min-h-9 text-ink-faint">
+            Esc · close / exit focus
           </Command.Item>
         </Command.Group>
 

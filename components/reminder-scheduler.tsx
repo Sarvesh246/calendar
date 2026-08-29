@@ -8,6 +8,7 @@ import {
   ensureReminderWorker,
   notificationPermission,
 } from "@/lib/reminders";
+import { subscribePush } from "@/lib/push-client";
 
 /**
  * Headless. Keeps the local reminder timers in sync with the item list: re-arms
@@ -21,6 +22,18 @@ export function ReminderScheduler() {
 
   useEffect(() => {
     void ensureReminderWorker();
+    if (notificationPermission() === "granted") void subscribePush();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const snoozeId = params.get("snooze");
+    if (!snoozeId) return;
+    useDatebookStore.getState().snoozeItem(snoozeId, 15);
+    params.delete("snooze");
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState({}, "", next);
   }, []);
 
   useEffect(() => {

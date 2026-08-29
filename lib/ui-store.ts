@@ -14,6 +14,7 @@ interface UIState {
   categoryFilter: string[] | null;
   focusedItemId: string | null;
   quickAddDateKey: string | null;
+  quickAddTime: { hour: number; minute: number } | null;
   calendarFocusDate: string | null;
 
   setCommandPaletteOpen: (open: boolean) => void;
@@ -29,6 +30,7 @@ interface UIState {
   clearCategoryFilter: () => void;
   setFocusedItemId: (id: string | null) => void;
   setQuickAddDateKey: (key: string | null) => void;
+  setQuickAddTime: (time: { hour: number; minute: number } | null) => void;
   setCalendarFocusDate: (key: string | null) => void;
 }
 
@@ -43,6 +45,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   categoryFilter: null,
   focusedItemId: null,
   quickAddDateKey: null,
+  quickAddTime: null,
   calendarFocusDate: null,
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
@@ -66,5 +69,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   clearCategoryFilter: () => set({ categoryFilter: null }),
   setFocusedItemId: (id) => set({ focusedItemId: id }),
   setQuickAddDateKey: (key) => set({ quickAddDateKey: key }),
+  setQuickAddTime: (time) => set({ quickAddTime: time }),
   setCalendarFocusDate: (key) => set({ calendarFocusDate: key }),
 }));

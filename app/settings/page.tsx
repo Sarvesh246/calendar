@@ -10,6 +10,8 @@ import { ImportCalendar } from "@/components/import-calendar";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { serializeIcs } from "@/lib/ics";
+import { parseBackup, serializeBackup } from "@/lib/backup";
+import { PwaInstallButton } from "@/components/pwa-install";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
@@ -22,6 +24,8 @@ export default function SettingsPage() {
   const updateCategory = useDatebookStore((s) => s.updateCategory);
   const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
+  const replaceFromBackup = useDatebookStore((s) => s.replaceFromBackup);
+  const resetAllData = useDatebookStore((s) => s.resetAllData);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#7C6CFF");
@@ -207,7 +211,7 @@ export default function SettingsPage() {
 
       <Section
         title="Reminders"
-        sub="Datebook alerts you before an event starts or an assignment is due. Reminders fire while the app is open and catch up on anything missed when you reopen it."
+        sub="Reminders fire while the app is open and catch up when you reopen it. Closed-app push works when VAPID keys are set and you are signed in."
       >
         <NotificationToggle />
         <div className="mt-1">
@@ -241,6 +245,75 @@ export default function SettingsPage() {
               </button>
             );
           })}
+        </div>
+      </Section>
+
+      <Section title="Install" sub="Add Datebook to your home screen.">
+        <PwaInstallButton />
+      </Section>
+
+      <Section
+        title="Backup & reset"
+        sub="Download a JSON copy of everything on this device, restore one, or start over. Feed URLs in the backup are secrets — don't share the file."
+      >
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const s = useDatebookStore.getState();
+              const blob = new Blob(
+                [
+                  serializeBackup({
+                    categories: s.categories,
+                    items: s.items,
+                    reminderPresets: s.reminderPresets,
+                    settings: s.settings,
+                    importSources: s.importSources,
+                  }),
+                ],
+                { type: "application/json" }
+              );
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "datebook-backup.json";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft hover:text-ink"
+          >
+            Download JSON backup
+          </button>
+          <label className="rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft hover:text-ink">
+            Restore backup
+            <input
+              type="file"
+              accept="application/json"
+              className="sr-only"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  const backup = parseBackup(await file.text());
+                  if (!confirm("Replace everything on this device with this backup?")) return;
+                  replaceFromBackup(backup);
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Couldn't read that file.");
+                }
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm("Delete all items and imported feeds on this device? This cannot be undone.")) return;
+              resetAllData();
+            }}
+            className="rounded-lg border border-warn/40 px-3.5 py-2.5 text-[13px] font-medium text-warn"
+          >
+            Reset calendar data
+          </button>
         </div>
       </Section>
     </div>

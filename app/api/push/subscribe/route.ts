@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getRequestUser } from "@/lib/api-guard";
+import { getRequestUser, sameOrigin } from "@/lib/api-guard";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
   const user = await getRequestUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "auth-required" }, { status: 401 });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

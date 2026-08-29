@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Bell, Check, Sparkles, Tag } from "lucide-react";
+import { ArrowUp, Bell, Sparkles, Tag } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
@@ -11,17 +11,12 @@ import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
 import { formatTime } from "@/lib/date-utils";
+import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-type Phase = "idle" | "parsing" | "preview";
-
-const CHECKS = [
-  { key: "date" as const, label: "Date found" },
-  { key: "category" as const, label: "Category suggested" },
-  { key: "reminder" as const, label: "Reminder found" },
-];
+type Phase = "idle" | "preview";
 
 export function QuickAddBar() {
   const categories = useDatebookStore((s) => s.categories);
@@ -33,6 +28,8 @@ export function QuickAddBar() {
   const setPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const dateKey = useUIStore((s) => s.quickAddDateKey);
   const setDateKey = useUIStore((s) => s.setQuickAddDateKey);
+  const timeHint = useUIStore((s) => s.quickAddTime);
+  const setTimeHint = useUIStore((s) => s.setQuickAddTime);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const askAI = useUIStore((s) => s.askAI);
 
@@ -42,9 +39,6 @@ export function QuickAddBar() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Reacts to an external trigger (command palette "New item") that needs an
-    // imperative DOM focus alongside the state sync — not expressible via
-    // useSyncExternalStore, so a plain effect is the right tool here.
     if (prefill !== null) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setText(prefill);
@@ -60,21 +54,18 @@ export function QuickAddBar() {
   function submit() {
     const trimmed = text.trim();
     if (!trimmed || phase !== "idle") return;
-    // A question ("what's due friday?") or a change to something that already
-    // exists ("move my essay to sunday") goes to the assistant; only a plain
-    // new thing to remember flows through quick-add's parse-and-confirm.
     if (shouldAskAssistant(trimmed)) {
       askAI(trimmed);
       reset();
       return;
     }
-    setPhase("parsing");
-    window.setTimeout(() => {
-      const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
-      const result = parseQuickAdd(text, categories, anchor ? { anchor } : undefined);
-      setParsed(result);
-      setPhase("preview");
-    }, 550);
+    const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
+    const result = parseQuickAdd(text, categories, {
+      ...(anchor ? { anchor } : {}),
+      ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
+    });
+    setParsed(result);
+    setPhase("preview");
   }
 
   function confirm() {
@@ -98,6 +89,9 @@ export function QuickAddBar() {
       type: parsed.type,
       categoryId: parsed.categoryId ?? categories[0]?.id,
       at: parsed.at.toISOString(),
+      ...(parsed.endAt ? { endAt: parsed.endAt.toISOString() } : {}),
+      ...(parsed.allDay ? { allDay: true } : {}),
+      ...(parsed.repeat ? { repeat: parsed.repeat } : {}),
       status: parsed.type === "event" ? undefined : "todo",
       reminders,
     });
@@ -110,9 +104,15 @@ export function QuickAddBar() {
     setParsed(null);
     setPhase("idle");
     setDateKey(null);
+    setTimeHint(null);
   }
 
   const category = categories.find((c) => c.id === parsed?.categoryId);
+  const whenLabel = parsed
+    ? parsed.allDay
+      ? `${isToday(parsed.at) ? "Today" : format(parsed.at, "EEE, MMM d")} · all day`
+      : `${isToday(parsed.at) ? "Today" : format(parsed.at, "EEE, MMM d")} · ${formatTime(parsed.at.toISOString(), clock24h)}${parsed.endAt ? `–${formatTime(parsed.endAt.toISOString(), clock24h)}` : ""}`
+    : "";
 
   return (
     <div className="relative w-full">
@@ -151,32 +151,6 @@ export function QuickAddBar() {
       </div>
 
       <AnimatePresence>
-        {phase === "parsing" && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-xl p-4"
-          >
-            <p className="mb-2.5 text-[13px] text-ink-soft">Understanding…</p>
-            <div className="flex flex-col gap-1.5">
-              {CHECKS.map((c, i) => (
-                <motion.div
-                  key={c.key}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.15 + i * 0.14, duration: motionTokens.standard }}
-                  className="flex items-center gap-2 text-[12.5px] text-ink-faint"
-                >
-                  <Check className="h-3 w-3" strokeWidth={2.5} />
-                  {c.label}
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
         {phase === "preview" && parsed && (
           <motion.div
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
@@ -188,8 +162,7 @@ export function QuickAddBar() {
             <p className="text-[15px] font-semibold text-ink">{parsed.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="flex items-center gap-1 rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
-                {isToday(parsed.at) ? "Today" : format(parsed.at, "EEE, MMM d")} ·{" "}
-                {formatTime(parsed.at.toISOString(), clock24h)}
+                {whenLabel}
               </span>
               {category && (
                 <span
@@ -204,6 +177,11 @@ export function QuickAddBar() {
                 <span className="flex items-center gap-1 rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
                   <Bell className="h-3 w-3" strokeWidth={1.75} />
                   {parsed.reminderLabel}
+                </span>
+              )}
+              {parsed.repeat && (
+                <span className="rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
+                  {repeatLabel(parsed.repeat)}
                 </span>
               )}
             </div>

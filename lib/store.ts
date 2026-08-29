@@ -21,12 +21,16 @@ import {
   rowToSettings,
   type PendingChanges,
 } from "./db-sync";
+import { expandRepeat } from "./repeat";
+import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import type { DatebookBackup } from "./backup";
 import type {
   Category,
   ImportSource,
   Item,
   ItemStatus,
   ReminderPreset,
+  RepeatRule,
   UserSettings,
 } from "./types";
 
@@ -37,7 +41,13 @@ export interface ImportResult {
 }
 
 export type SyncMode = "local" | "cloud";
-export type SyncStatus = "idle" | "connecting" | "syncing" | "synced" | "error";
+export type SyncStatus = "idle" | "connecting" | "syncing" | "synced" | "error" | "merge";
+export type CloudMergeChoice = "local" | "cloud" | "merge";
+
+export interface MergeOffer {
+  localItems: number;
+  cloudItems: number;
+}
 
 interface DatebookState {
   categories: Category[];
@@ -51,6 +61,8 @@ interface DatebookState {
   userId: string | null;
   syncStatus: SyncStatus;
   cloudError: string | null;
+  mergeOffer: MergeOffer | null;
+  lastConflict: string | null;
 
   addItem: (item: Omit<Item, "id" | "createdAt">) => Item;
   updateItem: (id: string, patch: Partial<Item>) => void;
@@ -71,7 +83,14 @@ interface DatebookState {
   /** Merge a fetched calendar feed into the store, keyed by `url` (re-syncs in
    *  place rather than duplicating). Returns what changed. */
   applyImport: (url: string, feed: FetchedCalendar) => ImportResult;
+  markImportError: (url: string, message: string) => void;
   removeImportSource: (id: string, deleteItems: boolean) => void;
+  deleteSeries: (repeatId: string) => void;
+  snoozeItem: (id: string, minutes?: number) => void;
+  resetAllData: () => void;
+  replaceFromBackup: (backup: DatebookBackup) => void;
+  setItemRepeat: (id: string, rule: RepeatRule | undefined) => void;
+  clearConflict: () => void;
 
   /** Load the signed-in user's data, adopt/merge local data, and start realtime sync. */
   connectCloud: (userId: string) => Promise<void>;
@@ -81,6 +100,7 @@ interface DatebookState {
    *  attempt — reconnect if the session is down, otherwise re-subscribe realtime,
    *  reconcile, and flush the write queue. */
   retrySync: () => Promise<void>;
+  resolveCloudMerge: (choice: CloudMergeChoice) => Promise<void>;
 }
 
 // IDs of the old seeded demo content, stripped from any store that persisted it
@@ -116,12 +136,36 @@ export const useDatebookStore = create<DatebookState>()(
       userId: null,
       syncStatus: "idle",
       cloudError: null,
+      mergeOffer: null,
+      lastConflict: null,
 
       addItem: (item) => {
+        const createdAt = new Date().toISOString();
+        if (item.repeat) {
+          const seriesId = nanoid();
+          const occs = expandRepeat(item.at, item.endAt, item.repeat);
+          const created: Item[] = occs.map((occ) => {
+            const id = nanoid();
+            const row: Item = {
+              ...item,
+              ...occ,
+              id,
+              createdAt,
+              repeatId: seriesId,
+              repeat: item.repeat,
+            };
+            if (row.reminders) {
+              row.reminders = row.reminders.map((r) => ({ ...r, itemId: id }));
+            }
+            return row;
+          });
+          set({ items: [...get().items, ...created] });
+          return created[0];
+        }
         const newItem: Item = {
           ...item,
           id: nanoid(),
-          createdAt: new Date().toISOString(),
+          createdAt,
           reminders: item.reminders?.map((r) => ({ ...r, itemId: r.itemId || "" })),
         };
         if (newItem.reminders) {
@@ -132,6 +176,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateItem: (id, patch) => {
+        lastLocalEdit.set(id, Date.now());
         set({
           items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
         });
@@ -283,14 +328,108 @@ export const useDatebookStore = create<DatebookState>()(
           return {
             importSources: state.importSources.filter((s) => s.id !== id),
             items,
-            // Drop categories auto-created for this feed once nothing references them.
             categories: state.categories.filter((c) => c.sourceId !== id || inUse.has(c.id)),
           };
         });
       },
 
+      markImportError: (url, message) => {
+        set({
+          importSources: get().importSources.map((s) =>
+            s.url === url ? { ...s, lastError: message } : s
+          ),
+        });
+      },
+
+      deleteSeries: (repeatId) => {
+        set({ items: get().items.filter((i) => i.repeatId !== repeatId) });
+      },
+
+      snoozeItem: (id, minutes = 15) => {
+        const item = get().items.find((i) => i.id === id);
+        if (!item) return;
+        const fireAt = Date.now() + minutes * 60_000;
+        const offsetMinutes = Math.round((new Date(item.at).getTime() - fireAt) / 60_000);
+        const reminder = {
+          id: nanoid(),
+          itemId: id,
+          offsetMinutes,
+          label: `Snoozed ${minutes} min`,
+        };
+        lastLocalEdit.set(id, Date.now());
+        set({
+          items: get().items.map((i) =>
+            i.id === id ? mergeItem(i, { reminders: [...(i.reminders ?? []), reminder] }) : i
+          ),
+        });
+      },
+
+      setItemRepeat: (id, rule) => {
+        const item = get().items.find((i) => i.id === id);
+        if (!item) return;
+        const others = get().items.filter((i) => i.id !== id);
+        if (!rule) {
+          set({
+            items: get().items.map((i) => {
+              if (i.id !== id) return i;
+              const next = { ...i };
+              delete next.repeat;
+              delete next.repeatId;
+              return next;
+            }),
+          });
+          return;
+        }
+        const seriesId = item.repeatId ?? nanoid();
+        const occs = expandRepeat(item.at, item.endAt, rule);
+        const created: Item[] = occs.map((occ, idx) => {
+          if (idx === 0) {
+            return { ...item, ...occ, repeat: rule, repeatId: seriesId };
+          }
+          const nid = nanoid();
+          return {
+            ...item,
+            ...occ,
+            id: nid,
+            createdAt: new Date().toISOString(),
+            repeat: rule,
+            repeatId: seriesId,
+            reminders: item.reminders?.map((r) => ({ ...r, itemId: nid })),
+          };
+        });
+        const stripped = others.filter((i) => i.repeatId !== seriesId);
+        set({ items: [...stripped, ...created] });
+      },
+
+      resetAllData: () => {
+        set({
+          items: [],
+          categories: [...defaultCategories],
+          reminderPresets: [...defaultReminderPresets],
+          importSources: [],
+          lastDeleted: null,
+          settings: { ...get().settings, onboardingDismissed: false },
+        });
+      },
+
+      replaceFromBackup: (backup) => {
+        set({
+          items: backup.items ?? [],
+          categories: backup.categories?.length ? backup.categories : [...defaultCategories],
+          reminderPresets: backup.reminderPresets?.length
+            ? backup.reminderPresets
+            : [...defaultReminderPresets],
+          importSources: backup.importSources ?? [],
+          settings: backup.settings ?? get().settings,
+          lastDeleted: null,
+        });
+      },
+
+      clearConflict: () => set({ lastConflict: null }),
+
       connectCloud: async (userId) => {
         if (!supabase || activeUserId === userId || connecting) return;
+        if (get().syncStatus === "merge" && pendingMerge?.userId === userId) return;
         connecting = true;
         desiredUserId = userId;
         if (connectRetryTimer) {
@@ -329,9 +468,33 @@ export const useDatebookStore = create<DatebookState>()(
           // wipe local items the first time someone signs in.
           const cloudEmpty = cloud.items.length === 0;
           const localHasContent = local.items.length > 0 || local.categories.length > 0;
+          const bothHaveItems = !cloudEmpty && local.items.length > 0;
 
           applyingRemote = true;
-          if (cloudEmpty && localHasContent) {
+          if (bothHaveItems) {
+            applyingRemote = false;
+            connecting = false;
+            pendingMerge = {
+              userId,
+              cloud: {
+                categories: cloud.categories,
+                items: cloud.items,
+                reminderPresets: cloud.reminderPresets,
+                importSources: cloud.importSources,
+                settings: cloud.settings ?? local.settings,
+              },
+            };
+            set({
+              syncStatus: "merge",
+              mergeOffer: {
+                localItems: local.items.length,
+                cloudItems: cloud.items.length,
+              },
+              userId,
+              cloudError: null,
+            });
+            return;
+          } else if (cloudEmpty && localHasContent) {
             // First sign-in with data on this device: keep it, push it up.
             set({
               settings: cloud.settings ?? local.settings,
@@ -470,7 +633,16 @@ export const useDatebookStore = create<DatebookState>()(
         }
 
         applyingRemote = true;
-        set({ ...next, lastDeleted: null, mode: "local", userId: null, syncStatus: "idle", cloudError: null });
+        set({
+          ...next,
+          lastDeleted: null,
+          mode: "local",
+          userId: null,
+          syncStatus: "idle",
+          cloudError: null,
+          mergeOffer: null,
+          lastConflict: null,
+        });
         applyingRemote = false;
 
         // Drop the consumed snapshot so the next sign-in re-captures whatever the
@@ -511,6 +683,67 @@ export const useDatebookStore = create<DatebookState>()(
           // Session never came up (or was torn down) — start a clean connect.
           connecting = false;
           await get().connectCloud(uid);
+        }
+      },
+
+      resolveCloudMerge: async (choice) => {
+        const pending = pendingMerge;
+        if (!pending || !supabase) return;
+        pendingMerge = null;
+        const local = get();
+        const cloudSnap: CalendarSnapshot = {
+          categories: pending.cloud.categories,
+          items: pending.cloud.items,
+          reminderPresets: pending.cloud.reminderPresets.length
+            ? pending.cloud.reminderPresets
+            : defaultReminderPresets,
+          importSources: pending.cloud.importSources,
+          settings: pending.cloud.settings,
+        };
+        const localSnap: CalendarSnapshot = {
+          categories: local.categories,
+          items: local.items,
+          reminderPresets: local.reminderPresets,
+          importSources: local.importSources,
+          settings: local.settings,
+        };
+        let next: CalendarSnapshot;
+        if (choice === "cloud") next = cloudSnap;
+        else if (choice === "local") next = localSnap;
+        else next = mergeCalendars(localSnap, cloudSnap);
+
+        applyingRemote = true;
+        set({
+          ...next,
+          mode: "cloud",
+          userId: pending.userId,
+          mergeOffer: null,
+          syncStatus: "syncing",
+          cloudError: null,
+        });
+        applyingRemote = false;
+        activeUserId = pending.userId;
+        desiredUserId = pending.userId;
+        if (choice !== "cloud") {
+          suspended = true;
+          try {
+            await withTimeout(
+              pushAllToCloud(supabase, pending.userId, next),
+              "Uploading your calendar"
+            );
+          } catch (err) {
+            console.error("[datebook] merge upload failed; queueing:", err);
+            queueEntireLocalState(get());
+          }
+          suspended = false;
+        }
+        await subscribeRealtime(pending.userId);
+        connecting = false;
+        if (pendingWork()) {
+          set({ syncStatus: "syncing", cloudError: null });
+          scheduleFlush();
+        } else {
+          set({ syncStatus: "synced", cloudError: null });
         }
       },
     }),
@@ -571,6 +804,8 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
 let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
+const lastLocalEdit = new Map<string, number>();
+let pendingMerge: { userId: string; cloud: CalendarSnapshot } | null = null;
 // The user we WANT to be synced as — set the moment connectCloud starts, and
 // kept even while `activeUserId` is briefly null between a failed connect and
 // its retry. Lets the connectivity listeners relaunch a dead connect.
@@ -894,6 +1129,17 @@ function applyRealtime(
         return;
       }
       const idx = current.findIndex((x) => x.id === model.id);
+      if (key === "items" && idx !== -1) {
+        const edited = lastLocalEdit.get(model.id);
+        if (edited && Date.now() - edited < 30_000) {
+          const prev = current[idx];
+          if (JSON.stringify(prev) !== JSON.stringify(model)) {
+            useDatebookStore.setState({
+              lastConflict: (model as Item).title || "an item",
+            });
+          }
+        }
+      }
       nextArr = idx === -1 ? [...current, model] : current.map((x, i) => (i === idx ? model : x));
     }
     useDatebookStore.setState({ [key]: nextArr } as Partial<DatebookState>);
