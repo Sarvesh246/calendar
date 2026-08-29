@@ -469,9 +469,62 @@ export const useDatebookStore = create<DatebookState>()(
           const cloudEmpty = cloud.items.length === 0;
           const localHasContent = local.items.length > 0 || local.categories.length > 0;
           const bothHaveItems = !cloudEmpty && local.items.length > 0;
+          const isReconnect = local.mode === "cloud" && local.userId === userId;
 
           applyingRemote = true;
           if (bothHaveItems) {
+            if (isReconnect) {
+              // App reopen on a device that was already syncing this account —
+              // the persisted local snapshot is last session's cloud copy, not
+              // guest data. Merge quietly and resume instead of re-prompting.
+              const localSnap: CalendarSnapshot = {
+                categories: local.categories,
+                items: local.items,
+                reminderPresets: local.reminderPresets,
+                importSources: local.importSources,
+                settings: local.settings,
+              };
+              const cloudSnap: CalendarSnapshot = {
+                categories: cloud.categories,
+                items: cloud.items,
+                reminderPresets: cloud.reminderPresets.length
+                  ? cloud.reminderPresets
+                  : defaultReminderPresets,
+                importSources: cloud.importSources,
+                settings: cloud.settings ?? local.settings,
+              };
+              const merged = mergeCalendars(localSnap, cloudSnap);
+              set({
+                ...merged,
+                mode: "cloud",
+                userId,
+                mergeOffer: null,
+              });
+              applyingRemote = false;
+              activeUserId = userId;
+              suspended = true;
+              try {
+                await withTimeout(
+                  pushAllToCloud(supabase, userId, merged),
+                  "Syncing your calendar"
+                );
+              } catch (pushErr) {
+                console.error("[datebook] reconnect sync failed; queueing:", pushErr);
+                queueEntireLocalState(get());
+              }
+              suspended = false;
+              await subscribeRealtime(userId);
+              connectRetries = 0;
+              connecting = false;
+              if (pendingWork()) {
+                set({ syncStatus: "syncing", cloudError: null });
+                scheduleFlush();
+              } else {
+                set({ syncStatus: "synced", cloudError: null });
+              }
+              return;
+            }
+
             applyingRemote = false;
             connecting = false;
             pendingMerge = {
@@ -756,6 +809,8 @@ export const useDatebookStore = create<DatebookState>()(
         reminderPresets: s.reminderPresets,
         settings: s.settings,
         importSources: s.importSources,
+        mode: s.mode,
+        userId: s.userId,
       }),
       migrate: (persisted, version) => {
         const state = persisted as Partial<DatebookState>;

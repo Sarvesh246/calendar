@@ -18,7 +18,7 @@ export function UndoToast() {
   if (!lastDeleted) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-50 flex justify-center px-4 md:bottom-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-50 flex justify-center px-4 md:bottom-6">
       <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[13px] text-ink shadow-[var(--shadow-md)]">
         <span className="max-w-[40vw] truncate">Deleted “{lastDeleted.title}”</span>
         <button

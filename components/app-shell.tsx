@@ -32,12 +32,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        // `min-h-dvh` keeps iOS standalone PWAs tall enough that fixed chrome
-        // anchors to the screen; `h-dvh` caps the shell so scroll stays in main.
+        // `min-h-dvh` on mobile keeps iOS standalone PWAs tall enough that
+        // `position: fixed` bottom chrome anchors to the screen, not a short
+        // document. `h-dvh overflow-hidden` keeps scroll inside `<main>`.
         "mx-auto flex h-dvh min-h-dvh w-full max-w-[1800px] gap-5 overflow-hidden px-4 md:min-h-0",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6"
+          : "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:px-6 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
@@ -50,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {!focusMode && (
           <>
-            <div className="mb-2.5 flex shrink-0 items-center gap-2.5 md:mb-5">
+            <div className="mb-3 flex shrink-0 items-center gap-2.5 md:mb-5">
               {/* min-w-0 so the bar yields space to the fixed-width search button
                   instead of pushing it off the right edge on narrow screens. */}
               <div className="min-w-0 flex-1">
