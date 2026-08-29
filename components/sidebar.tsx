@@ -19,6 +19,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
 import { haptic } from "@/lib/haptic";
+import { ViewportLayer } from "@/components/viewport-layer";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -129,41 +130,43 @@ export function Sidebar() {
           press-scale on the parent `<Link>`, a mid-transition route change)
           made it lurch in from the bottom instead of sliding across. A single
           transform-animated element has nothing to mismeasure. */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
-        <div className="glass relative mx-auto flex max-w-md items-stretch rounded-2xl p-1.5">
-          {mobileActiveIndex >= 0 && (
-            <motion.span
-              aria-hidden
-              className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
-              style={{ width: `calc((100% - 0.75rem) / ${MOBILE_NAV.length})` }}
-              initial={false}
-              animate={{ x: `${mobileActiveIndex * 100}%` }}
-              transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            />
-          )}
-          {MOBILE_NAV.map((item) => {
-            const active = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                onClick={() => haptic("light")}
-                className="relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
-              >
-                <Icon
-                  className={cn("h-5 w-5 transition-colors", active ? "text-accent" : "text-ink-faint")}
-                  strokeWidth={1.9}
-                />
-                <span className={cn("transition-colors", active ? "text-accent" : "text-ink-faint")}>
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+      <ViewportLayer className="pointer-events-none z-40 md:hidden">
+        <nav className="pointer-events-auto absolute inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)]">
+          <div className="glass relative mx-auto flex max-w-md items-stretch rounded-2xl p-1.5">
+            {mobileActiveIndex >= 0 && (
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
+                style={{ width: `calc((100% - 0.75rem) / ${MOBILE_NAV.length})` }}
+                initial={false}
+                animate={{ x: `${mobileActiveIndex * 100}%` }}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              />
+            )}
+            {MOBILE_NAV.map((item) => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => haptic("light")}
+                  className="relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
+                >
+                  <Icon
+                    className={cn("h-5 w-5 transition-colors", active ? "text-accent" : "text-ink-faint")}
+                    strokeWidth={1.9}
+                  />
+                  <span className={cn("transition-colors", active ? "text-accent" : "text-ink-faint")}>
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </ViewportLayer>
     </>
   );
 }
