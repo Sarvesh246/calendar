@@ -394,10 +394,24 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* iOS Safari paints `background-attachment: fixed` as a separate layer that
-   jitters with the address bar. Scroll-attached is stable on phones. */
+/* Mobile PWA: lock the document to the visual viewport so (a) iOS standalone
+   anchors `position: fixed` chrome to the screen bottom instead of a short
+   document, and (b) scroll stays inside `<main>` rather than the whole page. */
 @media (max-width: 767px) {
-  body { background-attachment: scroll; }
+  html,
+  body {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* iOS Safari paints `background-attachment: fixed` as a separate layer that
+     jitters with the address bar. Scroll-attached is stable on phones. */
+  body {
+    background-attachment: scroll;
+  }
 }
 
 html.scroll-locked,
@@ -606,6 +620,9 @@ a.press-none:active,
 
 .page-shell > * > * {
   animation: content-rise var(--motion-emphasis) var(--ease-standard) both;
+  /* The enter animation nudges content up 10px; clip so it can't expand the
+     scroll container on mobile. */
+  backface-visibility: hidden;
 }
 .page-shell > * > *:nth-child(1) {
   animation-delay: 20ms;

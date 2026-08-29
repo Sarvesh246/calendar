@@ -32,7 +32,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "mx-auto flex h-dvh w-full max-w-[1800px] gap-5 overflow-hidden px-4",
+        // `min-h-dvh` keeps iOS standalone PWAs tall enough that fixed chrome
+        // anchors to the screen; `h-dvh` caps the shell so scroll stays in main.
+        "mx-auto flex h-dvh min-h-dvh w-full max-w-[1800px] gap-5 overflow-hidden px-4 md:min-h-0",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
           : "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:px-6 md:pt-4 md:pb-6"
@@ -42,8 +44,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main
         className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col",
-          pathname === "/calendar" ? "overflow-hidden" : "overflow-y-auto"
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden",
+          pathname === "/calendar" ? "overflow-hidden" : "overflow-y-auto overscroll-y-contain"
         )}
       >
         {!focusMode && (
