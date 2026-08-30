@@ -32,7 +32,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const timeHint = useUIStore((s) => s.quickAddTime);
   const setTimeHint = useUIStore((s) => s.setQuickAddTime);
   const askAI = useUIStore((s) => s.askAI);
-  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
+  const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
 
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -117,7 +117,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     setPhase("idle");
     setDateKey(null);
     setTimeHint(null);
-    setQuickAddOpen(false);
+    closeQuickAdd();
   }
 
   const category = categories.find((c) => c.id === parsed?.categoryId);
@@ -134,7 +134,6 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         <input
           ref={inputRef}
           value={text}
-          disabled={phase !== "idle"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
