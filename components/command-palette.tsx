@@ -26,6 +26,7 @@ export function CommandPalette() {
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
+  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
@@ -50,6 +51,7 @@ export function CommandPalette() {
 
   function createNew() {
     setQuickAddPrefill("");
+    setQuickAddOpen(true);
     setOpen(false);
   }
 

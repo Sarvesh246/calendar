@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSameDay, isToday, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { monthGrid, groupItemsByDay, dayKey } from "@/lib/date-utils";
+import { monthGrid, groupItemsByDay, dayKey, isOverdue, openItemsOnDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -16,10 +16,14 @@ const CHIP_HEIGHT = 20;
 const CHIP_GAP = 4;
 const MORE_LINE_HEIGHT = 14;
 
-/** Mobile dot row geometry (~7px dots, gap-1). */
-const DOT_SIZE = 7;
-const DOT_GAP = 4;
-const DOT_MORE_WIDTH = 18;
+function chipLabel(item: Item) {
+  if (item.allDay) return item.title;
+  const d = new Date(item.at);
+  if (Number.isNaN(d.getTime())) return item.title;
+  const h = d.getHours();
+  const hour12 = h % 12 || 12;
+  return `${hour12}${h >= 12 ? "p" : "a"} ${item.title}`;
+}
 
 function fitCountVertical(
   containerSize: number,
@@ -38,21 +42,10 @@ function fitCountVertical(
   return Math.max(0, Math.min(itemCount, Math.floor((forItems + gap) / slot)));
 }
 
-function fitCountHorizontal(
-  containerWidth: number,
-  itemCount: number,
-  itemSize: number,
-  gap: number,
-  moreWidth: number
-) {
-  if (itemCount === 0 || containerWidth <= 0) return itemCount;
-
-  const allWidth = itemCount * itemSize + Math.max(0, itemCount - 1) * gap;
-  if (allWidth <= containerWidth) return itemCount;
-
-  const forDots = containerWidth - moreWidth;
-  const slot = itemSize + gap;
-  return Math.max(0, Math.min(itemCount, Math.floor((forDots + gap) / slot)));
+function rankForChip(item: Item) {
+  if (isOverdue(item)) return 0;
+  if (item.type !== "event" && item.status === "done") return 2;
+  return 1;
 }
 
 function DayCellChips({
@@ -80,9 +73,13 @@ function DayCellChips({
     return () => ro.disconnect();
   }, [items.length, density]);
 
-  const visible = items.slice(0, fitCount);
-  const overflow = items.length - fitCount;
-  const hiddenTitles = items
+  const ranked = useMemo(
+    () => [...items].sort((a, b) => rankForChip(a) - rankForChip(b)),
+    [items]
+  );
+  const visible = ranked.slice(0, fitCount);
+  const hiddenOpen = openItemsOnDay(ranked.slice(fitCount)).length;
+  const hiddenTitles = ranked
     .slice(fitCount)
     .map((i) => i.title)
     .join(", ");
@@ -91,86 +88,49 @@ function DayCellChips({
     <div ref={ref} className="hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
       {visible.map((item) => {
         const color = colorOf(item.categoryId);
+        const done = item.type !== "event" && item.status === "done";
+        const task = item.type !== "event";
         return (
           <span
             key={item.id}
             title={item.title}
-            className="cal-chip shrink-0 truncate px-1.5 py-[2px] text-[11px] font-medium leading-tight"
+            className={cn(
+              "cal-chip shrink-0 truncate px-1.5 py-[2px] text-[11px] font-medium leading-tight",
+              task && "cal-chip-task",
+              done && "opacity-45",
+              isOverdue(item) && "cal-chip-overdue"
+            )}
             style={{ "--cat": color } as React.CSSProperties}
           >
-            {item.title}
+            {chipLabel(item)}
           </span>
         );
       })}
-      {overflow > 0 && (
+      {hiddenOpen > 0 && (
         <span
           className="shrink-0 px-1 text-[10.5px] font-medium leading-none text-ink-soft"
           title={hiddenTitles}
         >
-          +{overflow}
+          +{hiddenOpen}
         </span>
       )}
     </div>
   );
 }
 
-function DayCellDots({
-  items,
-  showCategoryDot,
-  colorOf,
-}: {
-  items: Item[];
-  showCategoryDot: boolean;
-  colorOf: (categoryId: string) => string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [fitCount, setFitCount] = useState(() => Math.min(4, items.length));
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !showCategoryDot) return;
-
-    const update = () => {
-      setFitCount(fitCountHorizontal(el.clientWidth, items.length, DOT_SIZE, DOT_GAP, DOT_MORE_WIDTH));
-    };
-
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [items.length, showCategoryDot]);
-
-  if (!showCategoryDot) {
-    if (items.length === 0) return null;
-    return (
-      <span className="shrink-0 text-[10px] font-medium tabular-nums leading-none text-ink-faint sm:hidden">
-        {items.length}
-      </span>
-    );
-  }
-
-  const overflow = items.length - fitCount;
-
+function DayCellCount({ items }: { items: Item[] }) {
+  const open = openItemsOnDay(items);
+  const overdue = items.some(isOverdue);
+  if (open.length === 0) return null;
   return (
-    <div
-      ref={ref}
-      className="flex min-h-[7px] flex-nowrap items-center gap-1 overflow-hidden sm:hidden"
-    >
-      {items.slice(0, fitCount).map((item) => {
-        const color = colorOf(item.categoryId);
-        return (
-          <span
-            key={item.id}
-            aria-hidden
-            className="h-[7px] w-[7px] shrink-0 rounded-full"
-            style={{ background: color }}
-          />
-        );
-      })}
-      {overflow > 0 && (
-        <span className="shrink-0 text-[9px] font-medium leading-none text-ink-faint">+{overflow}</span>
+    <span
+      className={cn(
+        "shrink-0 text-[10px] font-medium tabular-nums leading-none sm:hidden",
+        overdue ? "text-warn" : "text-ink-faint"
       )}
-    </div>
+    >
+      {open.length}
+    </span>
   );
 }
 
@@ -188,7 +148,6 @@ export function MonthView({
   onSwipeMonth?: (dir: 1 | -1) => void;
 }) {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
-  const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const categories = useDatebookStore((s) => s.categories);
   const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
@@ -272,7 +231,7 @@ export function MonthView({
               >
                 {format(date, "d")}
               </span>
-              <DayCellDots items={dayItems} showCategoryDot={showCategoryDot} colorOf={colorOf} />
+              <DayCellCount items={dayItems} />
               <DayCellChips items={dayItems} colorOf={colorOf} />
             </button>
           );

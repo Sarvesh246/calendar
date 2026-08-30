@@ -14,7 +14,7 @@ export default function Template({ children }: { children: React.ReactNode }) {
     <div
       className={cn(
         "page-shell",
-        fillViewport && "flex min-h-0 flex-1 flex-col overflow-hidden"
+        fillViewport && "flex min-h-0 flex-1 flex-col md:overflow-hidden"
       )}
     >
       {children}

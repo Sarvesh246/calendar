@@ -28,57 +28,47 @@ export function ItemCard({ item, category }: { item: Item; category: Category | 
 /* Status controls                                                     */
 /* ------------------------------------------------------------------ */
 
-const STATUS_CYCLE: ItemStatus[] = ["todo", "doing", "done"];
-
-const NEXT_ACTION: Record<ItemStatus, string> = {
-  todo: "Mark in progress",
-  doing: "Mark complete",
-  done: "Mark to do",
-};
-
-function StatusCycleButton({
+function CompleteButton({
   status,
   color,
-  onCycle,
+  onToggle,
 }: {
   status: ItemStatus;
   color: string;
-  onCycle: () => void;
+  onToggle: () => void;
 }) {
-  const prevStatus = useRef(status);
+  const done = status === "done";
+  const prevDone = useRef(done);
   const [checkBurst, setCheckBurst] = useState(false);
 
   useEffect(() => {
-    if (status === "done" && prevStatus.current !== "done") {
-      setCheckBurst(true);
-    }
-    prevStatus.current = status;
-  }, [status]);
+    if (done && !prevDone.current) setCheckBurst(true);
+    prevDone.current = done;
+  }, [done]);
 
   return (
     <button
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length];
-        haptic(next === "done" ? "success" : "light");
-        onCycle();
+        haptic(done ? "light" : "success");
+        onToggle();
       }}
-      aria-label={NEXT_ACTION[status]}
-      title={NEXT_ACTION[status]}
+      aria-label={done ? "Mark to do" : "Mark complete"}
+      title={done ? "Mark to do" : "Mark complete"}
       style={{ "--cat": color } as React.CSSProperties}
       className="press-none flex h-11 w-11 shrink-0 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
     >
       <span
         className={cn(
           "relative flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
-          status === "todo" && "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent",
-          status === "doing" && "status-doing-ring border-accent bg-[conic-gradient(from_200deg,var(--accent)_0deg,var(--accent)_180deg,transparent_180deg)]",
-          status === "done" && "border-good bg-good"
+          done
+            ? "border-good bg-good"
+            : "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent"
         )}
       >
         <AnimatePresence initial={false}>
-          {status === "done" && (
+          {done && (
             <motion.span
               key="check"
               initial={checkBurst ? { scale: 0, opacity: 0 } : false}
@@ -303,7 +293,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
 
 export function AssignmentCard({ item, category }: { item: Item; category: Category | undefined }) {
   const clock24h = useClock24h();
-  const cycleItemStatus = useDatebookStore((s) => s.cycleItemStatus);
+  const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
   const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const color = category?.color ?? "#8a8a94";
   const status = item.status ?? "todo";
@@ -327,10 +317,10 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       )}
     >
       <div className="flex items-center gap-1">
-        <StatusCycleButton
+        <CompleteButton
           status={status}
           color={color}
-          onCycle={() => cycleItemStatus(item.id)}
+          onToggle={() => toggleItemDone(item.id)}
         />
 
         <div className="min-w-0 flex-1">

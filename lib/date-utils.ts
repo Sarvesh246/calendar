@@ -250,3 +250,24 @@ export function weekWorkload(items: Item[], from = new Date(), weekStartsOn: 0 |
     return { date, count, intensity: workloadIntensity(count), isToday: isToday(date) };
   });
 }
+
+/** Soonest open assignment or task — overdue first, then upcoming due dates. */
+export function nextOpenAssignment(items: Item[]): Item | undefined {
+  return items
+    .filter((i) => i.type !== "event" && i.status !== "done")
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
+}
+
+/** Items that still occupy attention on a day: events plus unfinished work. */
+export function openItemsOnDay(items: Item[]) {
+  return items.filter((i) => i.type === "event" || i.status !== "done");
+}
+
+export function formatDaySummary(events: number, due: number, overdue: number) {
+  const parts: string[] = [];
+  if (overdue) parts.push(`${overdue} overdue`);
+  if (events) parts.push(`${events} event${events === 1 ? "" : "s"}`);
+  if (due) parts.push(`${due} due`);
+  if (parts.length === 0) return "Clear day";
+  return parts.join(" · ");
+}

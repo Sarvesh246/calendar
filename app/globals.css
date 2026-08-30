@@ -529,6 +529,16 @@ button, a, [role="button"], summary, input, textarea, select, label {
   color: var(--ink);
 }
 
+.cal-chip-task {
+  background: transparent;
+  border-style: dashed;
+}
+
+.cal-chip-overdue {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+}
+
 :root[data-preset="mono"] .cal-chip,
 :root[data-preset="mono"] .cat-surface {
   background: color-mix(in srgb, var(--ink) 5%, var(--surface));
@@ -605,18 +615,14 @@ a.press-none:active,
 @keyframes content-rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
 .page-shell > * > * {
-  animation: content-rise var(--motion-emphasis) var(--ease-standard) both;
-  /* The enter animation nudges content up 10px; clip so it can't expand the
-     scroll container on mobile. */
+  animation: content-rise var(--motion-standard) var(--ease-standard) both;
   backface-visibility: hidden;
 }
 .page-shell > * > *:nth-child(1) {

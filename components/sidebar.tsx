@@ -27,12 +27,9 @@ const NAV = [
   { href: "/agenda", label: "Agenda", icon: ListChecks },
 ];
 
-// The bottom nav adds Settings as a fourth destination.
-const MOBILE_NAV = [...NAV, { href: "/settings", label: "Settings", icon: Settings }];
-
 export function Sidebar() {
   const pathname = usePathname();
-  const mobileActiveIndex = MOBILE_NAV.findIndex((i) => i.href === pathname);
+  const mobileActiveIndex = NAV.findIndex((i) => i.href === pathname);
   const categories = useDatebookStore((s) => s.categories);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
@@ -135,13 +132,13 @@ export function Sidebar() {
             <motion.span
               aria-hidden
               className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
-              style={{ width: `calc((100% - 0.75rem) / ${MOBILE_NAV.length})` }}
+              style={{ width: `calc((100% - 0.75rem) / ${NAV.length})` }}
               initial={false}
               animate={{ x: `${mobileActiveIndex * 100}%` }}
               transition={{ type: "spring", stiffness: 420, damping: 34 }}
             />
           )}
-          {MOBILE_NAV.map((item) => {
+          {NAV.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (

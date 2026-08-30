@@ -40,32 +40,16 @@ export default function SettingsPage() {
   return (
     <div className="flex max-w-[640px] flex-col gap-10">
       <header>
-        <h1 className="font-display text-[28px] italic text-ink">Settings</h1>
-        <p className="mt-1 text-[13.5px] text-ink-soft">Make Datebook feel like yours.</p>
+        <h1 className="text-[26px] font-semibold tracking-tight text-ink">Settings</h1>
+        <p className="mt-1 text-[13px] text-ink-soft">Account, calendar, and how Datebook looks.</p>
       </header>
 
+      <p className="text-[12px] font-medium text-ink-faint">Account & data</p>
       <Section title="Account & sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
         <AccountSection />
       </Section>
 
-      <Section
-        title="Appearance"
-        sub="Pick a starting point — every color in the app derives from this."
-        collapsible
-        storageKey="appearance"
-      >
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          {presetOrder.map((preset) => (
-            <PresetCard
-              key={preset}
-              preset={preset}
-              active={settings.preset === preset}
-              onSelect={() => applyPreset(preset)}
-            />
-          ))}
-        </div>
-      </Section>
-
+      <p className="-mb-6 text-[12px] font-medium text-ink-faint">Calendar</p>
       <Section title="Layout & display">
         <Row label="Default view">
           <Segmented
@@ -117,6 +101,24 @@ export default function SettingsPage() {
         <Row label="Hide completed items" horizontal>
           <ToggleSwitch checked={settings.hideCompleted} onChange={(v) => updateSettings({ hideCompleted: v })} label="Hide completed" />
         </Row>
+      </Section>
+
+      <Section
+        title="Appearance"
+        sub="Optional. Datebook is designed around Minimal — other looks only recolor surfaces."
+        collapsible
+        storageKey="appearance"
+      >
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {presetOrder.map((preset) => (
+            <PresetCard
+              key={preset}
+              preset={preset}
+              active={settings.preset === preset}
+              onSelect={() => applyPreset(preset)}
+            />
+          ))}
+        </div>
       </Section>
 
       <Section title="Categories" sub="Each category's color drives its cards, chips, and calendar dots.">
@@ -337,9 +339,10 @@ function Section({
   const [open, setOpen] = useState(() => {
     if (!collapsible || !key) return true;
     try {
+      if (storageKey === "appearance") return localStorage.getItem(key) === "1";
       return localStorage.getItem(key) !== "0";
     } catch {
-      return true;
+      return storageKey !== "appearance";
     }
   });
 

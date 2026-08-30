@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Bell, Sparkles, Tag } from "lucide-react";
+import { ArrowUp, Bell, Plus, Sparkles, Tag, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
@@ -14,11 +14,12 @@ import { formatTime } from "@/lib/date-utils";
 import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Phase = "idle" | "preview";
+type Phase = "idle" | "preview" | "ask";
 
-export function QuickAddBar() {
+export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const categories = useDatebookStore((s) => s.categories);
   const addItem = useDatebookStore((s) => s.addItem);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -30,8 +31,8 @@ export function QuickAddBar() {
   const setDateKey = useUIStore((s) => s.setQuickAddDateKey);
   const timeHint = useUIStore((s) => s.quickAddTime);
   const setTimeHint = useUIStore((s) => s.setQuickAddTime);
-  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const askAI = useUIStore((s) => s.askAI);
+  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
 
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -55,8 +56,7 @@ export function QuickAddBar() {
     const trimmed = text.trim();
     if (!trimmed || phase !== "idle") return;
     if (shouldAskAssistant(trimmed)) {
-      askAI(trimmed);
-      reset();
+      setPhase("ask");
       return;
     }
     const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
@@ -99,12 +99,25 @@ export function QuickAddBar() {
     reset();
   }
 
+  function addAnyway() {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
+    const result = parseQuickAdd(text, categories, {
+      ...(anchor ? { anchor } : {}),
+      ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
+    });
+    setParsed(result);
+    setPhase("preview");
+  }
+
   function reset() {
     setText("");
     setParsed(null);
     setPhase("idle");
     setDateKey(null);
     setTimeHint(null);
+    setQuickAddOpen(false);
   }
 
   const category = categories.find((c) => c.id === parsed?.categoryId);
@@ -117,40 +130,69 @@ export function QuickAddBar() {
   return (
     <div className="relative w-full">
       <div className="glass flex items-center gap-2.5 rounded-xl px-4 py-3">
-        <Sparkles className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+        <Plus className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
         <input
           ref={inputRef}
           value={text}
           disabled={phase !== "idle"}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+            if (e.key === "Escape") reset();
+          }}
           enterKeyHint="go"
           autoComplete="off"
           autoCorrect="off"
-          placeholder={dateKey ? `Add something on ${dateKey}…` : "Add or ask anything…"}
+          placeholder={dateKey ? `Add something on ${dateKey}…` : "Assignment, class, or task…"}
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
-        <button
-          type="button"
-          onClick={() => setAIDrawerOpen(true)}
-          aria-label="Ask AI"
-          className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink sm:px-2 sm:py-1"
-        >
-          <Sparkles className="h-3.5 w-3.5 sm:hidden" strokeWidth={1.9} />
-          <span className="hidden sm:inline">Ask AI</span>
-        </button>
+        {!embedded && (
+          <Button variant="tertiary" size="iconSm" onClick={reset} aria-label="Close">
+            <X className="h-4 w-4" strokeWidth={2} />
+          </Button>
+        )}
         <button
           type="button"
           onClick={submit}
           disabled={!text.trim() || phase !== "idle"}
           aria-label="Add"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30 sm:h-7 sm:w-7"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30"
         >
           <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
         </button>
       </div>
 
       <AnimatePresence>
+        {phase === "ask" && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-xl p-4"
+          >
+            <p className="text-[13px] text-ink-soft">This looks like a question, not something to add.</p>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <Button variant="tertiary" size="sm" onClick={reset}>
+                Cancel
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addAnyway}>
+                Add as item
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  askAI(text.trim());
+                  reset();
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
+                Ask AI instead
+              </Button>
+            </div>
+          </motion.div>
+        )}
         {phase === "preview" && parsed && (
           <motion.div
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
@@ -186,20 +228,12 @@ export function QuickAddBar() {
               )}
             </div>
             <div className="mt-3.5 flex justify-end gap-2">
-              <button
-                onClick={reset}
-                className="min-h-11 rounded-lg px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken"
-              >
+              <Button variant="tertiary" size="sm" onClick={reset}>
                 Cancel
-              </button>
-              <button
-                onClick={confirm}
-                className={cn(
-                  "min-h-11 rounded-lg bg-accent px-4 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90"
-                )}
-              >
+              </Button>
+              <Button variant="primary" size="sm" onClick={confirm} className={cn()}>
                 Add
-              </button>
+              </Button>
             </div>
           </motion.div>
         )}
