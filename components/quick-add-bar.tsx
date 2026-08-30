@@ -36,6 +36,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
 
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
+  const [focused, setFocused] = useState(false);
   const [parsed, setParsed] = useState<ParsedQuickAdd | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -129,12 +130,31 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="relative w-full">
-      <div className="glass flex items-center gap-2.5 rounded-xl px-4 py-3">
-        <Plus className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+      <div
+        className={cn(
+          "glass flex items-center gap-2.5 rounded-xl px-4 py-3",
+          "transition-[box-shadow,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+          focused && "border-accent/50 shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_14%,transparent),var(--shadow-lg)]"
+        )}
+      >
+        <motion.span
+          // The glyph tints and grows on focus — a small confirmation that the
+          // app is listening, in the one place people type most.
+          animate={{ scale: focused ? 1.12 : 1 }}
+          transition={motionTokens.springSnappy}
+          className={cn(
+            "shrink-0 transition-colors duration-[var(--motion-standard)]",
+            focused ? "text-accent" : "text-ink-faint"
+          )}
+        >
+          <Plus className="h-4 w-4" strokeWidth={1.75} />
+        </motion.span>
         <input
           ref={inputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
             if (e.key === "Escape") reset();
@@ -155,9 +175,15 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
           onClick={submit}
           disabled={!text.trim() || phase !== "idle"}
           aria-label="Add"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30"
+          className="press-none flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity duration-[var(--motion-standard)] hover:opacity-90 disabled:opacity-30"
         >
-          <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+          <motion.span
+            initial={false}
+            animate={{ scale: text.trim() && phase === "idle" ? 1 : 0.86 }}
+            transition={motionTokens.springSnappy}
+          >
+            <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+          </motion.span>
         </button>
       </div>
 
@@ -194,10 +220,11 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         )}
         {phase === "preview" && parsed && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+            transition={motionTokens.spring}
+            style={{ transformOrigin: "top center" }}
             className="glass absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-xl p-4"
           >
             <p className="text-[15px] font-semibold text-ink">{parsed.title}</p>

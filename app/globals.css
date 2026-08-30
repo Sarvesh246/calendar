@@ -316,13 +316,20 @@
   color-scheme: light;
 }
 
-/* Motion + radius scale, referenced directly (not via @theme) */
+/* Motion + radius scale, referenced directly (not via @theme).
+   These mirror lib/motion.ts one-for-one — change both together. */
 :root {
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
   --motion-micro: 120ms;
-  --motion-standard: 200ms;
-  --motion-emphasis: 350ms;
+  --motion-standard: 220ms;
+  --motion-emphasis: 340ms;
+  --motion-exit: 160ms;
+  /* Decelerating — for things arriving. */
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Accelerating — for things leaving. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* Symmetric — for colour and cross-fades. */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   /* Height the on-screen keyboard is currently covering, published by
      useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
   --keyboard-inset: 0px;
@@ -587,26 +594,69 @@ button, a, [role="button"], summary, input, textarea, select, label {
 /* Interaction feedback + page-load choreography                          */
 /* ---------------------------------------------------------------------- */
 
-/* Buttons and button-like controls get a quick, tactile depress on press. */
+/* Buttons and button-like controls get a quick, tactile depress on press.
+   `a` is in the transition list too — without it a link snapped to the pressed
+   scale and snapped back with no easing at all, which was the single most
+   noticeable piece of jank in the app. */
 button,
+a,
 [role="button"],
-summary {
+summary,
+label {
   transition-property: transform, color, background-color, border-color, opacity, box-shadow;
   transition-duration: var(--motion-micro);
   transition-timing-function: var(--ease-standard);
 }
 
+/* Release is the half you actually watch, so let it ease back a touch slower
+   than it went down. */
 button:not(:disabled):active,
 a:not([aria-disabled="true"]):active,
 [role="button"]:not([aria-disabled="true"]):active,
 summary:active {
   transform: scale(0.97);
+  transition-duration: 80ms;
 }
 
 button.press-none:active,
 a.press-none:active,
 [role="button"].press-none:active {
   transform: none;
+}
+
+/* Large surfaces — cards, day cells, list rows. A 3% squeeze on something the
+   width of the screen looks like a glitch; these get a whisper of scale plus a
+   real depth cue instead. */
+.press-surface {
+  transition-property: transform, background-color, border-color, box-shadow, opacity;
+  transition-duration: var(--motion-standard);
+  transition-timing-function: var(--ease-standard);
+}
+
+.press-surface:active {
+  transform: scale(0.988);
+  box-shadow: none;
+  transition-duration: 90ms;
+}
+
+/* Hover raises the card. Deliberately *not* `border-color`: these surfaces carry
+   meaning in their border — the category tint on an event, the warn edge on an
+   overdue row — and a `.press-surface:hover` colour rule outranks the utility
+   class that painted it, so hovering an overdue item silently erased its
+   warning stripe. Elevation says "interactive" without spending the border. */
+@media (hover: hover) {
+  .press-surface:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Icon-only affordances that should feel like real buttons under a cursor. */
+  .hover-lift:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.hover-lift:active {
+  transform: translateY(0) scale(0.96);
 }
 
 /* Each freshly navigated page reveals its sections with a light upward stagger.
@@ -625,26 +675,28 @@ a.press-none:active,
   animation: content-rise var(--motion-standard) var(--ease-standard) both;
   backface-visibility: hidden;
 }
+/* Delays tighten as they go: the first few sections carry the sense of a
+   deliberate reveal, the rest catch up so the page never feels slow to settle. */
 .page-shell > * > *:nth-child(1) {
-  animation-delay: 20ms;
+  animation-delay: 0ms;
 }
 .page-shell > * > *:nth-child(2) {
-  animation-delay: 65ms;
+  animation-delay: 40ms;
 }
 .page-shell > * > *:nth-child(3) {
-  animation-delay: 110ms;
+  animation-delay: 75ms;
 }
 .page-shell > * > *:nth-child(4) {
-  animation-delay: 150ms;
+  animation-delay: 105ms;
 }
 .page-shell > * > *:nth-child(5) {
-  animation-delay: 185ms;
+  animation-delay: 130ms;
 }
 .page-shell > * > *:nth-child(6) {
-  animation-delay: 215ms;
+  animation-delay: 150ms;
 }
 .page-shell > * > *:nth-child(n + 7) {
-  animation-delay: 240ms;
+  animation-delay: 165ms;
 }
 
 /* Assistant sheet + backdrop — pure CSS enter/exit so visibility never rides on
@@ -661,4 +713,151 @@ a.press-none:active,
 }
 @keyframes overlay-out {
   to { opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Command palette (cmdk over Radix Dialog)                               */
+/* ---------------------------------------------------------------------- */
+
+/* cmdk had no enter or exit at all — the palette blinked in and blinked out.
+   Radix keeps the node mounted while a `data-state="closed"` animation is
+   running, so plain CSS keyframes give us a real exit with no JS presence
+   wrapper. The dialog is `-translate-x-1/2` centred, so the keyframes have to
+   restate that translate or the panel jumps half its width on open. */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+@keyframes palette-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.98);
+  }
+}
+
+.palette-panel[data-state="open"] {
+  animation: palette-in var(--motion-standard) var(--ease-standard);
+}
+.palette-panel[data-state="closed"] {
+  animation: palette-out var(--motion-exit) var(--ease-in) forwards;
+}
+.palette-overlay[data-state="open"] {
+  animation: overlay-in var(--motion-standard) var(--ease-standard);
+}
+.palette-overlay[data-state="closed"] {
+  animation: overlay-out var(--motion-exit) var(--ease-in) forwards;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Small named motions                                                    */
+/* ---------------------------------------------------------------------- */
+
+/* Assistant "thinking" — a travelling wave rather than three synchronised
+   pulses, which read as a stalled spinner. */
+@keyframes thinking-bounce {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  35% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.thinking-dot {
+  animation: thinking-bounce 1.15s var(--ease-in-out) infinite;
+}
+
+/* The undo toast's remaining time, drawn rather than guessed at. */
+@keyframes toast-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.toast-drain {
+  transform-origin: left center;
+  animation: toast-drain linear forwards;
+}
+
+/* A completed item gets one quiet acknowledgement, not a confetti burst. */
+@keyframes complete-ripple {
+  from {
+    opacity: 0.5;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+.complete-ripple {
+  animation: complete-ripple 520ms var(--ease-standard) forwards;
+}
+
+/* Live "happening now" marker. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.live-dot {
+  animation: live-pulse 2s var(--ease-in-out) infinite;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reduced motion                                                         */
+/* ---------------------------------------------------------------------- */
+
+/* The blanket rule near the top of this file collapses durations to ~0, which
+   covers transitions. These are the cases that also need their *end state*
+   forced, because a 0.01ms `both`/`forwards` animation still holds whatever the
+   last keyframe says. */
+@media (prefers-reduced-motion: reduce) {
+  .page-shell > * > *,
+  .thinking-dot,
+  .toast-drain,
+  .complete-ripple,
+  .live-dot,
+  .status-doing-ring {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .palette-panel[data-state="open"],
+  .palette-panel[data-state="closed"] {
+    animation: none !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .press-surface:active,
+  .hover-lift:hover,
+  .hover-lift:active,
+  button:not(:disabled):active,
+  a:not([aria-disabled="true"]):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  summary:active {
+    transform: none;
+  }
 }

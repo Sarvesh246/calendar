@@ -2,13 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { useCategory } from "@/lib/store";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
+import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import type { Item } from "@/lib/types";
 
@@ -42,6 +43,14 @@ export function DaySheet({
   const headingId = useId();
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
+  const [dragging, setDragging] = useState(false);
+
+  // The sheet is keyed stably in the calendar page (so picking a second day
+  // doesn't stack two sheets), which means this instance can be re-shown after a
+  // close. Re-arm the double-close guard whenever the day changes.
+  useEffect(() => {
+    closeGuard.current = false;
+  }, [date]);
 
   useEffect(() => {
     if (!visible) return;
@@ -52,69 +61,96 @@ export function DaySheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, onClose]);
 
+  const close = () => {
+    if (closeGuard.current) return;
+    closeGuard.current = true;
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: motionTokens.standard }}
-        onClick={onClose}
+        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+        onClick={close}
         className="overlay-scrim absolute inset-0 backdrop-blur-[2px]"
       />
       <motion.div
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        initial={{ y: 28, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 28, opacity: 0 }}
-        transition={{ duration: motionTokens.emphasis, ease: motionTokens.ease }}
+        // A sheet is a physical object being thrown up from the bottom edge, so
+        // it arrives on a spring. The old tween made it glide in at a constant
+        // rate and stop dead, which is the classic "web modal" tell.
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+        transition={motionTokens.springGentle}
         drag="y"
         dragListener={false}
         dragControls={dragControls}
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.04, bottom: 0.55 }}
+        dragElastic={{ top: 0.02, bottom: 0.6 }}
+        // Without this, releasing a drag snapped back on framer's default
+        // underdamped spring and the sheet bounced twice before settling.
+        dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
+        onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
-          if (info.offset.y > 88 || info.velocity.y > 700) onClose();
+          setDragging(false);
+          if (info.offset.y > 88 || info.velocity.y > 700) {
+            haptic("light");
+            close();
+          }
         }}
         className="glass absolute inset-x-0 bottom-0 flex max-h-[min(78dvh,640px)] flex-col rounded-t-2xl pb-[max(env(safe-area-inset-bottom),0.75rem)]"
       >
         <div
-          className="flex shrink-0 cursor-grab flex-col items-center pt-2 active:cursor-grabbing"
+          className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
           onPointerDown={(e) => dragControls.start(e)}
         >
-          <span aria-hidden className="h-1 w-10 rounded-full bg-line-strong" />
+          {/* The grab handle thickens while you hold it — the only feedback that
+              the drag has actually been picked up. */}
+          <motion.span
+            aria-hidden
+            animate={{ scaleX: dragging ? 1.25 : 1, opacity: dragging ? 1 : 0.75 }}
+            transition={motionTokens.springSnappy}
+            className="h-1 w-10 rounded-full bg-line-strong"
+          />
           <div className="flex w-full items-start justify-between gap-3 px-4 pb-2 pt-3">
             <div className="min-w-0">
-              <p id={headingId} className="text-[15px] font-semibold text-ink">{label}</p>
-              {showDate && (
-                <p className="mt-0.5 text-[12.5px] text-ink-faint">{format(date, "EEEE, MMMM d")}</p>
-              )}
+              <p id={headingId} className="text-[16px] font-semibold text-ink">
+                {label}
+              </p>
+              <p className="mt-0.5 text-[12.5px] text-ink-faint">
+                {showDate
+                  ? format(date, "EEEE, MMMM d")
+                  : `${items.length} thing${items.length === 1 ? "" : "s"} scheduled`}
+              </p>
             </div>
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                if (closeGuard.current) return;
-                closeGuard.current = true;
-                onClose();
+                close();
               }}
               aria-label="Close"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-soft"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-soft transition-colors hover:text-ink"
             >
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-3">
           {onAdd && (
             <button
               type="button"
               onClick={onAdd}
-              className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft"
+              className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft transition-colors active:border-accent active:bg-accent-soft active:text-accent"
             >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
               Add to this day
             </button>
           )}

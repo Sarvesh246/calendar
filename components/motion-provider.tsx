@@ -1,7 +1,7 @@
 "use client";
 
 import { MotionConfig } from "framer-motion";
-import { motion as motionTokens } from "@/lib/motion";
+import { tween } from "@/lib/motion";
 
 /**
  * `reducedMotion="user"` makes every Framer Motion animation honour the OS
@@ -13,7 +13,7 @@ export function MotionProvider({ children }: { children: React.ReactNode }) {
   return (
     <MotionConfig
       reducedMotion="user"
-      transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+      transition={tween.standard}
     >
       {children}
     </MotionConfig>

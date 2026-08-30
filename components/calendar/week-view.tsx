@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { format, isToday, isSameDay, differenceInMinutes, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { groupItemsByDay, dayKey, dayLabel } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
+import { EmptyState } from "@/components/empty-state";
+import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { assignOverlapColumns } from "@/lib/event-layout";
 import type { Item } from "@/lib/types";
@@ -159,7 +163,7 @@ export function WeekView({
                     aria-label={`Add at ${h}:00`}
                     onClick={() => onCreateAt?.(day, h, 0)}
                     style={{ height: HOUR_HEIGHT }}
-                    className="block w-full border-b border-line hover:bg-accent-soft/40"
+                    className="block w-full border-b border-line transition-colors duration-[var(--motion-micro)] hover:bg-accent-soft/50 active:bg-accent-soft"
                   />
                 ))}
                 {assignOverlapColumns(
@@ -176,7 +180,6 @@ export function WeekView({
                     };
                   })
                 ).map(({ item, startMin, durationMin, col, colCount }) => {
-                  const start = new Date(item.at);
                   const top = Math.max(0, (startMin / 60) * HOUR_HEIGHT);
                   const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
                   const color = colorOf(item.categoryId);
@@ -210,6 +213,16 @@ export function WeekView({
   );
 }
 
+/**
+ * A timed event block, draggable to reschedule.
+ *
+ * The drag used to hold its offset in React state, so every `pointermove` ran a
+ * full render of the block — and each move snapped the block to the raw pointer
+ * delta, not to the 15-minute grid it would actually land on. The transform is
+ * now written straight to the node (no React work per frame) and the preview
+ * snaps to the same increment as the commit, so what you see while dragging is
+ * exactly where it lands.
+ */
 function TimedBlock({
   item,
   top,
@@ -234,67 +247,90 @@ function TimedBlock({
   onReschedule?: (id: string, at: string, endAt?: string) => void;
 }) {
   const start = new Date(item.at);
-  const drag = useRef<{ y: number; moved: boolean } | null>(null);
-  const [dy, setDy] = useState(0);
+  const ref = useRef<HTMLButtonElement>(null);
+  const drag = useRef<{ y: number; moved: boolean; minutes: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   function snapMinutes(px: number) {
     const raw = (px / HOUR_HEIGHT) * 60;
     return Math.round(raw / 15) * 15;
   }
 
+  function paint(offsetPx: number) {
+    const el = ref.current;
+    if (el) el.style.transform = offsetPx ? `translate3d(0, ${offsetPx}px, 0)` : "";
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     if (!onReschedule) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { y: e.clientY, moved: false };
+    drag.current = { y: e.clientY, moved: false, minutes: 0 };
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (!drag.current) return;
-    const delta = e.clientY - drag.current.y;
-    if (Math.abs(delta) > 6) drag.current.moved = true;
-    setDy(delta);
+    const d = drag.current;
+    if (!d) return;
+    const delta = e.clientY - d.y;
+    if (!d.moved && Math.abs(delta) > 6) {
+      d.moved = true;
+      setDragging(true);
+      haptic("light");
+    }
+    if (!d.moved) return;
+    d.minutes = snapMinutes(delta);
+    paint((d.minutes / 60) * HOUR_HEIGHT);
+  }
+
+  function reset() {
+    drag.current = null;
+    setDragging(false);
+    paint(0);
   }
 
   function onPointerUp() {
     const d = drag.current;
-    drag.current = null;
-    const minutes = snapMinutes(dy);
-    setDy(0);
+    reset();
     if (!d) return;
     if (!d.moved) {
       onSelect();
       return;
     }
-    if (!onReschedule || minutes === 0) return;
-    const nextStart = new Date(start.getTime() + minutes * 60_000);
+    if (!onReschedule || d.minutes === 0) return;
+    haptic("success");
+    const nextStart = new Date(start.getTime() + d.minutes * 60_000);
     const nextEnd = item.endAt
-      ? new Date(new Date(item.endAt).getTime() + minutes * 60_000).toISOString()
+      ? new Date(new Date(item.endAt).getTime() + d.minutes * 60_000).toISOString()
       : undefined;
     onReschedule(item.id, nextStart.toISOString(), nextEnd);
   }
 
   return (
     <button
+      ref={ref}
       type="button"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => {
-        drag.current = null;
-        setDy(0);
-      }}
+      onPointerCancel={reset}
       onClick={(e) => {
         if (drag.current?.moved) e.preventDefault();
       }}
       style={{
-        top: top + dy,
+        top,
         height,
         left: `calc(${col * widthPct}% + 4px)`,
         width: `calc(${widthPct}% - 8px)`,
         background: `color-mix(in srgb, ${color} 14%, var(--surface))`,
         borderLeft: `2.5px solid ${color}`,
+        // A block being dragged lifts off the grid and rises above its
+        // neighbours; the shadow transition is dropped mid-drag so nothing
+        // lags behind the pointer.
+        boxShadow: dragging ? "var(--shadow-lg)" : undefined,
+        transition: dragging ? "none" : "box-shadow var(--motion-standard) var(--ease-standard)",
+        zIndex: dragging ? 3 : 1,
+        touchAction: "none",
       }}
-      className="absolute z-[1] cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight active:cursor-grabbing"
+      className="press-none absolute cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight active:cursor-grabbing"
     >
       <p className="truncate font-medium" style={{ color }}>
         {item.title}
@@ -349,9 +385,7 @@ function MobileWeekPager({
                 <p className="text-[12.5px] text-ink-faint">{format(day, "MMM d")}</p>
               </div>
               {dayItems.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[13px] text-ink-faint">
-                  Nothing scheduled.
-                </p>
+                <EmptyState title="Nothing scheduled." sub="A free day — enjoy it." />
               ) : (
                 <div className="flex flex-col gap-2">
                   {dayItems.map((item) => (
@@ -365,12 +399,17 @@ function MobileWeekPager({
       </div>
       <div className="mt-3 flex justify-center gap-1.5">
         {days.map((day, i) => (
-          <span
+          <motion.span
             key={day.toISOString()}
             aria-hidden
+            // `transition-all` put width and colour on one curve; the pill now
+            // widens on a spring while the colour crossfades on its own timing.
+            initial={false}
+            animate={{ width: i === page ? 16 : 6 }}
+            transition={motionTokens.spring}
             className={cn(
-              "h-1.5 rounded-full transition-all",
-              i === page ? "w-4 bg-accent" : "w-1.5 bg-line-strong"
+              "h-1.5 rounded-full transition-colors duration-[var(--motion-standard)]",
+              i === page ? "bg-accent" : "bg-line-strong"
             )}
           />
         ))}
