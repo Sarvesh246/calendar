@@ -142,7 +142,14 @@ export default function CalendarPage() {
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
         className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row"
       >
-        <div className={cn("min-h-0", mode === "month" ? "h-[min(52vh,440px)] lg:h-auto lg:flex-1" : "lg:flex-1")}>
+        <div
+          className={cn(
+            "min-h-0",
+            mode === "month"
+              ? "h-[min(52vh,440px)] lg:h-full lg:min-h-[28rem] lg:flex-1"
+              : "lg:h-full lg:flex-1"
+          )}
+        >
           {mode === "month" ? (
             <MonthView
               anchor={anchor}

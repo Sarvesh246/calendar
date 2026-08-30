@@ -1,3 +1,4 @@
+import { addDays, startOfDay } from "date-fns";
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "./quick-add-parser";
 
@@ -21,6 +22,16 @@ describe("parseQuickAdd", () => {
     const r = parseQuickAdd("lab 2-3pm tomorrow", cats);
     expect(r.at.getHours()).toBe(14);
     expect(r.endAt?.getHours()).toBe(15);
+  });
+
+  it("parses yesterday as the previous local day", () => {
+    const r = parseQuickAdd("lab report yesterday 11:59pm", cats);
+    expect(r.confidence.date).toBe(true);
+    const y = addDays(startOfDay(new Date()), -1);
+    expect(r.at.getFullYear()).toBe(y.getFullYear());
+    expect(r.at.getMonth()).toBe(y.getMonth());
+    expect(r.at.getDate()).toBe(y.getDate());
+    expect(r.type).toBe("assignment");
   });
 
   it("parses all day", () => {
