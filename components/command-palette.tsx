@@ -76,8 +76,12 @@ export function CommandPalette() {
       open={open}
       onOpenChange={setOpen}
       label="Command palette"
-      overlayClassName="overlay-scrim-light fixed inset-0 z-50 backdrop-blur-[2px]"
-      className="glass fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-xl"
+      // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see
+      // globals.css). cmdk renders through Radix Dialog, which keeps the node
+      // mounted while a `data-state="closed"` animation runs — so the palette
+      // now closes on screen instead of blinking out.
+      overlayClassName="palette-overlay overlay-scrim-light fixed inset-0 z-50 backdrop-blur-[2px]"
+      className="palette-panel glass fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-xl"
       style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
     >
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
@@ -87,9 +91,6 @@ export function CommandPalette() {
           placeholder="Search Datebook…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
-        <kbd className="hidden rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-faint sm:inline">
-          esc
-        </kbd>
       </div>
 
       <Command.List
@@ -137,15 +138,6 @@ export function CommandPalette() {
           </Command.Item>
         </Command.Group>
 
-        <Command.Group heading="Shortcuts" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          <Command.Item disabled className="cmdk-row min-h-9 text-ink-faint">
-            ⌘K · search
-          </Command.Item>
-          <Command.Item disabled className="cmdk-row min-h-9 text-ink-faint">
-            Esc · close / exit focus
-          </Command.Item>
-        </Command.Group>
-
         {items.length > 0 && (
           <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
             {[...items]
@@ -171,6 +163,32 @@ export function CommandPalette() {
           </Command.Group>
         )}
       </Command.List>
+
+      {/* A legend, not results. As disabled `Command.Item`s these sat inside the
+          filtered list, so typing left two permanently unselectable rows behind. */}
+      <div className="hidden items-center gap-4 border-t border-line px-4 py-2 text-[11px] text-ink-faint sm:flex">
+        <span className="flex items-center gap-1.5">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd>
+          to navigate
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Kbd>↵</Kbd>
+          to select
+        </span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <Kbd>esc</Kbd>
+          to close
+        </span>
+      </div>
     </Command.Dialog>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex min-w-[1.4em] items-center justify-center rounded border border-line bg-surface-sunken px-1 py-0.5 font-mono text-[10px] leading-none text-ink-soft">
+      {children}
+    </kbd>
   );
 }

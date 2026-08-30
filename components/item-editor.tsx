@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlignLeft, Bell, CalendarClock, Check, ExternalLink, MapPin, Repeat, Tag, Trash2 } from "lucide-react";
+import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, ExternalLink, MapPin, Repeat, Shapes, Tag, Trash2, Type } from "lucide-react";
+import { motion } from "framer-motion";
+import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import {
   datetimeLocalToIso,
@@ -47,13 +49,20 @@ function DetailRow({
 }
 
 const FIELD =
-  "mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink focus:border-accent focus:outline-none";
+  "mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
+  // A focus ring that grows rather than snapping on — `box-shadow` animates
+  // where `border-width` does not, so the border colour and the ring move
+  // together on one timing.
+  "transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] " +
+  "hover:border-line-strong focus:border-accent focus:bg-surface-elevated focus:outline-none " +
+  "focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]";
 
 export function ItemEditor({
   item,
   category,
   clock24h,
   StatusSegmented,
+  onCollapse,
 }: {
   item: Item;
   category: Category | undefined;
@@ -63,6 +72,8 @@ export function ItemEditor({
     onChange: (status: ItemStatus) => void;
     layoutScope: string;
   }) => React.ReactNode;
+  /** Close the card this editor is expanded inside. */
+  onCollapse?: () => void;
 }) {
   const updateItem = useDatebookStore((s) => s.updateItem);
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
@@ -115,7 +126,7 @@ export function ItemEditor({
         </p>
       )}
 
-      <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
+      <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -151,14 +162,7 @@ export function ItemEditor({
           <span> · </span>
           {timeLabel}
         </p>
-        <label className="mb-1.5 flex items-center gap-2 text-[12.5px] text-ink">
-          <input
-            type="checkbox"
-            checked={Boolean(item.allDay)}
-            onChange={(e) => patch({ allDay: e.target.checked })}
-          />
-          All day
-        </label>
+        <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
         {item.allDay ? (
           <input
             type="date"
@@ -199,7 +203,7 @@ export function ItemEditor({
         )}
       </DetailRow>
 
-      <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Type">
+      <DetailRow icon={<Shapes className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Type">
         <select
           value={item.type}
           onChange={(e) => {
@@ -246,13 +250,29 @@ export function ItemEditor({
               <button
                 key={rp.id}
                 type="button"
-                onClick={() => toggleReminder(rp)}
+                onClick={() => {
+                  haptic("light");
+                  toggleReminder(rp);
+                }}
+                aria-pressed={active}
                 className={cn(
-                  "rounded-md border px-2.5 py-1.5 text-left text-[12.5px]",
-                  active ? "border-accent/40 bg-accent-soft text-ink" : "border-line text-ink-soft"
+                  "flex min-h-9 items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-left text-[12.5px]",
+                  "transition-[background-color,border-color,color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+                  active
+                    ? "border-accent/40 bg-accent-soft text-ink"
+                    : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
                 )}
               >
                 {rp.label}
+                <motion.span
+                  aria-hidden
+                  initial={false}
+                  animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
+                  transition={motionTokens.springSnappy}
+                  className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+                >
+                  <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
+                </motion.span>
               </button>
             );
           })}
@@ -341,21 +361,71 @@ export function ItemEditor({
         </a>
       )}
 
-      <ItemActions item={item} />
+      <ItemActions item={item} onCollapse={onCollapse} />
     </div>
   );
 }
 
-function ItemActions({ item }: { item: Item }) {
+/**
+ * A real switch for "All day". The raw `<input type="checkbox">` here was the
+ * only unstyled control in the app and gave a ~13px target on touch.
+ */
+function AllDayToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => {
+        haptic("light");
+        onChange(!checked);
+      }}
+      className="press-none mb-1.5 flex min-h-9 items-center gap-2 text-[12.5px] text-ink"
+    >
+      <span
+        className={cn(
+          "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border",
+          "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+          checked ? "border-accent bg-accent" : "border-line-strong bg-surface"
+        )}
+      >
+        <motion.span
+          initial={false}
+          animate={{ scale: checked ? 1 : 0, opacity: checked ? 1 : 0 }}
+          transition={motionTokens.springSnappy}
+        >
+          <Check className="h-3 w-3 text-accent-ink" strokeWidth={3} />
+        </motion.span>
+      </span>
+      All day
+    </button>
+  );
+}
+
+function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void }) {
   const deleteItem = useDatebookStore((s) => s.deleteItem);
   const deleteSeries = useDatebookStore((s) => s.deleteSeries);
   const [confirm, setConfirm] = useState(false);
 
+  // Leaving the confirm row armed after the editor closes means the next open
+  // starts on "Delete this?", one stray tap from losing the item.
+  useEffect(() => {
+    if (!confirm) return;
+    const t = window.setTimeout(() => setConfirm(false), 6000);
+    return () => window.clearTimeout(t);
+  }, [confirm]);
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <motion.div layout="position" transition={motionTokens.springLayout} className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
       {confirm ? (
         <>
-          <span className="text-[12.5px] text-warn">Delete this?</span>
+          <span className="text-[12.5px] font-medium text-warn">Delete this?</span>
           <button
             type="button"
             onClick={() => {
@@ -387,15 +457,27 @@ function ItemActions({ item }: { item: Item }) {
           </button>
         </>
       ) : (
-        <button
-          type="button"
-          onClick={() => setConfirm(true)}
-          className="ml-auto flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-warn"
-        >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-          Delete
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setConfirm(true)}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-warn transition-colors hover:bg-warn/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+            Delete
+          </button>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="ml-auto flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
+            >
+              <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+              Close
+            </button>
+          )}
+        </>
       )}
-    </div>
+    </motion.div>
   );
 }

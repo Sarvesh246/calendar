@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { isSameDay, isToday, format } from "date-fns";
+import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { monthGrid, groupItemsByDay, dayKey, isOverdue, openItemsOnDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
@@ -91,11 +94,15 @@ function DayCellChips({
         const done = item.type !== "event" && item.status === "done";
         const task = item.type !== "event";
         return (
-          <span
+          <motion.span
             key={item.id}
+            layout="position"
+            initial={{ opacity: 0, y: -2 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
             title={item.title}
             className={cn(
-              "cal-chip shrink-0 truncate px-1.5 py-[2px] text-[11px] font-medium leading-tight",
+              "cal-chip shrink-0 truncate rounded-[5px] px-1.5 py-[2px] text-[11px] font-medium leading-tight",
               task && "cal-chip-task",
               done && "opacity-45",
               isOverdue(item) && "cal-chip-overdue"
@@ -103,7 +110,7 @@ function DayCellChips({
             style={{ "--cat": color } as React.CSSProperties}
           >
             {chipLabel(item)}
-          </span>
+          </motion.span>
         );
       })}
       {hiddenOpen > 0 && (
@@ -195,7 +202,10 @@ export function MonthView({
           return (
             <button
               key={date.toISOString()}
-              onClick={() => onSelectDate(date)}
+              onClick={() => {
+                haptic("light");
+                onSelectDate(date);
+              }}
               aria-pressed={selected ?? false}
               aria-label={
                 `${format(date, "EEEE, MMMM d")}` +
@@ -213,15 +223,32 @@ export function MonthView({
                   : undefined
               }
               className={cn(
-                "press-none flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center transition-colors sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
-                today ? "border-accent/40" : "border-transparent hover:border-line",
-                selected && "ring-2 ring-inset ring-accent",
+                "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
+                "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+                // A day cell is far too wide for the global press-scale, but with
+                // `press-none` it had no press feedback at all — tapping a day
+                // felt like tapping dead space until the sheet arrived.
+                "active:bg-surface-sunken",
+                today ? "border-accent/40" : "border-transparent hover:border-line hover:bg-surface-sunken/60",
                 !inMonth && "opacity-70"
               )}
             >
+              {/* One selection ring shared across the grid, so moving between
+                  days slides the highlight instead of blinking it from cell to
+                  cell. */}
+              {selected && (
+                <motion.span
+                  layoutId="month-selected-day"
+                  aria-hidden
+                  transition={motionTokens.spring}
+                  className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-accent"
+                />
+              )}
               <span
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
+                  "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
+                  "transition-colors duration-[var(--motion-standard)]",
+                  "sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
                   today
                     ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
                     : inMonth

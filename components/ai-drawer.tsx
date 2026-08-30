@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
+import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
@@ -230,7 +232,13 @@ export function AIDrawer() {
 
           <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3.5">
             {messages.map((m, mi) => (
-              <div key={mi} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <motion.div
+                key={mi}
+                initial={{ opacity: 0, y: 8, x: m.role === "user" ? 8 : -8 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                transition={motionTokens.spring}
+                className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
+              >
                 <div
                   className={
                     m.role === "user"
@@ -260,9 +268,14 @@ export function AIDrawer() {
                       <div key={ai} className="rounded-lg border border-line bg-surface-sunken p-2.5">
                         <p className="text-[12px] text-ink-soft">{action.summary}</p>
                         {state === "applied" ? (
-                          <p className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-good">
+                          <motion.p
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={motionTokens.springSnappy}
+                            className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-good"
+                          >
                             <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Done
-                          </p>
+                          </motion.p>
                         ) : state === "dismissed" ? (
                           <p className="mt-1.5 text-[12px] text-ink-faint">Dismissed</p>
                         ) : (
@@ -295,7 +308,7 @@ export function AIDrawer() {
                         <button
                           key={s}
                           onClick={() => ask(s)}
-                          className="rounded-full border border-line px-2.5 py-1 text-[11.5px] text-ink-soft transition-colors hover:border-accent hover:text-accent"
+                          className="rounded-full border border-line px-3 py-1.5 text-[11.5px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
                         >
                           {s}
                         </button>
@@ -303,23 +316,32 @@ export function AIDrawer() {
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             ))}
 
-            {thinking && (
-              <div className="flex items-center gap-2 px-1">
-                <div className="flex items-center gap-1">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-duration:1s]"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </div>
-                {slow && <span className="text-[11px] text-ink-faint">Still working…</span>}
-              </div>
-            )}
+            <AnimatePresence initial={false}>
+              {thinking && (
+                <motion.div
+                  key="thinking"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+                  className="flex items-center gap-2 px-1"
+                >
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className="thinking-dot h-1.5 w-1.5 rounded-full bg-ink-faint"
+                        style={{ animationDelay: `${i * 0.14}s` }}
+                      />
+                    ))}
+                  </div>
+                  {slow && <span className="text-[11px] text-ink-faint">Still working…</span>}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="border-t border-line p-2.5">
@@ -349,9 +371,17 @@ export function AIDrawer() {
                 onClick={() => ask(input)}
                 disabled={!input.trim()}
                 aria-label="Send"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30"
               >
-                <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
+                <motion.span
+                  // The arrow lifts as soon as the field has something to send,
+                  // so the button stops looking permanently disabled.
+                  initial={false}
+                  animate={{ y: input.trim() ? -1 : 0 }}
+                  transition={motionTokens.springSnappy}
+                >
+                  <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
+                </motion.span>
               </button>
             </div>
           </div>

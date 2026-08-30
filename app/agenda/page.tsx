@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -108,9 +109,11 @@ export default function AgendaPage() {
             Overdue · {overdue.length}
           </p>
           <div className="flex flex-col gap-2">
-            {overdue.map((item) => (
-              <ItemRow key={item.id} item={item} />
-            ))}
+            <AnimatePresence initial={false}>
+              {overdue.map((item) => (
+                <ItemRow key={item.id} item={item} />
+              ))}
+            </AnimatePresence>
           </div>
         </section>
       )}
@@ -141,9 +144,11 @@ export default function AgendaPage() {
             )}
           </p>
           <div className="flex flex-col gap-2">
-            {group.items.map((item) => (
-              <ItemRow key={item.id} item={item} />
-            ))}
+            <AnimatePresence initial={false}>
+              {group.items.map((item) => (
+                <ItemRow key={item.id} item={item} />
+              ))}
+            </AnimatePresence>
           </div>
         </section>
         );
@@ -155,9 +160,11 @@ export default function AgendaPage() {
             Later
           </p>
           <div className="flex flex-col gap-2">
-            {later.map((item) => (
-              <ItemRow key={item.id} item={item} />
-            ))}
+            <AnimatePresence initial={false}>
+              {later.map((item) => (
+                <ItemRow key={item.id} item={item} />
+              ))}
+            </AnimatePresence>
           </div>
         </section>
       )}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
   Cloud,
@@ -19,6 +19,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
 import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -26,6 +27,30 @@ const NAV = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/agenda", label: "Agenda", icon: ListChecks },
 ];
+
+/**
+ * Labels in the collapsing rail. Previously these were `{!collapsed && label}`,
+ * so the text vanished in one frame and *then* the rail spent 200ms narrowing —
+ * two separate events for what should read as one. Fading and sliding them out
+ * on the same timing as the width makes it a single gesture.
+ */
+function RailLabel({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {!collapsed && (
+        <motion.span
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -6 }}
+          transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          className="truncate whitespace-nowrap"
+        >
+          {children}
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -39,17 +64,29 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop floating sidebar */}
-      <aside
-        className={cn(
-          "sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-sm)] transition-[width] duration-200 md:flex",
-          collapsed ? "w-[68px]" : "w-[220px]"
-        )}
+      <motion.aside
+        initial={false}
+        animate={{ width: collapsed ? 68 : 220 }}
+        transition={motionTokens.springLayout}
+        className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-sm)] md:flex"
       >
         <div className="flex items-center justify-between px-1 py-1.5">
-          {!collapsed && <span className="font-display text-[17px] italic text-ink">Datebook</span>}
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -6 }}
+                transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+                className="font-display whitespace-nowrap text-[17px] italic text-ink"
+              >
+                Datebook
+              </motion.span>
+            )}
+          </AnimatePresence>
           <button
             onClick={() => setSidebarCollapsed(!collapsed)}
-            className="ml-auto rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="hover-lift ml-auto rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -57,63 +94,78 @@ export function Sidebar() {
         </div>
 
         <nav className="mt-2 flex flex-col gap-0.5">
-          {NAV.map((item) => {
-            const active = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors",
-                  active ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                {!collapsed && item.label}
-              </Link>
-            );
-          })}
+          {NAV.map((item) => (
+            <RailLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              Icon={item.icon}
+              active={pathname === item.href}
+              collapsed={collapsed}
+            />
+          ))}
         </nav>
 
-        {!collapsed && (
-          <div className="mt-6 flex flex-col gap-0.5">
-            <p className="px-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-              Categories
-            </p>
-            {categories.filter((c) => !c.archived).map((cat) => {
-              const active = categoryFilter?.includes(cat.id) ?? false;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => toggleCategoryFilter(cat.id)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
-                    active ? "bg-surface-sunken text-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
-                  )}
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat.color }} />
-                  <span className="truncate">{cat.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: motionTokens.micro }}
+              className="mt-6 flex flex-col gap-0.5"
+            >
+              <p className="px-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                Categories
+              </p>
+              {categories
+                .filter((c) => !c.archived)
+                .map((cat) => {
+                  const active = categoryFilter?.includes(cat.id) ?? false;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => toggleCategoryFilter(cat.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "press-none group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px]",
+                        "transition-colors duration-[var(--motion-standard)]",
+                        active ? "bg-surface-sunken text-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+                      )}
+                    >
+                      {/* The dot doubles as the on/off indicator: filled and full
+                          size when the filter is on, hollow and small when off.
+                          Colour alone was doing that job and read as decoration. */}
+                      <motion.span
+                        aria-hidden
+                        initial={false}
+                        animate={{ scale: active ? 1 : 0.72 }}
+                        transition={motionTokens.springSnappy}
+                        className="h-2 w-2 shrink-0 rounded-full ring-2 ring-transparent transition-[box-shadow]"
+                        style={{
+                          background: cat.color,
+                          boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${cat.color} 22%, transparent)` : "none",
+                        }}
+                      />
+                      <span className="truncate">{cat.name}</span>
+                    </button>
+                  );
+                })}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="mt-auto flex flex-col gap-0.5">
           <SyncChip collapsed={collapsed} />
-          <Link
+          <RailLink
             href="/settings"
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors",
-              pathname === "/settings" ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
-            )}
-          >
-            <Settings className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-            {!collapsed && "Settings"}
-          </Link>
+            label="Settings"
+            Icon={Settings}
+            active={pathname === "/settings"}
+            collapsed={collapsed}
+          />
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Mobile bottom nav — SyncChip lives only in the desktop rail.
           The outer wrapper carries the iOS safe-area inset so the pill floats
@@ -147,13 +199,29 @@ export function Sidebar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => haptic("light")}
-                className="relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
+                className="press-none relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
               >
-                <Icon
-                  className={cn("h-5 w-5 transition-colors", active ? "text-accent" : "text-ink-faint")}
-                  strokeWidth={1.9}
-                />
-                <span className={cn("transition-colors", active ? "text-accent" : "text-ink-faint")}>
+                {/* The icon lifts a hair when its tab becomes active — enough to
+                    make the tap feel answered on top of the sliding pill. */}
+                <motion.span
+                  initial={false}
+                  animate={{ y: active ? -1 : 0, scale: active ? 1.06 : 1 }}
+                  transition={motionTokens.springSnappy}
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 transition-colors duration-[var(--motion-standard)]",
+                      active ? "text-accent" : "text-ink-faint"
+                    )}
+                    strokeWidth={1.9}
+                  />
+                </motion.span>
+                <span
+                  className={cn(
+                    "transition-colors duration-[var(--motion-standard)]",
+                    active ? "text-accent" : "text-ink-faint"
+                  )}
+                >
                   {item.label}
                 </span>
               </Link>
@@ -162,6 +230,52 @@ export function Sidebar() {
         </div>
       </nav>
     </>
+  );
+}
+
+/**
+ * A desktop rail destination. The active background is a shared `layoutId`
+ * element, so moving between pages slides one pill down the rail instead of
+ * cross-fading two blocks of colour — the same language the mobile bar already
+ * spoke, which the rail was missing.
+ */
+function RailLink({
+  href,
+  label,
+  Icon,
+  active,
+  collapsed,
+}: {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-[13.5px] font-medium",
+        "transition-colors duration-[var(--motion-standard)]",
+        active ? "text-accent-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+      )}
+    >
+      {active && (
+        <motion.span
+          layoutId="rail-active"
+          aria-hidden
+          className="absolute inset-0 rounded-lg bg-accent"
+          transition={motionTokens.spring}
+        />
+      )}
+      <Icon className="relative z-[1] h-4 w-4 shrink-0" strokeWidth={1.9} />
+      <span className="relative z-[1] flex min-w-0">
+        <RailLabel collapsed={collapsed}>{label}</RailLabel>
+      </span>
+    </Link>
   );
 }
 
@@ -198,12 +312,15 @@ function SyncChip({ collapsed }: { collapsed: boolean }) {
       href="/settings"
       title={label}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium transition-colors",
+        "press-none flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium",
+        "transition-colors duration-[var(--motion-standard)]",
         cls
       )}
     >
       {icon}
-      {!collapsed && <span className="truncate">{label}</span>}
+      <span className="flex min-w-0">
+        <RailLabel collapsed={collapsed}>{label}</RailLabel>
+      </span>
     </Link>
   );
 }

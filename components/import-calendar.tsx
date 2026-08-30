@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Check, Link2, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { fetchCalendarFeed, normalizeFeedUrl } from "@/lib/calendar-import";
 import { cn } from "@/lib/utils";
@@ -78,18 +80,28 @@ export function ImportCalendar() {
         </button>
       </div>
 
-      {status.kind === "error" && (
-        <p className="flex items-start gap-1.5 text-[12.5px] text-warn">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-          {status.message}
-        </p>
-      )}
-      {status.kind === "success" && (
-        <p className="flex items-start gap-1.5 text-[12.5px] text-good">
-          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
-          {status.message}
-        </p>
-      )}
+      <AnimatePresence initial={false} mode="wait">
+        {(status.kind === "error" || status.kind === "success") && (
+          <motion.p
+            key={status.kind + status.message}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            className={cn(
+              "flex items-start gap-1.5 text-[12.5px]",
+              status.kind === "error" ? "text-warn" : "text-good"
+            )}
+          >
+            {status.kind === "error" ? (
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            ) : (
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+            )}
+            {status.message}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       {sources.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -114,7 +126,7 @@ export function ImportCalendar() {
                     onClick={() => resync(source.id, source.url)}
                     disabled={syncingId !== null}
                     aria-label="Re-sync"
-            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
+                    className="flex h-11 w-11 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
                   >
                     <RefreshCw
                       className={cn("h-3.5 w-3.5", syncingId === source.id && "animate-spin")}
@@ -132,7 +144,15 @@ export function ImportCalendar() {
               </div>
 
               {confirmId === source.id && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  transition={{
+                    height: motionTokens.springLayout,
+                    opacity: { duration: motionTokens.micro },
+                  }}
+                  className="flex flex-wrap items-center gap-2 overflow-hidden border-t border-line pt-2"
+                >
                   <span className="text-[12px] text-ink-soft">Remove this feed and…</span>
                   <button
                     onClick={() => {
@@ -152,7 +172,7 @@ export function ImportCalendar() {
                   >
                     delete its items
                   </button>
-                </div>
+                </motion.div>
               )}
             </div>
           ))}

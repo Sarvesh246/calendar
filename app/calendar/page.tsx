@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { addMonths, addWeeks, format, parseISO, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -12,10 +12,27 @@ import { MonthView } from "@/components/calendar/month-view";
 import { WeekView } from "@/components/calendar/week-view";
 import { DayAgenda } from "@/components/day-agenda";
 import { Button } from "@/components/ui/button";
+import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "month" | "week";
+
+/** Direction-aware travel for the header title (vertical) and grid (lateral). */
+const titleVariants = {
+  enter: (d: number) => ({ opacity: 0, y: d > 0 ? 10 : -10 }),
+  center: { opacity: 1, y: 0 },
+  exit: (d: number) => ({ opacity: 0, y: d > 0 ? -10 : 10 }),
+};
+
+const gridVariants = {
+  // A short lateral travel plus a fade: enough to say "the period moved this
+  // way" without the grid sliding a full width, which at this size reads as a
+  // lurch rather than a page turn.
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 24 : -24 }),
+  center: { opacity: 1, x: 0 },
+  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -24 : 24 }),
+};
 
 export default function CalendarPage() {
   const allItems = useDatebookStore((s) => s.items);
@@ -38,6 +55,8 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<ViewMode>("month");
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  // Which way the period last moved, so the grid can leave the way it came.
+  const [direction, setDirection] = useState<1 | -1>(1);
 
   useEffect(() => {
     if (!calendarFocusDate) return;
@@ -60,6 +79,8 @@ export default function CalendarPage() {
   );
 
   function step(dir: 1 | -1) {
+    haptic("light");
+    setDirection(dir);
     startTransition(() => {
       setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
     });
@@ -68,6 +89,14 @@ export default function CalendarPage() {
   function selectDate(d: Date) {
     startTransition(() => setSelectedDate(d));
   }
+
+  // Keyed by the period on screen, so stepping months swaps one grid for
+  // another. Upstream keyed only on `mode`, which meant month navigation
+  // replaced the days with no transition at all.
+  const periodKey =
+    mode === "month"
+      ? `m-${format(anchor, "yyyy-MM")}`
+      : `w-${format(startOfWeek(anchor, { weekStartsOn }), "yyyy-MM-dd")}`;
 
   function addToSelected() {
     setQuickAddDateKey(dayKey(selectedDate));
@@ -78,10 +107,25 @@ export default function CalendarPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
       <header className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
-          {mode === "month"
-            ? format(anchor, "MMMM yyyy")
-            : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
+        <h1 className="flex min-w-0 items-baseline overflow-hidden text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
+          {/* The title travels with the grid rather than swapping a frame early,
+              so the header and the days read as one movement. */}
+          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+            <motion.span
+              key={periodKey}
+              custom={direction}
+              variants={titleVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+              className="block whitespace-nowrap"
+            >
+              {mode === "month"
+                ? format(anchor, "MMMM yyyy")
+                : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
+            </motion.span>
+          </AnimatePresence>
         </h1>
 
         <div className="flex items-center justify-between gap-2 sm:justify-end">
@@ -96,14 +140,16 @@ export default function CalendarPage() {
             </Button>
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                const t = new Date();
+                haptic("light");
+                setDirection(t >= anchor ? 1 : -1);
                 startTransition(() => {
-                  const t = new Date();
                   setAnchor(t);
                   setSelectedDate(t);
-                })
-              }
-              className="h-9 px-2.5 text-[13px] font-medium text-ink-soft hover:text-ink"
+                });
+              }}
+              className="h-9 rounded-md px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
             >
               Today
             </button>
@@ -122,34 +168,52 @@ export default function CalendarPage() {
               <button
                 key={m}
                 type="button"
-                onClick={() => startTransition(() => setMode(m))}
+                onClick={() => {
+                  if (m === mode) return;
+                  haptic("light");
+                  startTransition(() => setMode(m));
+                }}
+                aria-pressed={mode === m}
                 className={cn(
-                  "h-9 rounded-md px-3.5 text-[13px] font-medium capitalize transition-colors",
-                  mode === m ? "bg-accent text-accent-ink" : "text-ink-soft hover:text-ink"
+                  "press-none relative h-9 rounded-md px-3.5 text-[13px] font-medium capitalize",
+                  "transition-colors duration-[var(--motion-standard)]",
+                  mode === m ? "text-accent-ink" : "text-ink-soft hover:text-ink"
                 )}
               >
-                {m}
+                {mode === m && (
+                  <motion.span
+                    layoutId="calendar-mode-pill"
+                    className="absolute inset-0 rounded-md bg-accent"
+                    transition={motionTokens.spring}
+                  />
+                )}
+                <span className="relative z-[1]">{m}</span>
               </button>
             ))}
           </div>
         </div>
       </header>
 
-      <motion.div
-        key={mode}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row"
-      >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         <div
           className={cn(
-            "min-h-0 w-full",
+            "relative min-h-0 w-full",
             mode === "month"
               ? "h-[clamp(22rem,58dvh,34rem)] lg:h-full lg:min-h-[28rem] lg:flex-1"
               : "lg:h-full lg:flex-1"
           )}
         >
+          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+            <motion.div
+              key={`${mode}-${periodKey}`}
+              custom={direction}
+              variants={gridVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+              className="absolute inset-0 flex min-h-0 flex-col"
+            >
           {mode === "month" ? (
             <MonthView
               anchor={anchor}
@@ -178,6 +242,8 @@ export default function CalendarPage() {
               }
             />
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {mode === "month" && (
@@ -192,7 +258,7 @@ export default function CalendarPage() {
         <aside className="glass hidden min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex">
           <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
         </aside>
-      </motion.div>
+      </div>
     </div>
   );
 }

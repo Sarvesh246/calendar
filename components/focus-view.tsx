@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
@@ -8,6 +9,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { focusQueue, formatTime, relativeDueLabel } from "@/lib/date-utils";
 import { applyItemFilters } from "@/lib/filters";
 import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 
 export function FocusView() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
@@ -31,7 +33,15 @@ export function FocusView() {
   const currentCategory = useCategory(current?.categoryId);
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center gap-8 text-center">
+    // Entering focus mode strips away the whole shell, so the one thing left
+    // should arrive rather than simply be there — otherwise the transition reads
+    // as the app having crashed into a blank page.
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={motionTokens.springGentle}
+      className="flex min-h-[70vh] flex-col items-center justify-center gap-8 text-center"
+    >
       <button
         onClick={toggleFocusMode}
         aria-label="Exit focus"
@@ -43,7 +53,7 @@ export function FocusView() {
 
       {current ? (
         <>
-          <div>
+          <motion.div key={current.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={motionTokens.springGentle}>
             {currentCategory && (
               <p className="cat-text text-[12px] font-medium uppercase tracking-wider" style={{ "--cat": currentCategory.color } as React.CSSProperties}>
                 {currentCategory.name}
@@ -55,7 +65,7 @@ export function FocusView() {
             <p className="mt-2 text-[15px] text-ink-soft">
               {current.type === "event" ? formatTime(current.at, clock24h) : relativeDueLabel(current.at, { allDay: current.allDay })}
             </p>
-          </div>
+          </motion.div>
 
           {current.type !== "event" && (
             <button
@@ -63,7 +73,7 @@ export function FocusView() {
                 haptic("success");
                 setItemStatus(current.id, "done");
               }}
-              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink transition-opacity hover:opacity-90"
+              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink shadow-[var(--shadow-md)] transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover:shadow-[var(--shadow-lg)]"
             >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Mark complete
@@ -82,6 +92,6 @@ export function FocusView() {
       ) : (
         <p className="font-display text-[28px] italic text-ink-soft">Nothing left. Enjoy it.</p>
       )}
-    </div>
+    </motion.div>
   );
 }

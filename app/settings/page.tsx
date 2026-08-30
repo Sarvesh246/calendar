@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { ToggleSwitch } from "@/components/toggle-switch";
@@ -14,6 +14,7 @@ import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
+import { haptic } from "@/lib/haptic";
 import type { AppearancePreset, Density, LandingView } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -376,19 +377,38 @@ function Section({
           className="group flex w-full items-start justify-between gap-3 text-left"
         >
           <span className="min-w-0">{heading}</span>
-          <ChevronDown
-            className={cn(
-              "mt-1 h-4 w-4 shrink-0 text-ink-faint transition-transform group-hover:text-ink",
-              !open && "-rotate-90"
-            )}
-            strokeWidth={2}
-          />
+          <motion.span
+            aria-hidden
+            animate={{ rotate: open ? 0 : -90 }}
+            transition={motionTokens.spring}
+            className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center text-ink-faint transition-colors group-hover:text-ink"
+          >
+            <ChevronDown className="h-4 w-4" strokeWidth={2} />
+          </motion.span>
         </button>
       ) : (
         heading
       )}
 
-      {(!collapsible || open) && (
+      {collapsible ? (
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{
+                height: motionTokens.springLayout,
+                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
+              }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3.5 flex flex-col gap-3">{children}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      ) : (
         <div className="mt-3.5 flex flex-col gap-3">{children}</div>
       )}
     </section>
@@ -472,23 +492,48 @@ function PresetCard({
   return (
     <motion.button
       type="button"
-      layout
-      onClick={onSelect}
-      transition={motionTokens.spring}
+      onClick={() => {
+        haptic("light");
+        onSelect();
+      }}
+      aria-pressed={active}
+      whileTap={{ scale: 0.975 }}
+      transition={motionTokens.springSnappy}
       className={cn(
-        "flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-[border-color,box-shadow]",
-        active ? "border-accent shadow-[var(--shadow-sm)]" : "border-line hover:border-line-strong"
+        "press-none group relative flex flex-col gap-2.5 rounded-xl border p-3 text-left",
+        "transition-[border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+        active
+          ? "border-accent shadow-[0_0_0_1px_var(--accent),var(--shadow-md)]"
+          : "border-line hover:border-line-strong hover:shadow-[var(--shadow-sm)]"
       )}
     >
       <div className="flex overflow-hidden rounded-md border border-line">
         {meta.swatch.map((c, i) => (
-          <span key={i} className="h-8 flex-1" style={{ background: c }} />
+          <motion.span
+            key={i}
+            // The bands spread apart a touch on the active card, so the chosen
+            // theme reads at a glance across a grid of eleven near-identical
+            // tiles.
+            initial={false}
+            animate={{ flexGrow: active && i === 2 ? 1.6 : 1 }}
+            transition={motionTokens.spring}
+            className="h-8 flex-1"
+            style={{ background: c }}
+          />
         ))}
       </div>
       <div>
         <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
           {meta.label}
-          {active && <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />}
+          <motion.span
+            aria-hidden
+            initial={false}
+            animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
+            transition={motionTokens.springSnappy}
+            className="flex h-3.5 w-3.5 items-center justify-center"
+          >
+            <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
+          </motion.span>
         </p>
         <p className="mt-0.5 text-[11.5px] leading-snug text-ink-soft">{meta.description}</p>
       </div>
