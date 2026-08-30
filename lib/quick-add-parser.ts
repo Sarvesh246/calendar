@@ -119,6 +119,10 @@ export function parseQuickAdd(
     base = addDays(base, 1);
     matchedDate = true;
     text = text.replace(/\btomorrow\b/i, "").trim();
+  } else if (/\byesterday\b/i.test(text)) {
+    base = addDays(base, -1);
+    matchedDate = true;
+    text = text.replace(/\byesterday\b/i, "").trim();
   } else if (/\btoday\b/i.test(text)) {
     matchedDate = true;
     text = text.replace(/\btoday\b/i, "").trim();

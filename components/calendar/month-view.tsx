@@ -174,7 +174,7 @@ export function MonthView({
     <div
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-sm)] sm:p-3"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-sm)] sm:p-3"
     >
       <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
         {labels.map((l) => (
