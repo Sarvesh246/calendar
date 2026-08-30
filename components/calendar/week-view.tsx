@@ -334,7 +334,7 @@ function MobileWeekPager({
           const next = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
           setPage((p) => (p === next ? p : next));
         }}
-        className="-mx-4 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-2 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:-mx-4 [&::-webkit-scrollbar]:hidden"
       >
         {days.map((day) => {
           const dayItems = byDay.get(dayKey(day)) ?? NO_ITEMS;
@@ -342,7 +342,7 @@ function MobileWeekPager({
           return (
             <section
               key={day.toISOString()}
-              className="w-full shrink-0 snap-start px-4"
+              className="w-full shrink-0 snap-start px-2 md:px-4"
             >
               <div className="mb-3 flex items-baseline justify-between">
                 <p className="text-[15px] font-semibold text-ink">{label}</p>

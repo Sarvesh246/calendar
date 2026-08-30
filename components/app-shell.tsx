@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, Settings } from "lucide-react";
@@ -23,8 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
-  const setQuickAddDateKey = useUIStore((s) => s.setQuickAddDateKey);
-  const setQuickAddTime = useUIStore((s) => s.setQuickAddTime);
+  const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
   const quickAddOpen = useUIStore((s) => s.quickAddOpen);
   const focusMode = useUIStore((s) => s.focusMode);
   const pathname = usePathname();
@@ -39,6 +39,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // producing a hydration mismatch — the cost is one blank frame on first load.
   const mounted = useHasMounted();
 
+  useEffect(() => {
+    closeQuickAdd();
+  }, [pathname, closeQuickAdd]);
+
   function openAdd() {
     setQuickAddPrefill("");
     setQuickAddOpen(true);
@@ -47,16 +51,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-[1800px] gap-5 px-4",
+        "mx-auto flex w-full max-w-[1800px] gap-5",
+        onCalendar ? "px-2 md:px-6" : "px-4 md:px-6",
         // Only the desktop calendar locks to the viewport so the month grid
         // fills the pane. Mobile calendar scrolls the document so the selected
         // day's list can sit under the grid (Google Calendar pattern).
-        onCalendar
-          ? "min-h-dvh md:h-dvh md:overflow-hidden"
-          : "min-h-dvh",
+        onCalendar ? "min-h-dvh md:h-dvh md:overflow-hidden" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:min-h-0 md:px-6 md:pt-4 md:pb-6"
+          : "pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
@@ -68,45 +71,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         {!focusMode && (
-          <div className="mb-3 flex shrink-0 items-center gap-2 md:mb-4">
+          <div
+            className={cn(
+              "sticky top-0 z-20 mb-3 flex shrink-0 items-center gap-2 bg-surface-base",
+              "pt-[calc(env(safe-area-inset-top)+0.85rem)] pb-2",
+              onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
+              "md:static md:top-auto md:z-auto md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:pt-0 md:pb-0"
+            )}
+          >
             {onToday && (
               <div className="hidden min-w-0 flex-1 md:block">
                 <QuickAddBar embedded />
               </div>
             )}
-            {!onToday && <div className="min-w-0 flex-1" />}
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => setCommandPaletteOpen(true)}
-              aria-label="Search"
-            >
-              <Search className="h-4 w-4" strokeWidth={1.9} />
-            </Button>
-            {!onSettings && <FilterButton className="md:hidden" />}
-            <Link
-              href="/settings"
-              aria-label="Settings"
-              className={cn(
-                "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink md:hidden",
-                onSettings && "border-accent bg-accent-soft text-accent"
-              )}
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.9} />
-            </Link>
-            {!onSettings && !onToday && (
-              <Button variant="primary" size="sm" onClick={openAdd} className="hidden md:inline-flex">
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                Add
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => setCommandPaletteOpen(true)}
+                aria-label="Search"
+              >
+                <Search className="h-4 w-4" strokeWidth={1.9} />
               </Button>
-            )}
+              {!onSettings && <FilterButton className="md:hidden" />}
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className={cn(
+                  "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink md:hidden",
+                  onSettings && "border-accent bg-accent-soft text-accent"
+                )}
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.9} />
+              </Link>
+              {!onSettings && !onToday && (
+                <Button variant="primary" size="sm" onClick={openAdd} className="hidden md:inline-flex">
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  Add
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
         {mounted ? children : null}
       </main>
 
-      {!focusMode && !onSettings && (
+      {!focusMode && !onSettings && !quickAddOpen && (
         <Button
           variant="fab"
           size="fab"
@@ -125,21 +136,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               aria-label="Dismiss add"
-              className="overlay-scrim-light fixed inset-0 z-30"
-              onClick={() => {
-                setQuickAddOpen(false);
-                setQuickAddDateKey(null);
-                setQuickAddTime(null);
-              }}
+              className="overlay-scrim-light fixed inset-0 z-[45]"
+              onClick={closeQuickAdd}
+              onPointerDown={closeQuickAdd}
             />
           )}
-          {quickAddOpen && !onToday && (
-            <div className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto w-[calc(100%-2rem)] max-w-[640px] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto">
-              <QuickAddBar />
-            </div>
-          )}
-          {quickAddOpen && onToday && (
-            <div className="fixed inset-x-4 top-[max(0.75rem,env(safe-area-inset-top))] z-40 md:hidden">
+          {quickAddOpen && (
+            <div
+              className={cn(
+                "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
+                onToday && "md:hidden"
+              )}
+              style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)" }}
+            >
               <QuickAddBar />
             </div>
           )}

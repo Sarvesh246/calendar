@@ -77,14 +77,14 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <header className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
           {mode === "month"
             ? format(anchor, "MMMM yyyy")
             : `Week of ${format(startOfWeek(anchor, { weekStartsOn }), "MMM d")}`}
         </h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 sm:justify-end">
           <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
             <Button
               variant="tertiary"
@@ -144,9 +144,9 @@ export default function CalendarPage() {
       >
         <div
           className={cn(
-            "min-h-0",
+            "min-h-0 w-full",
             mode === "month"
-              ? "h-[min(52vh,440px)] lg:h-full lg:min-h-[28rem] lg:flex-1"
+              ? "h-[clamp(22rem,58dvh,34rem)] lg:h-full lg:min-h-[28rem] lg:flex-1"
               : "lg:h-full lg:flex-1"
           )}
         >

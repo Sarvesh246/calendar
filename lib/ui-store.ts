@@ -27,6 +27,7 @@ interface UIState {
   toggleFocusMode: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setQuickAddOpen: (open: boolean) => void;
+  closeQuickAdd: () => void;
   setQuickAddPrefill: (text: string | null) => void;
   toggleCategoryFilter: (id: string) => void;
   clearCategoryFilter: () => void;
@@ -35,6 +36,12 @@ interface UIState {
   setQuickAddTime: (time: { hour: number; minute: number } | null) => void;
   setCalendarFocusDate: (key: string | null) => void;
 }
+
+const closedAdd = {
+  quickAddOpen: false,
+  quickAddDateKey: null,
+  quickAddTime: null,
+} as const;
 
 export const useUIStore = create<UIState>((set, get) => ({
   commandPaletteOpen: false,
@@ -51,10 +58,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   quickAddTime: null,
   calendarFocusDate: null,
 
-  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
-  setFilterOpen: (open) => set({ filterOpen: open }),
-  setAIDrawerOpen: (open) => set({ aiDrawerOpen: open }),
-  askAI: (message) => set({ aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null }),
+  setCommandPaletteOpen: (open) =>
+    set(open ? { commandPaletteOpen: true, ...closedAdd } : { commandPaletteOpen: false }),
+  setFilterOpen: (open) =>
+    set(open ? { filterOpen: true, ...closedAdd } : { filterOpen: false }),
+  setAIDrawerOpen: (open) =>
+    set(open ? { aiDrawerOpen: true, ...closedAdd } : { aiDrawerOpen: false }),
+  askAI: (message) =>
+    set({ aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null, ...closedAdd }),
   consumeAIDrawerPendingMessage: () => {
     const msg = get().aiDrawerPendingMessage;
     if (msg !== null) set({ aiDrawerPendingMessage: null });
@@ -62,7 +73,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-  setQuickAddOpen: (open) => set({ quickAddOpen: open }),
+  setQuickAddOpen: (open) => set(open ? { quickAddOpen: true } : closedAdd),
+  closeQuickAdd: () => set(closedAdd),
   setQuickAddPrefill: (text) => set({ quickAddPrefill: text }),
   toggleCategoryFilter: (id) =>
     set((s) => {

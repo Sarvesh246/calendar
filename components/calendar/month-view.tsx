@@ -125,7 +125,7 @@ function DayCellCount({ items }: { items: Item[] }) {
   return (
     <span
       className={cn(
-        "shrink-0 text-[10px] font-medium tabular-nums leading-none sm:hidden",
+        "shrink-0 text-[11px] font-medium tabular-nums leading-none sm:hidden",
         overdue ? "text-warn" : "text-ink-faint"
       )}
     >
@@ -174,7 +174,7 @@ export function MonthView({
     <div
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-sm)] sm:p-3"
+      className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:p-3"
     >
       <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
         {labels.map((l) => (
@@ -184,8 +184,8 @@ export function MonthView({
         ))}
       </div>
       <div
-        className="grid min-h-0 flex-1 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
-        style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+        className="grid min-h-0 w-full flex-1 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
+        style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
       >
         {grid.map(({ date, inMonth }) => {
           const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
@@ -213,7 +213,7 @@ export function MonthView({
                   : undefined
               }
               className={cn(
-                "press-none flex min-h-0 flex-col items-stretch gap-0.5 overflow-hidden rounded-lg border p-1 text-left transition-colors sm:gap-1 sm:p-2",
+                "press-none flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center transition-colors sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
                 today ? "border-accent/40" : "border-transparent hover:border-line",
                 selected && "ring-2 ring-inset ring-accent",
                 !inMonth && "opacity-70"
@@ -221,7 +221,7 @@ export function MonthView({
             >
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
                   today
                     ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
                     : inMonth
