@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { isOverdue, itemDaySpan, itemOccupiesDay, wallTimeInZoneToIso, weekWorkload } from "./date-utils";
+import {
+  formatDaySummary,
+  isOverdue,
+  itemDaySpan,
+  itemOccupiesDay,
+  nextOpenAssignment,
+  openItemsOnDay,
+  wallTimeInZoneToIso,
+  weekWorkload,
+} from "./date-utils";
 import type { Item } from "./types";
 
 const base = (over: Partial<Item> = {}): Item => ({
@@ -70,5 +79,32 @@ describe("weekWorkload", () => {
   it("returns 7 days", () => {
     const days = weekWorkload([], new Date("2026-08-28T12:00:00"), 0);
     expect(days).toHaveLength(7);
+  });
+});
+
+describe("nextOpenAssignment", () => {
+  it("skips events and completed work, then returns the soonest due", () => {
+    const later = base({ id: "2", at: new Date("2026-09-02T12:00:00").toISOString() });
+    const sooner = base({ id: "3", at: new Date("2026-09-01T12:00:00").toISOString() });
+    const done = base({ id: "4", status: "done", at: new Date("2026-08-01T12:00:00").toISOString() });
+    const event = base({ id: "5", type: "event", at: new Date("2026-08-15T12:00:00").toISOString() });
+    expect(nextOpenAssignment([later, sooner, done, event])?.id).toBe("3");
+  });
+});
+
+describe("openItemsOnDay", () => {
+  it("keeps events and unfinished work", () => {
+    const event = base({ id: "e", type: "event", status: undefined });
+    const done = base({ id: "d", status: "done" });
+    const open = base({ id: "o", status: "todo" });
+    expect(openItemsOnDay([event, done, open]).map((i) => i.id)).toEqual(["e", "o"]);
+  });
+});
+
+describe("formatDaySummary", () => {
+  it("joins the counts that matter and stays quiet when empty", () => {
+    expect(formatDaySummary(0, 0, 0)).toBe("Clear day");
+    expect(formatDaySummary(1, 0, 0)).toBe("1 event");
+    expect(formatDaySummary(2, 1, 1)).toBe("1 overdue · 2 events · 1 due");
   });
 });

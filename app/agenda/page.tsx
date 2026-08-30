@@ -1,15 +1,18 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
-import { dayLabel, isOverdue, itemOccupiesDay } from "@/lib/date-utils";
+import { dayLabel, isOverdue, itemOccupiesDay, weekWorkload } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
+import { ViewMenu } from "@/components/view-menu";
+import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
 const HORIZON_DAYS = 120;
@@ -18,7 +21,7 @@ export default function AgendaPage() {
   const allItems = useDatebookStore((s) => s.items);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
-  const updateSettings = useDatebookStore((s) => s.updateSettings);
+  const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
     [allItems, categoryFilter, hideCompleted]
@@ -32,11 +35,16 @@ export default function AgendaPage() {
     [items]
   );
 
+  const todayCount = useMemo(() => {
+    const today = startOfDay(new Date());
+    return items.filter((it) => itemOccupiesDay(it, today) && !isOverdue(it)).length;
+  }, [items]);
+
   const { groups, later } = useMemo(() => {
     const today = startOfDay(new Date());
     const cutoff = addDays(today, HORIZON_DAYS);
     const result: { date: Date; items: Item[] }[] = [];
-    for (let i = 0; i < HORIZON_DAYS; i++) {
+    for (let i = 1; i < HORIZON_DAYS; i++) {
       const date = addDays(today, i);
       const dayItems = items
         .filter((it) => itemOccupiesDay(it, date) && !isOverdue(it))
@@ -49,23 +57,38 @@ export default function AgendaPage() {
     return { groups: result, later: laterItems };
   }, [items]);
 
-  const isEmpty = overdue.length === 0 && groups.length === 0 && later.length === 0;
+  const heat = weekWorkload(items, new Date(), weekStartsOn);
+  const isEmpty = overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-[var(--page-gap)]">
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[28px] italic text-ink">Agenda</h1>
-          <p className="mt-1 text-[13.5px] text-ink-soft">Everything ahead, one day at a time.</p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agenda</h1>
+          <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => updateSettings({ hideCompleted: !hideCompleted })}
-          className="shrink-0 text-[12.5px] font-medium text-ink-faint hover:text-ink"
-        >
-          {hideCompleted ? "Show completed" : "Hide completed"}
-        </button>
+        <ViewMenu />
       </header>
+
+      <div className="flex gap-1">
+        {heat.map((d) => (
+          <div key={d.date.toISOString()} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+            <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
+              {format(d.date, "EEEEE")}
+            </span>
+            <span
+              className={cn(
+                "h-1.5 w-full rounded-full",
+                d.intensity === 0 && "bg-surface-sunken",
+                d.intensity === 1 && "bg-good",
+                d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
+                d.intensity >= 4 && "bg-warn"
+              )}
+              title={`${format(d.date, "EEE")} · ${d.count} open`}
+            />
+          </div>
+        ))}
+      </div>
 
       {isEmpty && (
         <>
@@ -73,7 +96,7 @@ export default function AgendaPage() {
           <FeedHealthBanner />
           <EmptyState
             title="Nothing on the horizon."
-            sub="Add something with the quick-add bar above whenever you're ready."
+            sub="Use Add to put something on a day whenever you're ready."
           />
         </>
       )}
@@ -81,7 +104,7 @@ export default function AgendaPage() {
 
       {overdue.length > 0 && (
         <section>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-warn backdrop-blur-sm">
+          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-warn backdrop-blur-sm">
             Overdue · {overdue.length}
           </p>
           <div className="flex flex-col gap-2">
@@ -92,15 +115,27 @@ export default function AgendaPage() {
         </section>
       )}
 
+      {todayCount > 0 && (
+        <Link
+          href="/today"
+          className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft hover:border-line-strong"
+        >
+          <span>Today</span>
+          <span className="font-medium text-ink">
+            {todayCount} item{todayCount === 1 ? "" : "s"} · Open Today
+          </span>
+        </Link>
+      )}
+
       {groups.map((group) => {
         const label = dayLabel(group.date);
-        const showDate = label === "Today" || label === "Tomorrow";
+        const showDate = label === "Tomorrow";
         return (
         <section key={group.date.toISOString()}>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 flex items-baseline gap-2 bg-surface-base/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-ink-faint backdrop-blur-sm">
+          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 flex items-baseline gap-2 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-ink-faint backdrop-blur-sm">
             {label}
             {showDate && (
-              <span className="normal-case tracking-normal text-ink-faint/70">
+              <span className="font-normal text-ink-faint/70">
                 {format(group.date, "MMM d")}
               </span>
             )}
@@ -116,7 +151,7 @@ export default function AgendaPage() {
 
       {later.length > 0 && (
         <section>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-ink-faint backdrop-blur-sm">
+          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-ink-faint backdrop-blur-sm">
             Later
           </p>
           <div className="flex flex-col gap-2">

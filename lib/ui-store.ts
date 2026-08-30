@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 interface UIState {
   commandPaletteOpen: boolean;
+  filterOpen: boolean;
   aiDrawerOpen: boolean;
   /** A message to auto-send once the AI drawer opens (from the quick-add bar). */
   aiDrawerPendingMessage: string | null;
@@ -18,6 +19,7 @@ interface UIState {
   calendarFocusDate: string | null;
 
   setCommandPaletteOpen: (open: boolean) => void;
+  setFilterOpen: (open: boolean) => void;
   setAIDrawerOpen: (open: boolean) => void;
   /** Open the AI drawer and queue a message for it to answer. */
   askAI: (message: string) => void;
@@ -36,6 +38,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set, get) => ({
   commandPaletteOpen: false,
+  filterOpen: false,
   aiDrawerOpen: false,
   aiDrawerPendingMessage: null,
   focusMode: false,
@@ -49,6 +52,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   calendarFocusDate: null,
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  setFilterOpen: (open) => set({ filterOpen: open }),
   setAIDrawerOpen: (open) => set({ aiDrawerOpen: open }),
   askAI: (message) => set({ aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null }),
   consumeAIDrawerPendingMessage: () => {

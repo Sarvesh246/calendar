@@ -111,7 +111,12 @@ export function WeekView({
                         if (onSelectItem) onSelectItem(item, day);
                         else onSelectDate?.(day);
                       }}
-                      className="cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium"
+                      className={cn(
+                        "cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium",
+                        item.type !== "event" && "cal-chip-task",
+                        item.status === "done" && "opacity-45",
+                        item.type !== "event" && item.status !== "done" && "cal-chip-task"
+                      )}
                       style={{ "--cat": color } as React.CSSProperties}
                     >
                       {item.title}
