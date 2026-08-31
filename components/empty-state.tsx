@@ -1,4 +1,8 @@
+"use client";
+
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { motion as motionTokens } from "@/lib/motion";
 
 /**
  * The empty state used to be a loose icon over two lines of left-aligned text,
@@ -25,7 +29,10 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
       className={cn(
         "flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-line text-center",
         compact ? "px-3 py-6" : "px-4 py-8 sm:py-10",
@@ -35,6 +42,6 @@ export function EmptyState({
       <p className="text-[13.5px] font-medium text-ink">{title}</p>
       {sub && <p className="max-w-[34ch] text-[12.5px] leading-relaxed text-ink-soft">{sub}</p>}
       {action && <div className="mt-2">{action}</div>}
-    </div>
+    </motion.div>
   );
 }

@@ -199,8 +199,8 @@ export function AIDrawer() {
         className={cn(
           "overlay-scrim absolute inset-0 backdrop-blur-[2px]",
           open
-            ? "animate-[overlay-in_200ms_ease-out]"
-            : "animate-[overlay-out_180ms_ease-in_forwards]"
+            ? "animate-[overlay-in_340ms_ease-out]"
+            : "animate-[overlay-out_160ms_ease-in_forwards]"
         )}
       />
       <div
@@ -214,8 +214,8 @@ export function AIDrawer() {
         className={cn(
           "glass absolute inset-x-3 bottom-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-2xl",
           open
-            ? "animate-[sheet-in_220ms_var(--ease-standard)]"
-            : "animate-[sheet-out_180ms_ease-in_forwards]"
+            ? "animate-[sheet-in_340ms_var(--ease-standard)]"
+            : "animate-[sheet-out_160ms_ease-in_forwards]"
         )}
       >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">

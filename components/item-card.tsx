@@ -427,7 +427,8 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
         expanded && "border-line-strong shadow-[var(--shadow-md)]",
         // An overdue row earns a warning edge. Previously the only signal was one
         // word in 12px text, which scrolled past unnoticed in a long list.
-        overdue && !done && "border-l-[3px] border-l-warn"
+        overdue && !done && "border-l-[3px] border-l-warn",
+        status === "doing" && !done && "border-l-[3px] border-l-accent bg-accent-soft/25"
       )}
     >
       <div className="flex items-center gap-1">
