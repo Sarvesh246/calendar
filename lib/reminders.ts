@@ -114,8 +114,25 @@ function reminderBody(item: Item, clock24h: boolean): string {
   return item.type === "event" ? `Starts ${when}` : `Due ${when}`;
 }
 
-async function showReminder(item: Item, label: string, clock24h: boolean): Promise<void> {
-  if (notificationPermission() !== "granted") return;
+/**
+ * Show one reminder, returning whether it actually landed on screen.
+ *
+ * This used to reach for `serviceWorker.getRegistration()` and call
+ * `showNotification` on whatever it found — including a registration that was
+ * still installing. Right after the very first "Enable notifications" tap,
+ * `ensureReminderWorker()` and `armReminders()` both fire without waiting on
+ * each other, so the worker frequently isn't active yet; some browsers throw
+ * on `showNotification` in that state, which the old code swallowed with no
+ * fallback. That first reminder — often the most important one, since it's
+ * usually a catch-up notification for something already due — just vanished.
+ *
+ * Now it only trusts a worker that's actually controlling this page, and
+ * always falls back to a plain page-context `Notification` (which works
+ * immediately, with no activation race) whenever the worker path isn't
+ * available or throws.
+ */
+async function showReminder(item: Item, label: string, clock24h: boolean): Promise<boolean> {
+  if (notificationPermission() !== "granted") return false;
   const title = item.type === "event" ? item.title : `Due soon — ${item.title}`;
   const options: NotificationOptions & { tag: string; data?: { itemId: string } } = {
     body: `${label} · ${reminderBody(item, clock24h)}`,
@@ -128,27 +145,58 @@ async function showReminder(item: Item, label: string, clock24h: boolean): Promi
       { action: "snooze", title: "Snooze 15 min" },
     ],
   } as NotificationOptions & { tag: string };
-  try {
-    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.showNotification(title, options);
-        return;
-      }
+
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator && navigator.serviceWorker.controller) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, options);
+      return true;
+    } catch {
+      /* fall through to the page-context path below */
     }
+  }
+  try {
     new Notification(title, options);
+    return true;
   } catch {
-    /* mobile without an active SW, or the tab was torn down mid-await */
+    // Mobile Safari with no active worker throws here (it has no page-context
+    // Notification at all) — nothing more this tab can do.
+    return false;
   }
 }
 
 /* --- scheduling ------------------------------------------------- */
 
 let timers = new Map<string, ReturnType<typeof setTimeout>>();
+// Reminders currently mid-`showReminder()`. `armReminders` re-runs on every
+// items change, every 10 minutes, and on every foreground — several of which
+// can land while a just-fired reminder's own async attempt is still pending —
+// so without this a slow or failing attempt could be started twice.
+const inFlight = new Set<string>();
 
 function clearTimers(): void {
   for (const t of timers.values()) clearTimeout(t);
   timers = new Map();
+}
+
+/**
+ * Deliver a reminder and record it as fired only once it actually displayed.
+ * A failed attempt (permission revoked mid-flight, both notification paths
+ * throwing) leaves the key unmarked, so the next `armReminders` pass — the
+ * 10-minute interval, or the next time the tab is foregrounded — sees a
+ * small negative delay and retries it as a catch-up, instead of the reminder
+ * being silently lost the moment `showReminder` failed once.
+ */
+function deliver(key: string, item: Item, label: string, clock24h: boolean): void {
+  if (inFlight.has(key)) return;
+  inFlight.add(key);
+  void showReminder(item, label, clock24h)
+    .then((shown) => {
+      if (shown) markFired(key);
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
 }
 
 /**
@@ -181,8 +229,7 @@ export function armReminders(items: Item[], clock24h = false): void {
         // Came due while the app was closed. Deliver recent misses once; let old
         // ones lapse silently so reopening after a trip isn't an alert storm.
         if (delay > -CATCH_UP_GRACE_MS && at > now - 60 * 60_000) {
-          markFired(key);
-          void showReminder(item, r.label, clock24h);
+          deliver(key, item, r.label, clock24h);
         } else {
           markFired(key);
         }
@@ -194,8 +241,7 @@ export function armReminders(items: Item[], clock24h = false): void {
         key,
         setTimeout(() => {
           timers.delete(key);
-          markFired(key);
-          void showReminder(item, r.label, clock24h);
+          deliver(key, item, r.label, clock24h);
         }, delay)
       );
     }

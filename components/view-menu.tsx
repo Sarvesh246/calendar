@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minimize2, MoreHorizontal } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { motion as motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,34 +43,51 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
       >
         <MoreHorizontal className="h-4 w-4" strokeWidth={1.9} />
       </Button>
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-md)]">
-          <button
-            type="button"
-            onClick={() => {
-              updateSettings({ hideCompleted: !hideCompleted });
-              setOpen(false);
+      {/* This popped open and shut with no transition at all — the sharpest
+          menu in the app. It now scales in from its anchor corner on the same
+          snappy spring as every other small popover. */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{
+              opacity: 0,
+              scale: 0.96,
+              y: -2,
+              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
             }}
-            className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-[13px] text-ink hover:bg-surface-sunken"
+            transition={motionTokens.springSnappy}
+            style={{ transformOrigin: "top right" }}
+            className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-md)]"
           >
-            Hide completed
-            {hideCompleted && <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />}
-          </button>
-          {showFocus && (
             <button
               type="button"
               onClick={() => {
-                toggleFocusMode();
+                updateSettings({ hideCompleted: !hideCompleted });
                 setOpen(false);
               }}
-              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink hover:bg-surface-sunken"
+              className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken"
             >
-              <Minimize2 className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
-              Focus
+              Hide completed
+              {hideCompleted && <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />}
             </button>
-          )}
-        </div>
-      )}
+            {showFocus && (
+              <button
+                type="button"
+                onClick={() => {
+                  toggleFocusMode();
+                  setOpen(false);
+                }}
+                className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken"
+              >
+                <Minimize2 className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
+                Focus
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

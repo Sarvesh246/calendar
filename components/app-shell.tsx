@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Search, Settings } from "lucide-react";
+import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
 import { CommandPalette } from "./command-palette";
@@ -74,7 +76,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div
             className={cn(
               "sticky top-0 z-20 mb-3 flex shrink-0 items-center gap-2 bg-surface-base",
-              "pt-[calc(env(safe-area-inset-top)+0.85rem)] pb-2",
+              // Extra clearance above the row: on a notched/Dynamic-Island phone
+              // the previous 0.85rem left these icon buttons sitting right at
+              // the edge of the safe area, so their top few pixels read as
+              // clipped by the status bar / camera cutout.
+              "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-2",
               onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
               "md:static md:top-auto md:z-auto md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:pt-0 md:pb-0"
             )}
@@ -132,26 +138,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {mounted && (
         <>
-          {quickAddOpen && (
-            <button
-              type="button"
-              aria-label="Dismiss add"
-              className="overlay-scrim-light fixed inset-0 z-[45]"
-              onClick={closeQuickAdd}
-              onPointerDown={closeQuickAdd}
-            />
-          )}
-          {quickAddOpen && (
-            <div
-              className={cn(
-                "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
-                onToday && "md:hidden"
-              )}
-              style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)" }}
-            >
-              <QuickAddBar />
-            </div>
-          )}
+          {/* The plus button used to swap this straight in with a bare
+              conditional render — no fade, no travel, just a hard cut. It now
+              drops in from just above its resting spot on the same spring
+              every other popover in the app uses, and eases back out quicker
+              than it arrived. */}
+          <AnimatePresence>
+            {quickAddOpen && (
+              <motion.button
+                key="quick-add-scrim"
+                type="button"
+                aria-label="Dismiss add"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                className="overlay-scrim-light fixed inset-0 z-[45]"
+                onClick={closeQuickAdd}
+                onPointerDown={closeQuickAdd}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {quickAddOpen && (
+              <motion.div
+                key="quick-add-panel"
+                initial={{ opacity: 0, y: -10, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{
+                  opacity: 0,
+                  y: -8,
+                  scale: 0.98,
+                  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+                }}
+                transition={motionTokens.spring}
+                style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
+                className={cn(
+                  "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
+                  onToday && "md:hidden"
+                )}
+              >
+                <QuickAddBar />
+              </motion.div>
+            )}
+          </AnimatePresence>
           <FilterSheet />
           <CommandPalette />
           <AIDrawer />
