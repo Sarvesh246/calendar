@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useDatebookStore } from "@/lib/store";
 
 export default function RootPage() {
@@ -20,12 +21,16 @@ export default function RootPage() {
   }, [router]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-6">
-      <div className="flex flex-col gap-2">
-        <div className="h-4 w-24 animate-pulse rounded bg-surface-sunken" />
-        <div className="h-8 w-56 animate-pulse rounded bg-surface-sunken" />
-      </div>
-      <div className="h-32 animate-pulse rounded-xl border border-line bg-surface-sunken" />
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+      <Image
+        src="/icon-192.png"
+        alt=""
+        width={72}
+        height={72}
+        priority
+        className="rounded-[18px] shadow-md animate-[pulse_1.8s_ease-in-out_infinite]"
+      />
+      <p className="font-display text-[20px] italic text-ink-soft">Datebook</p>
     </div>
   );
 }

@@ -45,15 +45,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const applyAuth = (nextUser: User | null) => {
       setUser(nextUser);
-      if (nextUser && connectedFor.current !== nextUser.id) {
-        connectedFor.current = nextUser.id;
-        void connectCloud(nextUser.id);
-        if (notificationPermission() === "granted") {
-          void subscribePush();
+      const run = () => {
+        if (nextUser && connectedFor.current !== nextUser.id) {
+          connectedFor.current = nextUser.id;
+          void connectCloud(nextUser.id);
+          if (notificationPermission() === "granted") {
+            void subscribePush();
+          }
+        } else if (!nextUser && connectedFor.current) {
+          connectedFor.current = null;
+          void disconnectCloud();
         }
-      } else if (!nextUser && connectedFor.current) {
-        connectedFor.current = null;
-        void disconnectCloud();
+      };
+      // Defer cloud connect until after first paint so launch stays snappy.
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(run, { timeout: 2500 });
+      } else {
+        setTimeout(run, 400);
       }
     };
 

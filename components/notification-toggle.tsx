@@ -16,19 +16,23 @@ export function NotificationToggle() {
   const mounted = useHasMounted();
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [busy, setBusy] = useState(false);
+  const [swReady, setSwReady] = useState<boolean | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
 
-  // Read the live value only after mount — Notification isn't defined during SSR.
   const current = mounted ? notificationPermission() : "default";
   const state = permission === "default" ? current : permission;
 
   async function enable() {
     setBusy(true);
+    setPushError(null);
     const result = await requestNotificationPermission();
     setPermission(result);
     if (result === "granted") {
-      await ensureReminderWorker();
+      const registered = await ensureReminderWorker();
+      setSwReady(registered);
       armReminders(useDatebookStore.getState().items, useDatebookStore.getState().settings.clock24h);
-      void subscribePush();
+      const push = await subscribePush();
+      if (!push.ok) setPushError(push.error);
     }
     setBusy(false);
   }
@@ -53,13 +57,25 @@ export function NotificationToggle() {
 
   if (state === "granted") {
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
-        <Check className="h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
-        Notifications on — reminders fire while Datebook is open and catch up when you return.
-        {vapidPublicKey()
-          ? " Closed-app alerts are on for this signed-in browser."
-          : " Closed-app push needs VAPID keys on the server — until then, keep a tab open or reopen to catch up."}
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="flex items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
+          <Check className="h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
+          Notifications on — reminders fire while Datebook is open and catch up when you return.
+          {vapidPublicKey()
+            ? " Closed-app alerts are on for this signed-in browser."
+            : " Closed-app push needs VAPID keys on the server — until then, keep a tab open or reopen to catch up."}
+        </p>
+        {swReady === false && (
+          <p className="text-[12px] text-ink-soft">
+            Notifications warming up — reopen Datebook if the first alert doesn&apos;t appear.
+          </p>
+        )}
+        {pushError && (
+          <p className="rounded-lg border border-warn/40 bg-warn-soft px-3.5 py-2 text-[12px] text-ink-soft">
+            {pushError}
+          </p>
+        )}
+      </div>
     );
   }
 
