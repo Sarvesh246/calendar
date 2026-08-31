@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { createDebouncedStorage } from "./debounced-storage";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { nanoid } from "./nanoid";
 import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
@@ -822,6 +823,7 @@ export const useDatebookStore = create<DatebookState>()(
     {
       name: "datebook-store",
       version: 2,
+      storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
         items: s.items,

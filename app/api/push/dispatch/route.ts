@@ -11,15 +11,21 @@ const LOOKBACK_MS = 12 * 60 * 60 * 1000; // Catch reminders missed during cron g
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
-  if (secret && auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ ok: false }, { status: 401 });
-  }
 
   const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!vapidPublic || !vapidPrivate || !service || !url) {
+  const pushConfigured = !!(vapidPublic && vapidPrivate && service && url);
+
+  if (pushConfigured && (!secret || auth !== `Bearer ${secret}`)) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+  if (secret && auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+
+  if (!pushConfigured) {
     return NextResponse.json({ ok: true, skipped: true, reason: "push-not-configured" });
   }
 
@@ -31,11 +37,16 @@ export async function GET(request: Request) {
   const now = Date.now();
   const horizon = now + WINDOW_MS;
   const lookback = now - LOOKBACK_MS;
+  const maxOffsetMs = 24 * 60 * 60 * 1000;
+  const atMin = new Date(lookback - maxOffsetMs).toISOString();
+  const atMax = new Date(horizon + maxOffsetMs).toISOString();
 
   const { data: items, error: itemsErr } = await supabase
     .from("items")
     .select("id, user_id, title, type, at, end_at, all_day, status, reminders")
-    .neq("status", "done");
+    .neq("status", "done")
+    .gte("at", atMin)
+    .lte("at", atMax);
   if (itemsErr) {
     console.error("[push] items", itemsErr.message);
     return NextResponse.json({ ok: false, error: itemsErr.message }, { status: 500 });

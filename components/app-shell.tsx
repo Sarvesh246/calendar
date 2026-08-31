@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -8,18 +9,32 @@ import { Plus, Search, Settings } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
-import { CommandPalette } from "./command-palette";
-import { AIDrawer } from "./ai-drawer";
 import { ReminderScheduler } from "./reminder-scheduler";
 import { UndoToast } from "./undo-toast";
-import { FeedSync } from "./feed-sync";
-import { MergeCloudDialog } from "./merge-cloud-dialog";
+import { DeferredFeedSync } from "./deferred-feed-sync";
 import { ConflictToast } from "./conflict-toast";
-import { FilterButton, FilterSheet } from "./filter-sheet";
+import { FilterButton } from "./filter-sheet";
+import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { cn } from "@/lib/utils";
+
+const CommandPalette = dynamic(
+  () => import("./command-palette").then((m) => ({ default: m.CommandPalette })),
+  { ssr: false }
+);
+const AIDrawer = dynamic(() => import("./ai-drawer").then((m) => ({ default: m.AIDrawer })), {
+  ssr: false,
+});
+const MergeCloudDialog = dynamic(
+  () => import("./merge-cloud-dialog").then((m) => ({ default: m.MergeCloudDialog })),
+  { ssr: false }
+);
+const FilterSheet = dynamic(
+  () => import("./filter-sheet").then((m) => ({ default: m.FilterSheet })),
+  { ssr: false }
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
@@ -175,8 +190,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ReminderScheduler />
       <UndoToast />
       <ConflictToast />
-      <FeedSync />
+      <DeferredFeedSync />
       <MergeCloudDialog />
+      <StorageSync />
     </div>
   );
 }

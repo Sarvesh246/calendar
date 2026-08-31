@@ -58,12 +58,14 @@ export async function maybePromptForReminders(getItems: () => Item[]): Promise<v
 }
 
 /** Register the click-handling service worker. Safe to call repeatedly. */
-export async function ensureReminderWorker(): Promise<void> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+export async function ensureReminderWorker(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return false;
   try {
     await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
+    return true;
   } catch {
-    /* SW is an enhancement here — fall back to page-context Notification */
+    return false;
   }
 }
 
@@ -139,8 +141,8 @@ async function showReminder(item: Item, label: string, clock24h: boolean): Promi
   const options: NotificationOptions & { tag: string; data?: { itemId: string } } = {
     body: `${label} · ${reminderBody(item, clock24h)}`,
     tag: `datebook-${item.id}`,
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     data: { itemId: item.id },
     actions: [
       { action: "open", title: "Open" },

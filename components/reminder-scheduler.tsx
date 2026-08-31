@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useDatebookStore } from "@/lib/store";
+import { useReminderItems, useSettings } from "@/lib/store-selectors";
 import {
   armReminders,
   disarmReminders,
@@ -17,8 +18,8 @@ import { subscribePush } from "@/lib/push-client";
  * browsers freeze timers while backgrounded).
  */
 export function ReminderScheduler() {
-  const items = useDatebookStore((s) => s.items);
-  const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const items = useReminderItems();
+  const { clock24h } = useSettings();
 
   useEffect(() => {
     void (async () => {
