@@ -18,7 +18,6 @@ import { ConflictToast } from "./conflict-toast";
 import { FilterButton, FilterSheet } from "./filter-sheet";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
-import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { cn } from "@/lib/utils";
 
@@ -35,11 +34,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onToday = pathname === "/today";
 
   useKeyboardInset();
-
-  // Several views render "live" time-relative text (countdowns, "today"). Gating
-  // real content behind a client-only mount avoids server/client clock drift
-  // producing a hydration mismatch — the cost is one blank frame on first load.
-  const mounted = useHasMounted();
 
   useEffect(() => {
     closeQuickAdd();
@@ -120,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {mounted ? children : null}
+        {children}
       </main>
 
       {!focusMode && !onSettings && !quickAddOpen && (
@@ -136,62 +130,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Button>
       )}
 
-      {mounted && (
-        <>
-          {/* The plus button used to swap this straight in with a bare
-              conditional render — no fade, no travel, just a hard cut. It now
-              drops in from just above its resting spot on the same spring
-              every other popover in the app uses, and eases back out quicker
-              than it arrived. */}
-          <AnimatePresence>
-            {quickAddOpen && (
-              <motion.button
-                key="quick-add-scrim"
-                type="button"
-                aria-label="Dismiss add"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-                className="overlay-scrim-light fixed inset-0 z-[45]"
-                onClick={closeQuickAdd}
-                onPointerDown={closeQuickAdd}
-              />
+      <AnimatePresence>
+        {quickAddOpen && (
+          <motion.button
+            key="quick-add-scrim"
+            type="button"
+            aria-label="Dismiss add"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            className="overlay-scrim-light fixed inset-0 z-[45]"
+            onClick={closeQuickAdd}
+            onPointerDown={closeQuickAdd}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {quickAddOpen && (
+          <motion.div
+            key="quick-add-panel"
+            initial={{ opacity: 0, y: -10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              y: -8,
+              scale: 0.98,
+              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+            }}
+            transition={motionTokens.spring}
+            style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
+            className={cn(
+              "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
+              onToday && "md:hidden"
             )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {quickAddOpen && (
-              <motion.div
-                key="quick-add-panel"
-                initial={{ opacity: 0, y: -10, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{
-                  opacity: 0,
-                  y: -8,
-                  scale: 0.98,
-                  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
-                }}
-                transition={motionTokens.spring}
-                style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
-                className={cn(
-                  "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
-                  onToday && "md:hidden"
-                )}
-              >
-                <QuickAddBar />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <FilterSheet />
-          <CommandPalette />
-          <AIDrawer />
-          <ReminderScheduler />
-          <UndoToast />
-          <ConflictToast />
-          <FeedSync />
-          <MergeCloudDialog />
-        </>
-      )}
+          >
+            <QuickAddBar />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <FilterSheet />
+      <CommandPalette />
+      <AIDrawer />
+      <ReminderScheduler />
+      <UndoToast />
+      <ConflictToast />
+      <FeedSync />
+      <MergeCloudDialog />
     </div>
   );
 }

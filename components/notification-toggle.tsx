@@ -33,7 +33,14 @@ export function NotificationToggle() {
     setBusy(false);
   }
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <div
+        className="h-[44px] animate-pulse rounded-lg border border-line bg-surface-sunken"
+        aria-hidden
+      />
+    );
+  }
 
   if (state === "unsupported") {
     return (

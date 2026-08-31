@@ -6,6 +6,7 @@ import type { Item, Reminder } from "@/lib/types";
 export const runtime = "nodejs";
 
 const WINDOW_MS = 25 * 60 * 1000; // GitHub Actions runs ~every 10m and can be late
+const LOOKBACK_MS = 12 * 60 * 60 * 1000; // Catch reminders missed during cron gaps
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 
   const now = Date.now();
   const horizon = now + WINDOW_MS;
-  const lookback = now - WINDOW_MS;
+  const lookback = now - LOOKBACK_MS;
 
   const { data: items, error: itemsErr } = await supabase
     .from("items")

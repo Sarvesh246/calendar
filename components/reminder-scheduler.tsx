@@ -21,8 +21,10 @@ export function ReminderScheduler() {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
 
   useEffect(() => {
-    void ensureReminderWorker();
-    if (notificationPermission() === "granted") void subscribePush();
+    void (async () => {
+      await ensureReminderWorker();
+      if (notificationPermission() === "granted") await subscribePush();
+    })();
   }, []);
 
   useEffect(() => {

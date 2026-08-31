@@ -60,7 +60,7 @@ function DayCellChips({
 }) {
   const density = useDatebookStore((s) => s.settings.density);
   const ref = useRef<HTMLDivElement>(null);
-  const [fitCount, setFitCount] = useState(() => Math.min(3, items.length));
+  const [fitCount, setFitCount] = useState(0);
 
   useEffect(() => {
     const el = ref.current;

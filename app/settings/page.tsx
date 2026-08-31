@@ -39,19 +39,20 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex max-w-[640px] flex-col gap-10">
+    <div className="flex max-w-[640px] flex-col gap-[var(--page-gap)]">
       <header>
         <h1 className="text-[26px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1 text-[13px] text-ink-soft">Account, calendar, and how Datebook looks.</p>
       </header>
 
-      <p className="text-[12px] font-medium text-ink-faint">Account & data</p>
-      <Section title="Account & sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
-        <AccountSection />
-      </Section>
+      <SettingsGroup label="Account & data">
+        <Section title="Account & sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
+          <AccountSection />
+        </Section>
+      </SettingsGroup>
 
-      <p className="-mb-6 text-[12px] font-medium text-ink-faint">Calendar</p>
-      <Section title="Layout & display">
+      <SettingsGroup label="How Datebook looks">
+        <Section title="Layout & display">
         <Row label="Default view">
           <Segmented
             segmentId="landing-view"
@@ -102,14 +103,14 @@ export default function SettingsPage() {
         <Row label="Hide completed items" horizontal>
           <ToggleSwitch checked={settings.hideCompleted} onChange={(v) => updateSettings({ hideCompleted: v })} label="Hide completed" />
         </Row>
-      </Section>
+        </Section>
 
-      <Section
-        title="Appearance"
-        sub="Optional. Datebook is designed around Minimal — other looks only recolor surfaces."
-        collapsible
-        storageKey="appearance"
-      >
+        <Section
+          title="Appearance"
+          sub="Optional. Datebook is designed around Minimal — other looks only recolor surfaces."
+          collapsible
+          storageKey="appearance"
+        >
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {presetOrder.map((preset) => (
             <PresetCard
@@ -120,9 +121,11 @@ export default function SettingsPage() {
             />
           ))}
         </div>
-      </Section>
+        </Section>
+      </SettingsGroup>
 
-      <Section title="Categories" sub="Each category's color drives its cards, chips, and calendar dots.">
+      <SettingsGroup label="Calendar">
+        <Section title="Categories" sub="Each category's color drives its cards, chips, and calendar dots.">
         <div className="flex flex-col gap-2">
           {categories.map((cat) => (
             <div key={cat.id} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5">
@@ -186,14 +189,14 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section
-        title="Import from a calendar link"
-        sub="Paste a feed URL from Canvas, Google Calendar, or Outlook to pull in assignments and events — due dates, titles, and descriptions. Re-sync any time to pick up changes."
-      >
-        <ImportCalendar />
-      </Section>
+        <Section
+          title="Import from a calendar link"
+          sub="Paste a feed URL from Canvas, Google Calendar, or Outlook to pull in assignments and events — due dates, titles, and descriptions. Re-sync any time to pick up changes."
+        >
+          <ImportCalendar />
+        </Section>
 
-      <Section title="Export" sub="Download your calendar as an .ics file you can open in Google Calendar, Outlook, or Apple Calendar.">
+        <Section title="Export" sub="Download your calendar as an .ics file you can open in Google Calendar, Outlook, or Apple Calendar.">
         <button
           type="button"
           onClick={() => {
@@ -210,12 +213,12 @@ export default function SettingsPage() {
         >
           Download .ics
         </button>
-      </Section>
+        </Section>
 
-      <Section
-        title="Reminders"
-        sub="Reminders fire while the app is open and catch up when you reopen it. Closed-app push works when VAPID keys are set and you are signed in."
-      >
+        <Section
+          title="Reminders"
+          sub="Reminders fire while the app is open and catch up when you reopen it. Closed-app push works when VAPID keys are set and you are signed in."
+        >
         <NotificationToggle />
         <div className="mt-1">
           <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">
@@ -249,16 +252,16 @@ export default function SettingsPage() {
             );
           })}
         </div>
-      </Section>
+        </Section>
 
-      <Section title="Install" sub="Add Datebook to your home screen.">
-        <PwaInstallButton />
-      </Section>
+        <Section title="Install" sub="Add Datebook to your home screen.">
+          <PwaInstallButton />
+        </Section>
 
-      <Section
-        title="Backup & reset"
-        sub="Download a JSON copy of everything on this device, restore one, or start over. Feed URLs in the backup are secrets — don't share the file."
-      >
+        <Section
+          title="Backup & reset"
+          sub="Download a JSON copy of everything on this device, restore one, or start over. Feed URLs in the backup are secrets — don't share the file."
+        >
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -318,7 +321,17 @@ export default function SettingsPage() {
             Reset calendar data
           </button>
         </div>
-      </Section>
+        </Section>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+function SettingsGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[12px] font-medium text-ink-faint">{label}</p>
+      <div className="flex flex-col gap-[var(--page-gap)]">{children}</div>
     </div>
   );
 }

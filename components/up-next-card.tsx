@@ -45,7 +45,7 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
         </p>
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{item.title}</h3>
-          <span className="shrink-0 text-[12px] tabular-nums text-ink-soft">
+          <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
             {!started && formatDistanceToNowStrict(start, { addSuffix: false })}
           </span>
         </div>

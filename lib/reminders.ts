@@ -2,6 +2,7 @@
 
 import { format, isToday } from "date-fns";
 import type { Item } from "./types";
+import { subscribePush } from "./push-client";
 
 /* ------------------------------------------------------------------ */
 /* Local reminder delivery                                             */
@@ -52,6 +53,7 @@ export async function maybePromptForReminders(getItems: () => Item[]): Promise<v
   if (result === "granted") {
     await ensureReminderWorker();
     armReminders(getItems());
+    void subscribePush();
   }
 }
 
