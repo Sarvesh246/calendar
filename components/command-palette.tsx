@@ -77,11 +77,17 @@ export function CommandPalette() {
       onOpenChange={setOpen}
       label="Command palette"
       // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see
-      // globals.css). cmdk renders through Radix Dialog, which keeps the node
-      // mounted while a `data-state="closed"` animation runs — so the palette
-      // now closes on screen instead of blinking out.
+      // globals.css) and key off `data-state`. cmdk's `className` prop lands on
+      // its own inner Command root — a plain div nested *inside* Radix's
+      // Dialog.Content — which never receives `data-state` at all, so the
+      // `.palette-panel[data-state=...]` selector could never match and the
+      // panel just snapped open/closed with no animation. `contentClassName`
+      // is what actually reaches Dialog.Content, the element Radix stamps
+      // with `data-state="open"/"closed"` — that's where the positioning and
+      // the animation trigger both need to live.
       overlayClassName="palette-overlay overlay-scrim-light fixed inset-0 z-50 backdrop-blur-[2px]"
-      className="palette-panel glass fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-xl"
+      contentClassName="palette-panel fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2"
+      className="glass block w-full overflow-hidden rounded-xl"
       style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
     >
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
