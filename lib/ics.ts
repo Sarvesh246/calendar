@@ -1,6 +1,6 @@
 // Minimal iCalendar (RFC 5545) reader — enough to import event/assignment feeds
 // from Canvas, Google Calendar, Outlook, and similar. Recurring events (RRULE
-// DAILY/WEEKLY/MONTHLY) are expanded into concrete instances; VTODO is ignored.
+// DAILY/WEEKLY/MONTHLY) are expanded into concrete instances; VTODO imports as tasks.
 //
 // Pure module — no Node or browser APIs — so the API route (server) and the
 // settings UI (client, type-only) can both import it.
@@ -16,6 +16,10 @@ export interface IcsEvent {
   /** ISO datetime string, when the feed provides DTEND. */
   end?: string;
   allDay: boolean;
+  /** Present when parsed from a VTODO component. */
+  kind?: "event" | "todo";
+  /** VTODO STATUS when provided (NEEDS-ACTION, COMPLETED, etc.). */
+  todoStatus?: string;
 }
 
 interface RawEvent extends IcsEvent {
@@ -23,6 +27,7 @@ interface RawEvent extends IcsEvent {
   exdates: string[];
   recurrenceId?: string;
   cancelled?: boolean;
+  todoStatus?: string;
 }
 
 export interface ParsedCalendar {
@@ -137,12 +142,86 @@ function parseDate(value: string, params: Record<string, string>): DateResult | 
 
 type CurEvent = Partial<RawEvent> & { _start?: DateResult; _end?: DateResult };
 
+function pushCur(rawEvents: RawEvent[], cur: CurEvent, kind: "event" | "todo") {
+  if (!cur.uid || !cur.summary || !cur._start) return;
+  rawEvents.push({
+    uid: cur.uid,
+    summary: cur.summary,
+    description: cur.description,
+    location: cur.location,
+    url: cur.url,
+    start: cur._start.iso,
+    end: cur._end?.iso,
+    allDay: cur._start.allDay,
+    rrule: cur.rrule,
+    exdates: cur.exdates ?? [],
+    recurrenceId: cur.recurrenceId,
+    cancelled: cur.cancelled,
+    kind,
+    todoStatus: cur.todoStatus,
+  });
+}
+
+function applyProperty(cur: CurEvent, key: string, params: Record<string, string>, value: string) {
+  switch (key) {
+    case "UID":
+      cur.uid = value.trim();
+      break;
+    case "SUMMARY":
+      cur.summary = unescapeText(value).trim();
+      break;
+    case "DESCRIPTION": {
+      const text = toPlainText(value);
+      if (text) cur.description = text;
+      if (!cur.url) {
+        const found = extractFirstUrl(value);
+        if (found) cur.url = found;
+      }
+      break;
+    }
+    case "LOCATION": {
+      const loc = unescapeText(value).trim();
+      if (loc) cur.location = loc;
+      break;
+    }
+    case "URL":
+      if (value.trim()) cur.url = value.trim();
+      break;
+    case "DTSTART":
+    case "DUE":
+      cur._start = parseDate(value, params) ?? undefined;
+      break;
+    case "DTEND":
+      cur._end = parseDate(value, params) ?? undefined;
+      break;
+    case "RRULE":
+      cur.rrule = value.trim();
+      break;
+    case "EXDATE": {
+      for (const piece of value.split(",")) {
+        const p = parseDate(piece.trim(), params);
+        if (p) (cur.exdates ??= []).push(p.iso);
+      }
+      break;
+    }
+    case "RECURRENCE-ID": {
+      const rec = parseDate(value, params);
+      if (rec) cur.recurrenceId = rec.iso;
+      break;
+    }
+    case "STATUS":
+      if (/^cancelled$/i.test(value.trim())) cur.cancelled = true;
+      else cur.todoStatus = value.trim();
+      break;
+  }
+}
+
 export function parseIcs(raw: string): ParsedCalendar {
   const lines = unfold(raw);
   let name: string | null = null;
   const rawEvents: RawEvent[] = [];
 
-  let inEvent = false;
+  let block: "event" | "todo" | null = null;
   let cur: CurEvent = {};
 
   for (const line of lines) {
@@ -151,85 +230,32 @@ export function parseIcs(raw: string): ParsedCalendar {
     const { name: key, params, value } = parsed;
 
     if (key === "BEGIN" && value === "VEVENT") {
-      inEvent = true;
+      block = "event";
+      cur = { exdates: [] };
+      continue;
+    }
+    if (key === "BEGIN" && value === "VTODO") {
+      block = "todo";
       cur = { exdates: [] };
       continue;
     }
     if (key === "END" && value === "VEVENT") {
-      inEvent = false;
-      if (cur.uid && cur.summary && cur._start) {
-        rawEvents.push({
-          uid: cur.uid,
-          summary: cur.summary,
-          description: cur.description,
-          location: cur.location,
-          url: cur.url,
-          start: cur._start.iso,
-          end: cur._end?.iso,
-          allDay: cur._start.allDay,
-          rrule: cur.rrule,
-          exdates: cur.exdates ?? [],
-          recurrenceId: cur.recurrenceId,
-          cancelled: cur.cancelled,
-        });
-      }
+      pushCur(rawEvents, cur, "event");
+      block = null;
+      continue;
+    }
+    if (key === "END" && value === "VTODO") {
+      pushCur(rawEvents, cur, "todo");
+      block = null;
       continue;
     }
 
-    if (!inEvent) {
+    if (!block) {
       if (key === "X-WR-CALNAME") name = unescapeText(value).trim() || null;
       continue;
     }
 
-    switch (key) {
-      case "UID":
-        cur.uid = value.trim();
-        break;
-      case "SUMMARY":
-        cur.summary = unescapeText(value).trim();
-        break;
-      case "DESCRIPTION": {
-        const text = toPlainText(value);
-        if (text) cur.description = text;
-        if (!cur.url) {
-          const found = extractFirstUrl(value);
-          if (found) cur.url = found;
-        }
-        break;
-      }
-      case "LOCATION": {
-        const loc = unescapeText(value).trim();
-        if (loc) cur.location = loc;
-        break;
-      }
-      case "URL":
-        if (value.trim()) cur.url = value.trim();
-        break;
-      case "DTSTART":
-        cur._start = parseDate(value, params) ?? undefined;
-        break;
-      case "DTEND":
-        cur._end = parseDate(value, params) ?? undefined;
-        break;
-      case "RRULE":
-        cur.rrule = value.trim();
-        break;
-      case "EXDATE": {
-        for (const piece of value.split(",")) {
-          const p = parseDate(piece.trim(), params);
-          if (p) (cur.exdates ??= []).push(p.iso);
-        }
-        break;
-      }
-      case "RECURRENCE-ID": {
-        const rec = parseDate(value, params);
-        if (rec) cur.recurrenceId = rec.iso;
-        break;
-      }
-      case "STATUS":
-        if (/^cancelled$/i.test(value.trim())) cur.cancelled = true;
-        break;
-    }
+    applyProperty(cur, key, params, value);
   }
 
   return { name, events: flattenRecurrence(rawEvents) };
@@ -380,6 +406,8 @@ function flattenRecurrence(raw: RawEvent[]): IcsEvent[] {
       start,
       end,
       allDay: ev.allDay,
+      ...(ev.kind ? { kind: ev.kind } : {}),
+      ...(ev.todoStatus ? { todoStatus: ev.todoStatus } : {}),
     };
   };
 

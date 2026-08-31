@@ -87,9 +87,11 @@ export function ItemEditor({
   const [customOffset, setCustomOffset] = useState("30");
 
   useEffect(() => {
-    setTitle(item.title);
-    setLocation(item.location ?? "");
-    setDescription(item.description ?? "");
+    queueMicrotask(() => {
+      setTitle(item.title);
+      setLocation(item.location ?? "");
+      setDescription(item.description ?? "");
+    });
   }, [item.id, item.title, item.location, item.description]);
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;

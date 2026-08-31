@@ -72,6 +72,7 @@ function splitCourse(summary: string): { title: string; course: string | null } 
 }
 
 function detectType(ev: IcsEvent): ItemType {
+  if (ev.kind === "todo") return "task";
   const hay = `${ev.uid} ${ev.url ?? ""}`.toLowerCase();
   if (/(assignment|quiz|discussion_topic|homework)/.test(hay)) return "assignment";
   // A point-in-time entry with no end is a due date, not a meeting.
@@ -130,7 +131,13 @@ export function buildImportPlan(
       ...(ev.url ? { url: ev.url } : {}),
       ...(ev.end ? { endAt: ev.end } : {}),
       ...(ev.allDay ? { allDay: true } : {}),
-      ...(type !== "event" ? { status: "todo" as const } : {}),
+      ...(type !== "event"
+        ? {
+            status: (ev.todoStatus && /^COMPLETED$/i.test(ev.todoStatus) ? "done" : "todo") as
+              | "todo"
+              | "done",
+          }
+        : {}),
     };
     draft.sourceSnapshot = snapshotFrom(draft);
     drafts.push(draft);

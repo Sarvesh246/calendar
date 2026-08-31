@@ -212,8 +212,10 @@ function useExpandable(itemId: string) {
 
   useEffect(() => {
     if (focusedItemId === itemId) {
-      setExpanded(true);
-      setFocusedItemId(null);
+      queueMicrotask(() => {
+        setExpanded(true);
+        setFocusedItemId(null);
+      });
     }
   }, [focusedItemId, itemId, setFocusedItemId]);
 
@@ -277,11 +279,11 @@ function useCompleteStyle(done: boolean) {
 
   useEffect(() => {
     if (!done) {
-      setStyled(false);
+      queueMicrotask(() => setStyled(false));
       return;
     }
     if (prefersReducedMotion()) {
-      setStyled(true);
+      queueMicrotask(() => setStyled(true));
       return;
     }
     // Let the tick land before the row dims and strikes through, so the two read

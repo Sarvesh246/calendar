@@ -358,7 +358,7 @@ function MobileWeekPager({
     const idx = days.findIndex((d) => isToday(d));
     if (idx < 0) return;
     el.scrollTo({ left: el.clientWidth * idx, behavior: "instant" });
-    setPage(idx);
+    queueMicrotask(() => setPage(idx));
   }, [days]);
 
   return (
