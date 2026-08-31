@@ -17,7 +17,7 @@
     <!-- Page surface: white catching light at the top, settling to a
          hair of grey at the bottom — the same cue a real sheet of paper
          or a matte plastic card gives under a lamp. -->
-    <linearGradient id="page" x1="256" y1="144" x2="256" y2="348" gradientUnits="userSpaceOnUse">
+    <linearGradient id="page" x1="256" y1="156" x2="256" y2="360" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffffff" />
       <stop offset="1" stop-color="#eeeef1" />
     </linearGradient>
@@ -41,12 +41,12 @@
   <!-- Pad: a torn-off day sheet with two ring tabs at the top, standing in
        for "calendar", and a bold check standing in for "done" — one mark
        that reads as a planner without drawing a literal grid. -->
-  <rect x="144" y="144" width="224" height="204" rx="26" fill="url(#page)" filter="url(#pageShadow)" />
-  <rect x="191" y="112" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
-  <rect x="303" y="112" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
+  <rect x="144" y="156" width="224" height="204" rx="26" fill="url(#page)" filter="url(#pageShadow)" />
+  <rect x="191" y="124" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
+  <rect x="303" y="124" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
 
   <path
-    d="M186 250 L234 298 L326 202"
+    d="M186 262 L234 310 L326 214"
     stroke="#0b0b0d"
     stroke-width="32"
     stroke-linecap="round"
