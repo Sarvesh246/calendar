@@ -14,8 +14,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       tag: data.tag || "datebook-push",
-      icon: "/icon.svg",
-      badge: "/icon.svg",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
       data: { itemId: data.itemId },
       actions: [
         { action: "open", title: "Open" },

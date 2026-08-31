@@ -35,8 +35,9 @@ export function PwaInstallButton() {
   if (!event) {
     return (
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        On iPhone, open Share and tap Add to Home Screen. Chrome and Edge will offer an install button here when the
-        app is installable.
+        On iPhone, open Share and tap Add to Home Screen. If you installed before a recent icon update,
+        remove the old home-screen icon and add again so iOS picks up the latest tile. Chrome and Edge
+        will offer an install button here when the app is installable.
       </p>
     );
   }
