@@ -1,11 +1,13 @@
 {
+  "id": "/",
   "name": "Datebook",
   "short_name": "Datebook",
   "description": "A personal calendar and assignment tracker.",
   "start_url": "/today",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f7f7f8",
+  "orientation": "portrait",
+  "background_color": "#07070a",
   "theme_color": "#f7f7f8",
   "icons": [
     {
@@ -27,13 +29,13 @@
       "purpose": "any"
     },
     {
-      "src": "/icon-192.png",
+      "src": "/icon-192-maskable.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

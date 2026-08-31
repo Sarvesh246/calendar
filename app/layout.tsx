@@ -6,6 +6,7 @@ import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppShell } from "@/components/app-shell";
 import { MotionProvider } from "@/components/motion-provider";
+import { SplashScreenLinks } from "@/components/splash-screen-links";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,13 +38,19 @@ export const metadata: Metadata = {
   // insets) to `apple-mobile-web-app-capable` being present, so without this
   // the home-screen app renders with the OS reserving its own status-bar
   // strip instead of the page drawing edge-to-edge under it.
-  other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     // iOS's home-screen icon doesn't reliably rasterize an SVG here across
     // versions — a real PNG is what actually shows up after "Add to Home
     // Screen" instead of a blank tile.
-    apple: "/apple-touch-icon.png",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180" },
+      { url: "/icon-152.png", sizes: "152x152" },
+      { url: "/icon-167.png", sizes: "167x167" },
+    ],
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 
@@ -70,6 +77,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <SplashScreenLinks />
+      </head>
       <body className="min-h-full">
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
