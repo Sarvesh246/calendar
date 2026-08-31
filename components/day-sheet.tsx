@@ -61,6 +61,8 @@ export function DaySheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, onClose]);
 
+  if (!visible) return null;
+
   const close = () => {
     if (closeGuard.current) return;
     closeGuard.current = true;

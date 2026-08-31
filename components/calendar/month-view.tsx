@@ -125,19 +125,41 @@ function DayCellChips({
   );
 }
 
-function DayCellCount({ items }: { items: Item[] }) {
+function DayCellMobilePreview({
+  items,
+  colorOf,
+}: {
+  items: Item[];
+  colorOf: (categoryId: string) => string;
+}) {
   const open = openItemsOnDay(items);
   const overdue = items.some(isOverdue);
   if (open.length === 0) return null;
+
+  const categories = [...new Set(open.map((i) => i.categoryId))].slice(0, 3);
+
   return (
-    <span
-      className={cn(
-        "shrink-0 text-[11px] font-medium tabular-nums leading-none sm:hidden",
-        overdue ? "text-warn" : "text-ink-faint"
+    <div className="flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
+      <span
+        className={cn(
+          "text-[11px] font-medium tabular-nums leading-none",
+          overdue ? "text-warn" : "text-ink-faint"
+        )}
+      >
+        {open.length}
+      </span>
+      {categories.length > 0 && (
+        <div className="flex items-center gap-0.5">
+          {categories.map((id) => (
+            <span
+              key={id}
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: colorOf(id) }}
+            />
+          ))}
+        </div>
       )}
-    >
-      {open.length}
-    </span>
+    </div>
   );
 }
 
@@ -165,21 +187,41 @@ export function MonthView({
   const labels = weekStartsOn === 0 ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
   const weeks = grid.length / 7;
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragging = useRef(false);
 
   function onTouchStart(e: React.TouchEvent) {
     swipeStart.current = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    dragging.current = true;
+    setIsDragging(true);
+    setDragX(0);
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging.current || swipeStart.current == null) return;
+    const dx = e.changedTouches[0].clientX - swipeStart.current.x;
+    const dy = e.changedTouches[0].clientY - swipeStart.current.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      setDragX(dx * 0.35);
+    }
   }
   function onTouchEnd(e: React.TouchEvent) {
-    if (swipeStart.current == null || !onSwipeMonth) return;
+    if (swipeStart.current == null) return;
     const dx = e.changedTouches[0].clientX - swipeStart.current.x;
     const dy = e.changedTouches[0].clientY - swipeStart.current.y;
     swipeStart.current = null;
-    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) onSwipeMonth(dx < 0 ? 1 : -1);
+    dragging.current = false;
+    setIsDragging(false);
+    setDragX(0);
+    if (onSwipeMonth && Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      onSwipeMonth(dx < 0 ? 1 : -1);
+    }
   }
 
   return (
     <div
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:p-3"
     >
@@ -190,7 +232,9 @@ export function MonthView({
           </div>
         ))}
       </div>
-      <div
+      <motion.div
+        animate={{ x: dragX }}
+        transition={isDragging ? { duration: 0 } : motionTokens.springSnappy}
         className="grid min-h-0 w-full flex-1 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
         style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
       >
@@ -258,12 +302,12 @@ export function MonthView({
               >
                 {format(date, "d")}
               </span>
-              <DayCellCount items={dayItems} />
+              <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
               <DayCellChips items={dayItems} colorOf={colorOf} />
             </button>
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }

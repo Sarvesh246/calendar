@@ -2,12 +2,13 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
-import { dayLabel, isOverdue, itemOccupiesDay, weekWorkload } from "@/lib/date-utils";
+import { dayKey, dayLabel, isOverdue, itemOccupiesDay, weekWorkload } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
@@ -19,6 +20,8 @@ import type { Item } from "@/lib/types";
 const HORIZON_DAYS = 120;
 
 export default function AgendaPage() {
+  const router = useRouter();
+  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   const allItems = useDatebookStore((s) => s.items);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
@@ -73,7 +76,16 @@ export default function AgendaPage() {
 
       <div className="flex gap-1">
         {heat.map((d) => (
-          <div key={d.date.toISOString()} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+          <button
+            key={d.date.toISOString()}
+            type="button"
+            onClick={() => {
+              setCalendarFocusDate(dayKey(d.date));
+              router.push("/calendar");
+            }}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
+            title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
+          >
             <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
               {format(d.date, "EEEEE")}
             </span>
@@ -85,9 +97,8 @@ export default function AgendaPage() {
                 d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
                 d.intensity >= 4 && "bg-warn"
               )}
-              title={`${format(d.date, "EEE")} · ${d.count} open`}
             />
-          </div>
+          </button>
         ))}
       </div>
 

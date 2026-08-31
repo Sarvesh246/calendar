@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
@@ -19,8 +19,8 @@ export function FocusView() {
   });
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const [celebrating, setCelebrating] = useState(false);
 
-  // Focus mode hides the nav, so Esc is the keyboard way back out.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") toggleFocusMode();
@@ -32,10 +32,17 @@ export function FocusView() {
   const { current, next } = focusQueue(items);
   const currentCategory = useCategory(current?.categoryId);
 
+  function completeCurrent() {
+    if (!current || current.type === "event" || celebrating) return;
+    haptic("success");
+    setCelebrating(true);
+    window.setTimeout(() => {
+      setItemStatus(current.id, "done");
+      setCelebrating(false);
+    }, 320);
+  }
+
   return (
-    // Entering focus mode strips away the whole shell, so the one thing left
-    // should arrive rather than simply be there — otherwise the transition reads
-    // as the app having crashed into a blank page.
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -53,9 +60,17 @@ export function FocusView() {
 
       {current ? (
         <>
-          <motion.div key={current.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={motionTokens.springGentle}>
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: celebrating ? 0.85 : 1, y: 0, scale: celebrating ? 0.98 : 1 }}
+            transition={motionTokens.springGentle}
+          >
             {currentCategory && (
-              <p className="cat-text text-[12px] font-medium uppercase tracking-wider" style={{ "--cat": currentCategory.color } as React.CSSProperties}>
+              <p
+                className="cat-text text-[12px] font-medium uppercase tracking-wider"
+                style={{ "--cat": currentCategory.color } as React.CSSProperties}
+              >
                 {currentCategory.name}
               </p>
             )}
@@ -63,17 +78,28 @@ export function FocusView() {
               {current.title}
             </h1>
             <p className="mt-2 text-[15px] text-ink-soft">
-              {current.type === "event" ? formatTime(current.at, clock24h) : relativeDueLabel(current.at, { allDay: current.allDay })}
+              {current.type === "event"
+                ? formatTime(current.at, clock24h)
+                : relativeDueLabel(current.at, { allDay: current.allDay })}
             </p>
+            <AnimatePresence>
+              {celebrating && (
+                <motion.span
+                  key="celebrate"
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1.4, opacity: 0 }}
+                  transition={{ duration: 0.32, ease: motionTokens.ease }}
+                  className="complete-ripple pointer-events-none mx-auto mt-4 block h-12 w-12 rounded-full border-2 border-good"
+                />
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {current.type !== "event" && (
             <button
-              onClick={() => {
-                haptic("success");
-                setItemStatus(current.id, "done");
-              }}
-              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink shadow-[var(--shadow-md)] transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover:shadow-[var(--shadow-lg)]"
+              onClick={completeCurrent}
+              disabled={celebrating}
+              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink shadow-[var(--shadow-md)] transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover:shadow-[var(--shadow-lg)] disabled:opacity-60"
             >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Mark complete
@@ -81,12 +107,10 @@ export function FocusView() {
           )}
 
           {next && (
-            <div className="mt-4 border-t border-line pt-6">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">Up next</p>
-              <p className="mt-1.5 text-[14px] text-ink-soft">
-                {next.title} · {format(new Date(next.at), "EEE, MMM d")}
-              </p>
-            </div>
+            <p className="text-[13px] text-ink-faint">
+              Up next · {next.title}
+              {next.type !== "event" && ` · ${format(new Date(next.at), "MMM d")}`}
+            </p>
           )}
         </>
       ) : (

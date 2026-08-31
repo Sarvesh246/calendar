@@ -11,6 +11,7 @@ import { useState } from "react";
 export function FeedHealthBanner() {
   const sources = useDatebookStore((s) => s.importSources);
   const applyImport = useDatebookStore((s) => s.applyImport);
+  const markImportError = useDatebookStore((s) => s.markImportError);
   const failed = sources.filter((s) => s.lastError);
   const [busy, setBusy] = useState<string | null>(null);
   return (
@@ -48,8 +49,8 @@ export function FeedHealthBanner() {
                   try {
                     const feed = await fetchCalendarFeed(s.url);
                     applyImport(s.url, feed);
-                  } catch {
-                    /* markImportError already set by fetch path if we wire it */
+                  } catch (err) {
+                    markImportError(s.url, err instanceof Error ? err.message : "Sync failed.");
                   } finally {
                     setBusy(null);
                   }

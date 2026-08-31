@@ -11,6 +11,7 @@ import { dayKey, itemsOnDay, weekDays } from "@/lib/date-utils";
 import { MonthView } from "@/components/calendar/month-view";
 import { WeekView } from "@/components/calendar/week-view";
 import { DayAgenda } from "@/components/day-agenda";
+import { DaySheet } from "@/components/day-sheet";
 import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
@@ -55,6 +56,7 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<ViewMode>("month");
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [sheetOpen, setSheetOpen] = useState(false);
   // Which way the period last moved, so the grid can leave the way it came.
   const [direction, setDirection] = useState<1 | -1>(1);
 
@@ -88,6 +90,7 @@ export default function CalendarPage() {
 
   function selectDate(d: Date) {
     startTransition(() => setSelectedDate(d));
+    setSheetOpen(true);
   }
 
   // Keyed by the period on screen, so stepping months swaps one grid for
@@ -199,7 +202,7 @@ export default function CalendarPage() {
           className={cn(
             "relative min-h-0 w-full",
             mode === "month"
-              ? "h-[clamp(22rem,58dvh,34rem)] lg:h-full lg:min-h-[28rem] lg:flex-1"
+              ? "h-[clamp(24rem,72dvh,100%)] lg:h-full lg:min-h-[28rem] lg:flex-1"
               : "lg:h-full lg:flex-1"
           )}
         >
@@ -246,19 +249,22 @@ export default function CalendarPage() {
           </AnimatePresence>
         </div>
 
-        {mode === "month" && (
-          <DayAgenda
-            date={selectedDate}
-            items={selectedItems}
-            onAdd={addToSelected}
-            className="lg:hidden"
-          />
-        )}
-
         <aside className="glass hidden min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex">
           <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
         </aside>
       </div>
+
+      <AnimatePresence>
+        {sheetOpen && mode === "month" && (
+          <DaySheet
+            key={dayKey(selectedDate)}
+            date={selectedDate}
+            items={selectedItems}
+            onClose={() => setSheetOpen(false)}
+            onAdd={addToSelected}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
