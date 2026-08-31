@@ -1,18 +1,54 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Datebook">
+  <defs>
+    <!-- Tile: a single top-to-bottom material gradient, not a flat fill —
+         gives the black surface actual physical presence instead of
+         reading as a flat colour swatch. -->
+    <linearGradient id="tile" x1="256" y1="0" x2="256" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c1c20" />
+      <stop offset="1" stop-color="#07070a" />
+    </linearGradient>
+    <!-- One soft ambient highlight, upper-left, standing in for an overhead
+         light source. Kept faint and monochrome so it reads as material,
+         not a glow effect. -->
+    <radialGradient id="sheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(150 96) rotate(90) scale(300 380)">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <!-- Page surface: white catching light at the top, settling to a
+         hair of grey at the bottom — the same cue a real sheet of paper
+         or a matte plastic card gives under a lamp. -->
+    <linearGradient id="page" x1="256" y1="144" x2="256" y2="348" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#eeeef1" />
+    </linearGradient>
+
+    <!-- The page is a raised card sitting above the tile. -->
+    <filter id="pageShadow" x="-30%" y="-20%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000000" flood-opacity="0.55" />
+    </filter>
+    <!-- The ring tabs sit above the page and drop their own tighter,
+         closer shadow onto it — the detail that sells them as separate,
+         physical pieces rather than a flat cutout. -->
+    <filter id="tabShadow" x="-80%" y="-40%" width="260%" height="220%">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
   <!-- Tile -->
-  <rect x="0" y="0" width="512" height="512" rx="114" fill="#0B0B0D" />
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#tile)" />
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#sheen)" />
 
   <!-- Pad: a torn-off day sheet with two ring tabs at the top, standing in
        for "calendar", and a bold check standing in for "done" — one mark
        that reads as a planner without drawing a literal grid. -->
-  <rect x="191" y="144" width="18" height="48" rx="9" fill="#FFFFFF" />
-  <rect x="303" y="144" width="18" height="48" rx="9" fill="#FFFFFF" />
-  <rect x="144" y="168" width="224" height="204" rx="26" fill="#FFFFFF" />
+  <rect x="144" y="144" width="224" height="204" rx="26" fill="url(#page)" filter="url(#pageShadow)" />
+  <rect x="191" y="112" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
+  <rect x="303" y="112" width="18" height="52" rx="9" fill="url(#page)" filter="url(#tabShadow)" />
 
   <path
-    d="M186 280 L234 328 L326 232"
-    stroke="#0B0B0D"
-    stroke-width="26"
+    d="M186 250 L234 298 L326 202"
+    stroke="#0b0b0d"
+    stroke-width="32"
     stroke-linecap="round"
     stroke-linejoin="round"
   />
