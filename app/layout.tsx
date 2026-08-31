@@ -40,7 +40,10 @@ export const metadata: Metadata = {
   other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    apple: "/icon.svg",
+    // iOS's home-screen icon doesn't reliably rasterize an SVG here across
+    // versions — a real PNG is what actually shows up after "Add to Home
+    // Screen" instead of a blank tile.
+    apple: "/apple-touch-icon.png",
   },
 };
 
