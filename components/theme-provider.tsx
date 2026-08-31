@@ -49,6 +49,10 @@ export const themeInitScript = `
     var density = settings && settings.density;
     if (preset) document.documentElement.setAttribute("data-preset", preset);
     if (density) document.documentElement.setAttribute("data-density", density);
+    document.documentElement.setAttribute("data-first-load", "1");
+    window.addEventListener("load", function () {
+      document.documentElement.removeAttribute("data-first-load");
+    }, { once: true });
     if (preset) {
       var colors = ${JSON.stringify(presetThemeColor)};
       var color = colors[preset];

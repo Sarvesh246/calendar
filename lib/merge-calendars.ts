@@ -41,6 +41,20 @@ function unionByKey<T>(base: T[], overlay: T[], key: (x: T) => string): T[] {
   return [...map.values()];
 }
 
+/** Prefer the row with the furthest-along assignment status; tie goes to local. */
+function pickItem(local: Item, cloud: Item): Item {
+  const rank = (s: Item["status"]) => (s === "done" ? 2 : s === "doing" ? 1 : 0);
+  const lr = rank(local.status);
+  const cr = rank(cloud.status);
+  if (lr !== cr) return lr > cr ? local : cloud;
+  if (local.status === "done" && cloud.status === "done") {
+    const lt = local.completedAt ? Date.parse(local.completedAt) : 0;
+    const ct = cloud.completedAt ? Date.parse(cloud.completedAt) : 0;
+    if (lt !== ct) return lt > ct ? local : cloud;
+  }
+  return local;
+}
+
 function mergeItems(local: Item[], cloud: Item[]): Item[] {
   const byId = new Map(cloud.map((i) => [i.id, i]));
   const uidToId = new Map(
@@ -51,7 +65,8 @@ function mergeItems(local: Item[], cloud: Item[]): Item[] {
       const cloudId = uidToId.get(item.sourceUid)!;
       byId.delete(cloudId);
     }
-    byId.set(item.id, item);
+    const existing = byId.get(item.id);
+    byId.set(item.id, existing ? pickItem(item, existing) : item);
     if (item.sourceUid) uidToId.set(item.sourceUid, item.id);
   }
   return [...byId.values()];

@@ -95,7 +95,7 @@ interface DatebookState {
   /** Load the signed-in user's data, adopt/merge local data, and start realtime sync. */
   connectCloud: (userId: string) => Promise<void>;
   /** Stop realtime sync and fall back to local (restores the pre-sign-in local data). */
-  disconnectCloud: () => void;
+  disconnectCloud: () => Promise<void>;
   /** User-triggered "Retry sync": clears every backoff timer and forces a fresh
    *  attempt — reconnect if the session is down, otherwise re-subscribe realtime,
    *  reconcile, and flush the write queue. */
@@ -198,6 +198,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       cycleItemStatus: (id) => {
+        lastLocalEdit.set(id, Date.now());
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
@@ -210,6 +211,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       setItemStatus: (id, status) => {
+        lastLocalEdit.set(id, Date.now());
         set({
           items: get().items.map((i) =>
             i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
@@ -218,6 +220,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       toggleItemDone: (id) => {
+        lastLocalEdit.set(id, Date.now());
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
@@ -469,7 +472,8 @@ export const useDatebookStore = create<DatebookState>()(
           const cloudEmpty = cloud.items.length === 0;
           const localHasContent = local.items.length > 0 || local.categories.length > 0;
           const bothHaveItems = !cloudEmpty && local.items.length > 0;
-          const isReconnect = local.mode === "cloud" && local.userId === userId;
+          // Same account on this device — merge quietly instead of prompting.
+          const isReconnect = local.userId === userId;
 
           applyingRemote = true;
           if (bothHaveItems) {
@@ -647,7 +651,7 @@ export const useDatebookStore = create<DatebookState>()(
         }
       },
 
-      disconnectCloud: () => {
+      disconnectCloud: async () => {
         if (connectRetryTimer) {
           clearTimeout(connectRetryTimer);
           connectRetryTimer = null;
@@ -656,6 +660,21 @@ export const useDatebookStore = create<DatebookState>()(
         connecting = false;
         desiredUserId = null;
         unsubscribeRealtime();
+
+        // Drain any in-flight status edits before tearing down — sign-out used to
+        // clear the debounced queue and drop "done" marks that never reached cloud.
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        if (activeUserId && supabase && pendingWork()) {
+          try {
+            await flush();
+          } catch (err) {
+            console.warn("[datebook] pre-sign-out flush failed:", err);
+          }
+        }
+
         activeUserId = null;
         suspended = false;
         clearPending();
@@ -1187,11 +1206,13 @@ function applyRealtime(
       if (key === "items" && idx !== -1) {
         const edited = lastLocalEdit.get(model.id);
         if (edited && Date.now() - edited < 30_000) {
-          const prev = current[idx];
+          const prev = current[idx] as Item;
           if (JSON.stringify(prev) !== JSON.stringify(model)) {
             useDatebookStore.setState({
               lastConflict: (model as Item).title || "an item",
             });
+            // Local edit still in flight — keep it instead of reverting to cloud.
+            return;
           }
         }
       }
@@ -1246,17 +1267,35 @@ async function catchUpFromCloud(userId: string) {
       scheduleFlush();
       return;
     }
+    const local = useDatebookStore.getState();
+    const merged = mergeCalendars(
+      {
+        categories: local.categories,
+        items: local.items,
+        reminderPresets: local.reminderPresets,
+        importSources: local.importSources,
+        settings: local.settings,
+      },
+      {
+        categories: cloud.categories,
+        items: cloud.items,
+        reminderPresets: cloud.reminderPresets.length
+          ? cloud.reminderPresets
+          : defaultReminderPresets,
+        importSources: cloud.importSources,
+        settings: cloud.settings ?? local.settings,
+      }
+    );
     applyingRemote = true;
     useDatebookStore.setState({
-      items: cloud.items,
-      categories: cloud.categories,
-      reminderPresets: cloud.reminderPresets.length
-        ? cloud.reminderPresets
-        : defaultReminderPresets,
-      importSources: cloud.importSources,
-      ...(cloud.settings ? { settings: cloud.settings } : {}),
+      items: merged.items,
+      categories: merged.categories,
+      reminderPresets: merged.reminderPresets,
+      importSources: merged.importSources,
+      ...(cloud.settings ? { settings: merged.settings } : {}),
     });
     applyingRemote = false;
+    if (pendingWork()) scheduleFlush();
   } catch (err) {
     applyingRemote = false;
     console.warn("[datebook] catch-up pull failed:", err);

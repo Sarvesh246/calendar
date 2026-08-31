@@ -6,6 +6,7 @@
 
 @theme inline {
   --color-surface: var(--surface);
+  --color-surface-base: var(--surface-base);
   --color-surface-elevated: var(--surface-elevated);
   --color-surface-sunken: var(--surface-sunken);
   --color-line: var(--line);
@@ -674,6 +675,10 @@ a.press-none:active,
 .page-shell > * > * {
   animation: content-rise var(--motion-standard) var(--ease-standard) both;
   backface-visibility: hidden;
+}
+/* Skip the stagger on the very first paint — it made cold starts feel blank. */
+html[data-first-load="1"] .page-shell > * > * {
+  animation: none;
 }
 /* Delays tighten as they go: the first few sections carry the sense of a
    deliberate reveal, the rest catch up so the page never feels slow to settle. */
