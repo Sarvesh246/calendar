@@ -52,6 +52,23 @@ describe("parseIcs", () => {
     expect(events).toHaveLength(1);
     expect(events[0].uid).toBe("asg-1");
   });
+
+  it("parses VTODO with DUE as a task", () => {
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VTODO",
+      "UID:todo-1",
+      "SUMMARY:Buy milk",
+      "DUE:20260905",
+      "STATUS:NEEDS-ACTION",
+      "END:VTODO",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const { events } = parseIcs(ics);
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("todo");
+    expect(events[0].summary).toBe("Buy milk");
+  });
 });
 
 describe("serializeIcs", () => {

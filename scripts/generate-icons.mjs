@@ -55,7 +55,7 @@ async function exportSplash(width, height, outName) {
 
 async function assertOpaque(fileName) {
   const file = path.join(PUBLIC, fileName);
-  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   let transparent = 0;
   for (let i = 3; i < data.length; i += 4) {
     if (data[i] < 255) transparent++;

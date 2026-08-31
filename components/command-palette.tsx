@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
@@ -29,6 +29,13 @@ export function CommandPalette() {
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
+  const sortedItems = useMemo(
+    () =>
+      [...items]
+        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+        .slice(0, 250),
+    [items]
+  );
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   useLockBodyScroll(open);
@@ -146,10 +153,7 @@ export function CommandPalette() {
 
         {items.length > 0 && (
           <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-            {[...items]
-              .sort((a, b) => Math.abs(+new Date(a.at) - Date.now()) - Math.abs(+new Date(b.at) - Date.now()))
-              .slice(0, 250)
-              .map((item) => {
+            {sortedItems.map((item) => {
               const category = categories.find((c) => c.id === item.categoryId);
               return (
                 <Command.Item

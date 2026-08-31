@@ -25,6 +25,48 @@ describe("buildImportPlan", () => {
     expect(plan.drafts[0].title).toBe("Essay 1");
     expect(plan.drafts[0].type).toBe("assignment");
   });
+
+  it("imports VTODO feeds as tasks", () => {
+    const plan = buildImportPlan(
+      {
+        calendarName: "Tasks",
+        events: [
+          {
+            uid: "todo-1",
+            summary: "Buy milk",
+            start: "2026-09-05T12:00:00.000Z",
+            allDay: true,
+            kind: "todo",
+          },
+        ],
+      },
+      [],
+      "source-1"
+    );
+    expect(plan.drafts[0].type).toBe("task");
+    expect(plan.drafts[0].status).toBe("todo");
+  });
+
+  it("marks completed VTODO items as done", () => {
+    const plan = buildImportPlan(
+      {
+        calendarName: "Tasks",
+        events: [
+          {
+            uid: "todo-2",
+            summary: "Done task",
+            start: "2026-09-05T12:00:00.000Z",
+            allDay: true,
+            kind: "todo",
+            todoStatus: "COMPLETED",
+          },
+        ],
+      },
+      [],
+      "source-1"
+    );
+    expect(plan.drafts[0].status).toBe("done");
+  });
 });
 
 describe("mergeImportedItem", () => {

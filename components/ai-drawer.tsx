@@ -28,6 +28,20 @@ const WELCOME: Message = {
   suggestions: ["What's on today?", "What's due this week?", "Add gym at 6pm tomorrow"],
 };
 
+const ASSISTANT_SESSION_KEY = "datebook-assistant-session";
+
+function loadSessionMessages(): Message[] {
+  if (typeof sessionStorage === "undefined") return [WELCOME];
+  try {
+    const raw = sessionStorage.getItem(ASSISTANT_SESSION_KEY);
+    if (!raw) return [WELCOME];
+    const parsed = JSON.parse(raw) as Message[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [WELCOME];
+  } catch {
+    return [WELCOME];
+  }
+}
+
 export function AIDrawer() {
   const open = useUIStore((s) => s.aiDrawerOpen);
   const setOpen = useUIStore((s) => s.setAIDrawerOpen);
@@ -43,7 +57,7 @@ export function AIDrawer() {
   const updateItem = useDatebookStore((s) => s.updateItem);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
 
-  const [messages, setMessages] = useState<Message[]>([WELCOME]);
+  const [messages, setMessages] = useState<Message[]>(loadSessionMessages);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [slow, setSlow] = useState(false);
@@ -71,6 +85,15 @@ export function AIDrawer() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
+
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined" || messages.length <= 1) return;
+    try {
+      sessionStorage.setItem(ASSISTANT_SESSION_KEY, JSON.stringify(messages.slice(-24)));
+    } catch {
+      /* quota / private mode */
+    }
+  }, [messages]);
 
   // "Still working…" nudge so a slow reply doesn't look frozen.
   useEffect(() => {

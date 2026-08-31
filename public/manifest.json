@@ -3,7 +3,7 @@
   "name": "Datebook",
   "short_name": "Datebook",
   "description": "A personal calendar and assignment tracker.",
-  "start_url": "/today",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
