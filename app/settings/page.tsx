@@ -401,7 +401,7 @@ function CollapsibleCard({
   sub,
   children,
   storageKey,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   title: string;
   sub?: string;
@@ -412,7 +412,6 @@ function CollapsibleCard({
   const key = `datebook-section:${storageKey}`;
   const [open, setOpen] = useState(() => {
     try {
-      if (storageKey === "appearance") return localStorage.getItem(key) === "1";
       const stored = localStorage.getItem(key);
       if (stored === null) return defaultOpen;
       return stored === "1";

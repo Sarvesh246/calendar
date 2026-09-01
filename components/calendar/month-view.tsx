@@ -185,7 +185,7 @@ function MonthGridPanel({
               (today ? ", today" : "") +
               (dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ", nothing scheduled")
             }
-            style={today ? ({ background: "var(--accent-soft)" } as React.CSSProperties) : undefined}
+            style={undefined}
             className={cn(
               "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
               "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
@@ -194,27 +194,37 @@ function MonthGridPanel({
               !inMonth && "opacity-70"
             )}
           >
-            {selected && (
-              <motion.span
-                layoutId="month-selected-day"
-                aria-hidden
-                transition={motionTokens.spring}
-                className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-accent"
-              />
-            )}
-            <span
-              className={cn(
-                "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
-                "transition-colors duration-[var(--motion-standard)]",
-                "sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
-                today
-                  ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
-                  : inMonth
-                    ? "text-ink"
-                    : "text-ink-faint"
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
+              {selected && (
+                <motion.span
+                  layoutId="month-selected-day"
+                  aria-hidden
+                  transition={motionTokens.spring}
+                  className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-accent sm:hidden"
+                />
               )}
-            >
-              {format(date, "d")}
+              <span
+                className={cn(
+                  "relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
+                  "transition-colors duration-[var(--motion-standard)]",
+                  "sm:h-auto sm:min-w-0 sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
+                  today
+                    ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
+                    : inMonth
+                      ? "text-ink"
+                      : "text-ink-faint"
+                )}
+              >
+                {format(date, "d")}
+              </span>
+              {selected && (
+                <motion.span
+                  layoutId="month-selected-day-desktop"
+                  aria-hidden
+                  transition={motionTokens.spring}
+                  className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
+                />
+              )}
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
             <DayCellChips items={dayItems} colorOf={colorOf} />
@@ -248,7 +258,7 @@ export function MonthView({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const dragging = useRef(false);
   const dragX = useMotionValue(0);
   const trackX = useTransform(dragX, (v) => (width ? -width + v : 0));
@@ -270,14 +280,17 @@ export function MonthView({
   }, [anchor, dragX]);
 
   function onTouchStart(e: React.TouchEvent) {
-    swipeStart.current = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    const t = e.changedTouches[0];
+    const now = Date.now();
+    swipeStart.current = { x: t.clientX, y: t.clientY, t: now };
     dragging.current = true;
   }
 
   function onTouchMove(e: React.TouchEvent) {
     if (!dragging.current || swipeStart.current == null || !width) return;
-    const dx = e.changedTouches[0].clientX - swipeStart.current.x;
-    const dy = e.changedTouches[0].clientY - swipeStart.current.y;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeStart.current.x;
+    const dy = t.clientY - swipeStart.current.y;
     if (Math.abs(dx) > Math.abs(dy)) {
       const max = width * 0.92;
       dragX.set(Math.max(-max, Math.min(max, dx)));
@@ -286,24 +299,27 @@ export function MonthView({
 
   function onTouchEnd(e: React.TouchEvent) {
     if (swipeStart.current == null || !width) return;
-    const dx = e.changedTouches[0].clientX - swipeStart.current.x;
-    const dy = e.changedTouches[0].clientY - swipeStart.current.y;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeStart.current.x;
+    const dy = t.clientY - swipeStart.current.y;
+    const dt = Math.max(1, Date.now() - swipeStart.current.t);
+    const vx = (dx / dt) * 1000;
     swipeStart.current = null;
     dragging.current = false;
 
-    const threshold = width * 0.22;
-    const commit =
-      onSwipeMonth && Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.2
-        ? dx < 0
-          ? 1
-          : -1
-        : null;
+    const threshold = width * 0.18;
+    const fling = Math.abs(vx) > 620;
+    let commit: 1 | -1 | null = null;
+    if (onSwipeMonth && Math.abs(dx) > Math.abs(dy) * 1.15) {
+      if (dx < -threshold || (fling && vx < 0)) commit = 1;
+      else if (dx > threshold || (fling && vx > 0)) commit = -1;
+    }
 
     if (commit) {
       haptic("light");
-      const target = commit === 1 ? -width * 2 : 0;
-      void animate(dragX, target, { duration: motionTokens.standard, ease: motionTokens.ease }).then(() => {
-        onSwipeMonth?.(commit);
+      const target = commit === 1 ? -width : width;
+      void animate(dragX, target, motionTokens.springSnappy).then(() => {
+        onSwipeMonth?.(commit!);
         dragX.set(0);
       });
       return;

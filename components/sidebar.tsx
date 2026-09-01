@@ -189,7 +189,15 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const tabWidth = trackWidth / NAV.length;
   const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
 
-  const pillSpring = { type: "spring" as const, stiffness: 340, damping: 24, mass: 0.72 };
+  const pillSpring = { type: "spring" as const, stiffness: 380, damping: 24, mass: 0.68 };
+
+  function navigateTo(index: number) {
+    if (index === activeIndex) return;
+    haptic("light");
+    router.push(NAV[index].href);
+    void animate(baseX, index * tabWidth, pillSpring);
+    dragX.set(0);
+  }
 
   useEffect(() => {
     const el = navRef.current;
@@ -245,13 +253,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     const clamped = Math.max(0, Math.min(NAV.length - 1, target));
 
     if (clamped !== activeIndex) {
-      haptic("light");
-      void Promise.all([
-        animate(baseX, clamped * tabWidth, pillSpring),
-        animate(dragX, 0, pillSpring),
-      ]).then(() => {
-        router.push(NAV[clamped].href);
-      });
+      navigateTo(clamped);
       return;
     }
 
@@ -276,29 +278,35 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-[1.25rem] p-1.5"
+        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-full p-1.5"
       >
         {navWidth > 0 && (
           <motion.span
             aria-hidden
-            className="mobile-tab-pill pointer-events-none absolute inset-y-1.5 left-0 rounded-[0.85rem]"
+            className="mobile-tab-pill pointer-events-none absolute inset-y-1.5 left-0"
             style={{ width: tabWidth, x: pillX }}
-            animate={{ scale: isDragging ? 1.04 : 1 }}
+            animate={{ scale: isDragging ? 1.03 : 1 }}
             transition={pillSpring}
           />
         )}
-        {NAV.map((item) => {
+        {NAV.map((item, index) => {
           const active = pathname === item.href;
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
+              prefetch
               aria-current={active ? "page" : undefined}
               onClick={(e) => {
                 if (didDrag.current) {
                   e.preventDefault();
                   didDrag.current = false;
+                  return;
+                }
+                if (index !== activeIndex) {
+                  e.preventDefault();
+                  navigateTo(index);
                 } else {
                   haptic("light");
                 }

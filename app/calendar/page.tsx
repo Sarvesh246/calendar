@@ -81,12 +81,13 @@ export default function CalendarPage() {
     [items, selectedDate]
   );
 
-  function step(dir: 1 | -1) {
+  function step(dir: 1 | -1, immediate = false) {
     haptic("light");
     setDirection(dir);
-    startTransition(() => {
+    const update = () =>
       setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
-    });
+    if (immediate) update();
+    else startTransition(update);
   }
 
   function selectDate(d: Date) {
@@ -207,47 +208,49 @@ export default function CalendarPage() {
               : "lg:h-full lg:flex-1"
           )}
         >
-          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-            <motion.div
-              key={`${mode}-${periodKey}`}
-              custom={direction}
-              variants={gridVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              className="absolute inset-0 flex min-h-0 flex-col"
-            >
           {mode === "month" ? (
-            <MonthView
-              anchor={anchor}
-              items={items}
-              selectedDate={selectedDate}
-              onSelectDate={selectDate}
-              onSwipeMonth={step}
-            />
+            <div className="absolute inset-0 flex min-h-0 flex-col">
+              <MonthView
+                anchor={anchor}
+                items={items}
+                selectedDate={selectedDate}
+                onSelectDate={selectDate}
+                onSwipeMonth={(dir) => step(dir, true)}
+              />
+            </div>
           ) : (
-            <WeekView
-              days={days}
-              items={items}
-              onSelectDate={selectDate}
-              onSelectItem={(item, day) => {
-                setFocusedItemId(item.id);
-                selectDate(day);
-              }}
-              onCreateAt={(day, hour, minute) => {
-                setQuickAddDateKey(dayKey(day));
-                setQuickAddTime({ hour, minute });
-                setQuickAddPrefill("");
-                setQuickAddOpen(true);
-              }}
-              onReschedule={(id, at, endAt) =>
-                updateItem(id, endAt ? { at, endAt } : { at })
-              }
-            />
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+              <motion.div
+                key={`week-${periodKey}`}
+                custom={direction}
+                variants={gridVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                className="absolute inset-0 flex min-h-0 flex-col"
+              >
+                <WeekView
+                  days={days}
+                  items={items}
+                  onSelectDate={selectDate}
+                  onSelectItem={(item, day) => {
+                    setFocusedItemId(item.id);
+                    selectDate(day);
+                  }}
+                  onCreateAt={(day, hour, minute) => {
+                    setQuickAddDateKey(dayKey(day));
+                    setQuickAddTime({ hour, minute });
+                    setQuickAddPrefill("");
+                    setQuickAddOpen(true);
+                  }}
+                  onReschedule={(id, at, endAt) =>
+                    updateItem(id, endAt ? { at, endAt } : { at })
+                  }
+                />
+              </motion.div>
+            </AnimatePresence>
           )}
-            </motion.div>
-          </AnimatePresence>
         </div>
 
         {mobileDayDetails === "inline" && (
