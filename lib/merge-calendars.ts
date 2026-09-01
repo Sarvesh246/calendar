@@ -1,4 +1,5 @@
 import type { Category, ImportSource, Item, ReminderPreset, UserSettings } from "./types";
+import { normalizeSettings } from "./settings";
 
 export interface CalendarSnapshot {
   categories: Category[];
@@ -25,7 +26,7 @@ export function mergeCalendars(local: CalendarSnapshot, cloud: CalendarSnapshot)
     items,
     reminderPresets,
     importSources,
-    settings: local.settings,
+    settings: normalizeSettings(local.settings, cloud.settings),
   };
 }
 

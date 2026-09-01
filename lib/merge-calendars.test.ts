@@ -88,4 +88,10 @@ describe("mergeCalendars", () => {
     expect(merged.items).toHaveLength(1);
     expect(merged.items[0].title).toBe("Essay (edited)");
   });
+
+  it("keeps the local appearance theme when cloud still has the default", () => {
+    const cloud = snap({ settings: { ...settings, preset: "minimal" } });
+    const local = snap({ settings: { ...settings, preset: "ember" } });
+    expect(mergeCalendars(local, cloud).settings.preset).toBe("ember");
+  });
 });

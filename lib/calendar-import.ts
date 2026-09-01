@@ -2,6 +2,7 @@ import { nanoid } from "./nanoid";
 import { parseIcs, type IcsEvent } from "./ics";
 import { snapshotFrom } from "./source-snapshot";
 import { authHeaders } from "./auth-headers";
+import { categoryName } from "./settings";
 import type { Category, Item, ItemType } from "./types";
 
 export interface FetchedCalendar {
@@ -91,7 +92,10 @@ export function buildImportPlan(
   sourceId: string
 ): ImportPlan {
   const byName = new Map<string, Category>();
-  for (const c of existingCategories) byName.set(c.name.trim().toLowerCase(), c);
+  for (const c of existingCategories) {
+    const key = categoryName(c?.name).toLowerCase();
+    if (key) byName.set(key, c);
+  }
 
   const newCategories: Category[] = [];
   const fallbackName = (calendarName ?? "").trim() || "Imported";
