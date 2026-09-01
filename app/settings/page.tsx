@@ -15,7 +15,7 @@ import { PwaInstallButton } from "@/components/pwa-install";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
-import type { AppearancePreset, Density, LandingView } from "@/lib/types";
+import type { AppearancePreset, Density, LandingView, MobileDayDetails } from "@/lib/types";
 
 export default function SettingsPage() {
   const settings = useDatebookStore((s) => s.settings);
@@ -31,115 +31,96 @@ export default function SettingsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#7C6CFF");
 
-  // Paint the theme this frame — the store write and the debounced cloud sync
-  // catch up after, and don't need to gate the visual change.
   const applyPreset = (preset: AppearancePreset) => {
     document.documentElement.setAttribute("data-preset", preset);
     updateSettings({ preset });
   };
 
   return (
-    <div className="flex max-w-[640px] flex-col gap-[var(--page-gap)]">
-      <header>
-        <h1 className="text-[26px] font-semibold tracking-tight text-ink">Settings</h1>
-        <p className="mt-1 text-[13px] text-ink-soft">Account, calendar, and how Datebook looks.</p>
+    <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 pb-4">
+      <header className="pt-1">
+        <h1 className="font-display text-[28px] italic tracking-tight text-ink">Settings</h1>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
+          Tune how Datebook opens, looks, and keeps your calendar in sync.
+        </p>
       </header>
 
-      <SettingsGroup label="Account & data">
-        <Section title="Account & sync" sub="Sign in to save your calendar to the cloud and keep every device in sync.">
-          <AccountSection />
-        </Section>
-      </SettingsGroup>
-
-      <SettingsGroup label="How Datebook looks">
-        <Section title="Layout & display">
-        <Row label="Default view">
-          <Segmented
-            segmentId="landing-view"
-            value={settings.landingView}
-            options={[
-              { value: "today", label: "Today" },
-              { value: "calendar", label: "Calendar" },
-              { value: "agenda", label: "Agenda" },
-            ]}
-            onChange={(v) => updateSettings({ landingView: v as LandingView })}
-          />
-        </Row>
-        <Row label="Density">
-          <Segmented
-            segmentId="density"
-            value={settings.density}
-            options={[
-              { value: "compact", label: "Compact" },
-              { value: "comfortable", label: "Comfortable" },
-              { value: "spacious", label: "Spacious" },
-            ]}
-            onChange={(v) => {
-              document.documentElement.setAttribute("data-density", v);
-              updateSettings({ density: v as Density });
-            }}
-          />
-        </Row>
-        <Row label="Week starts on">
-          <Segmented
-            segmentId="week-starts"
-            value={String(settings.weekStartsOn)}
-            options={[
-              { value: "0", label: "Sunday" },
-              { value: "1", label: "Monday" },
-            ]}
-            onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
-          />
-        </Row>
-        <Row label="24-hour clock" horizontal>
-          <ToggleSwitch checked={settings.clock24h} onChange={(v) => updateSettings({ clock24h: v })} label="24-hour clock" />
-        </Row>
-        <Row label="Show location on event cards" horizontal>
-          <ToggleSwitch checked={settings.showLocation} onChange={(v) => updateSettings({ showLocation: v })} label="Show location" />
-        </Row>
-        <Row label="Show category dots" horizontal>
-          <ToggleSwitch checked={settings.showCategoryDot} onChange={(v) => updateSettings({ showCategoryDot: v })} label="Show category dots" />
-        </Row>
-        <Row label="Hide completed items" horizontal>
-          <ToggleSwitch checked={settings.hideCompleted} onChange={(v) => updateSettings({ hideCompleted: v })} label="Hide completed" />
-        </Row>
-        </Section>
-
-        <Section
-          title="Appearance"
-          sub="Optional. Datebook is designed around Minimal — other looks only recolor surfaces."
-          collapsible
-          storageKey="appearance"
-        >
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          {presetOrder.map((preset) => (
-            <PresetCard
-              key={preset}
-              preset={preset}
-              active={settings.preset === preset}
-              onSelect={() => applyPreset(preset)}
+      {/* Most-changed preferences — always visible */}
+      <SettingsCard>
+        <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
+        <div className="mt-4 flex flex-col gap-5">
+          <SettingBlock label="Open Datebook to" hint="The first screen when you launch the app.">
+            <Segmented
+              segmentId="landing-view"
+              value={settings.landingView}
+              options={[
+                { value: "today", label: "Today" },
+                { value: "calendar", label: "Calendar" },
+                { value: "agenda", label: "Agenda" },
+              ]}
+              onChange={(v) => updateSettings({ landingView: v as LandingView })}
             />
-          ))}
-        </div>
-        </Section>
-      </SettingsGroup>
+          </SettingBlock>
 
-      <SettingsGroup label="Calendar">
-        <Section title="Categories" sub="Each category's color drives its cards, chips, and calendar dots.">
+          <SettingBlock
+            label="When you tap a day on mobile"
+            hint="Choose how the day's schedule appears on your phone."
+          >
+            <Segmented
+              segmentId="mobile-day-details"
+              value={settings.mobileDayDetails}
+              options={[
+                { value: "sheet", label: "Slide-up panel" },
+                { value: "inline", label: "List below calendar" },
+              ]}
+              onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
+            />
+          </SettingBlock>
+
+          <SettingBlock label="Calendar density" hint="How much fits on screen at once.">
+            <Segmented
+              segmentId="density"
+              value={settings.density}
+              options={[
+                { value: "compact", label: "Compact" },
+                { value: "comfortable", label: "Comfortable" },
+                { value: "spacious", label: "Spacious" },
+              ]}
+              onChange={(v) => {
+                document.documentElement.setAttribute("data-density", v);
+                updateSettings({ density: v as Density });
+              }}
+            />
+          </SettingBlock>
+        </div>
+      </SettingsCard>
+
+      <CollapsibleCard title="Account & sync" sub="Sign in to back up and sync across devices." storageKey="account">
+        <AccountSection />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Calendar & categories"
+        sub="Organize items by color and pull in events from other calendars."
+        storageKey="calendar"
+      >
         <div className="flex flex-col gap-2">
           {categories.map((cat) => (
-            <div key={cat.id} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5">
+            <div
+              key={cat.id}
+              className="flex items-center gap-3 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
+            >
               <input
                 type="color"
                 value={cat.color}
                 onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                className="h-6 w-6 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+                className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
                 aria-label={`${cat.name} color`}
               />
               <input
                 value={cat.name}
                 onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
               />
               {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
               <button
@@ -147,7 +128,7 @@ export default function SettingsPage() {
                 onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
                 className="text-[12px] font-medium text-ink-faint hover:text-ink"
               >
-                {cat.archived ? "Unarchive" : "Archive"}
+                {cat.archived ? "Restore" : "Archive"}
               </button>
               {categories.length > 1 && (
                 <button
@@ -161,19 +142,19 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
-        <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-dashed border-line px-3 py-2.5">
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
           <input
             type="color"
             value={newCategoryColor}
             onChange={(e) => setNewCategoryColor(e.target.value)}
-            className="h-6 w-6 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+            className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
             aria-label="New category color"
           />
           <input
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
-            placeholder="New category name"
-            className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
+            placeholder="New category"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
           />
           <button
             disabled={!newCategoryName.trim()}
@@ -181,22 +162,27 @@ export default function SettingsPage() {
               addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
               setNewCategoryName("");
             }}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
             aria-label="Add category"
           >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
           </button>
         </div>
-      </Section>
 
-        <Section
-          title="Import from a calendar link"
-          sub="Paste a feed URL from Canvas, Google Calendar, or Outlook to pull in assignments and events — due dates, titles, and descriptions. Re-sync any time to pick up changes."
-        >
-          <ImportCalendar />
-        </Section>
+        <Divider />
 
-        <Section title="Export" sub="Download your calendar as an .ics file you can open in Google Calendar, Outlook, or Apple Calendar.">
+        <Subheading title="Import a calendar link" />
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions — re-sync any time for updates.
+        </p>
+        <ImportCalendar />
+
+        <Divider />
+
+        <Subheading title="Export" />
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Download an .ics file for Google Calendar, Outlook, or Apple Calendar.
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -209,26 +195,21 @@ export default function SettingsPage() {
             a.click();
             URL.revokeObjectURL(url);
           }}
-          className="self-start rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+          className="self-start rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
         >
           Download .ics
         </button>
-        </Section>
+      </CollapsibleCard>
 
-        <Section
-          title="Reminders"
-          sub="Reminders fire while the app is open and catch up when you reopen it. Closed-app push works when VAPID keys are set and you are signed in."
-        >
+      <CollapsibleCard title="Reminders" sub="In-app alerts and default reminder timing." storageKey="reminders">
         <NotificationToggle />
-        <div className="mt-1">
-          <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">
-            Applied by default
-          </p>
-          <p className="mt-0.5 text-[13px] text-ink-soft">
-            Added automatically when the quick-add bar doesn&apos;t catch a reminder itself.
+        <div className="mt-2">
+          <Subheading title="Default reminders" />
+          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
+            Applied when quick-add doesn&apos;t pick up a reminder from what you typed.
           </p>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="mt-2 flex flex-col gap-1.5">
           {reminderPresets.map((rp) => {
             const active = settings.defaultReminderPresetIds.includes(rp.id);
             return (
@@ -242,8 +223,10 @@ export default function SettingsPage() {
                   })
                 }
                 className={cn(
-                  "flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-left text-[13.5px] transition-colors",
-                  active ? "border-accent/40 bg-accent-soft text-ink" : "border-line bg-surface text-ink-soft hover:border-line-strong"
+                  "flex items-center justify-between rounded-xl border px-3.5 py-3 text-left text-[14px] transition-colors",
+                  active
+                    ? "border-accent/40 bg-accent-soft text-ink"
+                    : "border-line/80 bg-surface-sunken/30 text-ink-soft hover:border-line-strong"
                 )}
               >
                 {rp.label}
@@ -252,17 +235,74 @@ export default function SettingsPage() {
             );
           })}
         </div>
-        </Section>
+      </CollapsibleCard>
 
-        <Section title="Install" sub="Add Datebook to your home screen.">
-          <PwaInstallButton />
-        </Section>
+      <CollapsibleCard title="Display options" sub="Clock, week layout, and what shows on cards." storageKey="display">
+        <div className="flex flex-col gap-4">
+          <SettingBlock label="Week starts on">
+            <Segmented
+              segmentId="week-starts"
+              value={String(settings.weekStartsOn)}
+              options={[
+                { value: "0", label: "Sunday" },
+                { value: "1", label: "Monday" },
+              ]}
+              onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
+            />
+          </SettingBlock>
 
-        <Section
+          <ToggleRow
+            label="24-hour clock"
+            checked={settings.clock24h}
+            onChange={(v) => updateSettings({ clock24h: v })}
+          />
+          <ToggleRow
+            label="Show location on events"
+            checked={settings.showLocation}
+            onChange={(v) => updateSettings({ showLocation: v })}
+          />
+          <ToggleRow
+            label="Category color dots"
+            checked={settings.showCategoryDot}
+            onChange={(v) => updateSettings({ showCategoryDot: v })}
+          />
+          <ToggleRow
+            label="Hide completed items"
+            checked={settings.hideCompleted}
+            onChange={(v) => updateSettings({ hideCompleted: v })}
+          />
+        </div>
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Appearance"
+        sub="Optional color themes. Minimal is the default look."
+        storageKey="appearance"
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {presetOrder.map((preset) => (
+            <PresetCard
+              key={preset}
+              preset={preset}
+              active={settings.preset === preset}
+              onSelect={() => applyPreset(preset)}
+            />
+          ))}
+        </div>
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Install app" sub="Add Datebook to your home screen for offline use." storageKey="install">
+        <PwaInstallButton />
+      </CollapsibleCard>
+
+      {/* Backup & reset — always expanded, pinned to bottom */}
+      <SettingsCard variant="danger">
+        <CardHeading
           title="Backup & reset"
-          sub="Download a JSON copy of everything on this device, restore one, or start over. Feed URLs in the backup are secrets — don't share the file."
-        >
-        <div className="flex flex-wrap gap-2">
+          sub="Download a full copy of your data, restore from a file, or wipe this device clean."
+        />
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -286,11 +326,11 @@ export default function SettingsPage() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            className="rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft hover:text-ink"
+            className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
           >
-            Download JSON backup
+            Download backup
           </button>
-          <label className="rounded-lg border border-line px-3.5 py-2.5 text-[13px] font-medium text-ink-soft hover:text-ink">
+          <label className="cursor-pointer rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink">
             Restore backup
             <input
               type="file"
@@ -316,137 +356,165 @@ export default function SettingsPage() {
               if (!confirm("Delete all items and imported feeds on this device? This cannot be undone.")) return;
               resetAllData();
             }}
-            className="rounded-lg border border-warn/40 px-3.5 py-2.5 text-[13px] font-medium text-warn"
+            className="rounded-xl border border-warn/40 px-4 py-2.5 text-[13px] font-medium text-warn"
           >
             Reset calendar data
           </button>
         </div>
-        </Section>
-      </SettingsGroup>
+      </SettingsCard>
     </div>
   );
 }
 
-function SettingsGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function SettingsCard({
+  children,
+  variant = "default",
+}: {
+  children: React.ReactNode;
+  variant?: "default" | "danger";
+}) {
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[12px] font-medium text-ink-faint">{label}</p>
-      <div className="flex flex-col gap-[var(--page-gap)]">{children}</div>
-    </div>
+    <section
+      className={cn(
+        "rounded-2xl border p-4 sm:p-5",
+        variant === "danger"
+          ? "border-warn/25 bg-surface"
+          : "border-line/80 bg-surface shadow-[var(--shadow-sm)]"
+      )}
+    >
+      {children}
+    </section>
   );
 }
 
-function Section({
+function CollapsibleCard({
   title,
   sub,
   children,
-  collapsible = false,
   storageKey,
+  defaultOpen = true,
 }: {
   title: string;
   sub?: string;
   children: React.ReactNode;
-  collapsible?: boolean;
-  storageKey?: string;
+  storageKey: string;
+  defaultOpen?: boolean;
 }) {
-  const key = storageKey ? `datebook-section:${storageKey}` : null;
+  const key = `datebook-section:${storageKey}`;
   const [open, setOpen] = useState(() => {
-    if (!collapsible || !key) return true;
     try {
       if (storageKey === "appearance") return localStorage.getItem(key) === "1";
-      return localStorage.getItem(key) !== "0";
+      const stored = localStorage.getItem(key);
+      if (stored === null) return defaultOpen;
+      return stored === "1";
     } catch {
-      return storageKey !== "appearance";
+      return defaultOpen;
     }
   });
 
   const toggle = () =>
     setOpen((prev) => {
       const next = !prev;
-      if (key) {
-        try {
-          localStorage.setItem(key, next ? "1" : "0");
-        } catch {
-          /* storage disabled — collapse still works, it just won't persist */
-        }
+      try {
+        localStorage.setItem(key, next ? "1" : "0");
+      } catch {
+        /* storage disabled */
       }
       return next;
     });
 
-  const heading = (
-    <>
-      <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-      {sub && <p className="mt-0.5 text-[13px] text-ink-soft">{sub}</p>}
-    </>
-  );
-
   return (
-    <section>
-      {collapsible ? (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          className="group flex w-full items-start justify-between gap-3 text-left"
+    <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface shadow-[var(--shadow-sm)]">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="group flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
+      >
+        <CardHeading title={title} sub={sub} />
+        <motion.span
+          aria-hidden
+          animate={{ rotate: open ? 0 : -90 }}
+          transition={motionTokens.spring}
+          className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-ink-faint transition-colors group-hover:bg-surface-sunken group-hover:text-ink"
         >
-          <span className="min-w-0">{heading}</span>
-          <motion.span
-            aria-hidden
-            animate={{ rotate: open ? 0 : -90 }}
-            transition={motionTokens.spring}
-            className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center text-ink-faint transition-colors group-hover:text-ink"
-          >
-            <ChevronDown className="h-4 w-4" strokeWidth={2} />
-          </motion.span>
-        </button>
-      ) : (
-        heading
-      )}
+          <ChevronDown className="h-4 w-4" strokeWidth={2} />
+        </motion.span>
+      </button>
 
-      {collapsible ? (
-        <AnimatePresence initial={false}>
-          {open && (
-            <motion.div
-              key="body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{
-                height: motionTokens.springLayout,
-                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-              }}
-              className="overflow-hidden"
-            >
-              <div className="mt-3.5 flex flex-col gap-3">{children}</div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      ) : (
-        <div className="mt-3.5 flex flex-col gap-3">{children}</div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{
+              height: motionTokens.springLayout,
+              opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
+            }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
 
-function Row({
+function CardHeading({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="min-w-0">
+      <h2 className="text-[16px] font-semibold tracking-tight text-ink">{title}</h2>
+      {sub && <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
+function Subheading({ title }: { title: string }) {
+  return <p className="text-[13px] font-medium text-ink">{title}</p>;
+}
+
+function Divider() {
+  return <div className="my-1 h-px bg-line/60" role="separator" />;
+}
+
+function SettingBlock({
   label,
+  hint,
   children,
-  horizontal = false,
 }: {
   label: string;
+  hint?: string;
   children: React.ReactNode;
-  horizontal?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        horizontal
-          ? "flex flex-row items-center justify-between gap-4"
-          : "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-      )}
-    >
-      <span className="text-[13.5px] text-ink">{label}</span>
+    <div className="flex flex-col gap-2">
+      <div>
+        <p className="text-[14px] font-medium text-ink">{label}</p>
+        {hint && <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-faint">{hint}</p>}
+      </div>
       {children}
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl bg-surface-sunken/30 px-3 py-2.5">
+      <span className="text-[14px] text-ink">{label}</span>
+      <ToggleSwitch checked={checked} onChange={onChange} label={label} />
     </div>
   );
 }
@@ -463,7 +531,7 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 sm:w-auto">
+    <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-auto">
       {options.map((opt) => {
         const active = value === opt.value;
         return (
@@ -472,7 +540,7 @@ function Segmented({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "press-none relative min-h-9 flex-1 rounded-md px-2.5 text-[12px] font-medium transition-colors sm:flex-none",
+              "press-none relative min-h-10 flex-1 rounded-lg px-3 text-[13px] font-medium transition-colors sm:flex-none sm:px-4",
               active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
             )}
             aria-pressed={active}
@@ -480,11 +548,11 @@ function Segmented({
             {active && (
               <motion.span
                 layoutId={`settings-segment-${segmentId}`}
-                className="absolute inset-0 rounded-md bg-accent"
+                className="absolute inset-0 rounded-lg bg-accent"
                 transition={motionTokens.spring}
               />
             )}
-            <span className="relative z-[1]">{opt.label}</span>
+            <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>
           </button>
         );
       })}
@@ -513,24 +581,21 @@ function PresetCard({
       whileTap={{ scale: 0.975 }}
       transition={motionTokens.springSnappy}
       className={cn(
-        "press-none group relative flex flex-col gap-2.5 rounded-xl border p-3 text-left",
-        "transition-[border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+        "press-none group relative flex flex-col gap-2 rounded-xl border p-3 text-left",
+        "transition-[border-color,box-shadow] duration-[var(--motion-standard)]",
         active
           ? "border-accent shadow-[0_0_0_1px_var(--accent),var(--shadow-md)]"
-          : "border-line hover:border-line-strong hover:shadow-[var(--shadow-sm)]"
+          : "border-line/80 hover:border-line-strong hover:shadow-[var(--shadow-sm)]"
       )}
     >
-      <div className="flex overflow-hidden rounded-md border border-line">
+      <div className="flex overflow-hidden rounded-lg border border-line/60">
         {meta.swatch.map((c, i) => (
           <motion.span
             key={i}
-            // The bands spread apart a touch on the active card, so the chosen
-            // theme reads at a glance across a grid of eleven near-identical
-            // tiles.
             initial={false}
             animate={{ flexGrow: active && i === 2 ? 1.6 : 1 }}
             transition={motionTokens.spring}
-            className="h-8 flex-1"
+            className="h-7 flex-1"
             style={{ background: c }}
           />
         ))}
@@ -548,7 +613,7 @@ function PresetCard({
             <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
           </motion.span>
         </p>
-        <p className="mt-0.5 text-[11.5px] leading-snug text-ink-soft">{meta.description}</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-ink-soft">{meta.description}</p>
       </div>
     </motion.button>
   );

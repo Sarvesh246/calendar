@@ -39,6 +39,7 @@ export default function CalendarPage() {
   const allItems = useDatebookStore((s) => s.items);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const mobileDayDetails = useDatebookStore((s) => s.settings.mobileDayDetails);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
@@ -90,7 +91,7 @@ export default function CalendarPage() {
 
   function selectDate(d: Date) {
     startTransition(() => setSelectedDate(d));
-    setSheetOpen(true);
+    if (mobileDayDetails === "sheet") setSheetOpen(true);
   }
 
   // Keyed by the period on screen, so stepping months swaps one grid for
@@ -249,13 +250,19 @@ export default function CalendarPage() {
           </AnimatePresence>
         </div>
 
+        {mobileDayDetails === "inline" && (
+          <section className="min-h-0 shrink-0 rounded-xl border border-line bg-surface p-4 shadow-[var(--shadow-sm)] lg:hidden">
+            <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
+          </section>
+        )}
+
         <aside className="glass hidden min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex">
           <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
         </aside>
       </div>
 
       <AnimatePresence>
-        {sheetOpen && mode === "month" && (
+        {sheetOpen && mode === "month" && mobileDayDetails === "sheet" && (
           <DaySheet
             key={dayKey(selectedDate)}
             date={selectedDate}

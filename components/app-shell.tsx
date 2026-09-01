@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Search, Settings } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
@@ -13,7 +12,7 @@ import { ReminderScheduler } from "./reminder-scheduler";
 import { UndoToast } from "./undo-toast";
 import { DeferredFeedSync } from "./deferred-feed-sync";
 import { ConflictToast } from "./conflict-toast";
-import { FilterButton } from "./filter-sheet";
+import { MobileHeaderActions } from "./mobile-header-actions";
 import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
@@ -82,51 +81,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         {!focusMode && (
-          <div
-            className={cn(
-              "sticky top-0 z-20 mb-3 flex shrink-0 items-center gap-2 bg-surface-base",
-              // Extra clearance above the row: on a notched/Dynamic-Island phone
-              // the previous 0.85rem left these icon buttons sitting right at
-              // the edge of the safe area, so their top few pixels read as
-              // clipped by the status bar / camera cutout.
-              "pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-2",
-              onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
-              "md:static md:top-auto md:z-auto md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:pt-0 md:pb-0"
-            )}
-          >
-            {onToday && (
-              <div className="hidden min-w-0 flex-1 md:block">
-                <QuickAddBar embedded />
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="icon"
-                onClick={() => setCommandPaletteOpen(true)}
-                aria-label="Search"
-              >
-                <Search className="h-4 w-4" strokeWidth={1.9} />
-              </Button>
-              {!onSettings && <FilterButton className="md:hidden" />}
-              <Link
-                href="/settings"
-                aria-label="Settings"
-                className={cn(
-                  "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink md:hidden",
-                  onSettings && "border-accent bg-accent-soft text-accent"
-                )}
-              >
-                <Settings className="h-4 w-4" strokeWidth={1.9} />
-              </Link>
-              {!onSettings && !onToday && (
-                <Button variant="primary" size="sm" onClick={openAdd} className="hidden md:inline-flex">
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  Add
-                </Button>
+          <>
+            <MobileHeaderActions />
+            <div
+              className={cn(
+                "mb-3 hidden shrink-0 items-center gap-2 md:flex",
+                onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
+                "md:static md:mx-0 md:mb-4 md:px-0"
               )}
+            >
+              {onToday && (
+                <div className="min-w-0 flex-1">
+                  <QuickAddBar embedded />
+                </div>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  aria-label="Search"
+                >
+                  <Search className="h-4 w-4" strokeWidth={1.9} />
+                </Button>
+                {!onSettings && !onToday && (
+                  <Button variant="primary" size="sm" onClick={openAdd}>
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    Add
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {children}

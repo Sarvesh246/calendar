@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { addMonths } from "date-fns";
+import { motion, useMotionValue, animate, useTransform } from "framer-motion";
 import { isSameDay, isToday, format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
@@ -14,7 +15,6 @@ const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const NO_ITEMS: Item[] = [];
 
-/** Fixed chip geometry — must match the rendered .cal-chip + gap classes below. */
 const CHIP_HEIGHT = 20;
 const CHIP_GAP = 4;
 const MORE_LINE_HEIGHT = 14;
@@ -36,10 +36,8 @@ function fitCountVertical(
   moreSize: number
 ) {
   if (itemCount === 0 || containerSize <= 0) return itemCount;
-
   const allSize = itemCount * itemSize + Math.max(0, itemCount - 1) * gap;
   if (allSize <= containerSize) return itemCount;
-
   const forItems = containerSize - moreSize - gap;
   const slot = itemSize + gap;
   return Math.max(0, Math.min(itemCount, Math.floor((forItems + gap) / slot)));
@@ -65,11 +63,9 @@ function DayCellChips({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-
     const update = () => {
       setFitCount(fitCountVertical(el.clientHeight, items.length, CHIP_HEIGHT, CHIP_GAP, MORE_LINE_HEIGHT));
     };
-
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -82,10 +78,7 @@ function DayCellChips({
   );
   const visible = ranked.slice(0, fitCount);
   const hiddenOpen = openItemsOnDay(ranked.slice(fitCount)).length;
-  const hiddenTitles = ranked
-    .slice(fitCount)
-    .map((i) => i.title)
-    .join(", ");
+  const hiddenTitles = ranked.slice(fitCount).map((i) => i.title).join(", ");
 
   return (
     <div ref={ref} className="hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
@@ -114,10 +107,7 @@ function DayCellChips({
         );
       })}
       {hiddenOpen > 0 && (
-        <span
-          className="shrink-0 px-1 text-[10.5px] font-medium leading-none text-ink-soft"
-          title={hiddenTitles}
-        >
+        <span className="shrink-0 px-1 text-[10.5px] font-medium leading-none text-ink-soft" title={hiddenTitles}>
           +{hiddenOpen}
         </span>
       )}
@@ -135,30 +125,109 @@ function DayCellMobilePreview({
   const open = openItemsOnDay(items);
   const overdue = items.some(isOverdue);
   if (open.length === 0) return null;
-
   const categories = [...new Set(open.map((i) => i.categoryId))].slice(0, 3);
 
   return (
     <div className="flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
-      <span
-        className={cn(
-          "text-[11px] font-medium tabular-nums leading-none",
-          overdue ? "text-warn" : "text-ink-faint"
-        )}
-      >
+      <span className={cn("text-[11px] font-medium tabular-nums leading-none", overdue ? "text-warn" : "text-ink-faint")}>
         {open.length}
       </span>
       {categories.length > 0 && (
         <div className="flex items-center gap-0.5">
           {categories.map((id) => (
-            <span
-              key={id}
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: colorOf(id) }}
-            />
+            <span key={id} className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(id) }} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MonthGridPanel({
+  anchor,
+  items,
+  selectedDate,
+  onSelectDate,
+  weekStartsOn,
+  colorOf,
+}: {
+  anchor: Date;
+  items: Item[];
+  selectedDate: Date | null;
+  onSelectDate: (date: Date) => void;
+  weekStartsOn: 0 | 1;
+  colorOf: (categoryId: string) => string;
+}) {
+  const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
+  const byDay = useMemo(() => groupItemsByDay(items), [items]);
+  const weeks = grid.length / 7;
+
+  return (
+    <div
+      className="grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
+      style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
+    >
+      {grid.map(({ date, inMonth }) => {
+        const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
+        const today = isToday(date);
+        const selected = selectedDate && isSameDay(date, selectedDate);
+
+        return (
+          <button
+            key={`${anchor.toISOString()}-${date.toISOString()}`}
+            onClick={() => {
+              haptic("light");
+              onSelectDate(date);
+            }}
+            aria-pressed={selected ?? false}
+            aria-label={
+              `${format(date, "EEEE, MMMM d")}` +
+              (today ? ", today" : "") +
+              (dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ", nothing scheduled")
+            }
+            style={
+              today
+                ? ({
+                    background:
+                      "radial-gradient(140% 140% at 20% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%)",
+                  } as React.CSSProperties)
+                : undefined
+            }
+            className={cn(
+              "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
+              "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+              "active:bg-surface-sunken",
+              today ? "border-accent/40" : "border-transparent hover:border-line hover:bg-surface-sunken/60",
+              !inMonth && "opacity-70"
+            )}
+          >
+            {selected && (
+              <motion.span
+                layoutId="month-selected-day"
+                aria-hidden
+                transition={motionTokens.spring}
+                className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-accent"
+              />
+            )}
+            <span
+              className={cn(
+                "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
+                "transition-colors duration-[var(--motion-standard)]",
+                "sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
+                today
+                  ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
+                  : inMonth
+                    ? "text-ink"
+                    : "text-ink-faint"
+              )}
+            >
+              {format(date, "d")}
+            </span>
+            <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
+            <DayCellChips items={dayItems} colorOf={colorOf} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -178,45 +247,85 @@ export function MonthView({
 }) {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const categories = useDatebookStore((s) => s.categories);
-  const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
-  const byDay = useMemo(() => groupItemsByDay(items), [items]);
   const colorOf = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.color] as const));
     return (categoryId: string) => m.get(categoryId) ?? "#8a8a94";
   }, [categories]);
   const labels = weekStartsOn === 0 ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
-  const weeks = grid.length / 7;
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
-  const [dragX, setDragX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const dragging = useRef(false);
+  const dragX = useMotionValue(0);
+  const trackX = useTransform(dragX, (v) => (width ? -width + v : 0));
+
+  const prevAnchor = useMemo(() => addMonths(anchor, -1), [anchor]);
+  const nextAnchor = useMemo(() => addMonths(anchor, 1), [anchor]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    dragX.set(0);
+  }, [anchor, dragX]);
 
   function onTouchStart(e: React.TouchEvent) {
     swipeStart.current = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
     dragging.current = true;
-    setIsDragging(true);
-    setDragX(0);
   }
+
   function onTouchMove(e: React.TouchEvent) {
-    if (!dragging.current || swipeStart.current == null) return;
+    if (!dragging.current || swipeStart.current == null || !width) return;
     const dx = e.changedTouches[0].clientX - swipeStart.current.x;
     const dy = e.changedTouches[0].clientY - swipeStart.current.y;
     if (Math.abs(dx) > Math.abs(dy)) {
-      setDragX(dx * 0.35);
+      const max = width * 0.92;
+      dragX.set(Math.max(-max, Math.min(max, dx)));
     }
   }
+
   function onTouchEnd(e: React.TouchEvent) {
-    if (swipeStart.current == null) return;
+    if (swipeStart.current == null || !width) return;
     const dx = e.changedTouches[0].clientX - swipeStart.current.x;
     const dy = e.changedTouches[0].clientY - swipeStart.current.y;
     swipeStart.current = null;
     dragging.current = false;
-    setIsDragging(false);
-    setDragX(0);
-    if (onSwipeMonth && Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-      onSwipeMonth(dx < 0 ? 1 : -1);
+
+    const threshold = width * 0.22;
+    const commit =
+      onSwipeMonth && Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.2
+        ? dx < 0
+          ? 1
+          : -1
+        : null;
+
+    if (commit) {
+      haptic("light");
+      const target = commit === 1 ? -width * 2 : 0;
+      void animate(dragX, target, { duration: motionTokens.standard, ease: motionTokens.ease }).then(() => {
+        onSwipeMonth?.(commit);
+        dragX.set(0);
+      });
+      return;
     }
+
+    void animate(dragX, 0, motionTokens.springSnappy);
   }
+
+  const panelProps = {
+    items,
+    selectedDate,
+    onSelectDate,
+    weekStartsOn,
+    colorOf,
+  };
 
   return (
     <div
@@ -232,82 +341,19 @@ export function MonthView({
           </div>
         ))}
       </div>
-      <motion.div
-        animate={{ x: dragX }}
-        transition={isDragging ? { duration: 0 } : motionTokens.springSnappy}
-        className="grid min-h-0 w-full flex-1 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
-        style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
-      >
-        {grid.map(({ date, inMonth }) => {
-          const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
-          const today = isToday(date);
-          const selected = selectedDate && isSameDay(date, selectedDate);
-
-          return (
-            <button
-              key={date.toISOString()}
-              onClick={() => {
-                haptic("light");
-                onSelectDate(date);
-              }}
-              aria-pressed={selected ?? false}
-              aria-label={
-                `${format(date, "EEEE, MMMM d")}` +
-                (today ? ", today" : "") +
-                (dayItems.length
-                  ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
-                  : ", nothing scheduled")
-              }
-              style={
-                today
-                  ? ({
-                      background:
-                        "radial-gradient(140% 140% at 20% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%)",
-                    } as React.CSSProperties)
-                  : undefined
-              }
-              className={cn(
-                "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
-                "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-                // A day cell is far too wide for the global press-scale, but with
-                // `press-none` it had no press feedback at all — tapping a day
-                // felt like tapping dead space until the sheet arrived.
-                "active:bg-surface-sunken",
-                today ? "border-accent/40" : "border-transparent hover:border-line hover:bg-surface-sunken/60",
-                !inMonth && "opacity-70"
-              )}
-            >
-              {/* One selection ring shared across the grid, so moving between
-                  days slides the highlight instead of blinking it from cell to
-                  cell. */}
-              {selected && (
-                <motion.span
-                  layoutId="month-selected-day"
-                  aria-hidden
-                  transition={motionTokens.spring}
-                  className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-accent"
-                />
-              )}
-              <span
-                className={cn(
-                  "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
-                  "transition-colors duration-[var(--motion-standard)]",
-                  "sm:h-auto sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
-                  today
-                    ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
-                    : inMonth
-                      ? "text-ink"
-                      : "text-ink-faint"
-                )}
-              >
-                {format(date, "d")}
-              </span>
-              <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
-              <DayCellChips items={dayItems} colorOf={colorOf} />
-            </button>
-          );
-        })}
-      </motion.div>
+      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden">
+        <motion.div className="flex h-full" style={{ x: trackX, width: width ? width * 3 : "300%" }}>
+          <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
+            <MonthGridPanel anchor={prevAnchor} {...panelProps} />
+          </div>
+          <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
+            <MonthGridPanel anchor={anchor} {...panelProps} />
+          </div>
+          <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
+            <MonthGridPanel anchor={nextAnchor} {...panelProps} />
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }

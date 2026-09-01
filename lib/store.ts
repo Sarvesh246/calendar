@@ -119,6 +119,7 @@ const defaultSettings: UserSettings = {
   showCategoryDot: true,
   hideCompleted: false,
   defaultReminderPresetIds: ["rp-night"],
+  mobileDayDetails: "sheet",
 };
 
 const GUEST_BACKUP_KEY = "datebook-store.guest";
@@ -822,7 +823,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -842,6 +843,9 @@ export const useDatebookStore = create<DatebookState>()(
         }
         if (state?.settings && state.settings.hideCompleted === undefined) {
           state.settings = { ...state.settings, hideCompleted: false };
+        }
+        if (state?.settings && state.settings.mobileDayDetails === undefined) {
+          state.settings = { ...state.settings, mobileDayDetails: "sheet" };
         }
         return state as DatebookState;
       },
