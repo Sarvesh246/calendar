@@ -73,9 +73,12 @@ export function toCategoryRow(c: Category, userId: string): Row {
   };
 }
 export function rowToCategory(r: Row): Category {
+  const rawName = r.name;
+  const name =
+    typeof rawName === "string" && rawName.trim() ? rawName.trim() : "Uncategorized";
   return {
     id: r.id as string,
-    name: r.name as string,
+    name,
     color: r.color as string,
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),

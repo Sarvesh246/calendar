@@ -24,6 +24,11 @@ import {
 } from "./db-sync";
 import { expandRepeat } from "./repeat";
 import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import {
+  sanitizeCategories,
+  sanitizeImportSources,
+  sanitizeSettings,
+} from "./sanitize-store";
 import type { DatebookBackup } from "./backup";
 import type {
   Category,
@@ -259,10 +264,11 @@ export const useDatebookStore = create<DatebookState>()(
 
       applyImport: (url, feed) => {
         const state = get();
+        const categories = sanitizeCategories(state.categories);
         const existing = state.importSources.find((s) => s.url === url);
         const sourceId = existing?.id ?? nanoid();
 
-        const { newCategories, drafts } = buildImportPlan(feed, state.categories, sourceId);
+        const { newCategories, drafts } = buildImportPlan(feed, categories, sourceId);
         const incoming = new Map(drafts.map((d) => [d.sourceUid, d]));
 
         let added = 0;
@@ -313,7 +319,7 @@ export const useDatebookStore = create<DatebookState>()(
 
         set({
           items: pruned,
-          categories: [...state.categories, ...newCategories],
+          categories: [...categories, ...newCategories],
           importSources: existing
             ? state.importSources.map((s) => (s.id === sourceId ? source : s))
             : [...state.importSources, source],
@@ -823,7 +829,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -847,7 +853,31 @@ export const useDatebookStore = create<DatebookState>()(
         if (state?.settings && state.settings.mobileDayDetails === undefined) {
           state.settings = { ...state.settings, mobileDayDetails: "sheet" };
         }
+        if (state?.categories) {
+          state.categories = sanitizeCategories(state.categories);
+        }
+        if (state?.importSources) {
+          state.importSources = sanitizeImportSources(state.importSources);
+        }
+        if (state?.settings) {
+          state.settings = sanitizeSettings(state.settings);
+        }
         return state as DatebookState;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const categories = sanitizeCategories(state.categories);
+        const importSources = sanitizeImportSources(state.importSources);
+        const settings = sanitizeSettings(state.settings);
+        if (
+          categories !== state.categories ||
+          importSources !== state.importSources ||
+          settings !== state.settings
+        ) {
+          queueMicrotask(() => {
+            useDatebookStore.setState({ categories, importSources, settings });
+          });
+        }
       },
     }
   )

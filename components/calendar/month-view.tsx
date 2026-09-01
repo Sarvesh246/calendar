@@ -150,6 +150,7 @@ function MonthGridPanel({
   onSelectDate,
   weekStartsOn,
   colorOf,
+  showSelectionRing,
 }: {
   anchor: Date;
   items: Item[];
@@ -157,6 +158,8 @@ function MonthGridPanel({
   onSelectDate: (date: Date) => void;
   weekStartsOn: 0 | 1;
   colorOf: (categoryId: string) => string;
+  /** Only the on-screen month panel — avoids layoutId flying in from adjacent carousel panels. */
+  showSelectionRing: boolean;
 }) {
   const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
@@ -195,10 +198,11 @@ function MonthGridPanel({
             )}
           >
             <span className="relative flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
-              {selected && (
+              {selected && showSelectionRing && (
                 <motion.span
                   layoutId="month-selected-day"
                   aria-hidden
+                  initial={false}
                   transition={motionTokens.spring}
                   className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-accent sm:hidden"
                 />
@@ -217,10 +221,11 @@ function MonthGridPanel({
               >
                 {format(date, "d")}
               </span>
-              {selected && (
+              {selected && showSelectionRing && (
                 <motion.span
                   layoutId="month-selected-day-desktop"
                   aria-hidden
+                  initial={false}
                   transition={motionTokens.spring}
                   className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
                 />
@@ -353,13 +358,13 @@ export function MonthView({
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden">
         <motion.div className="flex h-full" style={{ x: trackX, width: width ? width * 3 : "300%" }}>
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={prevAnchor} {...panelProps} />
+            <MonthGridPanel anchor={prevAnchor} {...panelProps} showSelectionRing={false} />
           </div>
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={anchor} {...panelProps} />
+            <MonthGridPanel anchor={anchor} {...panelProps} showSelectionRing />
           </div>
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={nextAnchor} {...panelProps} />
+            <MonthGridPanel anchor={nextAnchor} {...panelProps} showSelectionRing={false} />
           </div>
         </motion.div>
       </div>
