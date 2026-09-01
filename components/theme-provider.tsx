@@ -41,12 +41,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export const themeInitScript = `
 (function () {
   try {
-    var raw = localStorage.getItem("datebook-store");
-    if (!raw) return;
-    var parsed = JSON.parse(raw);
-    var settings = parsed && parsed.state && parsed.state.settings;
-    var preset = settings && settings.preset;
-    var density = settings && settings.density;
+    var preset;
+    var density;
+    try {
+      var appearance = localStorage.getItem("datebook-appearance");
+      if (appearance) {
+        var a = JSON.parse(appearance);
+        if (a) {
+          preset = a.preset;
+          density = a.density;
+        }
+      }
+    } catch (e) {}
+    if (!preset) {
+      var raw = localStorage.getItem("datebook-store");
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        var settings = parsed && parsed.state && parsed.state.settings;
+        preset = settings && settings.preset;
+        density = density || (settings && settings.density);
+      }
+    }
     if (preset) document.documentElement.setAttribute("data-preset", preset);
     if (density) document.documentElement.setAttribute("data-density", density);
     document.documentElement.setAttribute("data-first-load", "1");

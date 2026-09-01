@@ -47,6 +47,26 @@ describe("buildImportPlan", () => {
     expect(plan.drafts[0].status).toBe("todo");
   });
 
+  it("does not crash when an existing category has no name", () => {
+    const plan = buildImportPlan(
+      {
+        calendarName: "Canvas",
+        events: [
+          {
+            uid: "a1",
+            summary: "Quiz [MATH 150]",
+            start: "2026-09-02T23:59:00.000Z",
+            allDay: false,
+          },
+        ],
+      },
+      [{ id: "broken", name: undefined as unknown as string, color: "#f00" }],
+      "source-1"
+    );
+    expect(plan.newCategories[0].name).toBe("MATH 150");
+    expect(plan.drafts).toHaveLength(1);
+  });
+
   it("marks completed VTODO items as done", () => {
     const plan = buildImportPlan(
       {

@@ -6,6 +6,7 @@ import type {
   ReminderPreset,
   UserSettings,
 } from "./types";
+import { defaultUserSettings, normalizeSettings } from "./settings";
 
 /* ------------------------------------------------------------------ */
 /* Row <-> client-model mappers                                        */
@@ -73,10 +74,11 @@ export function toCategoryRow(c: Category, userId: string): Row {
   };
 }
 export function rowToCategory(r: Row): Category {
+  const name = typeof r.name === "string" ? r.name.trim() : "";
   return {
     id: r.id as string,
-    name: r.name as string,
-    color: r.color as string,
+    name: name || "Untitled",
+    color: (typeof r.color === "string" && r.color) || "#8E8E93",
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
   };
@@ -183,20 +185,22 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
   };
 }
 export function rowToSettings(r: Row): UserSettings {
-  return {
-    preset: r.preset as UserSettings["preset"],
-    landingView: r.landing_view as UserSettings["landingView"],
-    density: r.density as UserSettings["density"],
-    weekStartsOn: r.week_starts_on as UserSettings["weekStartsOn"],
-    clock24h: Boolean(r.clock_24h),
-    showLocation: Boolean(r.show_location),
-    showCategoryDot: Boolean(r.show_category_dot),
-    hideCompleted: Boolean(r.hide_completed),
-    defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
-    mobileDayDetails:
-      r.mobile_day_details === "inline" ? "inline" : "sheet",
-    ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
-  };
+  return normalizeSettings(
+    {
+      preset: r.preset as UserSettings["preset"],
+      landingView: r.landing_view as UserSettings["landingView"],
+      density: r.density as UserSettings["density"],
+      weekStartsOn: r.week_starts_on as UserSettings["weekStartsOn"],
+      clock24h: Boolean(r.clock_24h),
+      showLocation: Boolean(r.show_location),
+      showCategoryDot: Boolean(r.show_category_dot),
+      hideCompleted: Boolean(r.hide_completed),
+      defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
+      mobileDayDetails: r.mobile_day_details === "inline" ? "inline" : "sheet",
+      ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
+    },
+    defaultUserSettings
+  );
 }
 
 /* ------------------------------------------------------------------ */

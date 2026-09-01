@@ -24,6 +24,7 @@ import {
 } from "./db-sync";
 import { expandRepeat } from "./repeat";
 import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import { defaultUserSettings, normalizeSettings, sanitizeCategories } from "./settings";
 import type { DatebookBackup } from "./backup";
 import type {
   Category,
@@ -109,18 +110,20 @@ interface DatebookState {
 const SAMPLE_ITEM_IDS = new Set(Array.from({ length: 12 }, (_, i) => `item-${i + 1}`));
 const SAMPLE_CATEGORY_IDS = new Set(["cat-cs", "cat-bio", "cat-club"]);
 
-const defaultSettings: UserSettings = {
-  preset: "minimal",
-  landingView: "today",
-  density: "comfortable",
-  weekStartsOn: 0,
-  clock24h: false,
-  showLocation: true,
-  showCategoryDot: true,
-  hideCompleted: false,
-  defaultReminderPresetIds: ["rp-night"],
-  mobileDayDetails: "sheet",
-};
+const defaultSettings = defaultUserSettings;
+
+const APPEARANCE_KEY = "datebook-appearance";
+
+function persistAppearance(settings: UserSettings) {
+  try {
+    localStorage.setItem(
+      APPEARANCE_KEY,
+      JSON.stringify({ preset: settings.preset, density: settings.density })
+    );
+  } catch {
+    /* private mode / quota */
+  }
+}
 
 const GUEST_BACKUP_KEY = "datebook-store.guest";
 
@@ -254,7 +257,10 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateSettings: (patch) => {
-        set({ settings: { ...get().settings, ...patch } });
+        lastLocalSettingsEdit = Date.now();
+        const settings = normalizeSettings({ ...get().settings, ...patch }, get().settings);
+        set({ settings });
+        persistAppearance(settings);
       },
 
       applyImport: (url, feed) => {
@@ -262,7 +268,11 @@ export const useDatebookStore = create<DatebookState>()(
         const existing = state.importSources.find((s) => s.url === url);
         const sourceId = existing?.id ?? nanoid();
 
-        const { newCategories, drafts } = buildImportPlan(feed, state.categories, sourceId);
+        const { newCategories, drafts } = buildImportPlan(
+          feed,
+          sanitizeCategories(state.categories),
+          sourceId
+        );
         const incoming = new Map(drafts.map((d) => [d.sourceUid, d]));
 
         let added = 0;
@@ -497,7 +507,7 @@ export const useDatebookStore = create<DatebookState>()(
                   ? cloud.reminderPresets
                   : defaultReminderPresets,
                 importSources: cloud.importSources,
-                settings: cloud.settings ?? local.settings,
+                settings: normalizeSettings(cloud.settings, local.settings),
               };
               const merged = mergeCalendars(localSnap, cloudSnap);
               set({
@@ -540,7 +550,7 @@ export const useDatebookStore = create<DatebookState>()(
                 items: cloud.items,
                 reminderPresets: cloud.reminderPresets,
                 importSources: cloud.importSources,
-                settings: cloud.settings ?? local.settings,
+                settings: normalizeSettings(cloud.settings, local.settings),
               },
             };
             set({
@@ -556,7 +566,7 @@ export const useDatebookStore = create<DatebookState>()(
           } else if (cloudEmpty && localHasContent) {
             // First sign-in with data on this device: keep it, push it up.
             set({
-              settings: cloud.settings ?? local.settings,
+              settings: normalizeSettings(local.settings, cloud.settings ?? local.settings),
               reminderPresets: cloud.reminderPresets.length
                 ? cloud.reminderPresets
                 : local.reminderPresets,
@@ -598,7 +608,7 @@ export const useDatebookStore = create<DatebookState>()(
                 ? cloud.reminderPresets
                 : defaultReminderPresets,
               importSources: cloud.importSources,
-              settings: cloud.settings ?? defaultSettings,
+              settings: normalizeSettings(cloud.settings, local.settings),
               mode: "cloud",
               userId,
             });
@@ -834,6 +844,18 @@ export const useDatebookStore = create<DatebookState>()(
         mode: s.mode,
         userId: s.userId,
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<DatebookState>;
+        return {
+          ...currentState,
+          ...persisted,
+          settings: normalizeSettings(persisted.settings, currentState.settings),
+          categories: sanitizeCategories(persisted.categories ?? currentState.categories),
+        };
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state?.settings) persistAppearance(state.settings);
+      },
       migrate: (persisted, version) => {
         const state = persisted as Partial<DatebookState>;
         if (state && version < 1) {
@@ -885,6 +907,7 @@ let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
 const lastLocalEdit = new Map<string, number>();
+let lastLocalSettingsEdit = 0;
 let pendingMerge: { userId: string; cloud: CalendarSnapshot } | null = null;
 // The user we WANT to be synced as — set the moment connectCloud starts, and
 // kept even while `activeUserId` is briefly null between a failed connect and
@@ -1174,12 +1197,14 @@ function applyRealtime(
   try {
     if (table === "user_settings") {
       if (payload.eventType !== "DELETE" && payload.new) {
-        const incoming = rowToSettings(payload.new);
         const current = useDatebookStore.getState().settings;
-        // The echo of our own settings write lands ~half a second later; applying
-        // an identical value would re-commit the store (and re-run the theme
-        // recalc) for nothing — visible as a stutter while flicking through
-        // appearance presets.
+        const incoming = normalizeSettings(rowToSettings(payload.new), current);
+        if (
+          (pending.settingsDirty || Date.now() - lastLocalSettingsEdit < 15_000) &&
+          (incoming.preset !== current.preset || incoming.density !== current.density)
+        ) {
+          return;
+        }
         if (JSON.stringify(incoming) !== JSON.stringify(current)) {
           useDatebookStore.setState({ settings: incoming });
         }
@@ -1289,7 +1314,9 @@ async function catchUpFromCloud(userId: string) {
           ? cloud.reminderPresets
           : defaultReminderPresets,
         importSources: cloud.importSources,
-        settings: cloud.settings ?? local.settings,
+        settings: cloud.settings
+          ? normalizeSettings(cloud.settings, local.settings)
+          : local.settings,
       }
     );
     applyingRemote = true;
@@ -1422,6 +1449,13 @@ function bindConnectivityListeners() {
       void catchUpFromCloud(uid);
     })();
   };
+  const persistOnHide = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      if (pendingWork() && activeUserId) void flush();
+    }
+  };
+  document.addEventListener("visibilitychange", persistOnHide);
+  window.addEventListener("pagehide", persistOnHide);
   document.addEventListener("visibilitychange", resume);
   window.addEventListener("online", resume);
   window.addEventListener("focus", resume);

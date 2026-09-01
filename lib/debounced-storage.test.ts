@@ -39,6 +39,21 @@ describe("createDebouncedStorage", () => {
     expect(localStorage.getItem("test")).toBe("b");
   });
 
+  it("flush writes a pending value immediately so a backgrounded PWA cannot drop it", () => {
+    const storage = createDebouncedStorage(5000);
+    storage.setItem("test", "ember");
+    expect(localStorage.getItem("test")).toBeNull();
+    storage.flush();
+    expect(localStorage.getItem("test")).toBe("ember");
+  });
+
+  it("getItem returns a pending write before it hits localStorage", () => {
+    const storage = createDebouncedStorage(5000);
+    storage.setItem("test", "noir");
+    expect(storage.getItem("test")).toBe("noir");
+    expect(localStorage.getItem("test")).toBeNull();
+  });
+
   it("removeItem clears pending write", () => {
     const storage = createDebouncedStorage(200);
     storage.setItem("test", "a");
