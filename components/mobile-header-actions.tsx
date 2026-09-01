@@ -8,7 +8,8 @@ import { FilterButton } from "@/components/filter-sheet";
 import { useUIStore } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
-/** Fixed top-right controls — opaque cluster over a solid header backing. */
+/** Floating top-right glass controls. The page stays continuous; content
+ *  scrolls under this cluster. No full-width header strip. */
 export function MobileHeaderActions() {
   const pathname = usePathname();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
@@ -16,12 +17,7 @@ export function MobileHeaderActions() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-30 md:hidden">
-      <div
-        aria-hidden
-        className="mobile-header-backing pointer-events-none absolute inset-x-0 top-0"
-        style={{ height: "var(--mobile-header-height)" }}
-      />
-      <div className="relative pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+      <div className="pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="flex justify-end px-3">
           <div className="mobile-header-cluster pointer-events-auto flex items-center gap-0.5 p-0.5">
             <Button

@@ -334,8 +334,9 @@
   /* Height the on-screen keyboard is currently covering, published by
      useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
   --keyboard-inset: 0px;
-  /* Floating mobile header: safe area + button row. Content starts below; scrolls under on scroll. */
-  --mobile-header-height: calc(env(safe-area-inset-top) + 4rem);
+  /* Space reserved so titles clear the floating glass cluster. The page
+     itself stays continuous — no opaque header strip. */
+  --mobile-header-height: calc(env(safe-area-inset-top) + 3.5rem);
   --page-gap: 2rem;
   --card-pad-y: 0.75rem;
   --card-pad-x: 1rem;
@@ -449,8 +450,10 @@ button, a, [role="button"], summary, input, textarea, select, label {
   border: 1px solid var(--line);
 }
 
-/* Floating tab bar — restrained material, neutral selection bubble */
-.mobile-tab-bar {
+/* Floating glass chrome — tab bar and header cluster share one recipe so
+   restoring button blur never requires an opaque page header. */
+.mobile-tab-bar,
+.mobile-header-cluster {
   isolation: isolate;
   border-radius: 9999px;
   background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
@@ -469,31 +472,9 @@ button, a, [role="button"], summary, input, textarea, select, label {
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
-/* Opaque mobile header chrome — blocks scroll/ambient bleed through controls */
-.mobile-header-backing {
-  background: var(--surface-base);
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  /* Extend slightly below the cluster so scroll bleed can't show at the seam. */
-  box-shadow: 0 12px 0 var(--surface-base);
-}
-
-.mobile-header-cluster {
-  background: var(--surface-elevated);
-  border: 0.5px solid var(--line-strong);
-  border-radius: 9999px;
-  box-shadow: var(--shadow-sm);
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  /* Block iOS compositing bleed from content scrolling underneath. */
-  isolation: isolate;
-  contain: paint;
-}
-
 @supports not ((backdrop-filter: blur(1px))) {
-  .mobile-tab-bar {
+  .mobile-tab-bar,
+  .mobile-header-cluster {
     background: var(--surface-elevated);
   }
 }
