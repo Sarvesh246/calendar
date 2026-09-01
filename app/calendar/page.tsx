@@ -111,7 +111,7 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
-      <header className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <header className="flex shrink-0 flex-col gap-2 pt-2.5 pr-[7.25rem] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between md:pt-0 md:pr-0">
         <h1 className="flex min-w-0 items-baseline overflow-hidden text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
           {/* The title travels with the grid rather than swapping a frame early,
               so the header and the days read as one movement. */}

@@ -20,7 +20,7 @@ import type { Item } from "@/lib/types";
 const HORIZON_DAYS = 120;
 
 const AGENDA_STICKY =
-  "sticky z-10 top-[var(--mobile-header-height)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
+  "sticky z-10 top-[env(safe-area-inset-top,0px)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
 
 export default function AgendaPage() {
   const router = useRouter();
@@ -69,7 +69,7 @@ export default function AgendaPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
-      <header className="flex items-start justify-between gap-3">
+      <header className="flex items-start justify-between gap-3 pt-2.5 pr-[7.25rem] md:pt-0 md:pr-0">
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agenda</h1>
           <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>

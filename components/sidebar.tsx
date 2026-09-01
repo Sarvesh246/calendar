@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
+import { AnimatePresence, motion, animate, useMotionValue } from "framer-motion";
 import {
   CalendarDays,
   Cloud,
@@ -21,6 +21,14 @@ import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import {
+  beginTabDrag,
+  endTabDrag,
+  prepareTabTransition,
+  snapTabIndex,
+  tabPageX,
+  tabTransition,
+} from "@/lib/tab-swipe";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -169,35 +177,32 @@ export function Sidebar() {
   );
 }
 
+const pillSpring = { type: "spring" as const, stiffness: 420, damping: 36, mass: 0.65 };
+const pageSpring = { type: "spring" as const, stiffness: 420, damping: 38, mass: 0.7 };
+
 /** Swipeable bottom tab bar — drag left/right to move between main views. */
 function MobileBottomNav({ pathname }: { pathname: string }) {
   const router = useRouter();
   const navRef = useRef<HTMLDivElement>(null);
   const [navWidth, setNavWidth] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const activeIndex = Math.max(0, NAV.findIndex((i) => i.href === pathname));
-  const dragX = useMotionValue(0);
-  const baseX = useMotionValue(0);
+  const pillX = useMotionValue(0);
+  const pillScale = useMotionValue(1);
   const dragging = useRef(false);
+  const navigating = useRef(false);
   const pointerId = useRef<number | null>(null);
   const startX = useRef(0);
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
-
   const pillInset = 4;
   const trackWidth = Math.max(0, navWidth - pillInset * 2);
   const tabWidth = trackWidth / NAV.length;
-  const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
 
-  const pillSpring = { type: "spring" as const, stiffness: 380, damping: 24, mass: 0.68 };
-
-  function navigateTo(index: number) {
-    if (index === activeIndex) return;
-    haptic("light");
-    router.push(NAV[index].href);
-    void animate(baseX, index * tabWidth, pillSpring);
-    dragX.set(0);
-  }
+  useEffect(() => {
+    NAV.forEach((item) => {
+      if (item.href !== pathname) router.prefetch(item.href);
+    });
+  }, [pathname, router]);
 
   useEffect(() => {
     const el = navRef.current;
@@ -209,20 +214,73 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   }, []);
 
   useEffect(() => {
-    if (!tabWidth || dragging.current) return;
-    baseX.set(activeIndex * tabWidth);
-    dragX.set(0);
+    if (!tabWidth) return;
+    const target = pillInset + activeIndex * tabWidth;
+    if (dragging.current || navigating.current) {
+      navigating.current = false;
+      return;
+    }
+    pillX.set(target);
     indexAtStart.current = activeIndex;
-  }, [activeIndex, tabWidth, baseX, dragX]);
+  }, [activeIndex, tabWidth, pillX]);
+
+  function pageOffsetFor(dx: number) {
+    if (!tabWidth) return 0;
+    return -(dx / tabWidth) * (typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 0);
+  }
+
+  function navigateTo(index: number, currentPageX = 0) {
+    if (index === activeIndex) return;
+    navigating.current = true;
+    haptic("light");
+    prepareTabTransition(activeIndex, index, currentPageX);
+    if (tabWidth) {
+      void animate(pillX, pillInset + index * tabWidth, pillSpring);
+    }
+    void animate(tabPageX, tabTransition.exitX, pageSpring);
+    router.push(NAV[index].href);
+  }
+
+  function finishGesture() {
+    if (!dragging.current) return;
+    dragging.current = false;
+    pointerId.current = null;
+    void animate(pillScale, 1, pillSpring);
+
+    if (!didDrag.current || !tabWidth) {
+      endTabDrag();
+      tabPageX.set(0);
+      return;
+    }
+
+    const origin = pillInset + indexAtStart.current * tabWidth;
+    const dx = pillX.get() - origin;
+    const clamped = snapTabIndex(indexAtStart.current, dx, tabWidth, NAV.length);
+
+    if (clamped !== activeIndex) {
+      navigateTo(clamped, tabPageX.get());
+      return;
+    }
+
+    endTabDrag();
+    void Promise.all([
+      animate(pillX, pillInset + activeIndex * tabWidth, pillSpring),
+      animate(tabPageX, 0, pageSpring),
+    ]);
+  }
 
   function onPointerDown(e: React.PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !tabWidth) return;
     dragging.current = true;
-    setIsDragging(true);
     didDrag.current = false;
+    navigating.current = false;
     pointerId.current = e.pointerId;
     startX.current = e.clientX;
     indexAtStart.current = activeIndex;
+    pillX.set(pillInset + activeIndex * tabWidth);
+    tabPageX.set(0);
+    beginTabDrag(pathname);
+    void animate(pillScale, 1.015, pillSpring);
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -232,81 +290,66 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     if (Math.abs(dx) > 6) didDrag.current = true;
     const min = -(indexAtStart.current * tabWidth);
     const max = (NAV.length - 1 - indexAtStart.current) * tabWidth;
-    dragX.set(Math.max(min, Math.min(max, dx)));
+    const clamped = Math.max(min, Math.min(max, dx));
+    pillX.set(pillInset + indexAtStart.current * tabWidth + clamped);
+    tabPageX.set(pageOffsetFor(clamped));
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (!dragging.current || pointerId.current !== e.pointerId) return;
-    dragging.current = false;
-    setIsDragging(false);
-    pointerId.current = null;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-
-    if (!tabWidth) {
-      dragX.set(0);
-      return;
+    if (pointerId.current !== e.pointerId) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
     }
-
-    const dx = dragX.get();
-    const moved = dx / tabWidth;
-    const target = Math.round(indexAtStart.current + moved);
-    const clamped = Math.max(0, Math.min(NAV.length - 1, target));
-
-    if (clamped !== activeIndex) {
-      navigateTo(clamped);
-      return;
-    }
-
-    void Promise.all([
-      animate(baseX, activeIndex * tabWidth, pillSpring),
-      animate(dragX, 0, pillSpring),
-    ]);
+    finishGesture();
   }
 
   function onPointerCancel() {
-    dragging.current = false;
-    setIsDragging(false);
-    pointerId.current = null;
-    void animate(dragX, 0, pillSpring);
+    finishGesture();
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
+    <nav
+      className="mobile-bottom-nav fixed inset-x-0 z-40 px-3 md:hidden"
+      style={{
+        bottom: "var(--vv-bottom, 0px)",
+        paddingBottom: "max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 0.6rem)",
+      }}
+    >
       <div
         ref={navRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-full p-1"
+        className="mobile-tab-bar relative mx-auto flex max-w-md touch-none select-none items-stretch rounded-full p-1"
       >
         {navWidth > 0 && (
           <motion.span
             aria-hidden
             className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
-            style={{ width: tabWidth, x: pillX }}
-            animate={{ scale: isDragging ? 1.015 : 1 }}
-            transition={pillSpring}
+            style={{ width: tabWidth, x: pillX, scale: pillScale }}
           />
         )}
         {NAV.map((item, index) => {
           const active = pathname === item.href;
           const Icon = item.icon;
           return (
-            <Link
+            <a
               key={item.href}
               href={item.href}
-              prefetch
               aria-current={active ? "page" : undefined}
               onClick={(e) => {
+                e.preventDefault();
                 if (didDrag.current) {
-                  e.preventDefault();
                   didDrag.current = false;
                   return;
                 }
                 if (index !== activeIndex) {
-                  e.preventDefault();
-                  navigateTo(index);
+                  endTabDrag();
+                  tabPageX.set(0);
+                  navigateTo(index, 0);
                 } else {
                   haptic("light");
                 }
@@ -328,7 +371,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
               >
                 {item.label}
               </span>
-            </Link>
+            </a>
           );
         })}
       </div>
