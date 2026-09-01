@@ -32,7 +32,7 @@ export function MobileHeaderActions() {
           <Search className="h-4 w-4" strokeWidth={1.9} />
         </Button>
         {!onSettings && (
-          <FilterButton className="pointer-events-auto h-10 w-10 rounded-full border border-line/70 bg-surface/92" />
+          <FilterButton className="pointer-events-auto h-10 w-10 rounded-full border border-line bg-surface" />
         )}
         <Link
           href="/settings"

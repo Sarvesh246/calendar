@@ -19,6 +19,9 @@ import type { Item } from "@/lib/types";
 
 const HORIZON_DAYS = 120;
 
+const AGENDA_STICKY =
+  "sticky z-10 top-[var(--mobile-header-height)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
+
 export default function AgendaPage() {
   const router = useRouter();
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
@@ -116,7 +119,7 @@ export default function AgendaPage() {
 
       {overdue.length > 0 && (
         <section>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-warn">
+          <p className={cn(AGENDA_STICKY, "text-[12px] font-medium text-warn")}>
             Overdue · {overdue.length}
           </p>
           <div className="flex flex-col gap-2">
@@ -146,7 +149,7 @@ export default function AgendaPage() {
         const showDate = label === "Tomorrow";
         return (
         <section key={group.date.toISOString()}>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 flex items-baseline gap-2 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-ink-faint">
+          <p className={cn(AGENDA_STICKY, "flex items-baseline gap-2 text-[12px] font-medium text-ink-faint")}>
             {label}
             {showDate && (
               <span className="font-normal text-ink-faint/70">
@@ -167,7 +170,7 @@ export default function AgendaPage() {
 
       {later.length > 0 && (
         <section>
-          <p className="sticky top-[calc(env(safe-area-inset-top)+0.25rem)] z-10 -mx-4 mb-2.5 bg-surface-base/95 px-4 py-2 text-[12px] font-medium text-ink-faint">
+          <p className={cn(AGENDA_STICKY, "text-[12px] font-medium text-ink-faint")}>
             Later
           </p>
           <div className="flex flex-col gap-2">

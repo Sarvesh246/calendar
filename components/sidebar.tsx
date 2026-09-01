@@ -174,16 +174,22 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const router = useRouter();
   const navRef = useRef<HTMLDivElement>(null);
   const [navWidth, setNavWidth] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const activeIndex = Math.max(0, NAV.findIndex((i) => i.href === pathname));
   const dragX = useMotionValue(0);
+  const baseX = useMotionValue(0);
   const dragging = useRef(false);
   const pointerId = useRef<number | null>(null);
   const startX = useRef(0);
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
 
-  const tabWidth = navWidth / NAV.length;
-  const pillX = useTransform(dragX, (v) => activeIndex * tabWidth + v);
+  const pillInset = 6;
+  const trackWidth = Math.max(0, navWidth - pillInset * 2);
+  const tabWidth = trackWidth / NAV.length;
+  const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
+
+  const pillSpring = { type: "spring" as const, stiffness: 340, damping: 24, mass: 0.72 };
 
   useEffect(() => {
     const el = navRef.current;
@@ -195,13 +201,16 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   }, []);
 
   useEffect(() => {
+    if (!tabWidth || dragging.current) return;
+    baseX.set(activeIndex * tabWidth);
     dragX.set(0);
     indexAtStart.current = activeIndex;
-  }, [activeIndex, dragX]);
+  }, [activeIndex, tabWidth, baseX, dragX]);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
     dragging.current = true;
+    setIsDragging(true);
     didDrag.current = false;
     pointerId.current = e.pointerId;
     startX.current = e.clientX;
@@ -221,6 +230,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   function onPointerUp(e: React.PointerEvent) {
     if (!dragging.current || pointerId.current !== e.pointerId) return;
     dragging.current = false;
+    setIsDragging(false);
     pointerId.current = null;
     e.currentTarget.releasePointerCapture(e.pointerId);
 
@@ -234,19 +244,28 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     const target = Math.round(indexAtStart.current + moved);
     const clamped = Math.max(0, Math.min(NAV.length - 1, target));
 
-    void animate(dragX, (clamped - activeIndex) * tabWidth, motionTokens.springSnappy).then(() => {
-      dragX.set(0);
-      if (clamped !== activeIndex) {
-        haptic("light");
+    if (clamped !== activeIndex) {
+      haptic("light");
+      void Promise.all([
+        animate(baseX, clamped * tabWidth, pillSpring),
+        animate(dragX, 0, pillSpring),
+      ]).then(() => {
         router.push(NAV[clamped].href);
-      }
-    });
+      });
+      return;
+    }
+
+    void Promise.all([
+      animate(baseX, activeIndex * tabWidth, pillSpring),
+      animate(dragX, 0, pillSpring),
+    ]);
   }
 
   function onPointerCancel() {
     dragging.current = false;
+    setIsDragging(false);
     pointerId.current = null;
-    void animate(dragX, 0, motionTokens.springSnappy);
+    void animate(dragX, 0, pillSpring);
   }
 
   return (
@@ -257,14 +276,15 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        className="relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-lg border border-line/80 bg-surface p-1.5"
+        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-[1.25rem] p-1.5"
       >
         {navWidth > 0 && (
           <motion.span
             aria-hidden
-            className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
+            className="mobile-tab-pill pointer-events-none absolute inset-y-1.5 left-0 rounded-[0.85rem]"
             style={{ width: tabWidth, x: pillX }}
-            transition={{ type: "spring", stiffness: 420, damping: 34 }}
+            animate={{ scale: isDragging ? 1.04 : 1 }}
+            transition={pillSpring}
           />
         )}
         {NAV.map((item) => {
