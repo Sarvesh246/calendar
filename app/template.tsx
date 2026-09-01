@@ -21,7 +21,6 @@ export default function Template({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      key={pathname}
       className={cn(
         "page-shell",
         isTabRoute ? "route-enter-instant" : "route-enter",

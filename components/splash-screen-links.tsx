@@ -2,6 +2,12 @@
 export function SplashScreenLinks() {
   return (
     <>
+      {/* Next 16's appleWebApp metadata omits the Apple-prefixed capable tag.
+          iOS only applies black-translucent (edge-to-edge under the status bar)
+          when this exact name is present. */}
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       <link
         rel="apple-touch-startup-image"
         href="/splash-1284x2778.png"

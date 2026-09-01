@@ -17,7 +17,9 @@ import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { useViewportChrome } from "@/lib/use-viewport-chrome";
 import { cn } from "@/lib/utils";
+import { PageSlide } from "@/components/page-slide";
 
 const CommandPalette = dynamic(
   () => import("./command-palette").then((m) => ({ default: m.CommandPalette })),
@@ -48,6 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onToday = pathname === "/today";
 
   useKeyboardInset();
+  useViewportChrome();
 
   useEffect(() => {
     closeQuickAdd();
@@ -69,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onCalendar ? "min-h-dvh md:h-dvh md:overflow-hidden" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)]"
-          : "pb-[calc(env(safe-area-inset-bottom)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
+          : "pb-[calc(var(--vv-bottom,0px)+var(--safe-bottom,env(safe-area-inset-bottom,0px))+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
@@ -77,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main
         className={cn(
           "flex min-w-0 flex-1 flex-col",
-          !focusMode && "pt-[var(--mobile-header-height)] md:pt-0",
+          !focusMode && "pt-[env(safe-area-inset-top,0px)] md:pt-0",
           onCalendar && "md:min-h-0 md:overflow-hidden"
         )}
       >
@@ -116,7 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </>
         )}
 
-        {children}
+        <PageSlide>{children}</PageSlide>
       </main>
 
       {!focusMode && !onSettings && !quickAddOpen && (
@@ -126,7 +129,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={openAdd}
           aria-label="Add item"
           className="fixed right-4 z-40 md:hidden"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.25rem)" }}
+          style={{
+            bottom:
+              "calc(var(--vv-bottom, 0px) + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 0.6rem) + 4.65rem)",
+          }}
         >
           <Plus className="h-6 w-6" strokeWidth={2.25} />
         </Button>

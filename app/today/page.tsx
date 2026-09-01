@@ -84,7 +84,7 @@ function TodayDashboard() {
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-6">
       <OnboardingCard />
       <FeedHealthBanner />
-      <header className="flex items-start justify-between gap-3">
+      <header className="flex items-start justify-between gap-3 pt-2.5 pr-[7.25rem] md:pt-0 md:pr-0">
         <div>
           <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
           <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">

@@ -38,7 +38,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 pb-4">
-      <header className="pt-1">
+      <header className="pt-2.5 pr-[7.25rem] md:pt-1 md:pr-0">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
