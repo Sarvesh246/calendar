@@ -60,14 +60,14 @@ export function NotificationToggle() {
       <div className="flex flex-col gap-2">
         <p className="flex items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
           <Check className="h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
-          Notifications on — reminders fire while Datebook is open and catch up when you return.
+          Notifications on. Reminders fire while Datebook is open and catch up when you return.
           {vapidPublicKey()
             ? " Closed-app alerts are on for this signed-in browser."
-            : " Closed-app push needs VAPID keys on the server — until then, keep a tab open or reopen to catch up."}
+            : " Closed-app push needs VAPID keys on the server. Until then, keep a tab open or reopen to catch up."}
         </p>
         {swReady === false && (
           <p className="text-[12px] text-ink-soft">
-            Notifications warming up — reopen Datebook if the first alert doesn&apos;t appear.
+            Notifications warming up. Reopen Datebook if the first alert doesn&apos;t appear.
           </p>
         )}
         {pushError && (

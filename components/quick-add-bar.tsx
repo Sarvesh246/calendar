@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Bell, Plus, Sparkles, Tag, X } from "lucide-react";
+import { ArrowUp, Bell, Plus, Tag, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
@@ -132,9 +132,9 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     <div className="relative w-full">
       <div
         className={cn(
-          "flex items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 shadow-[var(--shadow-md)]",
-          "transition-[box-shadow,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-          focused && "border-accent/40 shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_12%,transparent),var(--shadow-lg)]"
+          "flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
+          "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+          focused && "border-accent/50"
         )}
       >
         <motion.span
@@ -202,7 +202,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-2xl border border-line bg-surface p-4 shadow-[var(--shadow-lg)]"
+            className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-lg border border-line bg-surface p-4"
           >
             <p className="text-[13px] text-ink-soft">This looks like a question, not something to add.</p>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -220,8 +220,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                   reset();
                 }}
               >
-                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
-                Ask AI instead
+                Ask assistant instead
               </Button>
             </div>
           </motion.div>
@@ -233,7 +232,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.spring}
             style={{ transformOrigin: "top center" }}
-            className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-4 shadow-[var(--shadow-lg)]"
+            className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-lg border border-line bg-surface p-4"
           >
             <p className="text-[15px] font-semibold text-ink">{parsed.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">

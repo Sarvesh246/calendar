@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, RotateCw, Trash2, X } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -24,7 +24,7 @@ interface Message {
 
 const WELCOME: Message = {
   role: "assistant",
-  text: "Ask me anything about your calendar — what's due, when you're free, your busiest day — or tell me to add, move, reschedule, complete, or delete something.",
+  text: "Ask about your calendar, what's due, when you're free, or tell me to add, move, reschedule, complete, or delete something.",
   suggestions: ["What's on today?", "What's due this week?", "Add gym at 6pm tomorrow"],
 };
 
@@ -220,7 +220,7 @@ export function AIDrawer() {
       <div
         onClick={() => setOpen(false)}
         className={cn(
-          "overlay-scrim absolute inset-0 backdrop-blur-[2px]",
+          "overlay-scrim absolute inset-0",
           open
             ? "animate-[overlay-in_340ms_ease-out]"
             : "animate-[overlay-out_160ms_ease-in_forwards]"
@@ -235,15 +235,14 @@ export function AIDrawer() {
           height: "70dvh",
         }}
         className={cn(
-          "glass absolute inset-x-3 bottom-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-2xl",
+          "absolute inset-x-3 bottom-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-lg border border-line bg-surface",
           open
             ? "animate-[sheet-in_340ms_var(--ease-standard)]"
             : "animate-[sheet-out_160ms_ease-in_forwards]"
         )}
       >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-            <Sparkles className="h-4 w-4 text-accent" strokeWidth={2} />
-            <span className="text-[13.5px] font-semibold text-ink">Datebook Assistant</span>
+            <span className="text-[13.5px] font-semibold text-ink">Assistant</span>
             <button
               onClick={() => setOpen(false)}
               aria-label="Close assistant"
@@ -265,7 +264,7 @@ export function AIDrawer() {
                 <div
                   className={
                     m.role === "user"
-                      ? "max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink"
+                      ? "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink"
                       : "max-w-[92%] space-y-2"
                   }
                 >

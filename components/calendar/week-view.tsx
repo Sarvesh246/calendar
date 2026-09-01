@@ -73,7 +73,7 @@ export function WeekView({
     <>
       <MobileWeekPager days={days} byDay={byDay} />
 
-      <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[var(--shadow-sm)] md:flex md:overflow-y-auto">
+      <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface md:flex md:overflow-y-auto">
         <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
           <div />
           {days.map((day) => (
@@ -385,7 +385,7 @@ function MobileWeekPager({
                 <p className="text-[12.5px] text-ink-faint">{format(day, "MMM d")}</p>
               </div>
               {dayItems.length === 0 ? (
-                <EmptyState title="Nothing scheduled." sub="A free day — enjoy it." />
+                <EmptyState title="Nothing scheduled." sub="A free day." />
               ) : (
                 <div className="flex flex-col gap-2">
                   {dayItems.map((item) => (

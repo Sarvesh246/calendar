@@ -99,7 +99,7 @@ function CompleteButton({
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
             status === "doing" &&
-              "status-doing-ring border-accent bg-[conic-gradient(from_200deg,var(--accent)_0deg,var(--accent)_180deg,transparent_180deg)]",
+              "status-doing-ring border-2 border-accent bg-accent-soft",
             status === "done" && "border-good bg-good"
           )}
         >
@@ -360,9 +360,9 @@ export function EventCard({ item, category }: { item: Item; category: Category |
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "press-none press-surface cat-surface cursor-pointer overflow-hidden rounded-lg px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
-        "shadow-[var(--shadow-sm)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        expanded && "shadow-[var(--shadow-md)]"
+        "press-none press-surface cat-surface cursor-pointer overflow-hidden rounded-lg border border-line px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        expanded && "border-line-strong"
       )}
     >
       <div className="flex items-center gap-3">
@@ -424,13 +424,13 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       onKeyDown={keyToggle}
       className={cn(
         "press-none press-surface cursor-pointer overflow-hidden rounded-lg border border-line bg-surface",
-        "px-[var(--card-pad-x)] py-[var(--card-pad-y)] shadow-[var(--shadow-sm)]",
+        "px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        expanded && "border-line-strong shadow-[var(--shadow-md)]",
+        expanded && "border-line-strong",
         // An overdue row earns a warning edge. Previously the only signal was one
         // word in 12px text, which scrolled past unnoticed in a long list.
-        overdue && !done && "border-l-[3px] border-l-warn",
-        status === "doing" && !done && "border-l-[3px] border-l-accent bg-accent-soft/25"
+        overdue && !done && "bg-warn-soft/35",
+        status === "doing" && !done && "bg-accent-soft/30"
       )}
     >
       <div className="flex items-center gap-1">

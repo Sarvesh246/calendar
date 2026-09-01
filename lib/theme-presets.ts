@@ -6,86 +6,85 @@ export const presetMeta: Record<
 > = {
   minimal: {
     label: "Minimal",
-    description: "Clean, monochrome, low visual noise.",
-    swatch: ["#f7f7f8", "#ffffff", "#565fc2"],
-  },
-  midnight: {
-    label: "Midnight",
-    description: "Dark background, vibrant category accents.",
-    swatch: ["#0b0b0d", "#151518", "#8b7cff"],
-  },
-  paper: {
-    label: "Paper",
-    description: "Warm off-white, softer borders, serif headings.",
-    swatch: ["#f6efe2", "#fffdf8", "#7a3b32"],
-  },
-  aurora: {
-    label: "Aurora",
-    description: "Subtle gradients and colorful surfaces.",
-    swatch: ["#f5f3ff", "#ffffff", "#7c5cf0"],
-  },
-  mono: {
-    label: "Mono",
-    description: "Black and white, category colors used sparingly.",
-    swatch: ["#000000", "#0a0a0a", "#ffffff"],
-  },
-  noir: {
-    label: "Noir",
-    description: "Warm near-black with a brass accent — editorial.",
-    swatch: ["#0c0b0a", "#16140f", "#c9a24a"],
-  },
-  sakura: {
-    label: "Sakura",
-    description: "Soft warm white with a rose blush.",
-    swatch: ["#fdf2f4", "#fffafb", "#c2456b"],
-  },
-  evergreen: {
-    label: "Evergreen",
-    description: "Deep forest dark with a mint accent.",
-    swatch: ["#0a0f0c", "#101713", "#57c98b"],
+    description: "Neutral grey surfaces with a system blue accent.",
+    swatch: ["#f2f2f7", "#fafafa", "#007aff"],
   },
   slate: {
     label: "Slate",
-    description: "Cool grey, steel-blue accent, crisp.",
-    swatch: ["#eef1f4", "#ffffff", "#3d6ea5"],
+    description: "Cool grey with a steel-blue accent.",
+    swatch: ["#eef1f4", "#fafafa", "#3d6ea5"],
   },
-  ember: {
-    label: "Ember",
-    description: "Charcoal with a warm coral glow.",
-    swatch: ["#100d0c", "#1a1513", "#f0704a"],
+  paper: {
+    label: "Paper",
+    description: "Warm off-white with a muted brown accent.",
+    swatch: ["#f6efe2", "#fffdf8", "#7a3b32"],
   },
   frost: {
     label: "Frost",
-    description: "Pale arctic blue, glacier accent, airy.",
-    swatch: ["#eef4f8", "#ffffff", "#2b8fb8"],
+    description: "Pale blue-grey with a glacier accent.",
+    swatch: ["#eef4f8", "#fafafa", "#2b8fb8"],
+  },
+  midnight: {
+    label: "Midnight",
+    description: "Dark grey surfaces with a blue accent.",
+    swatch: ["#1c1c1e", "#2c2c2e", "#0a84ff"],
+  },
+  evergreen: {
+    label: "Evergreen",
+    description: "Forest dark with a muted green accent.",
+    swatch: ["#0a0f0c", "#101713", "#57c98b"],
+  },
+  noir: {
+    label: "Noir",
+    description: "Warm near-black with a brass accent.",
+    swatch: ["#0c0b0a", "#16140f", "#c9a24a"],
+  },
+  ember: {
+    label: "Ember",
+    description: "Charcoal with a warm coral accent.",
+    swatch: ["#100d0c", "#1a1513", "#f0704a"],
+  },
+  sakura: {
+    label: "Sakura",
+    description: "Soft rose tint on warm white.",
+    swatch: ["#fdf2f4", "#fffafb", "#c2456b"],
+  },
+  aurora: {
+    label: "Aurora",
+    description: "Cool grey with a steel accent.",
+    swatch: ["#eef1f4", "#f8f9fb", "#3d6ea5"],
+  },
+  mono: {
+    label: "Mono",
+    description: "High-contrast black and white.",
+    swatch: ["#000000", "#0a0a0a", "#fafafa"],
   },
 };
 
-/** Surface-base color for `theme-color` / the iOS status bar chrome. */
 export const presetThemeColor: Record<AppearancePreset, string> = {
-  minimal: "#f7f7f8",
-  midnight: "#0b0b0d",
-  paper: "#f6efe2",
-  aurora: "#f5f3ff",
-  mono: "#000000",
-  noir: "#0c0b0a",
-  sakura: "#fdf2f4",
-  evergreen: "#0a0f0c",
+  minimal: "#f2f2f7",
   slate: "#eef1f4",
-  ember: "#100d0c",
+  paper: "#f6efe2",
   frost: "#eef4f8",
+  midnight: "#1c1c1e",
+  evergreen: "#0a0f0c",
+  noir: "#0c0b0a",
+  ember: "#100d0c",
+  sakura: "#fdf2f4",
+  aurora: "#eef1f4",
+  mono: "#000000",
 };
 
 export const presetOrder: AppearancePreset[] = [
   "minimal",
-  "midnight",
+  "slate",
   "paper",
+  "frost",
+  "midnight",
+  "evergreen",
+  "noir",
+  "ember",
+  "sakura",
   "aurora",
   "mono",
-  "noir",
-  "sakura",
-  "evergreen",
-  "slate",
-  "ember",
-  "frost",
 ];

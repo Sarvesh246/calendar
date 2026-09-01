@@ -4,7 +4,7 @@ import type { Category, Item, ReminderPreset } from "./types";
 // `uuid` id column when synced to Supabase.
 export const defaultCategories: Category[] = [
   { id: "f39a9750-ce6d-4039-a792-45680017f5f0", name: "Personal", color: "#3DBE8B" },
-  { id: "1d3d851d-36c9-4570-896a-7b7de6875f27", name: "Work", color: "#7C6CFF" },
+  { id: "1d3d851d-36c9-4570-896a-7b7de6875f27", name: "Work", color: "#007AFF" },
 ];
 
 export const defaultReminderPresets: ReminderPreset[] = [

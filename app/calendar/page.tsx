@@ -251,12 +251,12 @@ export default function CalendarPage() {
         </div>
 
         {mobileDayDetails === "inline" && (
-          <section className="min-h-0 shrink-0 rounded-xl border border-line bg-surface p-4 shadow-[var(--shadow-sm)] lg:hidden">
+          <section className="min-h-0 shrink-0 rounded-xl border border-line bg-surface p-4 lg:hidden">
             <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
           </section>
         )}
 
-        <aside className="glass hidden min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex">
+        <aside className="bg-surface border border-line hidden min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex">
           <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
         </aside>
       </div>

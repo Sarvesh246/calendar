@@ -174,8 +174,8 @@ export function relativeDueLabel(iso: string, opts?: { allDay?: boolean }) {
   const overdue = past && !(opts?.allDay && isToday(date));
   if (overdue) {
     if (isToday(date)) return "Overdue";
-    if (isYesterday(date)) return "Overdue — was due yesterday";
-    return `Overdue — was due ${format(date, "MMM d")}`;
+    if (isYesterday(date)) return "Overdue since yesterday";
+    return `Overdue since ${format(date, "MMM d")}`;
   }
   if (isToday(date)) return "Due today";
   if (isTomorrow(date)) return "Due tomorrow";

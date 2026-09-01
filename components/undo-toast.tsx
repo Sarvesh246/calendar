@@ -33,7 +33,7 @@ export function UndoToast() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={motionTokens.spring}
-            className="pointer-events-auto relative flex max-w-[min(92vw,26rem)] items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface py-2.5 pl-3.5 pr-2 text-[13px] text-ink shadow-[var(--shadow-lg)]"
+            className="pointer-events-auto relative flex max-w-[min(92vw,26rem)] items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface py-2.5 pl-3.5 pr-2 text-[13px] text-ink"
           >
             <Trash2 className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.9} />
             <span className="min-w-0 flex-1 truncate">

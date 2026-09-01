@@ -23,39 +23,39 @@
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
 
-  --font-display: var(--font-instrument), Georgia, serif;
-  --font-ui: var(--font-geist-sans), -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 /* Base palette — "Minimal" (light, low-noise, single restrained accent) */
 :root,
 :root[data-preset="minimal"] {
-  --surface-base: #f7f7f8;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-sunken: #f0f0f2;
-  --surface-floating: rgba(255, 255, 255, 0.72);
-  --line: #e6e6e9;
-  --line-strong: #d4d4d9;
-  --ink: #18181b;
-  --ink-soft: #55555f;
-  --ink-faint: #9d9da6;
-  --accent: #565fc2;
-  --accent-2: #7c6cff;
+  --surface-base: #f2f2f7;
+  --surface: #fafafa;
+  --surface-elevated: #fafafa;
+  --surface-sunken: #ececee;
+  --surface-floating: #fafafa;
+  --line: #d8d8de;
+  --line-strong: #c4c4cc;
+  --ink: #1c1c1e;
+  --ink-soft: #48484a;
+  --ink-faint: #8e8e93;
+  --accent: #007aff;
+  --accent-2: #0056b3;
   --accent-ink: #ffffff;
-  --warn: #b7621f;
-  --warn-soft: #fbe9d9;
-  --good: #2f8f5b;
-  --good-soft: #dff3e7;
-  --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06);
-  --shadow-md: 0 4px 16px rgba(24, 24, 27, 0.08);
-  --shadow-lg: 0 16px 40px rgba(24, 24, 27, 0.12);
+  --warn: #c93400;
+  --warn-soft: #fde8e0;
+  --good: #248a3d;
+  --good-soft: #e0f2e4;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
   --ambient: none;
   color-scheme: light;
 }
@@ -442,22 +442,14 @@ button, a, [role="button"], summary, input, textarea, select, label {
 
 .font-display { font-family: var(--font-display); }
 
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
 .surface-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
-}
-
-.glass {
-  background: var(--surface-floating);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-}
-
-@supports not ((backdrop-filter: blur(1px))) {
-  .glass { background: var(--surface-elevated); }
 }
 
 /* Per-category color system — base color set via inline style `--cat` */
@@ -570,14 +562,14 @@ button, a, [role="button"], summary, input, textarea, select, label {
   border-color: color-mix(in srgb, var(--cat) 16%, var(--line));
 }
 
-/* In-progress status control — subtle idle pulse */
+/* In-progress status control */
 @keyframes status-doing-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+    opacity: 0.72;
   }
 }
 
@@ -640,24 +632,11 @@ a.press-none:active,
   transition-duration: 90ms;
 }
 
-/* Hover raises the card. Deliberately *not* `border-color`: these surfaces carry
-   meaning in their border — the category tint on an event, the warn edge on an
-   overdue row — and a `.press-surface:hover` colour rule outranks the utility
-   class that painted it, so hovering an overdue item silently erased its
-   warning stripe. Elevation says "interactive" without spending the border. */
+/* Hover: background highlight only — no elevation lift. */
 @media (hover: hover) {
   .press-surface:hover {
-    box-shadow: var(--shadow-md);
+    background-color: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
   }
-
-  /* Icon-only affordances that should feel like real buttons under a cursor. */
-  .hover-lift:hover {
-    transform: translateY(-1px);
-  }
-}
-
-.hover-lift:active {
-  transform: translateY(0) scale(0.96);
 }
 
 /* Each freshly navigated page reveals its sections with a light upward stagger.
@@ -694,9 +673,7 @@ body {
 
 :root[data-preset="paper"] .page-shell > header h1,
 :root[data-preset="paper"] .page-shell h1.text-\[26px\] {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .page-shell > * > * {
@@ -884,8 +861,6 @@ html[data-first-load="1"] .page-shell > * > * {
   }
 
   .press-surface:active,
-  .hover-lift:hover,
-  .hover-lift:active,
   button:not(:disabled):active,
   a:not([aria-disabled="true"]):active,
   [role="button"]:not([aria-disabled="true"]):active,

@@ -9,7 +9,6 @@ import {
   ListChecks,
   Plus,
   Settings,
-  Sparkles,
   Sun,
   Upload,
 } from "lucide-react";
@@ -92,13 +91,12 @@ export function CommandPalette() {
       // is what actually reaches Dialog.Content, the element Radix stamps
       // with `data-state="open"/"closed"` — that's where the positioning and
       // the animation trigger both need to live.
-      overlayClassName="palette-overlay overlay-scrim-light fixed inset-0 z-50 backdrop-blur-[2px]"
+      overlayClassName="palette-overlay overlay-scrim-light fixed inset-0 z-50"
       contentClassName="palette-panel fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2"
-      className="glass block w-full overflow-hidden rounded-xl"
+      className="block w-full overflow-hidden rounded-lg border border-line bg-surface"
       style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
     >
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
-        <Sparkles className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
         <Command.Input
           autoFocus
           placeholder="Search Datebook…"
@@ -141,7 +139,7 @@ export function CommandPalette() {
             }}
             className="cmdk-row min-h-11"
           >
-            <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask Gemini
+            Ask assistant
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar

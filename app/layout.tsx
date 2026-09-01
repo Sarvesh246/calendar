@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
@@ -8,23 +7,6 @@ import { AppShell } from "@/components/app-shell";
 import { MotionProvider } from "@/components/motion-provider";
 import { SplashScreenLinks } from "@/components/splash-screen-links";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-instrument",
-  weight: "400",
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
   title: "Datebook",
   description: "A personal calendar and assignment tracker.",
@@ -32,17 +14,8 @@ export const metadata: Metadata = {
   applicationName: "Datebook",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Datebook" },
   formatDetection: { telephone: false, date: false, address: false, email: false },
-  // Next 16's `appleWebApp.capable` only emits the standard
-  // `mobile-web-app-capable` tag now, not the Apple-prefixed one. iOS ties
-  // `apple-mobile-web-app-status-bar-style` (translucent status bar, safe-area
-  // insets) to `apple-mobile-web-app-capable` being present, so without this
-  // the home-screen app renders with the OS reserving its own status-bar
-  // strip instead of the page drawing edge-to-edge under it.
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    // iOS's home-screen icon doesn't reliably rasterize an SVG here across
-    // versions — a real PNG is what actually shows up after "Add to Home
-    // Screen" instead of a blank tile.
     apple: [
       { url: "/apple-touch-icon.png", sizes: "180x180" },
       { url: "/icon-152.png", sizes: "152x152" },
@@ -55,28 +28,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // `cover` lets the app draw into the iOS safe areas so `env(safe-area-inset-*)`
-  // resolves to real values — the bottom nav uses it to clear the home indicator.
   viewportFit: "cover",
-  // Let the on-screen keyboard overlay the page rather than reflowing the whole
-  // layout (which would resize the calendar grids on every focus). Bottom-anchored
-  // UI that must clear the keyboard — the AI drawer, the command palette — reads
-  // `--keyboard-inset` from `useKeyboardInset()` instead, which works the same on
-  // iOS Safari (where the layout viewport never resizes for the keyboard anyway).
   interactiveWidget: "overlays-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f7f8" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0b0d" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f2f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1c1e" },
   ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
-      suppressHydrationWarning
-    >
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <SplashScreenLinks />
       </head>
