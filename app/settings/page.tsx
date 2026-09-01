@@ -29,7 +29,7 @@ export default function SettingsPage() {
   const resetAllData = useDatebookStore((s) => s.resetAllData);
 
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryColor, setNewCategoryColor] = useState("#7C6CFF");
+  const [newCategoryColor, setNewCategoryColor] = useState("#007AFF");
 
   const applyPreset = (preset: AppearancePreset) => {
     document.documentElement.setAttribute("data-preset", preset);
@@ -39,7 +39,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 pb-4">
       <header className="pt-1">
-        <h1 className="font-display text-[28px] italic tracking-tight text-ink">Settings</h1>
+        <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
         </p>
@@ -173,7 +173,7 @@ export default function SettingsPage() {
 
         <Subheading title="Import a calendar link" />
         <p className="text-[13px] leading-relaxed text-ink-soft">
-          Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions — re-sync any time for updates.
+          Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions. Re-sync any time for updates.
         </p>
         <ImportCalendar />
 
@@ -361,6 +361,15 @@ export default function SettingsPage() {
             Reset calendar data
           </button>
         </div>
+        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
+          <a href="/privacy" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Privacy policy
+          </a>
+          {" · "}
+          <a href="/terms" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Terms of use
+          </a>
+        </p>
       </SettingsCard>
     </div>
   );
@@ -376,10 +385,10 @@ function SettingsCard({
   return (
     <section
       className={cn(
-        "rounded-2xl border p-4 sm:p-5",
+        "rounded-lg border p-4 sm:p-5",
         variant === "danger"
           ? "border-warn/25 bg-surface"
-          : "border-line/80 bg-surface shadow-[var(--shadow-sm)]"
+          : "border-line/80 bg-surface"
       )}
     >
       {children}
@@ -424,7 +433,7 @@ function CollapsibleCard({
     });
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface shadow-[var(--shadow-sm)]">
+    <section className="overflow-hidden rounded-lg border border-line/80 bg-surface">
       <button
         type="button"
         onClick={toggle}
@@ -584,8 +593,8 @@ function PresetCard({
         "press-none group relative flex flex-col gap-2 rounded-xl border p-3 text-left",
         "transition-[border-color,box-shadow] duration-[var(--motion-standard)]",
         active
-          ? "border-accent shadow-[0_0_0_1px_var(--accent),var(--shadow-md)]"
-          : "border-line/80 hover:border-line-strong hover:shadow-[var(--shadow-sm)]"
+          ? "border-accent"
+          : "border-line/80 hover:border-line-strong"
       )}
     >
       <div className="flex overflow-hidden rounded-lg border border-line/60">

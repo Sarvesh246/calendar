@@ -185,14 +185,7 @@ function MonthGridPanel({
               (today ? ", today" : "") +
               (dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ", nothing scheduled")
             }
-            style={
-              today
-                ? ({
-                    background:
-                      "radial-gradient(140% 140% at 20% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%)",
-                  } as React.CSSProperties)
-                : undefined
-            }
+            style={today ? ({ background: "var(--accent-soft)" } as React.CSSProperties) : undefined}
             className={cn(
               "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
               "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
@@ -332,7 +325,7 @@ export function MonthView({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow-sm)] sm:p-3"
+      className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 sm:p-3"
     >
       <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
         {labels.map((l) => (

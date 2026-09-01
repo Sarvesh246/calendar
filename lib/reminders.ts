@@ -137,7 +137,7 @@ function reminderBody(item: Item, clock24h: boolean): string {
  */
 async function showReminder(item: Item, label: string, clock24h: boolean): Promise<boolean> {
   if (notificationPermission() !== "granted") return false;
-  const title = item.type === "event" ? item.title : `Due soon — ${item.title}`;
+  const title = item.type === "event" ? item.title : `Due soon: ${item.title}`;
   const options: NotificationOptions & { tag: string; data?: { itemId: string } } = {
     body: `${label} · ${reminderBody(item, clock24h)}`,
     tag: `datebook-${item.id}`,

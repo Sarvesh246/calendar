@@ -59,7 +59,7 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
             }}
             transition={motionTokens.springSnappy}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-md)]"
+            className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1"
           >
             <button
               type="button"

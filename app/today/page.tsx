@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format } from "date-fns";
-import { ArrowRight } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
@@ -157,18 +156,10 @@ function TodayDashboard() {
         {tomorrow.length === 0 ? (
           <Link
             href="/agenda"
-            className="press-none group flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-line-strong hover:shadow-[var(--shadow-md)] active:scale-[0.99]"
+            className="press-none flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft transition-colors hover:border-line-strong hover:bg-surface-sunken/50"
           >
             <span>{format(addDays(now, 1), "EEEE, MMMM d")}</span>
-            <span className="flex items-center gap-1.5 font-medium text-ink">
-              Nothing yet
-              {/* The row was a link with no affordance at all — the arrow slides
-                  out on hover so it reads as somewhere to go. */}
-              <ArrowRight
-                className="h-3.5 w-3.5 text-ink-faint transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:translate-x-0.5"
-                strokeWidth={2}
-              />
-            </span>
+            <span className="font-medium text-ink">Nothing yet · Open agenda</span>
           </Link>
         ) : (
           <div className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface">

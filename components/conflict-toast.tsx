@@ -23,7 +23,7 @@ export function ConflictToast() {
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={motionTokens.spring}
             role="status"
-            className="pointer-events-auto flex w-full max-w-[420px] items-start gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 shadow-[var(--shadow-lg)]"
+            className="pointer-events-auto flex w-full max-w-[420px] items-start gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3"
           >
             <CloudDownload className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.9} />
             <p className="min-w-0 flex-1 text-[13px] leading-snug text-ink">

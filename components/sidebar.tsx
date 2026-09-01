@@ -68,7 +68,7 @@ export function Sidebar() {
         initial={false}
         animate={{ width: collapsed ? 68 : 220 }}
         transition={motionTokens.springLayout}
-        className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-sm)] md:flex"
+        className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-surface p-3 md:flex"
       >
         <div className="flex items-center justify-between px-1 py-1.5">
           <AnimatePresence initial={false}>
@@ -78,7 +78,7 @@ export function Sidebar() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -6 }}
                 transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
-                className="font-display whitespace-nowrap text-[17px] italic text-ink"
+                className="whitespace-nowrap text-[17px] italic text-ink"
               >
                 Datebook
               </motion.span>
@@ -86,7 +86,7 @@ export function Sidebar() {
           </AnimatePresence>
           <button
             onClick={() => setSidebarCollapsed(!collapsed)}
-            className="hover-lift ml-auto rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="ml-auto rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -257,7 +257,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        className="relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-2xl border border-line/80 bg-surface p-1.5 shadow-[var(--shadow-md)]"
+        className="relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-lg border border-line/80 bg-surface p-1.5"
       >
         {navWidth > 0 && (
           <motion.span

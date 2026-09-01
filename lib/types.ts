@@ -15,7 +15,7 @@ export interface RepeatRule {
 export interface Category {
   id: string;
   name: string;
-  color: string; // base hex, e.g. "#7C6CFF" — surface/border/text derived via color-mix
+  color: string; // base hex, e.g. "#007AFF"
   icon?: string;
   archived?: boolean;
   /** Set when auto-created for an imported feed; cleaned up when that feed is removed. */

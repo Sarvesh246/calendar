@@ -52,7 +52,7 @@ export function FocusView() {
       <button
         onClick={toggleFocusMode}
         aria-label="Exit focus"
-        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft shadow-[var(--shadow-md)] transition-colors hover:border-line-strong hover:text-ink"
+        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
       >
         <X className="h-4 w-4" strokeWidth={2} />
         Exit focus
@@ -74,7 +74,7 @@ export function FocusView() {
                 {currentCategory.name}
               </p>
             )}
-            <h1 className="font-display mt-2 max-w-[26ch] text-[32px] italic leading-tight text-ink sm:text-[36px]">
+            <h1 className="mt-2 max-w-[26ch] text-[32px] font-semibold leading-tight text-ink sm:text-[36px]">
               {current.title}
             </h1>
             <p className="mt-2 text-[15px] text-ink-soft">
@@ -99,7 +99,7 @@ export function FocusView() {
             <button
               onClick={completeCurrent}
               disabled={celebrating}
-              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink shadow-[var(--shadow-md)] transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover:shadow-[var(--shadow-lg)] disabled:opacity-60"
+              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover: disabled:opacity-60"
             >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Mark complete
@@ -114,7 +114,7 @@ export function FocusView() {
           )}
         </>
       ) : (
-        <p className="font-display text-[28px] italic text-ink-soft">Nothing left. Enjoy it.</p>
+        <p className="text-[28px] font-semibold text-ink-soft">Nothing left.</p>
       )}
     </motion.div>
   );

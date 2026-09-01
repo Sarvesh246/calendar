@@ -27,19 +27,19 @@ export function MobileHeaderActions() {
           size="icon"
           onClick={() => setCommandPaletteOpen(true)}
           aria-label="Search"
-          className="pointer-events-auto h-10 w-10 rounded-full border border-line/70 bg-surface/92 shadow-[var(--shadow-md)] backdrop-blur-md"
+          className="pointer-events-auto h-10 w-10 rounded-full border border-line bg-surface"
         >
           <Search className="h-4 w-4" strokeWidth={1.9} />
         </Button>
         {!onSettings && (
-          <FilterButton className="pointer-events-auto h-10 w-10 rounded-full border border-line/70 bg-surface/92 shadow-[var(--shadow-md)] backdrop-blur-md" />
+          <FilterButton className="pointer-events-auto h-10 w-10 rounded-full border border-line/70 bg-surface/92" />
         )}
         <Link
           href="/settings"
           aria-label="Settings"
           className={cn(
-            "pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-[var(--shadow-md)] backdrop-blur-md",
-            "border-line/70 bg-surface/92 text-ink-soft transition-colors hover:text-ink",
+            "pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border",
+            "border-line bg-surface text-ink-soft transition-colors hover:text-ink",
             onSettings && "border-accent/50 bg-accent-soft text-accent"
           )}
         >

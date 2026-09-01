@@ -41,7 +41,7 @@ export function MergeCloudDialog() {
               transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
             }}
             transition={motionTokens.springGentle}
-            className="glass absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl p-5"
+            className="bg-surface border border-line absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl p-5"
           >
             <h2 className="text-[16px] font-semibold text-ink">This device has a different calendar</h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-ink-soft">

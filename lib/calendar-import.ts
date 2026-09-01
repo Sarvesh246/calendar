@@ -18,14 +18,14 @@ export interface ImportPlan {
 }
 
 const PALETTE = [
-  "#7C6CFF",
-  "#E8A23D",
-  "#4C9BE8",
-  "#3DBE8B",
-  "#E86D9A",
-  "#B57BE0",
-  "#48B0A8",
-  "#E0603E",
+  "#007AFF",
+  "#5856D6",
+  "#AF52DE",
+  "#FF9500",
+  "#34C759",
+  "#FF2D55",
+  "#5AC8FA",
+  "#8E8E93",
 ];
 
 /** Strip `webcal://`, trim — the canonical form we store and re-sync against. */

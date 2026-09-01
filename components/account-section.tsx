@@ -64,7 +64,7 @@ export function AccountSection() {
           </div>
         ) : (
           <p className="text-[12.5px] leading-relaxed text-ink-faint">
-            Your calendar is saved to your account and syncs live across every signed-in device — changes appear
+            Your calendar is saved to your account and syncs live across every signed-in device. Changes appear
             without a refresh.
           </p>
         )}

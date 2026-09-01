@@ -55,7 +55,7 @@ const FIELD =
   // together on one timing.
   "transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] " +
   "hover:border-line-strong focus:border-accent focus:bg-surface-elevated focus:outline-none " +
-  "focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]";
+  "focus:";
 
 export function ItemEditor({
   item,
@@ -124,7 +124,7 @@ export function ItemEditor({
     >
       {item.sourceId && (
         <p className="text-[11.5px] leading-snug text-ink-faint">
-          Imported item — your edits to a field are kept when the feed re-syncs.
+          Imported item. Your edits to a field are kept when the feed re-syncs.
         </p>
       )}
 

@@ -110,7 +110,7 @@ export async function GET(request: Request) {
     if (sentKeys.has(job.key)) continue;
     const targets = byUser.get(job.userId) ?? [];
     if (targets.length === 0) continue;
-    const title = job.item.type === "event" ? job.item.title : `Due soon — ${job.item.title}`;
+    const title = job.item.type === "event" ? job.item.title : `Due soon: ${job.item.title}`;
     const body = `${job.reminder.label} · ${job.item.title}`;
     const payload = JSON.stringify({
       title,

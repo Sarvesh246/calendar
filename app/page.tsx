@@ -30,7 +30,7 @@ export default function RootPage() {
         priority
         className="rounded-[18px] shadow-md animate-[pulse_1.8s_ease-in-out_infinite]"
       />
-      <p className="font-display text-[20px] italic text-ink-soft">Datebook</p>
+      <p className="text-[20px] italic text-ink-soft">Datebook</p>
     </div>
   );
 }

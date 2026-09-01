@@ -77,7 +77,7 @@ export function DaySheet({
         exit={{ opacity: 0 }}
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
         onClick={close}
-        className="overlay-scrim absolute inset-0 backdrop-blur-[2px]"
+        className="overlay-scrim absolute inset-0"
       />
       <motion.div
         role="dialog"
@@ -106,7 +106,7 @@ export function DaySheet({
             close();
           }
         }}
-        className="absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col rounded-t-2xl border-t border-line bg-surface shadow-[var(--shadow-lg)]"
+        className="absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col rounded-t-2xl border-t border-line bg-surface"
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"

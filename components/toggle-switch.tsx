@@ -33,7 +33,7 @@ export function ToggleSwitch({
     >
       <motion.span
         aria-hidden
-        className="pointer-events-none block h-6 w-6 rounded-full bg-surface-elevated shadow-[var(--shadow-sm)] ring-1 ring-line"
+        className="pointer-events-none block h-6 w-6 rounded-full bg-surface-elevated ring-1 ring-line"
         // The knob stretches toward its destination as it travels — the trick
         // iOS uses to make a 24px slide feel like a physical throw.
         animate={{ x: checked ? 24 : 0 }}
