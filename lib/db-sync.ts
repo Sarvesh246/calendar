@@ -179,6 +179,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     onboarding_dismissed: s.onboardingDismissed ?? false,
+    mobile_day_details: s.mobileDayDetails,
   };
 }
 export function rowToSettings(r: Row): UserSettings {
@@ -192,6 +193,8 @@ export function rowToSettings(r: Row): UserSettings {
     showCategoryDot: Boolean(r.show_category_dot),
     hideCompleted: Boolean(r.hide_completed),
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
+    mobileDayDetails:
+      r.mobile_day_details === "inline" ? "inline" : "sheet",
     ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
   };
 }

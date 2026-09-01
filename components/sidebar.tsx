@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 import {
   CalendarDays,
   Cloud,
@@ -54,7 +55,6 @@ function RailLabel({ collapsed, children }: { collapsed: boolean; children: Reac
 
 export function Sidebar() {
   const pathname = usePathname();
-  const mobileActiveIndex = NAV.findIndex((i) => i.href === pathname);
   const categories = useDatebookStore((s) => s.categories);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
@@ -133,9 +133,6 @@ export function Sidebar() {
                         active ? "bg-surface-sunken text-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
                       )}
                     >
-                      {/* The dot doubles as the on/off indicator: filled and full
-                          size when the filter is on, hollow and small when off.
-                          Colour alone was doing that job and read as decoration. */}
                       <motion.span
                         aria-hidden
                         initial={false}
@@ -167,69 +164,153 @@ export function Sidebar() {
         </div>
       </motion.aside>
 
-      {/* Mobile bottom nav — SyncChip lives only in the desktop rail.
-          The outer wrapper carries the iOS safe-area inset so the pill floats
-          clear of the home indicator; the pill itself stays a fixed height.
+      <MobileBottomNav pathname={pathname} />
+    </>
+  );
+}
 
-          The active pill is one element positioned by the active tab's index
-          and animated on `x`. An earlier version gave each tab its own
-          `layoutId` span that mounted/unmounted on navigation — framer then had
-          to match across a changing DOM, and a disturbed measurement (the
-          press-scale on the parent `<Link>`, a mid-transition route change)
-          made it lurch in from the bottom instead of sliding across. A single
-          transform-animated element has nothing to mismeasure. */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
-        <div className="glass relative mx-auto flex max-w-md items-stretch rounded-2xl p-1.5">
-          {mobileActiveIndex >= 0 && (
-            <motion.span
-              aria-hidden
-              className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
-              style={{ width: `calc((100% - 0.75rem) / ${NAV.length})` }}
-              initial={false}
-              animate={{ x: `${mobileActiveIndex * 100}%` }}
-              transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            />
-          )}
-          {NAV.map((item) => {
-            const active = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                onClick={() => haptic("light")}
-                className="press-none relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
+/** Swipeable bottom tab bar — drag left/right to move between main views. */
+function MobileBottomNav({ pathname }: { pathname: string }) {
+  const router = useRouter();
+  const navRef = useRef<HTMLDivElement>(null);
+  const [navWidth, setNavWidth] = useState(0);
+  const activeIndex = Math.max(0, NAV.findIndex((i) => i.href === pathname));
+  const dragX = useMotionValue(0);
+  const dragging = useRef(false);
+  const pointerId = useRef<number | null>(null);
+  const startX = useRef(0);
+  const indexAtStart = useRef(activeIndex);
+  const didDrag = useRef(false);
+
+  const tabWidth = navWidth / NAV.length;
+  const pillX = useTransform(dragX, (v) => activeIndex * tabWidth + v);
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setNavWidth(el.clientWidth));
+    ro.observe(el);
+    setNavWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    dragX.set(0);
+    indexAtStart.current = activeIndex;
+  }, [activeIndex, dragX]);
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    dragging.current = true;
+    didDrag.current = false;
+    pointerId.current = e.pointerId;
+    startX.current = e.clientX;
+    indexAtStart.current = activeIndex;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragging.current || pointerId.current !== e.pointerId || !tabWidth) return;
+    const dx = e.clientX - startX.current;
+    if (Math.abs(dx) > 6) didDrag.current = true;
+    const min = -(indexAtStart.current * tabWidth);
+    const max = (NAV.length - 1 - indexAtStart.current) * tabWidth;
+    dragX.set(Math.max(min, Math.min(max, dx)));
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (!dragging.current || pointerId.current !== e.pointerId) return;
+    dragging.current = false;
+    pointerId.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+
+    if (!tabWidth) {
+      dragX.set(0);
+      return;
+    }
+
+    const dx = dragX.get();
+    const moved = dx / tabWidth;
+    const target = Math.round(indexAtStart.current + moved);
+    const clamped = Math.max(0, Math.min(NAV.length - 1, target));
+
+    void animate(dragX, (clamped - activeIndex) * tabWidth, motionTokens.springSnappy).then(() => {
+      dragX.set(0);
+      if (clamped !== activeIndex) {
+        haptic("light");
+        router.push(NAV[clamped].href);
+      }
+    });
+  }
+
+  function onPointerCancel() {
+    dragging.current = false;
+    pointerId.current = null;
+    void animate(dragX, 0, motionTokens.springSnappy);
+  }
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
+      <div
+        ref={navRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        className="relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-2xl border border-line/80 bg-surface p-1.5 shadow-[var(--shadow-md)]"
+      >
+        {navWidth > 0 && (
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-1.5 left-1.5 rounded-xl bg-accent-soft"
+            style={{ width: tabWidth, x: pillX }}
+            transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          />
+        )}
+        {NAV.map((item) => {
+          const active = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              onClick={(e) => {
+                if (didDrag.current) {
+                  e.preventDefault();
+                  didDrag.current = false;
+                } else {
+                  haptic("light");
+                }
+              }}
+              className="press-none relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
+            >
+              <motion.span
+                initial={false}
+                animate={{ y: active ? -1 : 0, scale: active ? 1.06 : 1 }}
+                transition={motionTokens.springSnappy}
               >
-                {/* The icon lifts a hair when its tab becomes active — enough to
-                    make the tap feel answered on top of the sliding pill. */}
-                <motion.span
-                  initial={false}
-                  animate={{ y: active ? -1 : 0, scale: active ? 1.06 : 1 }}
-                  transition={motionTokens.springSnappy}
-                >
-                  <Icon
-                    className={cn(
-                      "h-5 w-5 transition-colors duration-[var(--motion-standard)]",
-                      active ? "text-accent" : "text-ink-faint"
-                    )}
-                    strokeWidth={1.9}
-                  />
-                </motion.span>
-                <span
+                <Icon
                   className={cn(
-                    "transition-colors duration-[var(--motion-standard)]",
+                    "h-5 w-5 transition-colors duration-[var(--motion-standard)]",
                     active ? "text-accent" : "text-ink-faint"
                   )}
-                >
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    </>
+                  strokeWidth={1.9}
+                />
+              </motion.span>
+              <span
+                className={cn(
+                  "transition-colors duration-[var(--motion-standard)]",
+                  active ? "text-accent" : "text-ink-faint"
+                )}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 

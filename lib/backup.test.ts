@@ -12,6 +12,7 @@ const settings: UserSettings = {
   showCategoryDot: true,
   hideCompleted: false,
   defaultReminderPresetIds: [],
+  mobileDayDetails: "sheet",
 };
 
 describe("backup", () => {

@@ -106,7 +106,7 @@ export function DaySheet({
             close();
           }
         }}
-        className="glass absolute inset-x-0 bottom-0 flex max-h-[min(78dvh,640px)] flex-col rounded-t-2xl pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+        className="absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col rounded-t-2xl border-t border-line bg-surface shadow-[var(--shadow-lg)]"
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
@@ -145,7 +145,7 @@ export function DaySheet({
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-0">
           {onAdd && (
             <button
               type="button"

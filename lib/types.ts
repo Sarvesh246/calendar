@@ -91,6 +91,8 @@ export type AppearancePreset =
   | "frost";
 export type LandingView = "today" | "calendar" | "agenda";
 export type Density = "compact" | "comfortable" | "spacious";
+/** How tapping a day on mobile calendar shows that day's items. */
+export type MobileDayDetails = "sheet" | "inline";
 
 export interface ReminderPreset {
   id: string;
@@ -108,6 +110,8 @@ export interface UserSettings {
   showCategoryDot: boolean;
   hideCompleted: boolean;
   defaultReminderPresetIds: string[];
+  /** Mobile calendar: pop-up panel vs list below the month grid. */
+  mobileDayDetails: MobileDayDetails;
   /** Hide the first-run empty-state card. */
   onboardingDismissed?: boolean;
 }
