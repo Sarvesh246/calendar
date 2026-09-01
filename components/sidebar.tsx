@@ -184,7 +184,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
 
-  const pillInset = 6;
+  const pillInset = 4;
   const trackWidth = Math.max(0, navWidth - pillInset * 2);
   const tabWidth = trackWidth / NAV.length;
   const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
@@ -278,14 +278,14 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-full p-1.5"
+        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-full p-1"
       >
         {navWidth > 0 && (
           <motion.span
             aria-hidden
-            className="mobile-tab-pill pointer-events-none absolute inset-y-1.5 left-0"
+            className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
             style={{ width: tabWidth, x: pillX }}
-            animate={{ scale: isDragging ? 1.03 : 1 }}
+            animate={{ scale: isDragging ? 1.015 : 1 }}
             transition={pillSpring}
           />
         )}
@@ -311,25 +311,19 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                   haptic("light");
                 }
               }}
-              className="press-none relative z-10 flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium"
+              className="press-none relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10.5px] font-medium tracking-[0.01em]"
             >
-              <motion.span
-                initial={false}
-                animate={{ y: active ? -1 : 0, scale: active ? 1.06 : 1 }}
-                transition={motionTokens.springSnappy}
-              >
-                <Icon
-                  className={cn(
-                    "h-5 w-5 transition-colors duration-[var(--motion-standard)]",
-                    active ? "text-accent" : "text-ink-faint"
-                  )}
-                  strokeWidth={1.9}
-                />
-              </motion.span>
+              <Icon
+                className={cn(
+                  "h-[22px] w-[22px] transition-colors duration-[var(--motion-standard)]",
+                  active ? "text-accent" : "text-ink-faint"
+                )}
+                strokeWidth={active ? 2.1 : 1.85}
+              />
               <span
                 className={cn(
                   "transition-colors duration-[var(--motion-standard)]",
-                  active ? "text-accent" : "text-ink-faint"
+                  active ? "font-semibold text-ink" : "text-ink-faint"
                 )}
               >
                 {item.label}

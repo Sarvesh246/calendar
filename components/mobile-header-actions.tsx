@@ -8,43 +8,45 @@ import { FilterButton } from "@/components/filter-sheet";
 import { useUIStore } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
-/** Fixed top-right controls — page content scrolls underneath when scrolling. */
+/** Fixed top-right controls — opaque cluster over a solid header backing. */
 export function MobileHeaderActions() {
   const pathname = usePathname();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const onSettings = pathname === "/settings";
 
   return (
-    <div
-      className={cn(
-        "pointer-events-none fixed inset-x-0 top-0 z-30 md:hidden",
-        "pt-[calc(env(safe-area-inset-top)+0.875rem)]"
-      )}
-    >
-      <div className="flex justify-end px-3">
-        <div className="pointer-events-auto isolate flex items-center gap-1 rounded-full border border-line bg-surface p-1">
-          <Button
-            variant="tertiary"
-            size="icon"
-            onClick={() => setCommandPaletteOpen(true)}
-            aria-label="Search"
-            className="h-9 w-9 rounded-full bg-surface"
-          >
-            <Search className="h-4 w-4" strokeWidth={1.9} />
-          </Button>
-          {!onSettings && (
-            <FilterButton className="h-9 w-9 rounded-full border-0 bg-surface shadow-none" />
-          )}
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className={cn(
-              "inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface text-ink-soft transition-colors hover:text-ink",
-              onSettings && "bg-accent-soft text-accent"
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-30 md:hidden">
+      <div
+        aria-hidden
+        className="mobile-header-backing pointer-events-none absolute inset-x-0 top-0"
+        style={{ height: "var(--mobile-header-height)" }}
+      />
+      <div className="relative pt-[calc(env(safe-area-inset-top)+0.875rem)]">
+        <div className="flex justify-end px-3">
+          <div className="mobile-header-cluster pointer-events-auto flex items-center gap-0.5 p-0.5">
+            <Button
+              variant="tertiary"
+              size="icon"
+              onClick={() => setCommandPaletteOpen(true)}
+              aria-label="Search"
+              className="h-9 w-9 rounded-full bg-transparent hover:bg-surface-sunken"
+            >
+              <Search className="h-4 w-4" strokeWidth={1.9} />
+            </Button>
+            {!onSettings && (
+              <FilterButton className="h-9 w-9 rounded-full border-0 bg-transparent shadow-none hover:bg-surface-sunken" />
             )}
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.9} />
-          </Link>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink",
+                onSettings && "bg-surface-sunken text-accent"
+              )}
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.9} />
+            </Link>
+          </div>
         </div>
       </div>
     </div>
