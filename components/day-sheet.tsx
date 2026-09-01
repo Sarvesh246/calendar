@@ -45,9 +45,6 @@ export function DaySheet({
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
   const [dragging, setDragging] = useState(false);
 
-  // The sheet is keyed stably in the calendar page (so picking a second day
-  // doesn't stack two sheets), which means this instance can be re-shown after a
-  // close. Re-arm the double-close guard whenever the day changes.
   useEffect(() => {
     closeGuard.current = false;
   }, [date]);
@@ -83,9 +80,6 @@ export function DaySheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        // A sheet is a physical object being thrown up from the bottom edge, so
-        // it arrives on a spring. The old tween made it glide in at a constant
-        // rate and stop dead, which is the classic "web modal" tell.
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
@@ -95,8 +89,6 @@ export function DaySheet({
         dragControls={dragControls}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0.02, bottom: 0.6 }}
-        // Without this, releasing a drag snapped back on framer's default
-        // underdamped spring and the sheet bounced twice before settling.
         dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
@@ -106,14 +98,13 @@ export function DaySheet({
             close();
           }
         }}
-        className="absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col rounded-t-2xl border-t border-line bg-surface"
+        className="fixed inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
           onPointerDown={(e) => dragControls.start(e)}
         >
-          {/* The grab handle thickens while you hold it — the only feedback that
-              the drag has actually been picked up. */}
           <motion.span
             aria-hidden
             animate={{ scaleX: dragging ? 1.25 : 1, opacity: dragging ? 1 : 0.75 }}
@@ -145,7 +136,7 @@ export function DaySheet({
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-0">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-4 pt-0">
           {onAdd && (
             <button
               type="button"
