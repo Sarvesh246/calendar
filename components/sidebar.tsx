@@ -78,7 +78,7 @@ export function Sidebar() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -6 }}
                 transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
-                className="whitespace-nowrap text-[17px] italic text-ink"
+                className="whitespace-nowrap text-[17px] font-semibold text-ink"
               >
                 Datebook
               </motion.span>
