@@ -21,7 +21,7 @@ export function MobileHeaderActions() {
         className="mobile-header-backing pointer-events-none absolute inset-x-0 top-0"
         style={{ height: "var(--mobile-header-height)" }}
       />
-      <div className="relative pt-[calc(env(safe-area-inset-top)+0.875rem)]">
+      <div className="relative pt-[calc(env(safe-area-inset-top)+1.25rem)]">
         <div className="flex justify-end px-3">
           <div className="mobile-header-cluster pointer-events-auto flex items-center gap-0.5 p-0.5">
             <Button

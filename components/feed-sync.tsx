@@ -17,6 +17,7 @@ export function FeedSync() {
 
     async function syncAll() {
       if (running.current) return;
+      if (!useDatebookStore.persist.hasHydrated()) return;
       running.current = true;
       try {
         for (const source of useDatebookStore.getState().importSources) {
@@ -26,7 +27,7 @@ export function FeedSync() {
           } catch (err) {
             const message = err instanceof Error ? err.message : "Re-sync failed.";
             useDatebookStore.getState().markImportError(source.url, message);
-            console.warn("[datebook] feed sync failed", source.name);
+            console.warn("[datebook] feed sync failed", source.name, err);
           }
         }
       } finally {
@@ -34,15 +35,34 @@ export function FeedSync() {
       }
     }
 
+    let intervalId = 0;
+    let bootId = 0;
     const onVisible = () => {
       if (document.visibilityState === "visible") void syncAll();
     };
-    const id = window.setInterval(() => void syncAll(), INTERVAL_MS);
-    const boot = window.setTimeout(() => void syncAll(), 8000);
-    document.addEventListener("visibilitychange", onVisible);
+
+    function arm() {
+      intervalId = window.setInterval(() => void syncAll(), INTERVAL_MS);
+      bootId = window.setTimeout(() => void syncAll(), 8000);
+      document.addEventListener("visibilitychange", onVisible);
+    }
+
+    const persist = useDatebookStore.persist;
+    if (persist.hasHydrated()) {
+      arm();
+    } else {
+      const unsub = persist.onFinishHydration(arm);
+      return () => {
+        unsub();
+        window.clearInterval(intervalId);
+        window.clearTimeout(bootId);
+        document.removeEventListener("visibilitychange", onVisible);
+      };
+    }
+
     return () => {
-      window.clearInterval(id);
-      window.clearTimeout(boot);
+      window.clearInterval(intervalId);
+      window.clearTimeout(bootId);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [sources.length, applyImport]);

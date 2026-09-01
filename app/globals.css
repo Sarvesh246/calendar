@@ -335,7 +335,7 @@
      useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
   --keyboard-inset: 0px;
   /* Floating mobile header: safe area + button row. Content starts below; scrolls under on scroll. */
-  --mobile-header-height: calc(env(safe-area-inset-top) + 3.5rem);
+  --mobile-header-height: calc(env(safe-area-inset-top) + 4rem);
   --page-gap: 2rem;
   --card-pad-y: 0.75rem;
   --card-pad-x: 1rem;
@@ -474,6 +474,8 @@ button, a, [role="button"], summary, input, textarea, select, label {
   background: var(--surface-base);
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
+  /* Extend slightly below the cluster so scroll bleed can't show at the seam. */
+  box-shadow: 0 12px 0 var(--surface-base);
 }
 
 .mobile-header-cluster {
@@ -485,6 +487,9 @@ button, a, [role="button"], summary, input, textarea, select, label {
   -webkit-transform: translateZ(0);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  /* Block iOS compositing bleed from content scrolling underneath. */
+  isolation: isolate;
+  contain: paint;
 }
 
 @supports not ((backdrop-filter: blur(1px))) {

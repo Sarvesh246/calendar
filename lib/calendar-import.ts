@@ -91,7 +91,11 @@ export function buildImportPlan(
   sourceId: string
 ): ImportPlan {
   const byName = new Map<string, Category>();
-  for (const c of existingCategories) byName.set(c.name.trim().toLowerCase(), c);
+  for (const c of existingCategories) {
+    const name = typeof c.name === "string" ? c.name.trim() : "";
+    if (!name) continue;
+    byName.set(name.toLowerCase(), c);
+  }
 
   const newCategories: Category[] = [];
   const fallbackName = (calendarName ?? "").trim() || "Imported";

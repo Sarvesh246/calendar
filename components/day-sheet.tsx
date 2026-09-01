@@ -98,7 +98,7 @@ export function DaySheet({
             close();
           }
         }}
-        className="fixed inset-x-0 bottom-0 flex max-h-[min(82dvh,680px)] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
+        className="fixed inset-x-0 bottom-0 z-50 flex min-h-[min(72dvh,640px)] max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div
@@ -136,7 +136,7 @@ export function DaySheet({
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-4 pt-0">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-6 pt-0 [-webkit-overflow-scrolling:touch]">
           {onAdd && (
             <button
               type="button"
