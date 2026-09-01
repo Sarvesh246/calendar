@@ -77,6 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main
         className={cn(
           "flex min-w-0 flex-1 flex-col",
+          !focusMode && "pt-[var(--mobile-header-height)] md:pt-0",
           onCalendar && "md:min-h-0 md:overflow-hidden"
         )}
       >
