@@ -53,6 +53,10 @@ export interface Item {
   status?: ItemStatus; // assignments/tasks only
   /** Set when the item was marked done (not the due date). */
   completedAt?: string;
+  /** When `status` last changed. Merged independently of `updatedAt` so a feed
+   *  re-import — which rewrites description/category and moves `updatedAt` —
+   *  can't roll back progress ticked off on another device. */
+  statusAt?: string;
   reminders?: Reminder[];
   createdAt: string;
   /** Recurrence for a user-created series. Copied onto every expanded instance. */

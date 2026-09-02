@@ -5,6 +5,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { fetchCalendarFeed } from "@/lib/calendar-import";
+import { clearFeedBackoff, noteFeedFailure } from "@/lib/feed-retry";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 
@@ -46,10 +47,13 @@ export function FeedHealthBanner() {
                 disabled={busy === s.id}
                 onClick={async () => {
                   setBusy(s.id);
+                  // An explicit retry means now, not when the backoff says so.
+                  clearFeedBackoff(s.url);
                   try {
                     const feed = await fetchCalendarFeed(s.url);
                     applyImport(s.url, feed);
                   } catch (err) {
+                    noteFeedFailure(s.url, { lastSyncedAt: s.lastSyncedAt });
                     markImportError(s.url, err instanceof Error ? err.message : "Sync failed.");
                   } finally {
                     setBusy(null);

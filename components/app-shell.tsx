@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Sparkles } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
@@ -37,6 +37,7 @@ const FilterSheet = dynamic(
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
@@ -97,6 +98,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               <div className="ml-auto flex items-center gap-2">
+                {/* The assistant used to be reachable only from inside the
+                    command palette, which meant you had to already know it
+                    existed. It sits in the toolbar now, labelled. */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAIDrawerOpen(true)}
+                  aria-label="Ask the assistant"
+                >
+                  <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+                  Ask
+                </Button>
                 <Button
                   variant="secondary"
                   size="icon"

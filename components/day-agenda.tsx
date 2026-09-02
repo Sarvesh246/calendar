@@ -26,7 +26,7 @@ export function DayAgenda({
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
         <div>
           <p className="text-[15px] font-semibold text-ink">{label}</p>
           {showDate && (
@@ -43,7 +43,7 @@ export function DayAgenda({
       {items.length === 0 ? (
         <EmptyState title="Nothing scheduled." sub={`Free day on ${format(date, "MMM d")}.`} />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain">
+        <div className="-mr-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain pr-1">
           {items.map((item) => (
             <DayAgendaRow key={item.id} item={item} />
           ))}

@@ -1,5 +1,6 @@
 import { addDays, nextDay, setHours, setMinutes, startOfDay, type Day } from "date-fns";
 import { thisOrNextWeekday } from "./date-utils";
+import { matchDatePhrase } from "./date-phrase";
 import type { Category, ItemType, RepeatFreq, RepeatRule } from "./types";
 
 export interface ParsedQuickAdd {
@@ -114,8 +115,22 @@ export function parseQuickAdd(
   let hour = allDay ? 12 : isAssignment ? 23 : opts?.hour ?? 12;
   let minute = allDay ? 0 : isAssignment ? 59 : opts?.minute ?? 0;
   let matchedDate = Boolean(opts?.anchor) || opts?.hour !== undefined;
+  let rangeEnd: Date | undefined;
 
-  if (/\btomorrow\b/i.test(text)) {
+  // An actual calendar date beats everything else, including the day the user
+  // happened to have selected — writing "Sept. 9" is as explicit as it gets, and
+  // it used to be ignored entirely, putting the item on today.
+  const datePhrase = matchDatePhrase(text);
+  if (datePhrase) {
+    base = datePhrase.start;
+    matchedDate = true;
+    if (datePhrase.end) {
+      rangeEnd = datePhrase.end;
+      // A span of days is an all-day event; nobody means 12:00–12:00.
+      allDay = true;
+    }
+    text = (text.slice(0, datePhrase.index) + text.slice(datePhrase.index + datePhrase.text.length)).trim();
+  } else if (/\btomorrow\b/i.test(text)) {
     base = addDays(base, 1);
     matchedDate = true;
     text = text.replace(/\btomorrow\b/i, "").trim();
@@ -180,6 +195,8 @@ export function parseQuickAdd(
   }
 
   const at = allDay ? setMinutes(setHours(base, 12), 0) : setMinutes(setHours(base, hour), minute);
+  // A day range wins over any time range picked out of the leftover text.
+  if (rangeEnd) endAt = setMinutes(setHours(rangeEnd, 12), 0);
 
   let title = text
     .replace(/^[·•\-–—,:\s]+|[·•\-–—,:\s]+$/g, "")

@@ -510,6 +510,16 @@ button, a, [role="button"], summary, input, textarea, select, label {
   outline-offset: 2px;
 }
 
+/* …except inside a control that already shows focus for what it contains.
+   This rule is unlayered, so it outranks every Tailwind `outline-none`
+   utility no matter the specificity — which is why an input styled with
+   `focus:outline-none` still drew a ring tight around its text, inside the
+   bar that was already tinting its own border. Opting out here keeps one
+   focus indicator instead of two; the wrapper must provide it. */
+.focus-within-ring :focus-visible {
+  outline: none;
+}
+
 /* Command palette (cmdk) rows */
 .cmdk-row {
   display: flex;

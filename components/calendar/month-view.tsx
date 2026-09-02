@@ -15,9 +15,9 @@ const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const NO_ITEMS: Item[] = [];
 
-const CHIP_HEIGHT = 20;
+const CHIP_HEIGHT = 23;
 const CHIP_GAP = 4;
-const MORE_LINE_HEIGHT = 14;
+const MORE_LINE_HEIGHT = 16;
 
 function chipLabel(item: Item) {
   if (item.allDay) return item.title;
@@ -97,7 +97,7 @@ function DayCellChips({
   const hiddenTitles = ranked.slice(fitCount).map((i) => i.title).join(", ");
 
   return (
-    <div ref={ref} className="hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
+    <div ref={ref} className="relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
       {visible.map((item) => {
         const color = colorOf(item.categoryId);
         const done = item.type !== "event" && item.status === "done";
@@ -111,7 +111,7 @@ function DayCellChips({
             transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
             title={item.title}
             className={cn(
-              "cal-chip shrink-0 truncate rounded-[5px] px-1.5 py-[2px] text-[11px] font-medium leading-tight",
+              "cal-chip shrink-0 truncate rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px]",
               task && "cal-chip-task",
               done && "opacity-45",
               isOverdue(item) && "cal-chip-overdue"
@@ -123,8 +123,11 @@ function DayCellChips({
         );
       })}
       {hiddenOpen > 0 && (
-        <span className="shrink-0 px-1 text-[10.5px] font-medium leading-none text-ink-soft" title={hiddenTitles}>
-          +{hiddenOpen}
+        <span
+          className="shrink-0 px-1 pt-px text-[11.5px] font-medium leading-none text-ink-soft"
+          title={hiddenTitles}
+        >
+          +{hiddenOpen} more
         </span>
       )}
     </div>
@@ -244,14 +247,27 @@ function MonthGridPanel({
             }
             style={undefined}
             className={cn(
-              "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-2 sm:text-left",
+              "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-1.5 sm:text-left",
               "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
               "active:bg-surface-sunken",
-              today ? "border-accent/40" : "border-transparent hover:border-line hover:bg-surface-sunken/60",
-              !inMonth && "opacity-70"
+              // Today reads as a tinted cell plus a filled date badge; the ring
+              // is reserved for selection, so the two never fight for the same
+              // outline.
+              today ? "border-transparent bg-accent-soft/60" : "border-transparent hover:bg-surface-sunken/60",
+              !inMonth && "opacity-55"
             )}
           >
-            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
+            {/* Desktop selection wraps the whole cell. It used to be an inset
+                ring around just the date, sized to the text line — which drew
+                straight through the digits. */}
+            {selected && showSelectionRing && (
+              <SelectionRing
+                layoutId="month-selected-day-desktop"
+                animateSelection={animateSelection}
+                className="hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
+              />
+            )}
+            <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
               {selected && showSelectionRing && (
                 <SelectionRing
                   layoutId="month-selected-day"
@@ -263,9 +279,11 @@ function MonthGridPanel({
                 className={cn(
                   "relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
                   "transition-colors duration-[var(--motion-standard)]",
-                  "sm:h-auto sm:min-w-0 sm:w-auto sm:rounded-none sm:p-0 sm:text-[12px]",
+                  // Bigger than the old 12px, and today keeps its filled badge
+                  // on desktop too, so "where am I" is answered at a glance.
+                  "sm:h-[22px] sm:w-[22px] sm:min-w-0 sm:text-[13px]",
                   today
-                    ? "bg-accent text-accent-ink sm:bg-transparent sm:text-accent"
+                    ? "bg-accent text-accent-ink"
                     : inMonth
                       ? "text-ink"
                       : "text-ink-faint"
@@ -273,13 +291,6 @@ function MonthGridPanel({
               >
                 {format(date, "d")}
               </span>
-              {selected && showSelectionRing && (
-                <SelectionRing
-                  layoutId="month-selected-day-desktop"
-                  animateSelection={animateSelection}
-                  className="hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
-                />
-              )}
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
             <DayCellChips
@@ -418,8 +429,12 @@ export function MonthView({
     >
       <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
         {labels.map((l) => (
-          <div key={l} className="text-center text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-            {l}
+          <div
+            key={l}
+            className="text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft sm:text-left sm:text-[11.5px]"
+          >
+            <span className="sm:hidden">{l.slice(0, 1)}</span>
+            <span className="hidden sm:inline">{l}</span>
           </div>
         ))}
       </div>

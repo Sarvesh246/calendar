@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
@@ -9,6 +9,7 @@ import {
   ListChecks,
   Plus,
   Settings,
+  Sparkles,
   Sun,
   Upload,
 } from "lucide-react";
@@ -24,6 +25,8 @@ export function CommandPalette() {
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
+  const askAI = useUIStore((s) => s.askAI);
+  const [query, setQuery] = useState("");
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const items = useDatebookStore((s) => s.items);
@@ -43,6 +46,7 @@ export function CommandPalette() {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        if (open) setQuery("");
         setOpen(!open);
       }
     }
@@ -50,20 +54,33 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
 
+  /** Clearing the query on close keeps a stale one from being re-asked the
+   *  next time the palette opens. */
+  function setPaletteOpen(next: boolean) {
+    if (!next) setQuery("");
+    setOpen(next);
+  }
+
+  function ask(message?: string) {
+    if (message?.trim()) askAI(message.trim());
+    else setAIDrawerOpen(true);
+    setPaletteOpen(false);
+  }
+
   function go(path: string) {
     router.push(path);
-    setOpen(false);
+    setPaletteOpen(false);
   }
 
   function createNew() {
     setQuickAddPrefill("");
     setQuickAddOpen(true);
-    setOpen(false);
+    setPaletteOpen(false);
   }
 
   function openItem(item: Item) {
     setFocusedItemId(item.id);
-    setOpen(false);
+    setPaletteOpen(false);
     const at = new Date(item.at);
     if (isOverdue(item)) {
       router.push("/agenda");
@@ -80,7 +97,7 @@ export function CommandPalette() {
   return (
     <Command.Dialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={setPaletteOpen}
       label="Command palette"
       // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see
       // globals.css) and key off `data-state`. cmdk's `className` prop lands on
@@ -99,7 +116,9 @@ export function CommandPalette() {
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
         <Command.Input
           autoFocus
-          placeholder="Search Datebook…"
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search, or ask a question…"
           className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
       </div>
@@ -109,9 +128,35 @@ export function CommandPalette() {
         style={{ maxHeight: "max(140px, calc(var(--visible-height, 100dvh) - 14rem))" }}
         className="overflow-y-auto p-2"
       >
-        <Command.Empty className="px-3 py-6 text-center text-[13px] text-ink-faint">
-          No results.
+        <Command.Empty className="px-2 py-4">
+          <p className="px-1 pb-2 text-center text-[13px] text-ink-faint">
+            Nothing matched &ldquo;{query}&rdquo;.
+          </p>
+          <button
+            type="button"
+            onClick={() => ask(query)}
+            className="cmdk-row min-h-11 w-full text-left"
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
+            <span className="truncate">Ask the assistant about this</span>
+          </button>
         </Command.Empty>
+
+        {query.trim().length > 2 && (
+          <Command.Group
+            heading="Assistant"
+            className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+          >
+            <Command.Item
+              value={`ask assistant ${query}`}
+              onSelect={() => ask(query)}
+              className="cmdk-row min-h-11"
+            >
+              <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
+              <span className="truncate">Ask: &ldquo;{query.trim()}&rdquo;</span>
+            </Command.Item>
+          </Command.Group>
+        )}
 
         <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
           <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
@@ -132,14 +177,8 @@ export function CommandPalette() {
         </Command.Group>
 
         <Command.Group heading="Actions" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          <Command.Item
-            onSelect={() => {
-              setAIDrawerOpen(true);
-              setOpen(false);
-            }}
-            className="cmdk-row min-h-11"
-          >
-            Ask assistant
+          <Command.Item onSelect={() => ask()} className="cmdk-row min-h-11">
+            <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask assistant
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
