@@ -1,15 +1,19 @@
+import { safeCategoryColor, safeCategoryName } from "./db-sync";
 import type { Category, ImportSource, LandingView, UserSettings } from "./types";
 
 const LANDING_VIEWS = new Set<LandingView>(["today", "calendar", "agenda"]);
 
-/** Repair categories that lost a name in localStorage or cloud sync. */
+/** Repair categories that lost a name or colour in localStorage or cloud sync.
+ *  A colourless category is not just a rendering problem: `categories.color` is
+ *  NOT NULL, so pushing one used to fail every subsequent write in the queue. */
 export function sanitizeCategories(categories: Category[]): Category[] {
   let changed = false;
   const next = categories.map((c) => {
-    const name = typeof c.name === "string" ? c.name.trim() : "";
-    if (name && name === c.name) return c;
+    const name = safeCategoryName(c.name);
+    const color = safeCategoryColor(c.color);
+    if (name === c.name && color === c.color) return c;
     changed = true;
-    return { ...c, name: name || "Uncategorized" };
+    return { ...c, name, color };
   });
   return changed ? next : categories;
 }

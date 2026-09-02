@@ -13,6 +13,23 @@ describe("sanitizeCategories", () => {
     expect(next[0].name).toBe("Uncategorized");
     expect(next[1].name).toBe("Math");
   });
+
+  it("repairs a missing or malformed colour", () => {
+    const broken = [
+      { id: "1", name: "Math", color: undefined },
+      { id: "2", name: "Work", color: "not-a-colour" },
+      { id: "3", name: "Personal", color: "#3DBE8B" },
+    ] as unknown as Category[];
+    const next = sanitizeCategories(broken);
+    expect(next[0].color).toBe("#8E8E93");
+    expect(next[1].color).toBe("#8E8E93");
+    expect(next[2].color).toBe("#3DBE8B");
+  });
+
+  it("returns the same array when nothing needs repairing", () => {
+    const clean: Category[] = [{ id: "1", name: "Math", color: "#000" }];
+    expect(sanitizeCategories(clean)).toBe(clean);
+  });
 });
 
 describe("sanitizeSettings", () => {

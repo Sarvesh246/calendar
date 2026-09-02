@@ -52,10 +52,11 @@ const FIELD =
   "mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
   // A focus ring that grows rather than snapping on — `box-shadow` animates
   // where `border-width` does not, so the border colour and the ring move
-  // together on one timing.
+  // together on one timing. (This used to end on a bare "focus:" — a class name
+  // Tailwind can't generate, so the ring it describes was never there.)
   "transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] " +
   "hover:border-line-strong focus:border-accent focus:bg-surface-elevated focus:outline-none " +
-  "focus:";
+  "focus:shadow-[0_0_0_3px_var(--accent-soft)]";
 
 export function ItemEditor({
   item,
@@ -143,10 +144,14 @@ export function ItemEditor({
 
       <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Class">
         <select
-          value={item.categoryId}
+          value={item.categoryId ?? ""}
           onChange={(e) => patch({ categoryId: e.target.value })}
           className={FIELD}
         >
+          {/* An item with no class (or one whose class was deleted) must have a
+              matching option, or the select silently displays the first class
+              while the item is still filed under nothing. */}
+          {!category && <option value="">No class</option>}
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

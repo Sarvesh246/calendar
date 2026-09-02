@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
@@ -120,6 +120,15 @@ export default function SettingsPage() {
               <input
                 value={cat.name}
                 onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
+                // A category with no name is a blank row here, a blank chip on
+                // every card, and a NOT NULL column in the cloud. The field
+                // stays clearable while you retype it; leaving it empty is what
+                // gets repaired.
+                onBlur={(e) => {
+                  const name = e.target.value.trim();
+                  if (name !== cat.name) updateCategory(cat.id, { name: name || "Uncategorized" });
+                }}
+                aria-label={`${cat.name} name`}
                 className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
               />
               {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
@@ -153,6 +162,12 @@ export default function SettingsPage() {
           <input
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !newCategoryName.trim()) return;
+              e.preventDefault();
+              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
+              setNewCategoryName("");
+            }}
             placeholder="New category"
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
           />
@@ -409,27 +424,7 @@ function CollapsibleCard({
   storageKey: string;
   defaultOpen?: boolean;
 }) {
-  const key = `datebook-section:${storageKey}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored === null) return defaultOpen;
-      return stored === "1";
-    } catch {
-      return defaultOpen;
-    }
-  });
-
-  const toggle = () =>
-    setOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(key, next ? "1" : "0");
-      } catch {
-        /* storage disabled */
-      }
-      return next;
-    });
+  const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
 
   return (
     <section className="overflow-hidden rounded-lg border border-line/80 bg-surface">
@@ -471,6 +466,62 @@ function CollapsibleCard({
       </AnimatePresence>
     </section>
   );
+}
+
+/**
+ * Remembered open/closed state for a settings section.
+ *
+ * Reading localStorage in `useState`'s initialiser looked harmless but ran on
+ * the client only — the prerendered HTML had the section in its default state,
+ * so any card the user had left open hydrated with mismatched markup and React
+ * threw the whole subtree away and re-rendered it. `useSyncExternalStore` gives
+ * the server render the default and the client its stored value, which is
+ * exactly the case it exists for.
+ */
+const sectionOpen = new Map<string, boolean>();
+const sectionListeners = new Set<() => void>();
+
+function sectionKey(storageKey: string) {
+  return `datebook-section:${storageKey}`;
+}
+
+function subscribeSections(onChange: () => void) {
+  sectionListeners.add(onChange);
+  return () => sectionListeners.delete(onChange);
+}
+
+function useSectionOpen(storageKey: string, defaultOpen: boolean): [boolean, () => void] {
+  const key = sectionKey(storageKey);
+  const open = useSyncExternalStore(
+    subscribeSections,
+    () => {
+      const cached = sectionOpen.get(key);
+      if (cached !== undefined) return cached;
+      let value = defaultOpen;
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored !== null) value = stored === "1";
+      } catch {
+        /* storage disabled */
+      }
+      sectionOpen.set(key, value);
+      return value;
+    },
+    () => defaultOpen
+  );
+
+  const toggle = () => {
+    const next = !(sectionOpen.get(key) ?? defaultOpen);
+    sectionOpen.set(key, next);
+    try {
+      localStorage.setItem(key, next ? "1" : "0");
+    } catch {
+      /* storage disabled */
+    }
+    for (const listener of sectionListeners) listener();
+  };
+
+  return [open, toggle];
 }
 
 function CardHeading({ title, sub }: { title: string; sub?: string }) {

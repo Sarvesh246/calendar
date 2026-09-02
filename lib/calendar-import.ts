@@ -90,18 +90,25 @@ export function buildImportPlan(
   existingCategories: Category[],
   sourceId: string
 ): ImportPlan {
-  const byName = new Map<string, Category>();
-  for (const c of existingCategories) {
-    const name = typeof c.name === "string" ? c.name.trim() : "";
-    if (!name) continue;
-    byName.set(name.toLowerCase(), c);
-  }
-
   const newCategories: Category[] = [];
   const fallbackName = (calendarName ?? "").trim() || "Imported";
 
+  // Existing categories are matched by name, case-insensitively. A category
+  // whose name was lost is keyed under the repaired name (sanitizeCategories
+  // uses the same fallback), so a re-sync reuses it instead of minting another
+  // one on every pass — which is how an account ends up with a long column of
+  // identical unnamed categories.
+  const byName = new Map<string, Category>();
+  for (const c of existingCategories) {
+    const name = typeof c.name === "string" && c.name.trim() ? c.name.trim() : "Uncategorized";
+    const key = name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, c);
+  }
+
   const resolveCategory = (course: string | null): string => {
-    const wanted = (course ?? fallbackName).trim();
+    // `course ?? fallbackName` kept an empty string — a summary ending in an
+    // empty bracket ("Essay [ ]") produced a nameless category per sync.
+    const wanted = (course ?? "").trim() || fallbackName;
     const key = wanted.toLowerCase();
     const hit = byName.get(key);
     if (hit) return hit.id;

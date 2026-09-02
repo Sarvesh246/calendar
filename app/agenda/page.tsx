@@ -8,7 +8,14 @@ import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
-import { dayKey, dayLabel, isOverdue, itemOccupiesDay, weekWorkload } from "@/lib/date-utils";
+import {
+  dayKey,
+  dayLabel,
+  groupItemsByDay,
+  isOverdue,
+  itemOccupiesDay,
+  weekWorkload,
+} from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
@@ -51,11 +58,15 @@ export default function AgendaPage() {
     const today = startOfDay(new Date());
     const cutoff = addDays(today, HORIZON_DAYS);
     const result: { date: Date; items: Item[] }[] = [];
+    // One bucketing pass over the list, then 120 map lookups — the old shape
+    // re-scanned (and re-sorted) every item once per day on the horizon, which
+    // is 120 full passes on every render of this page.
+    const byDay = groupItemsByDay(items);
     for (let i = 1; i < HORIZON_DAYS; i++) {
       const date = addDays(today, i);
-      const dayItems = items
-        .filter((it) => itemOccupiesDay(it, date) && !isOverdue(it))
-        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+      const bucket = byDay.get(dayKey(date));
+      if (!bucket) continue;
+      const dayItems = bucket.filter((it) => !isOverdue(it));
       if (dayItems.length > 0) result.push({ date, items: dayItems });
     }
     const laterItems = items
