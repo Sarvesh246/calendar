@@ -22,15 +22,18 @@ only sees its own data, seeds default reminder presets for every new account, an
 adds the tables to the realtime publication. Later files add columns as the app
 grows.
 
-**Don't skip [`0006_sync_hardening.sql`](supabase/migrations/0006_sync_hardening.sql).**
+**Don't skip [`0006_sync_hardening.sql`](supabase/migrations/0006_sync_hardening.sql) or
+[`0007_status_time.sql`](supabase/migrations/0007_status_time.sql).**
 It adds the `deletions` table and makes `updated_at` reflect when an edit was
 actually made rather than when it was uploaded. Those two are what let the app
 tell "deleted on my phone" apart from "not uploaded from my phone yet", and what
 decides which device wins when both edited the same thing. Without it the app
 still syncs, but something you delete while a second device is offline can come
 back when that device reconnects, and an offline edit can beat a newer one made
-elsewhere. The app detects the missing table and logs a warning rather than
-failing.
+elsewhere. `0007` adds `items.status_at` so ticking something off is merged on
+its own clock — without it, a calendar feed refreshing on one device can undo
+progress marked on another. The app detects both as missing and logs a warning
+rather than failing.
 
 > **Seeing `Could not find the 'url' column of 'items' in the schema cache`
 > (PGRST204)?** Your project was created before the `items.url` column existed.

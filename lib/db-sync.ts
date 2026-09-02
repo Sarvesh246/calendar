@@ -48,7 +48,7 @@ export function safeCategoryColor(v: unknown): string {
 // it, retry, and keep syncing everything else rather than wedging the queue.
 // The column starts flowing again on its own once the migration is run.
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
-  items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id"],
+  items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at"],
   import_sources: ["last_error"],
   user_settings: ["hide_completed", "onboarding_dismissed", "mobile_day_details"],
 };
@@ -143,6 +143,7 @@ export function toItemRow(i: Item, userId: string): Row {
     status: i.status ?? null,
     reminders: i.reminders ?? [],
     completed_at: i.completedAt ? iso(i.completedAt) : null,
+    status_at: i.statusAt ? iso(i.statusAt) : null,
     source_snapshot: i.sourceSnapshot ?? null,
     created_at: iso(i.createdAt),
     source_id: i.sourceId ?? null,
@@ -170,6 +171,7 @@ export function rowToItem(r: Row): Item {
     ...(r.status ? { status: r.status as Item["status"] } : {}),
     ...(reminders && reminders.length ? { reminders } : {}),
     ...(r.completed_at ? { completedAt: iso(r.completed_at) } : {}),
+    ...(isoOrNull(r.status_at) ? { statusAt: isoOrNull(r.status_at) as string } : {}),
     createdAt: iso(r.created_at),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
     ...(r.source_uid ? { sourceUid: r.source_uid as string } : {}),
@@ -282,6 +284,12 @@ function isMissingTable(error: unknown): boolean {
   if (!e) return false;
   // PGRST205: absent from PostgREST's schema cache. 42P01: undefined table.
   return e.code === "PGRST205" || e.code === "42P01";
+}
+
+/** False once we've learned this project has no `deletions` table, so callers
+ *  can skip work that would only fail (e.g. a realtime binding to it). */
+export function deletionsSupported(): boolean {
+  return !deletionsUnavailable;
 }
 
 export async function fetchDeletions(

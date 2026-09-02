@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Settings } from "lucide-react";
+import { Search, Settings, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterButton } from "@/components/filter-sheet";
 import { useUIStore } from "@/lib/ui-store";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export function MobileHeaderActions() {
   const pathname = usePathname();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const onSettings = pathname === "/settings";
 
   return (
@@ -22,6 +23,15 @@ export function MobileHeaderActions() {
       <div className="pt-[calc(env(safe-area-inset-top)+1.375rem)]">
         <div className="flex justify-end px-3">
           <div className="mobile-header-cluster pointer-events-auto flex items-center gap-0.5 p-0.5">
+            <Button
+              variant="tertiary"
+              size="icon"
+              onClick={() => setAIDrawerOpen(true)}
+              aria-label="Ask the assistant"
+              className="h-9 w-9 rounded-full bg-transparent text-accent hover:bg-surface-sunken"
+            >
+              <Sparkles className="h-4 w-4" strokeWidth={1.9} />
+            </Button>
             <Button
               variant="tertiary"
               size="icon"

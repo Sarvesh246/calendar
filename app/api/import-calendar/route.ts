@@ -15,21 +15,46 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 
+/**
+ * Recently fetched feeds, keyed by resolved URL.
+ *
+ * Canvas publishes a feed that changes a few times a day at most, but it was
+ * being re-fetched per device, per tab focus. Serving a recent copy means the
+ * upstream sees one request per feed per window no matter how many clients ask,
+ * and — because a cache hit never reaches the rate limiter — an extra device
+ * signing in can't push anyone over the quota.
+ */
+const CACHE_TTL_MS = 10 * 60_000;
+/** How long a cached copy stays good enough to serve when upstream is failing. */
+const STALE_FALLBACK_MS = 6 * 60 * 60_000;
+const MAX_CACHE_ENTRIES = 64;
+
+interface CacheEntry {
+  text: string;
+  at: number;
+}
+const feedCache = new Map<string, CacheEntry>();
+
+function cacheGet(key: string, maxAge: number): string | null {
+  const hit = feedCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > maxAge) return null;
+  return hit.text;
+}
+
+function cacheSet(key: string, text: string) {
+  // Cheap LRU-ish bound: the oldest insertion goes first.
+  if (feedCache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = feedCache.keys().next().value;
+    if (oldest !== undefined) feedCache.delete(oldest);
+  }
+  feedCache.delete(key);
+  feedCache.set(key, { text, at: Date.now() });
+}
+
 export async function POST(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "That request wasn't allowed." }, { status: 403 });
-  }
-
-  const user = await getRequestUser(request);
-  const ip = clientKey(request);
-  const limitKey = user ? `import:user:${user.id}` : `import:ip:${ip}`;
-  const hourly = user ? 30 : 12;
-  if (
-    !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
-    !rateLimit(`${limitKey}:burst`, 4, 60_000) ||
-    !(await durableHourlyLimit(limitKey, hourly))
-  ) {
-    return tooMany();
   }
 
   let body: unknown;
@@ -53,6 +78,31 @@ export async function POST(request: Request) {
       { ok: false, error: "That doesn't look like a valid http(s) or webcal link." },
       { status: 400 }
     );
+  }
+
+  const cacheKey = start.toString();
+  const user = await getRequestUser(request);
+  const ip = clientKey(request);
+  const limitKey = user ? `import:user:${user.id}` : `import:ip:${ip}`;
+
+  // Served before any quota is touched: a cache hit costs nothing upstream, so
+  // charging for it is what turned "several devices, one feed" into a 429.
+  const fresh = cacheGet(cacheKey, CACHE_TTL_MS);
+  if (fresh) return NextResponse.json({ ok: true, text: fresh, cached: true });
+
+  // A crude guard against a client hammering uncached URLs. The hourly caps
+  // below now only ever count real upstream fetches.
+  const hourly = user ? 60 : 12;
+  if (
+    !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
+    !rateLimit(`${limitKey}:burst`, 6, 60_000) ||
+    !(await durableHourlyLimit(limitKey, hourly))
+  ) {
+    // Prefer a slightly stale copy over an error — the caller can't tell the
+    // difference and the calendar stays populated.
+    const stale = cacheGet(cacheKey, STALE_FALLBACK_MS);
+    if (stale) return NextResponse.json({ ok: true, text: stale, cached: true, stale: true });
+    return tooMany();
   }
 
   let current = start;
@@ -118,6 +168,8 @@ export async function POST(request: Request) {
   }
 
   if (!res.ok) {
+    const stale = cacheGet(cacheKey, STALE_FALLBACK_MS);
+    if (stale) return NextResponse.json({ ok: true, text: stale, cached: true, stale: true });
     return NextResponse.json(
       { ok: false, error: `The feed responded with ${res.status}. Double-check the link.` },
       { status: 502 }
@@ -140,6 +192,7 @@ export async function POST(request: Request) {
     );
   }
 
+  cacheSet(cacheKey, text);
   return NextResponse.json({ ok: true, text });
 }
 

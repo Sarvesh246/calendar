@@ -37,8 +37,13 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 pb-4">
-      <header className="pt-1">
+    // Every other page runs the full width of the pane; settings used to stop at
+    // a phone-shaped column and leave two thirds of a desktop window empty. It
+    // now spreads into two tracks once there's room, with the heading and the
+    // most-used card spanning both so the page still starts where you expect.
+    <div className="mx-auto w-full max-w-[1120px] pb-4">
+      <div className="flex flex-col gap-5 xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-5">
+      <header className="pt-1 xl:col-span-2">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
@@ -46,7 +51,7 @@ export default function SettingsPage() {
       </header>
 
       {/* Most-changed preferences — always visible */}
-      <SettingsCard>
+      <SettingsCard className="xl:col-span-2">
         <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
         <div className="mt-4 flex flex-col gap-5">
           <SettingBlock label="Open Datebook to" hint="The first screen when you launch the app.">
@@ -312,7 +317,7 @@ export default function SettingsPage() {
       </CollapsibleCard>
 
       {/* Backup & reset — always expanded, pinned to bottom */}
-      <SettingsCard variant="danger">
+      <SettingsCard variant="danger" className="xl:col-span-2">
         <CardHeading
           title="Backup & reset"
           sub="Download a full copy of your data, restore from a file, or wipe this device clean."
@@ -386,6 +391,7 @@ export default function SettingsPage() {
           </a>
         </p>
       </SettingsCard>
+      </div>
     </div>
   );
 }
@@ -393,9 +399,11 @@ export default function SettingsPage() {
 function SettingsCard({
   children,
   variant = "default",
+  className,
 }: {
   children: React.ReactNode;
   variant?: "default" | "danger";
+  className?: string;
 }) {
   return (
     <section
@@ -403,7 +411,8 @@ function SettingsCard({
         "rounded-lg border p-4 sm:p-5",
         variant === "danger"
           ? "border-warn/25 bg-surface"
-          : "border-line/80 bg-surface"
+          : "border-line/80 bg-surface",
+        className
       )}
     >
       {children}

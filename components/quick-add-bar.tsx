@@ -6,6 +6,8 @@ import { ArrowUp, Bell, Plus, Tag, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
+import { looksLikeBulkPaste, parseBulk, toNewItem, type BulkDraft } from "@/lib/bulk-parse";
+import { BulkAddPreview } from "@/components/bulk-add-preview";
 import { shouldAskAssistant } from "@/lib/ai-assistant";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
@@ -17,7 +19,7 @@ import { motion as motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Phase = "idle" | "preview" | "ask";
+type Phase = "idle" | "preview" | "ask" | "bulk";
 
 export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const categories = useDatebookStore((s) => s.categories);
@@ -38,7 +40,13 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [focused, setFocused] = useState(false);
   const [parsed, setParsed] = useState<ParsedQuickAdd | null>(null);
+  const [bulk, setBulk] = useState<{ drafts: BulkDraft[]; skipped: string[] } | null>(null);
+  const [picked, setPicked] = useState<boolean[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The field is a single line, so a multi-line paste would arrive with its
+  // newlines flattened — and with them, any hope of telling the rows apart.
+  // The original text is kept here instead.
+  const rawRef = useRef<string>("");
 
   useEffect(() => {
     if (prefill !== null) {
@@ -53,9 +61,21 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     if (dateKey) inputRef.current?.focus();
   }, [dateKey]);
 
+  /** Try the pasted-schedule path. Returns true when it took over. */
+  function tryBulk(raw: string): boolean {
+    if (!looksLikeBulkPaste(raw)) return false;
+    const result = parseBulk(raw, categories);
+    if (result.drafts.length < 2) return false;
+    setBulk(result);
+    setPicked(result.drafts.map(() => true));
+    setPhase("bulk");
+    return true;
+  }
+
   function submit() {
     const trimmed = text.trim();
     if (!trimmed || phase !== "idle") return;
+    if (tryBulk(rawRef.current || trimmed)) return;
     if (shouldAskAssistant(trimmed)) {
       setPhase("ask");
       return;
@@ -112,15 +132,28 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     setPhase("preview");
   }
 
+  function confirmBulk() {
+    if (!bulk) return;
+    const fallback = categories[0]?.id;
+    for (let i = 0; i < bulk.drafts.length; i += 1) {
+      if (picked[i]) addItem(toNewItem(bulk.drafts[i], fallback));
+    }
+    reset();
+  }
+
   function reset() {
     setText("");
     setParsed(null);
+    setBulk(null);
+    setPicked([]);
     setPhase("idle");
+    rawRef.current = "";
     setDateKey(null);
     setTimeHint(null);
     closeQuickAdd();
   }
 
+  const ready = Boolean(text.trim()) && phase === "idle";
   const category = categories.find((c) => c.id === parsed?.categoryId);
   const whenLabel = parsed
     ? parsed.allDay
@@ -132,9 +165,11 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     <div className="relative w-full">
       <div
         className={cn(
-          "flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
+          "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-          focused && "border-accent/50"
+          // The bar itself is the focus indicator for the field inside it, so it
+          // has to be unmistakable rather than a half-tinted hairline.
+          focused && "border-accent"
         )}
       >
         <motion.span
@@ -149,17 +184,24 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         >
           <Plus className="h-4 w-4" strokeWidth={1.75} />
         </motion.span>
-        <div
-          className={cn(
-            "flex min-w-0 flex-1 items-center rounded-xl border border-line/60 bg-surface-sunken/50 px-3 py-2",
-            "transition-[border-color,background-color] duration-[var(--motion-standard)]",
-            focused && "border-line bg-surface-sunken/70"
-          )}
-        >
+        <div className="flex min-w-0 flex-1 items-center">
           <input
             ref={inputRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              rawRef.current = "";
+              setText(e.target.value);
+            }}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              if (!pasted.includes("\n")) return;
+              // A pasted block is the whole input, not an insertion — showing it
+              // squashed onto one line would be a lie about what we parsed.
+              e.preventDefault();
+              rawRef.current = pasted;
+              setText(pasted.replace(/\s+/g, " ").trim().slice(0, 200));
+              tryBulk(pasted);
+            }}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
@@ -181,16 +223,22 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         <button
           type="button"
           onClick={submit}
-          disabled={!text.trim() || phase !== "idle"}
+          disabled={!ready}
           aria-label="Add"
-          className="press-none flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity duration-[var(--motion-standard)] hover:opacity-90 disabled:opacity-30"
+          className={cn(
+            "press-none flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+            "transition-[background-color,color] duration-[var(--motion-standard)]",
+            ready
+              ? "bg-accent text-accent-ink hover:opacity-90"
+              : "bg-surface-sunken text-ink-faint"
+          )}
         >
           <motion.span
             initial={false}
-            animate={{ scale: text.trim() && phase === "idle" ? 1 : 0.86 }}
+            animate={{ scale: ready ? 1 : 0.86 }}
             transition={motionTokens.springSnappy}
           >
-            <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+            <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
           </motion.span>
         </button>
       </div>
@@ -224,6 +272,22 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
               </Button>
             </div>
           </motion.div>
+        )}
+        {phase === "bulk" && bulk && (
+          <BulkAddPreview
+            drafts={bulk.drafts}
+            skipped={bulk.skipped}
+            selected={picked}
+            onToggle={(i) => setPicked((p) => p.map((v, j) => (j === i ? !v : v)))}
+            onCancel={reset}
+            onConfirm={confirmBulk}
+            onAskAI={() => {
+              askAI(
+                `Add these to my calendar. Keep each one on the date shown:\n\n${rawRef.current || text}`
+              );
+              reset();
+            }}
+          />
         )}
         {phase === "preview" && parsed && (
           <motion.div

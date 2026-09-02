@@ -24,8 +24,13 @@ interface Message {
 
 const WELCOME: Message = {
   role: "assistant",
-  text: "Ask about your calendar, what's due, when you're free, or tell me to add, move, reschedule, complete, or delete something.",
-  suggestions: ["What's on today?", "What's due this week?", "Add gym at 6pm tomorrow"],
+  text: "Ask about your calendar — what's due, when you're free — or tell me to add, move, reschedule, complete, or delete something. You can paste a schedule straight in and I'll work out the dates.",
+  suggestions: [
+    "What's due this week?",
+    "When am I free on Friday?",
+    "Add gym at 6pm tomorrow",
+    "What's my heaviest day?",
+  ],
 };
 
 const ASSISTANT_SESSION_KEY = "datebook-assistant-session";

@@ -27,8 +27,8 @@ export function ConflictToast() {
           >
             <CloudDownload className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.9} />
             <p className="min-w-0 flex-1 text-[13px] leading-snug text-ink">
-              Another device updated <span className="font-medium">{lastConflict}</span>. Showing the
-              latest cloud version.
+              <span className="font-medium">{lastConflict}</span> changed on another device while you
+              were editing it. Showing the newer version.
             </p>
             <button
               type="button"

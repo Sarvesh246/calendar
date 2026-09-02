@@ -21,6 +21,10 @@ type Stamped = { id: string; updatedAt?: string; createdAt?: string };
  *     genuine last-write-wins, rather than the old "whichever device happens to
  *     be reconciling" rule that silently discarded the other device's edits.
  *  3. Ties fall back to the further-along assignment status, then to local.
+ *  4. An item's status is merged on its own clock (`statusAt`), so a feed
+ *     re-import on one device can't roll back what you ticked off on another.
+ *  5. Two categories with the same name are collapsed into one, and items
+ *     pointing at the loser are repointed.
  *
  * `tombstones` should already be the union of the local and cloud tombstones.
  */
@@ -29,8 +33,11 @@ export function mergeCalendars(
   cloud: CalendarSnapshot,
   tombstones: TombstoneMap = {}
 ): CalendarSnapshot {
+  const { categories, remap } = dedupeCategories(
+    reconcile("category", local.categories, cloud.categories, tombstones)
+  );
   return {
-    categories: reconcile("category", local.categories, cloud.categories, tombstones),
+    categories,
     reminderPresets: reconcile(
       "reminder_preset",
       local.reminderPresets,
@@ -40,9 +47,73 @@ export function mergeCalendars(
     importSources: dedupeByUrl(
       reconcile("import_source", local.importSources, cloud.importSources, tombstones)
     ),
-    items: mergeItems(local.items, cloud.items, tombstones),
+    items: repointCategories(mergeItems(local.items, cloud.items, tombstones), remap),
     settings: pickSettings(local.settings, cloud.settings),
   };
+}
+
+function categoryKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Collapse categories that are the same class under two ids.
+ *
+ * A calendar feed resolves an event's course to a category *by name*, but the
+ * merge unions categories *by id* — so each device that imported the feed
+ * before syncing minted its own "ENGR-102…" and every one of them survived,
+ * which is why the sidebar grew a new copy on each sync. Keep the oldest id
+ * (the one other devices most likely already reference) and report the mapping
+ * so items can be repointed.
+ */
+export function dedupeCategories(categories: Category[]): {
+  categories: Category[];
+  remap: Map<string, string>;
+} {
+  const winners = new Map<string, Category>();
+  const remap = new Map<string, string>();
+  for (const c of categories) {
+    const key = categoryKey(c.name);
+    // A blank name can't identify anything — leave those alone rather than
+    // fusing unrelated rows together.
+    if (!key) {
+      winners.set(`id:${c.id}`, c);
+      continue;
+    }
+    const held = winners.get(key);
+    if (!held) {
+      winners.set(key, c);
+      continue;
+    }
+    // Prefer the one that has been around longest; ties break on id so every
+    // device independently reaches the same answer.
+    const keep = pickCategory(held, c);
+    const drop = keep === held ? c : held;
+    winners.set(key, keep);
+    remap.set(drop.id, keep.id);
+  }
+  // A dropped category may itself have been a target earlier in the loop.
+  for (const [from, to] of remap) {
+    let dest = to;
+    for (let i = 0; i < 8 && remap.has(dest); i += 1) dest = remap.get(dest)!;
+    remap.set(from, dest);
+  }
+  return { categories: [...winners.values()], remap };
+}
+
+function pickCategory(a: Category, b: Category): Category {
+  const at = time(a.updatedAt);
+  const bt = time(b.updatedAt);
+  if (at !== bt) return at < bt ? a : b; // older wins — it's the one already referenced
+  return a.id <= b.id ? a : b;
+}
+
+function repointCategories(items: Item[], remap: Map<string, string>): Item[] {
+  if (remap.size === 0) return items;
+  return items.map((i) => {
+    const to = remap.get(i.categoryId);
+    return to ? { ...i, categoryId: to } : i;
+  });
 }
 
 /** Newer `updatedAt` wins; missing timestamps fall back to `createdAt`, then to local. */
@@ -79,25 +150,48 @@ function dedupeByUrl(sources: ImportSource[]): ImportSource[] {
   return [...byUrl.values()];
 }
 
-/** Prefer the row with the furthest-along assignment status; tie goes to local. */
-function pickItem(local: Item, cloud: Item): Item {
+/** Content fields go to the newer edit; status is decided separately below. */
+function pickContent(local: Item, cloud: Item): Item {
   const lt = time(local.updatedAt ?? local.createdAt);
   const ct = time(cloud.updatedAt ?? cloud.createdAt);
   if (lt !== ct) return lt > ct ? local : cloud;
+  return local;
+}
 
-  // Same edit time (or neither is stamped — data written before this app
-  // recorded edit times). Marking something done is the edit least safe to
-  // lose, so let progress break the tie.
+/**
+ * Which side's status to keep.
+ *
+ * Deliberately not decided by `updatedAt`: a feed re-sync rewrites an item's
+ * description or category and moves `updatedAt`, and that used to drag the
+ * importing device's stale "todo" along with it, undoing a tick made on another
+ * device. `statusAt` moves only when the status itself changes.
+ */
+function pickStatusFrom(local: Item, cloud: Item): Item {
+  const ls = time(local.statusAt ?? local.completedAt);
+  const cs = time(cloud.statusAt ?? cloud.completedAt);
+  if (ls !== cs) return ls > cs ? local : cloud;
+
+  // Neither side is stamped (or both at the same instant) — fall back to the
+  // furthest-along status, since losing "done" is the worse outcome.
   const rank = (s: Item["status"]) => (s === "done" ? 2 : s === "doing" ? 1 : 0);
   const lr = rank(local.status);
   const cr = rank(cloud.status);
   if (lr !== cr) return lr > cr ? local : cloud;
-  if (local.status === "done" && cloud.status === "done") {
-    const lc = time(local.completedAt);
-    const cc = time(cloud.completedAt);
-    if (lc !== cc) return lc > cc ? local : cloud;
-  }
   return local;
+}
+
+function pickItem(local: Item, cloud: Item): Item {
+  const base = pickContent(local, cloud);
+  const statusSide = pickStatusFrom(local, cloud);
+  if (statusSide.status === base.status && statusSide.completedAt === base.completedAt) {
+    return base;
+  }
+  const next: Item = { ...base, status: statusSide.status };
+  if (statusSide.completedAt) next.completedAt = statusSide.completedAt;
+  else delete next.completedAt;
+  if (statusSide.statusAt) next.statusAt = statusSide.statusAt;
+  else delete next.statusAt;
+  return next;
 }
 
 function mergeItems(local: Item[], cloud: Item[], tombstones: TombstoneMap): Item[] {

@@ -22,6 +22,7 @@ import {
   rowToSettings,
   safeCategoryColor,
   safeCategoryName,
+  deletionsSupported,
   type CloudSnapshot,
   type PendingChanges,
 } from "./db-sync";
@@ -35,7 +36,7 @@ import {
   type TombstoneMap,
 } from "./tombstones";
 import { expandRepeat } from "./repeat";
-import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
 import {
   sanitizeCategories,
   sanitizeImportSources,
@@ -200,6 +201,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateItem: (id, patch) => {
+        noteLocalEdit(id);
         set({
           items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
         });
@@ -231,6 +233,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       cycleItemStatus: (id) => {
+        noteLocalEdit(id);
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
@@ -243,6 +246,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       setItemStatus: (id, status) => {
+        noteLocalEdit(id);
         set({
           items: get().items.map((i) =>
             i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
@@ -251,6 +255,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       toggleItemDone: (id) => {
+        noteLocalEdit(id);
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
@@ -305,7 +310,20 @@ export const useDatebookStore = create<DatebookState>()(
 
       applyImport: (url, feed) => {
         const state = get();
-        const categories = sanitizeCategories(state.categories);
+        // Collapse categories that already exist twice under different ids
+        // before resolving anything against them. A feed resolves a course to a
+        // category by name, so a duplicate meant every item flipped between two
+        // ids on alternating syncs — restamping the whole row each time.
+        const deduped = dedupeCategories(sanitizeCategories(state.categories));
+        const categories = deduped.categories;
+        const remap = deduped.remap;
+        const baseItems =
+          remap.size === 0
+            ? state.items
+            : state.items.map((i) => {
+                const to = remap.get(i.categoryId);
+                return to ? { ...i, categoryId: to } : i;
+              });
         const existing = state.importSources.find((s) => s.url === url);
         const sourceId = existing?.id ?? nanoid();
 
@@ -317,7 +335,7 @@ export const useDatebookStore = create<DatebookState>()(
 
         // Update items already tied to this source; leave the user's status and
         // any locally edited feed fields alone.
-        const merged = state.items.map((item) => {
+        const merged = baseItems.map((item) => {
           if (item.sourceId !== sourceId || !item.sourceUid) return item;
           const draft = incoming.get(item.sourceUid);
           if (!draft) return item;
@@ -368,8 +386,13 @@ export const useDatebookStore = create<DatebookState>()(
             ? state.importSources.map((s) => (s.id === sourceId ? source : s))
             : [...state.importSources, source],
           // An event dropped from the feed is a delete like any other — without a
-          // tombstone the other device pushes it straight back.
-          deletions: addTombstones(state.deletions, "item", [...droppedIds]),
+          // tombstone the other device pushes it straight back. Same for the
+          // duplicate categories collapsed above.
+          deletions: addTombstones(
+            addTombstones(state.deletions, "item", [...droppedIds]),
+            "category",
+            [...remap.keys()]
+          ),
         });
 
         return { added, updated, removed };
@@ -1024,8 +1047,14 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
   if ("description" in patch && !patch.description) delete next.description;
   if ("reminders" in patch && !patch.reminders?.length) delete next.reminders;
   if (patch.status !== undefined && item.type !== "event") {
+    if (patch.status !== (item.status ?? "todo")) {
+      // Status keeps its own clock. `updatedAt` moves for any edit — including a
+      // feed re-import rewriting a description — and merging status on that
+      // clock is what let a refresh on one device undo a tick on another.
+      next.statusAt = patch.statusAt ?? nowIso();
+    }
     if (patch.status === "done") {
-      if (item.status !== "done") next.completedAt = patch.completedAt ?? new Date().toISOString();
+      if (item.status !== "done") next.completedAt = patch.completedAt ?? nowIso();
     } else {
       delete next.completedAt;
     }
@@ -1042,6 +1071,32 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
 /* they don't loop back out as writes.                                  */
 
 const nowIso = () => new Date().toISOString();
+
+/**
+ * Items this device edited in the last few seconds.
+ *
+ * Purely for deciding whether a remote change is worth a toast — conflicts
+ * themselves are resolved by timestamp. Without it the app announced "another
+ * device updated this" for the echo of the user's *own* write, on the device
+ * they made it on.
+ */
+const CONFLICT_NOTICE_WINDOW_MS = 45_000;
+const recentLocalEdits = new Map<string, number>();
+
+function noteLocalEdit(id: string) {
+  const now = Date.now();
+  recentLocalEdits.set(id, now);
+  if (recentLocalEdits.size > 200) {
+    for (const [key, at] of recentLocalEdits) {
+      if (now - at > CONFLICT_NOTICE_WINDOW_MS) recentLocalEdits.delete(key);
+    }
+  }
+}
+
+function editedHereRecently(id: string): boolean {
+  const at = recentLocalEdits.get(id);
+  return at !== undefined && Date.now() - at < CONFLICT_NOTICE_WINDOW_MS;
+}
 
 function addTombstones(current: TombstoneMap, kind: EntityKind, ids: string[]): TombstoneMap {
   if (ids.length === 0) return current;
@@ -1082,6 +1137,7 @@ let pendingMerge: { userId: string; cloud: CloudSnapshot } | null = null;
 // its retry. Lets the connectivity listeners relaunch a dead connect.
 let desiredUserId: string | null = null;
 let channel: RealtimeChannel | null = null;
+let deletionsChannel: RealtimeChannel | null = null;
 
 // Resilience: the initial cloud connect and the realtime channel both retry with
 // backoff instead of stopping at the first failure, and a backgrounded tab
@@ -1243,6 +1299,16 @@ function queueDeltaAgainstCloud(next: CalendarSnapshot, cloud: CloudSnapshot) {
   const local = useDatebookStore.getState().deletions;
   for (const [key, at] of Object.entries(local)) {
     if (!cloud.deletions[key]) pending.deletions[key] = at;
+  }
+  // A row the reconcile decided shouldn't exist is a delete like any other, and
+  // needs a tombstone or the next device to sync pushes it straight back. Covers
+  // both "use this device" and the duplicate categories the merge collapses.
+  const at = nowIso();
+  for (const collKey of ["categories", "reminderPresets", "importSources", "items"] as CollKey[]) {
+    const kind = ENTITY_FOR_COLL[collKey];
+    for (const id of pending[collKey].deletes) {
+      pending.deletions[tombKey(kind, id)] ??= at;
+    }
   }
 }
 
@@ -1488,13 +1554,25 @@ function applyRealtime(
           // row here and did nothing else, so whichever side lost the race stayed
           // wrong until something happened to touch the row again — and it only
           // looked back 30 seconds. Keep the local edit *and* push it.
+          //
+          // No toast: what's on screen is what the user just did, and nothing
+          // about it changed.
           const b = pending[key] as unknown as { upserts: Map<string, unknown> };
           b.upserts.set(prev.id, prev);
           scheduleFlush();
-          if (key === "items") {
-            useDatebookStore.setState({ lastConflict: (model as Item).title || "an item" });
-          }
           return;
+        }
+        // The remote row wins and is about to replace what's on screen. Worth
+        // mentioning only if the user touched this item here moments ago —
+        // otherwise it's just sync doing its job, and announcing it on the very
+        // device that made the change (the echo of our own write) was noise.
+        if (
+          key === "items" &&
+          editedHereRecently(model.id) &&
+          JSON.stringify(prev) !== JSON.stringify(model)
+        ) {
+          recentLocalEdits.delete(model.id);
+          useDatebookStore.setState({ lastConflict: (model as Item).title || "an item" });
         }
       }
       nextArr = idx === -1 ? [...current, model] : current.map((x, i) => (i === idx ? model : x));
@@ -1677,14 +1755,12 @@ async function subscribeRealtime(userId: string) {
     /* best effort — the subscribe callback retries on failure anyway */
   }
   const ch = supabase.channel(`datebook:${userId}`);
-  const tables = [
-    "categories",
-    "items",
-    "reminder_presets",
-    "import_sources",
-    "user_settings",
-    "deletions",
-  ];
+  // `deletions` is deliberately NOT in this list. Postgres-changes bindings all
+  // share one channel, and binding to a table the project doesn't have yet (a
+  // schema that predates migration 0006) makes the server reject the *whole*
+  // subscription — which silently killed every live update, not just deletes.
+  // It gets its own channel below, where a failure costs only itself.
+  const tables = ["categories", "items", "reminder_presets", "import_sources", "user_settings"];
   for (const table of tables) {
     ch.on(
       "postgres_changes",
@@ -1712,6 +1788,37 @@ async function subscribeRealtime(userId: string) {
     }
   });
   channel = ch;
+  subscribeDeletions(userId);
+}
+
+/** Live deletes, on their own channel.
+ *
+ *  Missing the tombstone table costs live *deletes* — the next reconcile still
+ *  catches them — but it must not cost live edits, which is what happens when
+ *  this binding rides on the main channel and the server rejects it. */
+function subscribeDeletions(userId: string) {
+  if (!supabase || !deletionsSupported()) return;
+  const ch = supabase.channel(`datebook-deletions:${userId}`);
+  ch.on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "deletions", filter: `user_id=eq.${userId}` },
+    (payload) =>
+      applyRealtime("deletions", payload as RealtimePostgresChangesPayload<Record<string, unknown>>)
+  );
+  ch.subscribe((status) => {
+    if (deletionsChannel !== ch) return;
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      // Almost always "table not in the publication". Nothing else depends on
+      // this channel, so drop it quietly instead of retrying forever.
+      console.warn(
+        "[datebook] live delete updates unavailable — run supabase/migrations/0006. " +
+          "Deletes still reconcile on reconnect."
+      );
+      if (supabase) void supabase.removeChannel(ch);
+      if (deletionsChannel === ch) deletionsChannel = null;
+    }
+  });
+  deletionsChannel = ch;
 }
 
 function unsubscribeRealtime() {
@@ -1722,6 +1829,8 @@ function unsubscribeRealtime() {
   realtimeRetries = 0;
   if (channel && supabase) void supabase.removeChannel(channel);
   channel = null;
+  if (deletionsChannel && supabase) void supabase.removeChannel(deletionsChannel);
+  deletionsChannel = null;
 }
 
 /** Rejoin realtime + reconcile when the tab returns to the foreground or the

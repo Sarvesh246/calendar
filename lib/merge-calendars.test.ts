@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
 import { tombKey } from "./tombstones";
 import type { Item, UserSettings } from "./types";
 
@@ -183,5 +183,88 @@ describe("mergeCalendars", () => {
     );
     expect(merged.importSources).toHaveLength(1);
     expect(merged.importSources[0].id).toBe("cloud");
+  });
+});
+
+describe("status is merged on its own clock", () => {
+  // The real-world failure: a feed re-import on the laptop rewrote the item's
+  // description (moving `updatedAt`), and that dragged the laptop's stale
+  // "todo" along with it, undoing the tick made on the phone.
+  it("keeps a tick from another device through a local feed re-import", () => {
+    const base = item({ id: "a", type: "assignment", title: "Quiz 1" });
+    const localAfterImport: Item = {
+      ...base,
+      description: "Refreshed from the feed",
+      status: "todo",
+      updatedAt: LATE, // newest content edit
+    };
+    const remoteMarkedDone: Item = {
+      ...base,
+      status: "done",
+      completedAt: EARLY,
+      statusAt: EARLY, // status changed earlier, but it's the only status change
+      updatedAt: EARLY,
+    };
+    const merged = mergeCalendars(
+      snap({ items: [localAfterImport] }),
+      snap({ items: [remoteMarkedDone] })
+    );
+    expect(merged.items[0].description).toBe("Refreshed from the feed");
+    expect(merged.items[0].status).toBe("done");
+    expect(merged.items[0].completedAt).toBe(EARLY);
+  });
+
+  it("still lets a newer status change win", () => {
+    const merged = mergeCalendars(
+      snap({ items: [item({ id: "a", status: "done", completedAt: EARLY, statusAt: EARLY })] }),
+      snap({ items: [item({ id: "a", status: "todo", statusAt: LATE })] })
+    );
+    expect(merged.items[0].status).toBe("todo");
+    expect(merged.items[0].completedAt).toBeUndefined();
+  });
+});
+
+describe("dedupeCategories", () => {
+  it("collapses two ids for the same course name", () => {
+    const { categories, remap } = dedupeCategories([
+      { id: "old", name: "ENGR-102", color: "#111", updatedAt: EARLY },
+      { id: "new", name: "engr-102 ", color: "#222", updatedAt: LATE },
+    ]);
+    expect(categories).toHaveLength(1);
+    // The older id survives — it's the one existing items already point at.
+    expect(categories[0].id).toBe("old");
+    expect(remap.get("new")).toBe("old");
+  });
+
+  it("leaves genuinely different names alone", () => {
+    const { categories } = dedupeCategories([
+      { id: "a", name: "ENGR-102:201", color: "#111" },
+      { id: "b", name: "ENGR-102:204", color: "#222" },
+    ]);
+    expect(categories).toHaveLength(2);
+  });
+
+  it("does not fuse unnamed categories together", () => {
+    const { categories } = dedupeCategories([
+      { id: "a", name: "  ", color: "#111" },
+      { id: "b", name: "", color: "#222" },
+    ]);
+    expect(categories).toHaveLength(2);
+  });
+
+  it("repoints items at the surviving category during a merge", () => {
+    const merged = mergeCalendars(
+      snap({
+        categories: [{ id: "dup", name: "ENGR-102", color: "#222", updatedAt: LATE }],
+        items: [item({ id: "i1", categoryId: "dup" })],
+      }),
+      snap({
+        categories: [{ id: "orig", name: "ENGR-102", color: "#111", updatedAt: EARLY }],
+        items: [],
+      })
+    );
+    expect(merged.categories).toHaveLength(1);
+    expect(merged.categories[0].id).toBe("orig");
+    expect(merged.items[0].categoryId).toBe("orig");
   });
 });

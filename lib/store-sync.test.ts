@@ -75,6 +75,36 @@ describe("edit timestamps", () => {
   });
 });
 
+describe("status timestamps", () => {
+  it("stamps statusAt only when the status actually changes", async () => {
+    const item = addTask("Quiz");
+    expect(item.statusAt).toBeUndefined();
+
+    store().toggleItemDone(item.id);
+    const done = store().items[0];
+    expect(done.status).toBe("done");
+    expect(done.statusAt).toBeTypeOf("string");
+
+    await new Promise((r) => setTimeout(r, 5));
+    // A content-only edit must leave the status clock alone, or a feed refresh
+    // would keep re-winning the status merge.
+    store().updateItem(item.id, { description: "chapters 1-3" });
+    const edited = store().items[0];
+    expect(edited.statusAt).toBe(done.statusAt);
+    expect(time(edited.updatedAt)).toBeGreaterThan(time(done.updatedAt));
+  });
+
+  it("moves statusAt when the status changes again", async () => {
+    const item = addTask("Quiz");
+    store().setItemStatus(item.id, "doing");
+    const doing = store().items[0];
+    await new Promise((r) => setTimeout(r, 5));
+    store().setItemStatus(item.id, "done");
+    const done = store().items[0];
+    expect(time(done.statusAt)).toBeGreaterThan(time(doing.statusAt));
+  });
+});
+
 describe("deletion tombstones", () => {
   it("records a tombstone when an item is deleted", () => {
     const item = addTask("Essay");

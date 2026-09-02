@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 import {
   CalendarDays,
+  Sparkles,
   Cloud,
   CloudOff,
   ListChecks,
@@ -58,6 +59,7 @@ export function Sidebar() {
   const categories = useDatebookStore((s) => s.categories);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
+  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const toggleCategoryFilter = useUIStore((s) => s.toggleCategoryFilter);
 
@@ -104,6 +106,14 @@ export function Sidebar() {
               collapsed={collapsed}
             />
           ))}
+          {/* Sits with the views rather than buried in a menu — it's a place you
+              go, not a setting you find. */}
+          <RailButton
+            label="Assistant"
+            Icon={Sparkles}
+            collapsed={collapsed}
+            onClick={() => setAIDrawerOpen(true)}
+          />
         </nav>
 
         <AnimatePresence initial={false}>
@@ -379,6 +389,38 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
  * cross-fading two blocks of colour — the same language the mobile bar already
  * spoke, which the rail was missing.
  */
+/** A rail row that opens a panel instead of navigating. Same shape as
+ *  `RailLink` so the assistant reads as one of the places you can go. */
+function RailButton({
+  label,
+  Icon,
+  collapsed,
+  onClick,
+}: {
+  label: string;
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={cn(
+        "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium",
+        "transition-colors duration-[var(--motion-standard)]",
+        "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+      )}
+    >
+      <Icon className="relative z-[1] h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
+      <span className="relative z-[1] flex min-w-0">
+        <RailLabel collapsed={collapsed}>{label}</RailLabel>
+      </span>
+    </button>
+  );
+}
+
 function RailLink({
   href,
   label,

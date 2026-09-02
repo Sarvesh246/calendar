@@ -41,6 +41,17 @@ export function feedLabel(url: string): string {
   }
 }
 
+/** A feed fetch that failed. `rateLimited` failures are this device waiting its
+ *  turn rather than anything wrong with the feed, and are handled quietly. */
+export class FeedFetchError extends Error {
+  readonly rateLimited: boolean;
+  constructor(message: string, rateLimited = false) {
+    super(message);
+    this.name = "FeedFetchError";
+    this.rateLimited = rateLimited;
+  }
+}
+
 export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
   const res = await fetch("/api/import-calendar", {
     method: "POST",
@@ -51,15 +62,17 @@ export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
   try {
     data = await res.json();
   } catch {
-    throw new Error("The import service returned an unexpected response.");
+    throw new FeedFetchError("The import service returned an unexpected response.");
   }
   if (!res.ok || !data.ok || typeof data.text !== "string") {
-    if (res.status === 429) throw new Error("Too many import requests. Try again in a minute.");
-    throw new Error(data.error ?? "Import failed.");
+    if (res.status === 429) {
+      throw new FeedFetchError("Checking again shortly — this feed was refreshed very recently.", true);
+    }
+    throw new FeedFetchError(data.error ?? "Import failed.");
   }
   const { name, events } = parseIcs(data.text);
   if (events.length === 0) {
-    throw new Error("No events found in that feed.");
+    throw new FeedFetchError("No events found in that feed.");
   }
   return { calendarName: name, events };
 }
