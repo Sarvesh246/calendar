@@ -85,17 +85,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const persist = useDatebookStore.persist;
+    let unsubHydration: (() => void) | undefined;
     if (persist.hasHydrated()) {
       start();
     } else {
-      persist.onFinishHydration(start);
+      unsubHydration = persist.onFinishHydration(start);
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       sync(session?.user ?? null);
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      unsubHydration?.();
+      sub.subscription.unsubscribe();
+    };
   }, [connectCloud, disconnectCloud]);
 
   const value: AuthContextValue = {

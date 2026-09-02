@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addMonths } from "date-fns";
 import { motion, useMotionValue, animate, useTransform } from "framer-motion";
 import { isSameDay, isToday, format } from "date-fns";
@@ -49,28 +49,44 @@ function rankForChip(item: Item) {
   return 1;
 }
 
+/**
+ * Chips for one day cell.
+ *
+ * Every cell used to run its own ResizeObserver to find out how many chips fit
+ * — 42 per month panel, 126 across the swipe carousel, all re-measuring on
+ * every resize for an answer that is identical in all of them (the grid rows
+ * are `1fr`). Now one cell per panel reports its height (`onMeasure`) and the
+ * rest are handed that number.
+ */
 function DayCellChips({
   items,
   colorOf,
+  areaHeight,
+  onMeasure,
 }: {
   items: Item[];
   colorOf: (categoryId: string) => string;
+  areaHeight: number;
+  onMeasure?: (height: number) => void;
 }) {
-  const density = useDatebookStore((s) => s.settings.density);
   const ref = useRef<HTMLDivElement>(null);
-  const [fitCount, setFitCount] = useState(0);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      setFitCount(fitCountVertical(el.clientHeight, items.length, CHIP_HEIGHT, CHIP_GAP, MORE_LINE_HEIGHT));
-    };
+    if (!el || !onMeasure) return;
+    const update = () => onMeasure(el.clientHeight);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [items.length, density]);
+  }, [onMeasure]);
+
+  // Before the first measurement, show nothing rather than everything — a cell
+  // that briefly renders its whole list and then trims reads as a flicker.
+  const fitCount =
+    areaHeight > 0
+      ? fitCountVertical(areaHeight, items.length, CHIP_HEIGHT, CHIP_GAP, MORE_LINE_HEIGHT)
+      : 0;
 
   const ranked = useMemo(
     () => [...items].sort((a, b) => rankForChip(a) - rankForChip(b)),
@@ -143,34 +159,72 @@ function DayCellMobilePreview({
   );
 }
 
+/** The ring around the selected day. Before the first paint it is a plain
+ *  element in the right place; once mounted it becomes a shared-layout element
+ *  so picking another day slides it there. */
+function SelectionRing({
+  layoutId,
+  animateSelection,
+  className,
+}: {
+  layoutId: string;
+  animateSelection: boolean;
+  className: string;
+}) {
+  if (!animateSelection) {
+    return <span aria-hidden className={cn("pointer-events-none absolute inset-0", className)} />;
+  }
+  return (
+    <motion.span
+      layoutId={layoutId}
+      aria-hidden
+      initial={false}
+      transition={motionTokens.spring}
+      className={cn("pointer-events-none absolute inset-0", className)}
+    />
+  );
+}
+
 function MonthGridPanel({
   anchor,
-  items,
+  byDay,
   selectedDate,
   onSelectDate,
   weekStartsOn,
   colorOf,
   showSelectionRing,
+  animateSelection,
 }: {
   anchor: Date;
-  items: Item[];
+  /** Items bucketed by day key — built once for all three carousel panels. */
+  byDay: Map<string, Item[]>;
   selectedDate: Date | null;
   onSelectDate: (date: Date) => void;
   weekStartsOn: 0 | 1;
   colorOf: (categoryId: string) => string;
   /** Only the on-screen month panel — avoids layoutId flying in from adjacent carousel panels. */
   showSelectionRing: boolean;
+  /** False until the grid has been measured and painted once. The ring is a
+   *  shared-layout element, so on arrival it would otherwise fly in from
+   *  wherever framer last measured it (or from x=0, before the carousel knows
+   *  its width) — it should simply already be around today's date, and only
+   *  travel when you pick another day. */
+  animateSelection: boolean;
 }) {
   const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
-  const byDay = useMemo(() => groupItemsByDay(items), [items]);
   const weeks = grid.length / 7;
+  const [chipArea, setChipArea] = useState(0);
+  // Identity has to be stable or the measuring cell re-subscribes every render.
+  // The observer re-reports whenever the cell resizes, so a density change (or
+  // any relayout) updates every cell in the panel from that one measurement.
+  const onMeasure = useCallback((h: number) => setChipArea((prev) => (prev === h ? prev : h)), []);
 
   return (
     <div
       className="grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
       style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
     >
-      {grid.map(({ date, inMonth }) => {
+      {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
         const today = isToday(date);
         const selected = selectedDate && isSameDay(date, selectedDate);
@@ -199,12 +253,10 @@ function MonthGridPanel({
           >
             <span className="relative flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
               {selected && showSelectionRing && (
-                <motion.span
+                <SelectionRing
                   layoutId="month-selected-day"
-                  aria-hidden
-                  initial={false}
-                  transition={motionTokens.spring}
-                  className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-accent sm:hidden"
+                  animateSelection={animateSelection}
+                  className="rounded-full ring-2 ring-accent sm:hidden"
                 />
               )}
               <span
@@ -222,17 +274,20 @@ function MonthGridPanel({
                 {format(date, "d")}
               </span>
               {selected && showSelectionRing && (
-                <motion.span
+                <SelectionRing
                   layoutId="month-selected-day-desktop"
-                  aria-hidden
-                  initial={false}
-                  transition={motionTokens.spring}
-                  className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
+                  animateSelection={animateSelection}
+                  className="hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
                 />
               )}
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
-            <DayCellChips items={dayItems} colorOf={colorOf} />
+            <DayCellChips
+              items={dayItems}
+              colorOf={colorOf}
+              areaHeight={chipArea}
+              {...(cellIndex === 0 ? { onMeasure } : {})}
+            />
           </button>
         );
       })}
@@ -271,6 +326,10 @@ export function MonthView({
   const prevAnchor = useMemo(() => addMonths(anchor, -1), [anchor]);
   const nextAnchor = useMemo(() => addMonths(anchor, 1), [anchor]);
 
+  // Turned on one frame after the carousel has a width, so arriving on the
+  // calendar shows the ring already in place instead of animating it there.
+  const [ringAnimated, setRingAnimated] = useState(false);
+
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -279,6 +338,12 @@ export function MonthView({
     setWidth(el.clientWidth);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!width || ringAnimated) return;
+    const id = requestAnimationFrame(() => setRingAnimated(true));
+    return () => cancelAnimationFrame(id);
+  }, [width, ringAnimated]);
 
   useEffect(() => {
     dragX.set(0);
@@ -333,12 +398,15 @@ export function MonthView({
     void animate(dragX, 0, motionTokens.springSnappy);
   }
 
+  const byDay = useMemo(() => groupItemsByDay(items), [items]);
+
   const panelProps = {
-    items,
+    byDay,
     selectedDate,
     onSelectDate,
     weekStartsOn,
     colorOf,
+    animateSelection: ringAnimated,
   };
 
   return (

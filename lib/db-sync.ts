@@ -21,23 +21,49 @@ function iso(v: unknown): string {
   return d.toISOString();
 }
 
-// Set once if the account's `items` table predates migration 0002 (no `url`
-// column). PostgREST then rejects any write that carries `url` with PGRST204;
-// we strip the column and keep syncing everything else rather than wedging.
-// Links come back automatically once the migration is run.
-const STRIPPABLE_ITEM_COLS = ["url", "completed_at", "source_snapshot", "repeat", "repeat_id"] as const;
-const strippedItemCols = new Set<string>();
+/** Every category row must carry a name and a colour — both columns are NOT
+ *  NULL. A model that lost either (a half-written realtime payload, a
+ *  hand-edited backup, an older build) used to be pushed as-is and wedged the
+ *  whole write queue on `null value in column "color"`. Repair instead. */
+export const FALLBACK_CATEGORY_COLOR = "#8E8E93";
+const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
-function missingColumn(error: unknown): string | null {
+export function safeCategoryName(v: unknown): string {
+  return typeof v === "string" && v.trim() ? v.trim() : "Uncategorized";
+}
+export function safeCategoryColor(v: unknown): string {
+  if (typeof v !== "string") return FALLBACK_CATEGORY_COLOR;
+  const t = v.trim();
+  return HEX_RE.test(t) ? t : FALLBACK_CATEGORY_COLOR;
+}
+
+// Columns a project may not have yet because its SQL migrations are behind.
+// PostgREST rejects the whole write with PGRST204 when one is present; we drop
+// it, retry, and keep syncing everything else rather than wedging the queue.
+// The column starts flowing again on its own once the migration is run.
+const STRIPPABLE_COLS: Record<string, readonly string[]> = {
+  items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id"],
+  import_sources: ["last_error"],
+  user_settings: ["hide_completed", "onboarding_dismissed", "mobile_day_details"],
+};
+const stripped: Record<string, Set<string>> = {
+  items: new Set(),
+  import_sources: new Set(),
+  user_settings: new Set(),
+};
+
+function missingColumn(table: string, error: unknown): string | null {
   const e = error as { code?: string; message?: string } | null;
   if (e?.code !== "PGRST204") return null;
   const msg = e.message ?? "";
-  return STRIPPABLE_ITEM_COLS.find((col) => msg.includes(`'${col}'`)) ?? null;
+  return (STRIPPABLE_COLS[table] ?? []).find((col) => msg.includes(`'${col}'`)) ?? null;
 }
 
-function stripItemCols(rows: Row[]): Row[] {
+function stripCols(table: string, rows: Row[]): Row[] {
+  const drop = stripped[table];
+  if (!drop || drop.size === 0) return rows;
   for (const r of rows) {
-    for (const col of strippedItemCols) delete r[col];
+    for (const col of drop) delete r[col];
   }
   return rows;
 }
@@ -66,25 +92,33 @@ export function toCategoryRow(c: Category, userId: string): Row {
   return {
     id: c.id,
     user_id: userId,
-    name: c.name,
-    color: c.color,
+    name: safeCategoryName(c.name),
+    color: safeCategoryColor(c.color),
     archived: c.archived ?? false,
     source_id: c.sourceId ?? null,
   };
 }
 export function rowToCategory(r: Row): Category {
-  const rawName = r.name;
-  const name =
-    typeof rawName === "string" && rawName.trim() ? rawName.trim() : "Uncategorized";
   return {
     id: r.id as string,
-    name,
-    color: r.color as string,
+    name: safeCategoryName(r.name),
+    color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
   };
 }
 
+/**
+ * Every item row carries the same key set, always.
+ *
+ * Two things depended on that and were broken while optional columns were
+ * omitted: PostgREST rejects a bulk upsert whose objects have differing keys
+ * ("All object keys must match"), so one item with a link poisoned the batch
+ * it travelled in; and an omitted key is left untouched by the upsert, so
+ * clearing a link or a repeat rule locally never cleared it in the cloud.
+ * A project whose schema predates a column is handled by the strip-and-retry
+ * path above instead.
+ */
 export function toItemRow(i: Item, userId: string): Row {
   return {
     id: i.id,
@@ -94,9 +128,7 @@ export function toItemRow(i: Item, userId: string): Row {
     title: i.title,
     description: i.description ?? null,
     location: i.location ?? null,
-    // Only sent when set, so a DB that hasn't run the 0002 migration (no `url`
-    // column) still round-trips every item that doesn't carry a link.
-    ...(i.url ? { url: i.url } : {}),
+    url: i.url ?? null,
     at: iso(i.at),
     end_at: i.endAt ? iso(i.endAt) : null,
     all_day: i.allDay ?? false,
@@ -107,8 +139,8 @@ export function toItemRow(i: Item, userId: string): Row {
     created_at: iso(i.createdAt),
     source_id: i.sourceId ?? null,
     source_uid: i.sourceUid ?? null,
-    ...(i.repeat ? { repeat: i.repeat } : {}),
-    ...(i.repeatId ? { repeat_id: i.repeatId } : {}),
+    repeat: i.repeat ?? null,
+    repeat_id: i.repeatId ?? null,
   };
 }
 export function rowToItem(r: Row): Item {
@@ -150,10 +182,10 @@ export function toImportSourceRow(s: ImportSource, userId: string): Row {
     id: s.id,
     user_id: userId,
     url: s.url,
-    name: s.name,
+    name: typeof s.name === "string" && s.name.trim() ? s.name.trim() : "Calendar feed",
     added_at: iso(s.addedAt),
     last_synced_at: iso(s.lastSyncedAt),
-    item_count: s.itemCount,
+    item_count: s.itemCount ?? 0,
     last_error: s.lastError ?? null,
   };
 }
@@ -161,10 +193,10 @@ export function rowToImportSource(r: Row): ImportSource {
   return {
     id: r.id as string,
     url: r.url as string,
-    name: r.name as string,
+    name: typeof r.name === "string" && r.name.trim() ? r.name.trim() : "Calendar feed",
     addedAt: iso(r.added_at),
     lastSyncedAt: iso(r.last_synced_at),
-    itemCount: r.item_count as number,
+    itemCount: (r.item_count as number) ?? 0,
     ...(r.last_error ? { lastError: r.last_error as string } : {}),
   };
 }
@@ -214,69 +246,123 @@ export interface CloudSnapshot {
   settings: UserSettings | null;
 }
 
+// PostgREST caps a single response (1000 rows by default) and a single request
+// URL; both are easy to hit with a few years of imported calendar feeds.
+const PAGE_SIZE = 1000;
+const WRITE_CHUNK = 400;
+const DELETE_CHUNK = 150;
+
+/** Map models to rows, dropping (and reporting) any that can't be serialised —
+ *  one corrupt row must not block every other edit in the batch behind it, and
+ *  the batch is retried forever otherwise. */
+function mapRows<T>(models: T[], map: (m: T) => Row, label: string): Row[] {
+  const out: Row[] = [];
+  for (const m of models) {
+    try {
+      out.push(map(m));
+    } catch (err) {
+      console.warn(`[datebook] skipping unsyncable ${label}`, m, err);
+    }
+  }
+  return out;
+}
+
+function chunk<T>(rows: T[], size: number): T[][] {
+  if (rows.length <= size) return rows.length ? [rows] : [];
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+}
+
+/** Read every row of a table for a user, paging past PostgREST's row cap. */
+async function selectAllRows(
+  supabase: SupabaseClient,
+  table: string,
+  userId: string
+): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as Row[];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) return out;
+  }
+}
+
 export async function fetchAllForUser(
   supabase: SupabaseClient,
   userId: string
 ): Promise<CloudSnapshot> {
   const [c, i, rp, is, us] = await Promise.all([
-    supabase.from("categories").select("*").eq("user_id", userId),
-    supabase.from("items").select("*").eq("user_id", userId),
-    supabase.from("reminder_presets").select("*").eq("user_id", userId),
-    supabase.from("import_sources").select("*").eq("user_id", userId),
+    selectAllRows(supabase, "categories", userId),
+    selectAllRows(supabase, "items", userId),
+    selectAllRows(supabase, "reminder_presets", userId),
+    selectAllRows(supabase, "import_sources", userId),
     supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle(),
   ]);
-  for (const res of [c, i, rp, is, us]) {
-    if (res.error) throw res.error;
-  }
+  if (us.error) throw us.error;
+
+  const safeMap = <T>(rows: Row[], map: (r: Row) => T, label: string): T[] => {
+    const out: T[] = [];
+    for (const row of rows) {
+      try {
+        out.push(map(row));
+      } catch (err) {
+        console.warn(`[datebook] skipping corrupt ${label} row`, row.id, err);
+      }
+    }
+    return out;
+  };
+
   return {
-    categories: (c.data ?? []).map(rowToCategory),
-    items: (i.data ?? [])
-      .map((row) => {
-        try {
-          return rowToItem(row);
-        } catch (err) {
-          console.warn("[datebook] skipping corrupt item row", (row as Row).id, err);
-          return null;
-        }
-      })
-      .filter((item): item is Item => item !== null),
-    reminderPresets: (rp.data ?? []).map(rowToPreset),
-    importSources: (is.data ?? []).map(rowToImportSource),
-    settings: us.data ? rowToSettings(us.data) : null,
+    categories: safeMap(c, rowToCategory, "category"),
+    items: safeMap(i, rowToItem, "item"),
+    reminderPresets: safeMap(rp, rowToPreset, "reminder preset"),
+    importSources: safeMap(is, rowToImportSource, "import source"),
+    settings: us.data ? rowToSettings(us.data as Row) : null,
   };
 }
 
-async function upsertRows(supabase: SupabaseClient, table: string, rows: Row[], onConflict?: string) {
+/** Upsert rows in chunks, tolerating a schema that predates an optional column:
+ *  on the first PGRST204 we drop that column and retry, then omit it for the
+ *  rest of the session so the sync engine doesn't get stuck on it. */
+async function upsertRows(
+  supabase: SupabaseClient,
+  table: string,
+  rows: Row[],
+  onConflict?: string
+) {
   if (rows.length === 0) return;
-  const { error } = await supabase.from(table).upsert(rows, onConflict ? { onConflict } : undefined);
-  if (error) throw error;
-}
-
-/** Upsert into `items`, tolerating an account whose schema is missing the 0002
- *  `url` column: on the first PGRST204 we drop `url` and retry, then omit it for
- *  the rest of the session so the sync engine doesn't get stuck on it. */
-async function upsertItemRows(supabase: SupabaseClient, rows: Row[]) {
-  if (rows.length === 0) return;
-  stripItemCols(rows);
-  const { error } = await supabase.from("items").upsert(rows);
-  if (!error) return;
-  const col = missingColumn(error);
-  if (col) {
-    strippedItemCols.add(col);
-    console.warn(
-      `[datebook] items.${col} column not found — run supabase/migrations. Syncing without it until then.`
-    );
-    const { error: retryError } = await supabase.from("items").upsert(stripItemCols(rows));
-    if (retryError) throw retryError;
-    return;
+  stripCols(table, rows);
+  const opts = onConflict ? { onConflict } : undefined;
+  for (const batch of chunk(rows, WRITE_CHUNK)) {
+    let { error } = await supabase.from(table).upsert(batch, opts);
+    // A batch can name several missing columns, one error at a time.
+    for (let attempt = 0; error && attempt < 4; attempt += 1) {
+      const col = missingColumn(table, error);
+      if (!col) break;
+      stripped[table].add(col);
+      console.warn(
+        `[datebook] ${table}.${col} column not found — run supabase/migrations. Syncing without it until then.`
+      );
+      ({ error } = await supabase.from(table).upsert(stripCols(table, batch), opts));
+    }
+    if (error) throw error;
   }
-  throw error;
 }
 
 async function deleteRows(supabase: SupabaseClient, table: string, ids: string[], userId: string) {
   if (ids.length === 0) return;
-  const { error } = await supabase.from(table).delete().eq("user_id", userId).in("id", ids);
-  if (error) throw error;
+  for (const batch of chunk(ids, DELETE_CHUNK)) {
+    const { error } = await supabase.from(table).delete().eq("user_id", userId).in("id", batch);
+    if (error) throw error;
+  }
 }
 
 /** Drop category_id references that point at a category we aren't storing, so a
@@ -288,6 +374,10 @@ function sanitizeItemRows(rows: Row[], knownCategoryIds: Set<string>): Row[] {
   return rows;
 }
 
+async function upsertSettings(supabase: SupabaseClient, userId: string, s: UserSettings) {
+  await upsertRows(supabase, "user_settings", [toSettingsRow(s, userId)], "user_id");
+}
+
 /** Push the whole local store into an empty account (first sign-in migration). */
 export async function pushAllToCloud(
   supabase: SupabaseClient,
@@ -295,24 +385,24 @@ export async function pushAllToCloud(
   s: CloudSnapshot
 ) {
   const knownCategoryIds = new Set(s.categories.map((c) => c.id));
-  await upsertRows(supabase, "categories", s.categories.map((x) => toCategoryRow(x, userId)));
+  await upsertRows(supabase, "categories", mapRows(s.categories, (x) => toCategoryRow(x, userId), "category"));
   await upsertRows(
     supabase,
     "reminder_presets",
-    s.reminderPresets.map((x) => toPresetRow(x, userId)),
+    mapRows(s.reminderPresets, (x) => toPresetRow(x, userId), "reminder preset"),
     "user_id,id"
   );
-  await upsertRows(supabase, "import_sources", s.importSources.map((x) => toImportSourceRow(x, userId)));
-  await upsertItemRows(
+  await upsertRows(
     supabase,
-    sanitizeItemRows(s.items.map((x) => toItemRow(x, userId)), knownCategoryIds)
+    "import_sources",
+    mapRows(s.importSources, (x) => toImportSourceRow(x, userId), "import source")
   );
-  if (s.settings) {
-    const { error } = await supabase
-      .from("user_settings")
-      .upsert(toSettingsRow(s.settings, userId), { onConflict: "user_id" });
-    if (error) throw error;
-  }
+  await upsertRows(
+    supabase,
+    "items",
+    sanitizeItemRows(mapRows(s.items, (x) => toItemRow(x, userId), "item"), knownCategoryIds)
+  );
+  if (s.settings) await upsertSettings(supabase, userId, s.settings);
 }
 
 export interface CollectionDelta<T> {
@@ -335,21 +425,26 @@ export async function pushChanges(
   c: PendingChanges,
   knownCategoryIds: Set<string>
 ) {
-  await upsertRows(supabase, "categories", c.categories.upserts.map((x) => toCategoryRow(x, userId)));
+  await upsertRows(
+    supabase,
+    "categories",
+    mapRows(c.categories.upserts, (x) => toCategoryRow(x, userId), "category")
+  );
   await upsertRows(
     supabase,
     "reminder_presets",
-    c.reminderPresets.upserts.map((x) => toPresetRow(x, userId)),
+    mapRows(c.reminderPresets.upserts, (x) => toPresetRow(x, userId), "reminder preset"),
     "user_id,id"
   );
   await upsertRows(
     supabase,
     "import_sources",
-    c.importSources.upserts.map((x) => toImportSourceRow(x, userId))
+    mapRows(c.importSources.upserts, (x) => toImportSourceRow(x, userId), "import source")
   );
-  await upsertItemRows(
+  await upsertRows(
     supabase,
-    sanitizeItemRows(c.items.upserts.map((x) => toItemRow(x, userId)), knownCategoryIds)
+    "items",
+    sanitizeItemRows(mapRows(c.items.upserts, (x) => toItemRow(x, userId), "item"), knownCategoryIds)
   );
 
   await deleteRows(supabase, "items", c.items.deletes, userId);
@@ -357,12 +452,7 @@ export async function pushChanges(
   await deleteRows(supabase, "reminder_presets", c.reminderPresets.deletes, userId);
   await deleteRows(supabase, "categories", c.categories.deletes, userId);
 
-  if (c.settings) {
-    const { error } = await supabase
-      .from("user_settings")
-      .upsert(toSettingsRow(c.settings, userId), { onConflict: "user_id" });
-    if (error) throw error;
-  }
+  if (c.settings) await upsertSettings(supabase, userId, c.settings);
 }
 
 /** Shallow diff two id-keyed collections. Equality via JSON string (models are small & flat-ish). */

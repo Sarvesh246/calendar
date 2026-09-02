@@ -20,6 +20,8 @@ import {
   rowToItem,
   rowToPreset,
   rowToSettings,
+  safeCategoryColor,
+  safeCategoryName,
   type PendingChanges,
 } from "./db-sync";
 import { expandRepeat } from "./repeat";
@@ -183,7 +185,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateItem: (id, patch) => {
-        lastLocalEdit.set(id, Date.now());
+        markLocalEdit(id);
         set({
           items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
         });
@@ -205,7 +207,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       cycleItemStatus: (id) => {
-        lastLocalEdit.set(id, Date.now());
+        markLocalEdit(id);
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
@@ -218,7 +220,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       setItemStatus: (id, status) => {
-        lastLocalEdit.set(id, Date.now());
+        markLocalEdit(id);
         set({
           items: get().items.map((i) =>
             i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
@@ -227,7 +229,7 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       toggleItemDone: (id) => {
-        lastLocalEdit.set(id, Date.now());
+        markLocalEdit(id);
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
@@ -238,13 +240,23 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       addCategory: (category) => {
-        const newCategory: Category = { ...category, id: nanoid() };
+        // `categories.name` and `.color` are NOT NULL in Postgres — a blank or
+        // malformed value here would be pushed verbatim and stall the queue.
+        const newCategory: Category = {
+          ...category,
+          name: safeCategoryName(category.name),
+          color: safeCategoryColor(category.color),
+          id: nanoid(),
+        };
         set({ categories: [...get().categories, newCategory] });
         return newCategory;
       },
 
       updateCategory: (id, patch) => {
-        set({ categories: get().categories.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+        // The name is left exactly as typed (the field has to be clearable
+        // mid-edit); it's repaired on blur and again on the way to the cloud.
+        const next = "color" in patch ? { ...patch, color: safeCategoryColor(patch.color) } : patch;
+        set({ categories: get().categories.map((c) => (c.id === id ? { ...c, ...next } : c)) });
       },
 
       deleteCategory: (id) => {
@@ -367,7 +379,7 @@ export const useDatebookStore = create<DatebookState>()(
           offsetMinutes,
           label: `Snoozed ${minutes} min`,
         };
-        lastLocalEdit.set(id, Date.now());
+        markLocalEdit(id);
         set({
           items: get().items.map((i) =>
             i.id === id ? mergeItem(i, { reminders: [...(i.reminders ?? []), reminder] }) : i
@@ -687,6 +699,7 @@ export const useDatebookStore = create<DatebookState>()(
         suspended = false;
         clearPending();
         clearFlushRetry();
+        lastLocalEdit.clear();
 
         let next = {
           items: [] as Item[],
@@ -829,7 +842,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -915,6 +928,20 @@ let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
 const lastLocalEdit = new Map<string, number>();
+/** How long a local edit outranks an incoming realtime row for the same item. */
+const LOCAL_EDIT_TTL_MS = 30_000;
+
+/** Note an edit and drop expired entries, so a long session editing thousands
+ *  of items doesn't grow this map forever. */
+function markLocalEdit(id: string) {
+  const now = Date.now();
+  lastLocalEdit.set(id, now);
+  if (lastLocalEdit.size > 200) {
+    for (const [key, at] of lastLocalEdit) {
+      if (now - at > LOCAL_EDIT_TTL_MS) lastLocalEdit.delete(key);
+    }
+  }
+}
 let pendingMerge: { userId: string; cloud: CalendarSnapshot } | null = null;
 // The user we WANT to be synced as — set the moment connectCloud starts, and
 // kept even while `activeUserId` is briefly null between a failed connect and
@@ -1241,7 +1268,7 @@ function applyRealtime(
       const idx = current.findIndex((x) => x.id === model.id);
       if (key === "items" && idx !== -1) {
         const edited = lastLocalEdit.get(model.id);
-        if (edited && Date.now() - edited < 30_000) {
+        if (edited && Date.now() - edited < LOCAL_EDIT_TTL_MS) {
           const prev = current[idx] as Item;
           if (JSON.stringify(prev) !== JSON.stringify(model)) {
             useDatebookStore.setState({
@@ -1285,6 +1312,25 @@ function scheduleConnectRetry(userId: string) {
   }, delay);
 }
 
+/** Rows the cloud no longer has (and that aren't waiting to be pushed) were
+ *  deleted elsewhere — drop them instead of resurrecting them in the merge. */
+function dropRemotelyDeleted<T extends { id: string }>(local: T[], cloud: T[]): T[] {
+  if (local.length === 0) return local;
+  const ids = new Set(cloud.map((x) => x.id));
+  const next = local.filter((x) => ids.has(x.id));
+  return next.length === local.length ? local : next;
+}
+
+/** Same, but an imported item may legitimately exist under a different id on
+ *  each device; the feed's own UID identifies it across them. */
+function dropRemotelyDeletedItems(local: Item[], cloud: Item[]): Item[] {
+  if (local.length === 0) return local;
+  const ids = new Set(cloud.map((i) => i.id));
+  const uids = new Set(cloud.filter((i) => i.sourceUid).map((i) => i.sourceUid as string));
+  const next = local.filter((i) => ids.has(i.id) || (i.sourceUid ? uids.has(i.sourceUid) : false));
+  return next.length === local.length ? local : next;
+}
+
 /** Pull the full cloud snapshot and apply it — used after a realtime gap
  *  (reconnect, or returning from the background) where change events were missed.
  *  Local unsynced edits take priority: if any are queued we push instead. */
@@ -1304,12 +1350,16 @@ async function catchUpFromCloud(userId: string) {
       return;
     }
     const local = useDatebookStore.getState();
+    // Nothing is queued and nothing is in flight, so every local row has
+    // already been accepted by the cloud. Anything the cloud no longer has was
+    // therefore deleted on another device — union-merging it back is how a
+    // deletion used to "come back from the dead" on the next reconnect.
     const merged = mergeCalendars(
       {
-        categories: local.categories,
-        items: local.items,
+        categories: dropRemotelyDeleted(local.categories, cloud.categories),
+        items: dropRemotelyDeletedItems(local.items, cloud.items),
         reminderPresets: local.reminderPresets,
-        importSources: local.importSources,
+        importSources: dropRemotelyDeleted(local.importSources, cloud.importSources),
         settings: local.settings,
       },
       {

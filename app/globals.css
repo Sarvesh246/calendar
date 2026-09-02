@@ -336,7 +336,7 @@
   --keyboard-inset: 0px;
   /* Space reserved so titles clear the floating glass cluster. The page
      itself stays continuous — no opaque header strip. */
-  --mobile-header-height: calc(env(safe-area-inset-top) + 3.5rem);
+  --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
   --page-gap: 2rem;
   --card-pad-y: 0.75rem;
   --card-pad-x: 1rem;
@@ -752,6 +752,15 @@ html[data-first-load="1"] .page-shell > * > * {
 }
 .page-shell > * > *:nth-child(n + 7) {
   animation-delay: 165ms;
+}
+
+/* …but not on the three tab routes. Switching tabs already has its own
+   motion — the pill travelling under your thumb — and replaying a 165ms
+   staggered reveal of every section on top of it made a swap that should feel
+   immediate read as a stutter. The stagger stays where it earns its keep: the
+   first arrival at a page you navigated to deliberately (Settings). */
+.route-enter-instant > * > * {
+  animation: none;
 }
 
 /* Assistant sheet + backdrop — pure CSS enter/exit so visibility never rides on

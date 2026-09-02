@@ -189,14 +189,32 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const tabWidth = trackWidth / NAV.length;
   const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
 
-  const pillSpring = { type: "spring" as const, stiffness: 380, damping: 24, mass: 0.68 };
+  // Mass and damping tuned so a released pill settles once, without the second
+  // bounce that read as a stutter at the end of every swipe.
+  const pillSpring = { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.6 };
+  const settled = useRef(false);
+  // Where the pill is currently springing to, so the route-change effect below
+  // doesn't restart an animation that is already heading to the right tab.
+  const settleTarget = useRef<number | null>(null);
+
+  /** Move the pill to a tab, folding any in-progress drag into the resting
+   *  offset first so the spring starts from where the finger left it. */
+  function settlePillTo(index: number) {
+    if (!tabWidth) return;
+    const target = index * tabWidth;
+    baseX.set(baseX.get() + dragX.get());
+    dragX.set(0);
+    settleTarget.current = target;
+    void animate(baseX, target, pillSpring).then(() => {
+      if (settleTarget.current === target) settleTarget.current = null;
+    });
+  }
 
   function navigateTo(index: number) {
     if (index === activeIndex) return;
     haptic("light");
+    settlePillTo(index);
     router.push(NAV[index].href);
-    void animate(baseX, index * tabWidth, pillSpring);
-    dragX.set(0);
   }
 
   useEffect(() => {
@@ -208,11 +226,32 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     return () => ro.disconnect();
   }, []);
 
+  // Keep the pill in sync with the route (back/forward, a link elsewhere in the
+  // app, a resize). This used to hard-`set()` the position, which snapped the
+  // pill mid-flight and killed the spring started on release — the jump people
+  // saw after dragging and letting go. Now it only animates when it is actually
+  // out of place, so the release spring is left to finish on its own.
+  const lastTabWidth = useRef(0);
   useEffect(() => {
     if (!tabWidth || dragging.current) return;
-    baseX.set(activeIndex * tabWidth);
-    dragX.set(0);
     indexAtStart.current = activeIndex;
+    const target = activeIndex * tabWidth;
+    // First measurement, or the bar changed size (rotation, keyboard, resize):
+    // put the pill where it belongs instead of gliding it there.
+    if (!settled.current || lastTabWidth.current !== tabWidth) {
+      settled.current = true;
+      lastTabWidth.current = tabWidth;
+      settleTarget.current = null;
+      baseX.set(target);
+      dragX.set(0);
+      return;
+    }
+    if (settleTarget.current === target) return; // already on its way there
+    if (Math.abs(baseX.get() + dragX.get() - target) < 0.5) return;
+    settlePillTo(activeIndex);
+    // `pillSpring` and `settlePillTo` are stable for a given tabWidth; listing
+    // them would restart the spring on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, tabWidth, baseX, dragX]);
 
   function onPointerDown(e: React.PointerEvent) {
@@ -252,22 +291,20 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     const target = Math.round(indexAtStart.current + moved);
     const clamped = Math.max(0, Math.min(NAV.length - 1, target));
 
+    // Either way the pill settles on a spring from where it was released; a
+    // navigation just changes which tab it settles on.
+    settlePillTo(clamped);
     if (clamped !== activeIndex) {
-      navigateTo(clamped);
-      return;
+      haptic("light");
+      router.push(NAV[clamped].href);
     }
-
-    void Promise.all([
-      animate(baseX, activeIndex * tabWidth, pillSpring),
-      animate(dragX, 0, pillSpring),
-    ]);
   }
 
   function onPointerCancel() {
     dragging.current = false;
     setIsDragging(false);
     pointerId.current = null;
-    void animate(dragX, 0, pillSpring);
+    settlePillTo(activeIndex);
   }
 
   return (
@@ -284,7 +321,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
           <motion.span
             aria-hidden
             className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
-            style={{ width: tabWidth, x: pillX }}
+            style={{ width: tabWidth, x: pillX, willChange: "transform" }}
             animate={{ scale: isDragging ? 1.015 : 1 }}
             transition={pillSpring}
           />
