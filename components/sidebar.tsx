@@ -318,7 +318,10 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
+    // `viewport-pinned-bottom` keeps the bar on the window's bottom edge while
+    // the keyboard is up, instead of riding the viewport shift up over the
+    // keyboard and dropping back a beat after it closes.
+    <nav className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.6rem)] md:hidden">
       <div
         ref={navRef}
         onPointerDown={onPointerDown}

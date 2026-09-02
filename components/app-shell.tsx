@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           size="fab"
           onClick={openAdd}
           aria-label="Add item"
-          className="fixed right-4 z-40 md:hidden"
+          className="viewport-pinned-bottom fixed right-4 z-40 md:hidden"
           style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.25rem)" }}
         >
           <Plus className="h-6 w-6" strokeWidth={2.25} />
@@ -155,7 +155,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="overlay-scrim-light fixed inset-0 z-[45]"
+            className="viewport-pinned-top overlay-scrim-light fixed inset-0 z-[45]"
             onClick={closeQuickAdd}
             onPointerDown={closeQuickAdd}
           />
@@ -176,7 +176,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             transition={motionTokens.spring}
             style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
             className={cn(
-              "fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
+              "viewport-pinned-top fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
               onToday && "md:hidden"
             )}
           >

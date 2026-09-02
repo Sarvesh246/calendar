@@ -70,6 +70,7 @@ export function AIDrawer() {
   // `${messageIndex}:${actionIndex}` → outcome
   const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
 
   // Keep the sheet mounted through its exit animation, then drop it. The enter/
@@ -83,6 +84,12 @@ export function AIDrawer() {
       setPresent(true);
       return;
     }
+    // Hand focus back now rather than letting the field take it to the grave
+    // 190ms later when the sheet unmounts. Tapping a button doesn't blur an
+    // input on iOS, so without this the keyboard — and the viewport shift it
+    // holds the page in — only starts unwinding once the sheet has already
+    // gone, which is what left the tab bar hanging in mid-air afterwards.
+    inputRef.current?.blur();
     const t = setTimeout(() => setPresent(false), 190);
     return () => clearTimeout(t);
   }, [open]);
@@ -379,6 +386,7 @@ export function AIDrawer() {
             )}
             <div className="flex items-center gap-2">
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && ask(input)}
