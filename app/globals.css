@@ -334,6 +334,10 @@
   /* Height the on-screen keyboard is currently covering, published by
      useKeyboardInset(). 0 unless a field is focused on a soft-keyboard device. */
   --keyboard-inset: 0px;
+  /* How far the app's own fixed chrome has to be pushed back down to stay on
+     the window edge while the keyboard is up — also useKeyboardInset(). */
+  --viewport-pan: 0px;
+  --viewport-shrink: 0px;
   /* Space reserved so titles clear the floating glass cluster. The page
      itself stays continuous — no opaque header strip. */
   --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
@@ -423,6 +427,30 @@ body {
 html.scroll-locked,
 html.scroll-locked body {
   overflow: hidden;
+}
+
+/* Keep the app's own fixed chrome welded to the device window while the
+   on-screen keyboard is up.
+
+   `position: fixed` is laid out against the *layout* viewport, which the
+   keyboard moves out from under it: iOS pans the visual viewport up to reveal
+   the focused field, other browsers shrink the layout viewport outright. Either
+   way the bottom tab bar lifts off the window edge and floats above the
+   keyboard, and because the browser unwinds that on its own schedule it hangs
+   there for a beat after the sheet has closed before snapping back — the page
+   reads as two pieces that move separately.
+
+   Cancelling the offset costs nothing visually (the chrome simply stays put and
+   the keyboard covers it, as it does natively) and the snap-back disappears
+   with it, because the chrome never moved in the first place. Uses the
+   independent `translate` property, so it composes with `transform` from
+   framer-motion or a press animation instead of fighting it. */
+.viewport-pinned-top {
+  translate: 0 var(--viewport-pan, 0px);
+}
+
+.viewport-pinned-bottom {
+  translate: 0 calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px));
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
