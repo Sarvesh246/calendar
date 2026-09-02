@@ -6,6 +6,7 @@ import type {
   ReminderPreset,
   UserSettings,
 } from "./types";
+import { tombKey, type EntityKind, type TombstoneMap } from "./tombstones";
 
 /* ------------------------------------------------------------------ */
 /* Row <-> client-model mappers                                        */
@@ -13,6 +14,11 @@ import type {
 /* ------------------------------------------------------------------ */
 
 type Row = Record<string, unknown>;
+function isoOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const d = new Date(v as string);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 function iso(v: unknown): string {
   const d = new Date(v as string);
   if (Number.isNaN(d.getTime())) {
@@ -96,6 +102,7 @@ export function toCategoryRow(c: Category, userId: string): Row {
     color: safeCategoryColor(c.color),
     archived: c.archived ?? false,
     source_id: c.sourceId ?? null,
+    updated_at: c.updatedAt ?? new Date().toISOString(),
   };
 }
 export function rowToCategory(r: Row): Category {
@@ -105,6 +112,7 @@ export function rowToCategory(r: Row): Category {
     color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
+    ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }
 
@@ -141,6 +149,9 @@ export function toItemRow(i: Item, userId: string): Row {
     source_uid: i.sourceUid ?? null,
     repeat: i.repeat ?? null,
     repeat_id: i.repeatId ?? null,
+    // The time of the edit itself, not of the upload. Merges compare these to
+    // decide which device's version of a row survives.
+    updated_at: i.updatedAt ?? i.createdAt,
   };
 }
 export function rowToItem(r: Row): Item {
@@ -167,6 +178,7 @@ export function rowToItem(r: Row): Item {
       : {}),
     ...(r.repeat && typeof r.repeat === "object" ? { repeat: r.repeat as Item["repeat"] } : {}),
     ...(r.repeat_id ? { repeatId: r.repeat_id as string } : {}),
+    ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }
 
@@ -187,6 +199,7 @@ export function toImportSourceRow(s: ImportSource, userId: string): Row {
     last_synced_at: iso(s.lastSyncedAt),
     item_count: s.itemCount ?? 0,
     last_error: s.lastError ?? null,
+    updated_at: s.updatedAt ?? s.lastSyncedAt,
   };
 }
 export function rowToImportSource(r: Row): ImportSource {
@@ -198,6 +211,7 @@ export function rowToImportSource(r: Row): ImportSource {
     lastSyncedAt: iso(r.last_synced_at),
     itemCount: (r.item_count as number) ?? 0,
     ...(r.last_error ? { lastError: r.last_error as string } : {}),
+    ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }
 
@@ -215,6 +229,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
+    updated_at: s.updatedAt ?? new Date().toISOString(),
   };
 }
 export function rowToSettings(r: Row): UserSettings {
@@ -231,6 +246,7 @@ export function rowToSettings(r: Row): UserSettings {
     mobileDayDetails:
       r.mobile_day_details === "inline" ? "inline" : "sheet",
     ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
+    ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }
 
@@ -244,6 +260,89 @@ export interface CloudSnapshot {
   reminderPresets: ReminderPreset[];
   importSources: ImportSource[];
   settings: UserSettings | null;
+  /** Everything this account has deleted on any device, so a reconcile can
+   *  honour deletes it never saw happen. */
+  deletions: TombstoneMap;
+}
+
+/** What `pushAllToCloud` writes — tombstones travel on their own path. */
+export type PushableSnapshot = Omit<CloudSnapshot, "deletions">;
+
+/* ------------------------------------------------------------------ */
+/* Deletion tombstones                                                 */
+/* ------------------------------------------------------------------ */
+
+// Set if the project's schema predates migration 0006 (no `deletions` table).
+// Everything else keeps syncing without it — deletes just don't reach a device
+// that was offline when they happened — so we degrade instead of failing.
+let deletionsUnavailable = false;
+
+function isMissingTable(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  // PGRST205: absent from PostgREST's schema cache. 42P01: undefined table.
+  return e.code === "PGRST205" || e.code === "42P01";
+}
+
+export async function fetchDeletions(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<TombstoneMap> {
+  if (deletionsUnavailable) return {};
+  const { data, error } = await supabase
+    .from("deletions")
+    .select("entity,entity_id,deleted_at")
+    .eq("user_id", userId);
+  if (error) {
+    if (isMissingTable(error)) {
+      deletionsUnavailable = true;
+      console.warn(
+        "[datebook] `deletions` table not found — run supabase/migrations/0006. " +
+          "Until then, a delete made while a device is offline won't reach it."
+      );
+    } else {
+      console.warn("[datebook] tombstone fetch failed:", describeError(error));
+    }
+    return {};
+  }
+  const out: TombstoneMap = {};
+  for (const row of (data ?? []) as Row[]) {
+    const at = isoOrNull(row.deleted_at);
+    if (!at || typeof row.entity !== "string") continue;
+    out[tombKey(row.entity as EntityKind, String(row.entity_id))] = at;
+  }
+  return out;
+}
+
+export async function pushDeletions(
+  supabase: SupabaseClient,
+  userId: string,
+  tombstones: TombstoneMap
+) {
+  if (deletionsUnavailable) return;
+  const rows = Object.entries(tombstones).map(([key, at]) => {
+    const sep = key.indexOf(":");
+    return {
+      user_id: userId,
+      entity: key.slice(0, sep),
+      entity_id: key.slice(sep + 1),
+      deleted_at: at,
+    };
+  });
+  if (rows.length === 0) return;
+  for (const batch of chunk(rows, WRITE_CHUNK)) {
+    const { error } = await supabase
+      .from("deletions")
+      .upsert(batch, { onConflict: "user_id,entity,entity_id" });
+    if (error) {
+      if (isMissingTable(error)) {
+        deletionsUnavailable = true;
+        console.warn("[datebook] `deletions` table not found — run supabase/migrations/0006.");
+        return;
+      }
+      throw error;
+    }
+  }
 }
 
 // PostgREST caps a single response (1000 rows by default) and a single request
@@ -299,12 +398,15 @@ export async function fetchAllForUser(
   supabase: SupabaseClient,
   userId: string
 ): Promise<CloudSnapshot> {
-  const [c, i, rp, is, us] = await Promise.all([
+  const [c, i, rp, is, us, deletions] = await Promise.all([
     selectAllRows(supabase, "categories", userId),
     selectAllRows(supabase, "items", userId),
     selectAllRows(supabase, "reminder_presets", userId),
     selectAllRows(supabase, "import_sources", userId),
     supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle(),
+    // Never rejects and tolerates a schema without the table, so a project that
+    // hasn't run migration 0006 still connects normally.
+    fetchDeletions(supabase, userId),
   ]);
   if (us.error) throw us.error;
 
@@ -326,6 +428,7 @@ export async function fetchAllForUser(
     reminderPresets: safeMap(rp, rowToPreset, "reminder preset"),
     importSources: safeMap(is, rowToImportSource, "import source"),
     settings: us.data ? rowToSettings(us.data as Row) : null,
+    deletions,
   };
 }
 
@@ -382,7 +485,7 @@ async function upsertSettings(supabase: SupabaseClient, userId: string, s: UserS
 export async function pushAllToCloud(
   supabase: SupabaseClient,
   userId: string,
-  s: CloudSnapshot
+  s: PushableSnapshot
 ) {
   const knownCategoryIds = new Set(s.categories.map((c) => c.id));
   await upsertRows(supabase, "categories", mapRows(s.categories, (x) => toCategoryRow(x, userId), "category"));
@@ -415,6 +518,8 @@ export interface PendingChanges {
   importSources: CollectionDelta<ImportSource>;
   items: CollectionDelta<Item>;
   settings: UserSettings | null;
+  /** Tombstones recorded since the last successful push. */
+  deletions: TombstoneMap;
 }
 
 /** Apply one debounced batch of local edits to the cloud, respecting FK order.
@@ -446,6 +551,11 @@ export async function pushChanges(
     "items",
     sanitizeItemRows(mapRows(c.items.upserts, (x) => toItemRow(x, userId), "item"), knownCategoryIds)
   );
+
+  // Tombstones before the deletes: if the connection drops between the two, a
+  // recorded delete that hasn't happened yet is harmless — the next reconcile
+  // applies it — whereas a delete with no tombstone is how rows come back.
+  await pushDeletions(supabase, userId, c.deletions);
 
   await deleteRows(supabase, "items", c.items.deletes, userId);
   await deleteRows(supabase, "import_sources", c.importSources.deletes, userId);

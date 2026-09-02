@@ -5,6 +5,14 @@ import { useDatebookStore } from "@/lib/store";
 import { fetchCalendarFeed } from "@/lib/calendar-import";
 
 const INTERVAL_MS = 30 * 60 * 1000;
+// A feed's `lastSyncedAt` syncs across devices, so this also stops a phone and a
+// laptop from both re-pulling (and re-writing) the same feed minutes apart.
+const STALE_MS = 25 * 60 * 1000;
+
+function isStale(lastSyncedAt: string) {
+  const t = Date.parse(lastSyncedAt);
+  return Number.isNaN(t) || Date.now() - t > STALE_MS;
+}
 
 /** Re-fetch subscribed calendar feeds in the background. */
 export function FeedSync() {
@@ -21,6 +29,7 @@ export function FeedSync() {
       running.current = true;
       try {
         for (const source of useDatebookStore.getState().importSources) {
+          if (!isStale(source.lastSyncedAt)) continue;
           try {
             const feed = await fetchCalendarFeed(source.url);
             applyImport(source.url, feed);

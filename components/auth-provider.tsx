@@ -92,7 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unsubHydration = persist.onFinishHydration(start);
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // The realtime socket authenticates once, at join time. When the access
+      // token is rotated (roughly hourly) the socket keeps using the old one and
+      // eventually gets dropped mid-session — live updates would quietly stop on
+      // a tab that had been open a while. Hand it the fresh token instead.
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+        void supabase?.realtime.setAuth();
+      }
       sync(session?.user ?? null);
     });
 
