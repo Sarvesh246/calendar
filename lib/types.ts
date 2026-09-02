@@ -20,6 +20,8 @@ export interface Category {
   archived?: boolean;
   /** Set when auto-created for an imported feed; cleaned up when that feed is removed. */
   sourceId?: string;
+  /** ISO datetime of the last local edit — the tiebreaker when two devices disagree. */
+  updatedAt?: string;
 }
 
 export interface Reminder {
@@ -63,6 +65,8 @@ export interface Item {
   sourceUid?: string;
   /** Feed field values from the last sync; local edits to those fields are preserved. */
   sourceSnapshot?: SourceSnapshot;
+  /** ISO datetime of the last local edit — the tiebreaker when two devices disagree. */
+  updatedAt?: string;
 }
 
 /** A subscribed calendar feed (Canvas, Google, Outlook, …) the items were imported from. */
@@ -75,6 +79,8 @@ export interface ImportSource {
   itemCount: number;
   /** Set when the last background or manual sync failed. Cleared on success. */
   lastError?: string;
+  /** ISO datetime of the last local edit — the tiebreaker when two devices disagree. */
+  updatedAt?: string;
 }
 
 export type AppearancePreset =
@@ -114,4 +120,6 @@ export interface UserSettings {
   mobileDayDetails: MobileDayDetails;
   /** Hide the first-run empty-state card. */
   onboardingDismissed?: boolean;
+  /** ISO datetime of the last local edit — the tiebreaker when two devices disagree. */
+  updatedAt?: string;
 }

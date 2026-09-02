@@ -22,8 +22,18 @@ import {
   rowToSettings,
   safeCategoryColor,
   safeCategoryName,
+  type CloudSnapshot,
   type PendingChanges,
 } from "./db-sync";
+import {
+  isDeleted,
+  mergeTombstones,
+  pruneTombstones,
+  tombKey,
+  time,
+  type EntityKind,
+  type TombstoneMap,
+} from "./tombstones";
 import { expandRepeat } from "./repeat";
 import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
 import {
@@ -63,6 +73,8 @@ interface DatebookState {
   reminderPresets: ReminderPreset[];
   settings: UserSettings;
   importSources: ImportSource[];
+  /** Deletes made on this device, so a reconcile can't resurrect them. Persisted. */
+  deletions: TombstoneMap;
 
   // Cloud sync (transient — not persisted)
   mode: SyncMode;
@@ -139,6 +151,7 @@ export const useDatebookStore = create<DatebookState>()(
       reminderPresets: defaultReminderPresets,
       settings: defaultSettings,
       importSources: [],
+      deletions: {},
       lastDeleted: null,
 
       mode: "local",
@@ -160,6 +173,7 @@ export const useDatebookStore = create<DatebookState>()(
               ...occ,
               id,
               createdAt,
+              updatedAt: createdAt,
               repeatId: seriesId,
               repeat: item.repeat,
             };
@@ -175,6 +189,7 @@ export const useDatebookStore = create<DatebookState>()(
           ...item,
           id: nanoid(),
           createdAt,
+          updatedAt: createdAt,
           reminders: item.reminders?.map((r) => ({ ...r, itemId: r.itemId || "" })),
         };
         if (newItem.reminders) {
@@ -185,7 +200,6 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateItem: (id, patch) => {
-        markLocalEdit(id);
         set({
           items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
         });
@@ -193,7 +207,11 @@ export const useDatebookStore = create<DatebookState>()(
 
       deleteItem: (id) => {
         const item = get().items.find((i) => i.id === id) ?? null;
-        set({ items: get().items.filter((i) => i.id !== id), lastDeleted: item });
+        set({
+          items: get().items.filter((i) => i.id !== id),
+          lastDeleted: item,
+          deletions: addTombstones(get().deletions, "item", [id]),
+        });
       },
 
       restoreLastDeleted: () => {
@@ -203,11 +221,16 @@ export const useDatebookStore = create<DatebookState>()(
           set({ lastDeleted: null });
           return;
         }
-        set({ items: [...get().items, item], lastDeleted: null });
+        // Undo has to out-rank its own tombstone, or the next reconcile would
+        // take the item straight back off the screen.
+        set({
+          items: [...get().items, { ...item, updatedAt: nowIso() }],
+          lastDeleted: null,
+          deletions: dropTombstones(get().deletions, "item", [item.id]),
+        });
       },
 
       cycleItemStatus: (id) => {
-        markLocalEdit(id);
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
@@ -220,7 +243,6 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       setItemStatus: (id, status) => {
-        markLocalEdit(id);
         set({
           items: get().items.map((i) =>
             i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
@@ -229,7 +251,6 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       toggleItemDone: (id) => {
-        markLocalEdit(id);
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
@@ -247,6 +268,7 @@ export const useDatebookStore = create<DatebookState>()(
           name: safeCategoryName(category.name),
           color: safeCategoryColor(category.color),
           id: nanoid(),
+          updatedAt: nowIso(),
         };
         set({ categories: [...get().categories, newCategory] });
         return newCategory;
@@ -256,7 +278,11 @@ export const useDatebookStore = create<DatebookState>()(
         // The name is left exactly as typed (the field has to be clearable
         // mid-edit); it's repaired on blur and again on the way to the cloud.
         const next = "color" in patch ? { ...patch, color: safeCategoryColor(patch.color) } : patch;
-        set({ categories: get().categories.map((c) => (c.id === id ? { ...c, ...next } : c)) });
+        set({
+          categories: get().categories.map((c) =>
+            c.id === id ? { ...c, ...next, updatedAt: nowIso() } : c
+          ),
+        });
       },
 
       deleteCategory: (id) => {
@@ -266,12 +292,15 @@ export const useDatebookStore = create<DatebookState>()(
         if (!fallback) return;
         set({
           categories: cats.filter((c) => c.id !== id),
-          items: get().items.map((i) => (i.categoryId === id ? { ...i, categoryId: fallback.id } : i)),
+          items: get().items.map((i) =>
+            i.categoryId === id ? { ...i, categoryId: fallback.id, updatedAt: nowIso() } : i
+          ),
+          deletions: addTombstones(get().deletions, "category", [id]),
         });
       },
 
       updateSettings: (patch) => {
-        set({ settings: { ...get().settings, ...patch } });
+        set({ settings: { ...get().settings, ...patch, updatedAt: nowIso() } });
       },
 
       applyImport: (url, feed) => {
@@ -293,8 +322,9 @@ export const useDatebookStore = create<DatebookState>()(
           const draft = incoming.get(item.sourceUid);
           if (!draft) return item;
           const next = mergeImportedItem(item, draft);
-          if (importedFieldsChanged(item, next)) updated += 1;
-          return next;
+          if (!importedFieldsChanged(item, next)) return item;
+          updated += 1;
+          return { ...next, updatedAt: nowIso() };
         });
 
         const known = new Set(
@@ -302,19 +332,20 @@ export const useDatebookStore = create<DatebookState>()(
         );
 
         // Drop items that vanished from the feed — but keep ones marked done.
-        const beforePrune = merged.length;
-        const pruned = merged.filter(
+        const dropped = merged.filter(
           (i) =>
-            i.sourceId !== sourceId ||
-            !i.sourceUid ||
-            incoming.has(i.sourceUid) ||
-            i.status === "done"
+            i.sourceId === sourceId &&
+            i.sourceUid &&
+            !incoming.has(i.sourceUid) &&
+            i.status !== "done"
         );
-        const removed = beforePrune - pruned.length;
+        const droppedIds = new Set(dropped.map((i) => i.id));
+        const pruned = merged.filter((i) => !droppedIds.has(i.id));
+        const removed = dropped.length;
 
         for (const draft of drafts) {
           if (known.has(draft.sourceUid)) continue;
-          pruned.push({ ...draft, id: nanoid(), createdAt: new Date().toISOString() });
+          pruned.push({ ...draft, id: nanoid(), createdAt: nowIso(), updatedAt: nowIso() });
           added += 1;
         }
 
@@ -327,14 +358,18 @@ export const useDatebookStore = create<DatebookState>()(
           addedAt: existing?.addedAt ?? now,
           lastSyncedAt: now,
           itemCount: drafts.length,
+          updatedAt: now,
         };
 
         set({
           items: pruned,
-          categories: [...categories, ...newCategories],
+          categories: [...categories, ...newCategories.map((c) => ({ ...c, updatedAt: now }))],
           importSources: existing
             ? state.importSources.map((s) => (s.id === sourceId ? source : s))
             : [...state.importSources, source],
+          // An event dropped from the feed is a delete like any other — without a
+          // tombstone the other device pushes it straight back.
+          deletions: addTombstones(state.deletions, "item", [...droppedIds]),
         });
 
         return { added, updated, removed };
@@ -342,16 +377,31 @@ export const useDatebookStore = create<DatebookState>()(
 
       removeImportSource: (id, deleteItems) => {
         set((state) => {
+          const removedItemIds = deleteItems
+            ? state.items.filter((i) => i.sourceId === id).map((i) => i.id)
+            : [];
           const items = deleteItems
             ? state.items.filter((i) => i.sourceId !== id)
             : state.items.map((i) =>
-                i.sourceId === id ? { ...i, sourceId: undefined, sourceUid: undefined } : i
+                i.sourceId === id
+                  ? { ...i, sourceId: undefined, sourceUid: undefined, updatedAt: nowIso() }
+                  : i
               );
           const inUse = new Set(items.map((i) => i.categoryId));
+          const categories = state.categories.filter((c) => c.sourceId !== id || inUse.has(c.id));
+          const keptCategoryIds = new Set(categories.map((c) => c.id));
+          let deletions = addTombstones(state.deletions, "import_source", [id]);
+          deletions = addTombstones(deletions, "item", removedItemIds);
+          deletions = addTombstones(
+            deletions,
+            "category",
+            state.categories.filter((c) => !keptCategoryIds.has(c.id)).map((c) => c.id)
+          );
           return {
             importSources: state.importSources.filter((s) => s.id !== id),
             items,
-            categories: state.categories.filter((c) => c.sourceId !== id || inUse.has(c.id)),
+            categories,
+            deletions,
           };
         });
       },
@@ -359,13 +409,17 @@ export const useDatebookStore = create<DatebookState>()(
       markImportError: (url, message) => {
         set({
           importSources: get().importSources.map((s) =>
-            s.url === url ? { ...s, lastError: message } : s
+            s.url === url ? { ...s, lastError: message, updatedAt: nowIso() } : s
           ),
         });
       },
 
       deleteSeries: (repeatId) => {
-        set({ items: get().items.filter((i) => i.repeatId !== repeatId) });
+        const gone = get().items.filter((i) => i.repeatId === repeatId).map((i) => i.id);
+        set({
+          items: get().items.filter((i) => i.repeatId !== repeatId),
+          deletions: addTombstones(get().deletions, "item", gone),
+        });
       },
 
       snoozeItem: (id, minutes = 15) => {
@@ -379,7 +433,6 @@ export const useDatebookStore = create<DatebookState>()(
           offsetMinutes,
           label: `Snoozed ${minutes} min`,
         };
-        markLocalEdit(id);
         set({
           items: get().items.map((i) =>
             i.id === id ? mergeItem(i, { reminders: [...(i.reminders ?? []), reminder] }) : i
@@ -395,7 +448,7 @@ export const useDatebookStore = create<DatebookState>()(
           set({
             items: get().items.map((i) => {
               if (i.id !== id) return i;
-              const next = { ...i };
+              const next = { ...i, updatedAt: nowIso() };
               delete next.repeat;
               delete next.repeatId;
               return next;
@@ -407,43 +460,75 @@ export const useDatebookStore = create<DatebookState>()(
         const occs = expandRepeat(item.at, item.endAt, rule);
         const created: Item[] = occs.map((occ, idx) => {
           if (idx === 0) {
-            return { ...item, ...occ, repeat: rule, repeatId: seriesId };
+            return { ...item, ...occ, repeat: rule, repeatId: seriesId, updatedAt: nowIso() };
           }
           const nid = nanoid();
           return {
             ...item,
             ...occ,
             id: nid,
-            createdAt: new Date().toISOString(),
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
             repeat: rule,
             repeatId: seriesId,
             reminders: item.reminders?.map((r) => ({ ...r, itemId: nid })),
           };
         });
+        const replaced = others.filter((i) => i.repeatId === seriesId).map((i) => i.id);
         const stripped = others.filter((i) => i.repeatId !== seriesId);
-        set({ items: [...stripped, ...created] });
+        const keep = new Set(created.map((i) => i.id));
+        set({
+          items: [...stripped, ...created],
+          deletions: addTombstones(
+            get().deletions,
+            "item",
+            replaced.filter((id) => !keep.has(id))
+          ),
+        });
       },
 
       resetAllData: () => {
+        const s = get();
         set({
           items: [],
           categories: [...defaultCategories],
           reminderPresets: [...defaultReminderPresets],
           importSources: [],
           lastDeleted: null,
-          settings: { ...get().settings, onboardingDismissed: false },
+          settings: { ...s.settings, onboardingDismissed: false, updatedAt: nowIso() },
+          // Reset means reset everywhere — without tombstones the next device to
+          // reconcile pushes the whole calendar back up.
+          deletions: tombstonesForWipe(s),
         });
       },
 
       replaceFromBackup: (backup) => {
+        const prev = get();
+        const categories = backup.categories?.length ? backup.categories : [...defaultCategories];
+        const importSources = backup.importSources ?? [];
+        const gone = <T extends { id: string }>(before: T[], after: T[]) => {
+          const kept = new Set(after.map((x) => x.id));
+          return before.filter((x) => !kept.has(x.id)).map((x) => x.id);
+        };
+        // Restoring a backup replaces the calendar, so everything it drops has to
+        // be tombstoned — otherwise the other device pushes the old rows back.
+        let deletions = addTombstones(prev.deletions, "item", gone(prev.items, backup.items ?? []));
+        deletions = addTombstones(deletions, "category", gone(prev.categories, categories));
+        deletions = addTombstones(
+          deletions,
+          "import_source",
+          gone(prev.importSources, importSources)
+        );
+        const stamp = nowIso();
         set({
-          items: backup.items ?? [],
-          categories: backup.categories?.length ? backup.categories : [...defaultCategories],
+          deletions,
+          items: (backup.items ?? []).map((i) => ({ ...i, updatedAt: stamp })),
+          categories: categories.map((c) => ({ ...c, updatedAt: stamp })),
           reminderPresets: backup.reminderPresets?.length
             ? backup.reminderPresets
             : [...defaultReminderPresets],
-          importSources: backup.importSources ?? [],
-          settings: backup.settings ?? get().settings,
+          importSources: importSources.map((i) => ({ ...i, updatedAt: stamp })),
+          settings: { ...(backup.settings ?? prev.settings), updatedAt: stamp },
           lastDeleted: null,
         });
       },
@@ -485,7 +570,30 @@ export const useDatebookStore = create<DatebookState>()(
             fetchAllForUser(supabase, userId),
             "Loading your calendar"
           );
-          const local = get();
+          let local = get();
+
+          // Data left behind by a *different* account (someone signed in on this
+          // device before, and the session was dropped rather than signed out).
+          // It belongs to that account's cloud, not this one — adopting it here
+          // used to offer to merge a stranger's calendar into your own.
+          if (local.userId && local.userId !== userId) {
+            applyingRemote = true;
+            set({
+              items: [],
+              categories: [...defaultCategories],
+              reminderPresets: [...defaultReminderPresets],
+              importSources: [],
+              deletions: {},
+              lastDeleted: null,
+              settings: defaultSettings,
+              userId: null,
+            });
+            applyingRemote = false;
+            clearPending();
+            if (typeof localStorage !== "undefined") localStorage.removeItem(GUEST_BACKUP_KEY);
+            local = get();
+          }
+
           // Categories alone (seed rows from another device) are not "user data".
           // Treating them as a populated cloud would take the replace branch and
           // wipe local items the first time someone signs in.
@@ -494,6 +602,7 @@ export const useDatebookStore = create<DatebookState>()(
           const bothHaveItems = !cloudEmpty && local.items.length > 0;
           // Same account on this device — merge quietly instead of prompting.
           const isReconnect = local.userId === userId;
+          const tombstones = pruneTombstones(mergeTombstones(local.deletions, cloud.deletions));
 
           applyingRemote = true;
           if (bothHaveItems) {
@@ -517,26 +626,20 @@ export const useDatebookStore = create<DatebookState>()(
                 importSources: cloud.importSources,
                 settings: cloud.settings ?? local.settings,
               };
-              const merged = mergeCalendars(localSnap, cloudSnap);
+              const merged = mergeCalendars(localSnap, cloudSnap, tombstones);
               set({
                 ...merged,
+                deletions: tombstones,
                 mode: "cloud",
                 userId,
                 mergeOffer: null,
               });
               applyingRemote = false;
               activeUserId = userId;
-              suspended = true;
-              try {
-                await withTimeout(
-                  pushAllToCloud(supabase, userId, merged),
-                  "Syncing your calendar"
-                );
-              } catch (pushErr) {
-                console.error("[datebook] reconnect sync failed; queueing:", pushErr);
-                queueEntireLocalState(get());
-              }
-              suspended = false;
+              // Push only what the cloud is actually missing. Re-uploading the
+              // whole calendar on every app open was slow enough on mobile to
+              // time out, which surfaced as a sync error on a healthy account.
+              queueDeltaAgainstCloud(merged, cloud);
               await subscribeRealtime(userId);
               connectRetries = 0;
               connecting = false;
@@ -551,16 +654,7 @@ export const useDatebookStore = create<DatebookState>()(
 
             applyingRemote = false;
             connecting = false;
-            pendingMerge = {
-              userId,
-              cloud: {
-                categories: cloud.categories,
-                items: cloud.items,
-                reminderPresets: cloud.reminderPresets,
-                importSources: cloud.importSources,
-                settings: cloud.settings ?? local.settings,
-              },
-            };
+            pendingMerge = { userId, cloud };
             set({
               syncStatus: "merge",
               mergeOffer: {
@@ -578,6 +672,7 @@ export const useDatebookStore = create<DatebookState>()(
               reminderPresets: cloud.reminderPresets.length
                 ? cloud.reminderPresets
                 : local.reminderPresets,
+              deletions: tombstones,
               mode: "cloud",
               userId,
             });
@@ -609,39 +704,37 @@ export const useDatebookStore = create<DatebookState>()(
               queueEntireLocalState(get());
             }
           } else {
-            set({
-              items: cloud.items,
-              categories: cloud.categories,
-              reminderPresets: cloud.reminderPresets.length
-                ? cloud.reminderPresets
-                : defaultReminderPresets,
-              importSources: cloud.importSources,
-              settings: cloud.settings ?? defaultSettings,
-              mode: "cloud",
-              userId,
-            });
+            // The cloud is authoritative here — this device has no items of its
+            // own. It can still hold *tombstones* though (a delete made offline,
+            // possibly of the last item), and those have to be honoured or the
+            // row reappears the moment the device comes back.
+            const adopted = mergeCalendars(
+              {
+                categories: local.categories,
+                items: local.items,
+                reminderPresets: local.reminderPresets,
+                importSources: local.importSources,
+                settings: local.settings,
+              },
+              {
+                categories: cloud.categories,
+                items: cloud.items,
+                reminderPresets: cloud.reminderPresets.length
+                  ? cloud.reminderPresets
+                  : defaultReminderPresets,
+                importSources: cloud.importSources,
+                settings: cloud.settings ?? local.settings,
+              },
+              tombstones
+            );
+            set({ ...adopted, deletions: tombstones, mode: "cloud", userId });
             applyingRemote = false;
             activeUserId = userId;
-            // Backfill seed rows if this account predates the DB trigger.
-            // Best-effort: a failure here shouldn't block the connect.
-            if (!cloud.settings || cloud.reminderPresets.length === 0) {
-              suspended = true;
-              try {
-                await withTimeout(
-                  pushAllToCloud(supabase, userId, {
-                    categories: [],
-                    items: [],
-                    importSources: [],
-                    reminderPresets: cloud.reminderPresets.length ? [] : defaultReminderPresets,
-                    settings: cloud.settings ? null : defaultSettings,
-                  }),
-                  "Preparing your account"
-                );
-              } catch (seedErr) {
-                console.warn("[datebook] seed backfill failed (non-fatal):", seedErr);
-              }
-              suspended = false;
-            }
+            // Covers both those offline deletes and the seed rows an account
+            // predating the DB trigger is missing (settings, reminder presets):
+            // whatever the cloud lacks is queued and pushed by the normal flush,
+            // which already has retry and backoff.
+            queueDeltaAgainstCloud(adopted, cloud);
           }
 
           await subscribeRealtime(userId);
@@ -699,7 +792,6 @@ export const useDatebookStore = create<DatebookState>()(
         suspended = false;
         clearPending();
         clearFlushRetry();
-        lastLocalEdit.clear();
 
         let next = {
           items: [] as Item[],
@@ -707,6 +799,7 @@ export const useDatebookStore = create<DatebookState>()(
           reminderPresets: [...defaultReminderPresets],
           importSources: [] as ImportSource[],
           settings: defaultSettings as UserSettings,
+          deletions: {} as TombstoneMap,
         };
         const guest =
           typeof localStorage !== "undefined" ? localStorage.getItem(GUEST_BACKUP_KEY) : null;
@@ -719,6 +812,7 @@ export const useDatebookStore = create<DatebookState>()(
               reminderPresets: s.reminderPresets ?? [...defaultReminderPresets],
               importSources: s.importSources ?? [],
               settings: s.settings ?? defaultSettings,
+              deletions: s.deletions ?? {},
             };
           } catch {
             /* fall back to the empty defaults above */
@@ -791,7 +885,7 @@ export const useDatebookStore = create<DatebookState>()(
             ? pending.cloud.reminderPresets
             : defaultReminderPresets,
           importSources: pending.cloud.importSources,
-          settings: pending.cloud.settings,
+          settings: pending.cloud.settings ?? local.settings,
         };
         const localSnap: CalendarSnapshot = {
           categories: local.categories,
@@ -800,14 +894,29 @@ export const useDatebookStore = create<DatebookState>()(
           importSources: local.importSources,
           settings: local.settings,
         };
+        const tombstones = pruneTombstones(
+          mergeTombstones(local.deletions, pending.cloud.deletions)
+        );
+
         let next: CalendarSnapshot;
-        if (choice === "cloud") next = cloudSnap;
-        else if (choice === "local") next = localSnap;
-        else next = mergeCalendars(localSnap, cloudSnap);
+        let deletions: TombstoneMap;
+        if (choice === "cloud") {
+          next = cloudSnap;
+          // Adopting the cloud drops this device's local edits, so its pending
+          // deletes go with them — keeping them would delete matching cloud rows.
+          deletions = pruneTombstones(pending.cloud.deletions);
+        } else if (choice === "local") {
+          next = localSnap;
+          deletions = pruneTombstones(local.deletions);
+        } else {
+          next = mergeCalendars(localSnap, cloudSnap, tombstones);
+          deletions = tombstones;
+        }
 
         applyingRemote = true;
         set({
           ...next,
+          deletions,
           mode: "cloud",
           userId: pending.userId,
           mergeOffer: null,
@@ -818,17 +927,11 @@ export const useDatebookStore = create<DatebookState>()(
         activeUserId = pending.userId;
         desiredUserId = pending.userId;
         if (choice !== "cloud") {
-          suspended = true;
-          try {
-            await withTimeout(
-              pushAllToCloud(supabase, pending.userId, next),
-              "Uploading your calendar"
-            );
-          } catch (err) {
-            console.error("[datebook] merge upload failed; queueing:", err);
-            queueEntireLocalState(get());
-          }
-          suspended = false;
+          // Diffing against the snapshot we fetched is what makes "use this
+          // device" actually overwrite: cloud rows this device doesn't have
+          // become deletes. The old wholesale upload left them behind, so they
+          // reappeared on the next reconcile.
+          queueDeltaAgainstCloud(next, pending.cloud);
         }
         await subscribeRealtime(pending.userId);
         connecting = false;
@@ -842,7 +945,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -850,6 +953,9 @@ export const useDatebookStore = create<DatebookState>()(
         reminderPresets: s.reminderPresets,
         settings: s.settings,
         importSources: s.importSources,
+        // Tombstones must outlive a reload: a delete made offline is only
+        // honoured on reconnect if we still remember making it.
+        deletions: s.deletions,
         mode: s.mode,
         userId: s.userId,
       }),
@@ -874,6 +980,15 @@ export const useDatebookStore = create<DatebookState>()(
         }
         if (state?.settings) {
           state.settings = sanitizeSettings(state.settings);
+        }
+        if (state && version < 6) {
+          state.deletions = state.deletions ?? {};
+          // Data written before edit times were recorded: seed `updatedAt` from
+          // `createdAt` so a merge has something ordered to compare, rather than
+          // treating every old row as infinitely stale.
+          state.items = (state.items ?? []).map((i) =>
+            i.updatedAt ? i : { ...i, updatedAt: i.createdAt }
+          );
         }
         return state as DatebookState;
       },
@@ -901,7 +1016,9 @@ export function useCategory(id: string | undefined) {
 }
 
 function mergeItem(item: Item, patch: Partial<Item>): Item {
-  const next: Item = { ...item, ...patch };
+  // Every local edit carries the time it was made — that timestamp is what
+  // decides the winner when this device and another have both touched the row.
+  const next: Item = { ...item, ...patch, updatedAt: patch.updatedAt ?? nowIso() };
   if ("endAt" in patch && patch.endAt === undefined) delete next.endAt;
   if ("location" in patch && !patch.location) delete next.location;
   if ("description" in patch && !patch.description) delete next.description;
@@ -924,25 +1041,42 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
 /* devices are applied back into the store behind `applyingRemote` so   */
 /* they don't loop back out as writes.                                  */
 
+const nowIso = () => new Date().toISOString();
+
+function addTombstones(current: TombstoneMap, kind: EntityKind, ids: string[]): TombstoneMap {
+  if (ids.length === 0) return current;
+  const at = nowIso();
+  // Prune here so a device that never signs in doesn't accumulate tombstones for
+  // the life of the install.
+  const next = pruneTombstones(current);
+  for (const id of ids) next[tombKey(kind, id)] = at;
+  return next;
+}
+
+function dropTombstones(current: TombstoneMap, kind: EntityKind, ids: string[]): TombstoneMap {
+  const next = { ...current };
+  for (const id of ids) delete next[tombKey(kind, id)];
+  return next;
+}
+
+/** Tombstone everything currently in the store — used by "delete all data",
+ *  which has to mean deleted on every device, not just this one. */
+function tombstonesForWipe(s: {
+  items: Item[];
+  categories: Category[];
+  importSources: ImportSource[];
+  deletions: TombstoneMap;
+}): TombstoneMap {
+  let out = addTombstones(s.deletions, "item", s.items.map((i) => i.id));
+  out = addTombstones(out, "category", s.categories.map((c) => c.id));
+  out = addTombstones(out, "import_source", s.importSources.map((i) => i.id));
+  return out;
+}
+
 let applyingRemote = false;
 let suspended = false;
 let activeUserId: string | null = null;
-const lastLocalEdit = new Map<string, number>();
-/** How long a local edit outranks an incoming realtime row for the same item. */
-const LOCAL_EDIT_TTL_MS = 30_000;
-
-/** Note an edit and drop expired entries, so a long session editing thousands
- *  of items doesn't grow this map forever. */
-function markLocalEdit(id: string) {
-  const now = Date.now();
-  lastLocalEdit.set(id, now);
-  if (lastLocalEdit.size > 200) {
-    for (const [key, at] of lastLocalEdit) {
-      if (now - at > LOCAL_EDIT_TTL_MS) lastLocalEdit.delete(key);
-    }
-  }
-}
-let pendingMerge: { userId: string; cloud: CalendarSnapshot } | null = null;
+let pendingMerge: { userId: string; cloud: CloudSnapshot } | null = null;
 // The user we WANT to be synced as — set the moment connectCloud starts, and
 // kept even while `activeUserId` is briefly null between a failed connect and
 // its retry. Lets the connectivity listeners relaunch a dead connect.
@@ -1032,12 +1166,14 @@ const pending: {
   importSources: { upserts: Map<string, ImportSource>; deletes: Set<string> };
   items: { upserts: Map<string, Item>; deletes: Set<string> };
   settingsDirty: boolean;
+  deletions: TombstoneMap;
 } = {
   categories: { upserts: new Map(), deletes: new Set() },
   reminderPresets: { upserts: new Map(), deletes: new Set() },
   importSources: { upserts: new Map(), deletes: new Set() },
   items: { upserts: new Map(), deletes: new Set() },
   settingsDirty: false,
+  deletions: {},
 };
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1083,6 +1219,31 @@ function queueEntireLocalState(s: {
   for (const i of s.importSources) pending.importSources.upserts.set(i.id, i);
   for (const it of s.items) pending.items.upserts.set(it.id, it);
   pending.settingsDirty = true;
+  pending.deletions = mergeTombstones(pending.deletions, useDatebookStore.getState().deletions);
+}
+
+/**
+ * Queue exactly what the cloud is missing after a reconcile.
+ *
+ * The reconcile itself runs behind `applyingRemote`, so the store subscriber
+ * never sees it — before this, a row merged in from a local offline edit was
+ * shown on screen and then never pushed, leaving the two devices different until
+ * something else happened to touch it. Diffing the merged result against the
+ * snapshot we just fetched also turns "tombstoned away" into a real cloud
+ * delete, which is what makes a delete stick.
+ */
+function queueDeltaAgainstCloud(next: CalendarSnapshot, cloud: CloudSnapshot) {
+  accumulate("categories", cloud.categories, next.categories);
+  accumulate("reminderPresets", cloud.reminderPresets, next.reminderPresets);
+  accumulate("importSources", cloud.importSources, next.importSources);
+  accumulate("items", cloud.items, next.items);
+  if (!cloud.settings || JSON.stringify(cloud.settings) !== JSON.stringify(next.settings)) {
+    pending.settingsDirty = true;
+  }
+  const local = useDatebookStore.getState().deletions;
+  for (const [key, at] of Object.entries(local)) {
+    if (!cloud.deletions[key]) pending.deletions[key] = at;
+  }
 }
 
 function clearPending() {
@@ -1091,11 +1252,13 @@ function clearPending() {
     pending[k].deletes.clear();
   }
   pending.settingsDirty = false;
+  pending.deletions = {};
 }
 
 function pendingWork() {
   return (
     pending.settingsDirty ||
+    Object.keys(pending.deletions).length > 0 ||
     (["categories", "reminderPresets", "importSources", "items"] as CollKey[]).some(
       (k) => pending[k].upserts.size > 0 || pending[k].deletes.size > 0
     )
@@ -1151,6 +1314,7 @@ function requeue(batch: PendingChanges) {
     }
   }
   if (batch.settings) pending.settingsDirty = true;
+  pending.deletions = mergeTombstones(batch.deletions, pending.deletions);
 }
 
 async function flush() {
@@ -1165,8 +1329,10 @@ async function flush() {
     importSources: drain(pending.importSources),
     items: drain(pending.items),
     settings: pending.settingsDirty ? useDatebookStore.getState().settings : null,
+    deletions: pending.deletions,
   };
   pending.settingsDirty = false;
+  pending.deletions = {};
 
   let ok = false;
   try {
@@ -1207,6 +1373,14 @@ useDatebookStore.subscribe((state, prev) => {
     pending.settingsDirty = true;
     changed = true;
   }
+  if (state.deletions !== prev.deletions) {
+    for (const [key, at] of Object.entries(state.deletions)) {
+      if (prev.deletions[key] !== at) {
+        pending.deletions[key] = at;
+        changed = true;
+      }
+    }
+  }
   if (changed) scheduleFlush();
 });
 
@@ -1222,6 +1396,18 @@ const REALTIME_MAP: Record<CollKey, (r: Record<string, unknown>) => { id: string
   reminderPresets: rowToPreset,
   importSources: rowToImportSource,
 };
+const ENTITY_FOR_COLL: Record<CollKey, EntityKind> = {
+  categories: "category",
+  items: "item",
+  reminderPresets: "reminder_preset",
+  importSources: "import_source",
+};
+const COLL_FOR_ENTITY: Record<EntityKind, CollKey> = {
+  category: "categories",
+  item: "items",
+  reminder_preset: "reminderPresets",
+  import_source: "importSources",
+};
 
 function applyRealtime(
   table: string,
@@ -1233,6 +1419,9 @@ function applyRealtime(
       if (payload.eventType !== "DELETE" && payload.new) {
         const incoming = rowToSettings(payload.new);
         const current = useDatebookStore.getState().settings;
+        // Don't let an older broadcast undo a preference the user just changed
+        // here — settings are one row, so a stale echo would revert the panel.
+        if (time(incoming.updatedAt) < time(current.updatedAt)) return;
         // The echo of our own settings write lands ~half a second later; applying
         // an identical value would re-commit the store (and re-run the theme
         // recalc) for nothing — visible as a stutter while flicking through
@@ -1243,6 +1432,10 @@ function applyRealtime(
       }
       return;
     }
+    if (table === "deletions") {
+      applyRemoteTombstone(payload);
+      return;
+    }
     const key = REALTIME_KEY[table];
     if (!key) return;
     const current = useDatebookStore.getState()[key] as { id: string }[];
@@ -1251,6 +1444,11 @@ function applyRealtime(
       const id = (payload.old as { id?: string })?.id;
       if (!id) return;
       nextArr = current.filter((x) => x.id !== id);
+      // Remember the delete even if we didn't have the row: a later reconcile
+      // must not read "cloud is missing it" as "we haven't uploaded it yet".
+      useDatebookStore.setState((st) => ({
+        deletions: { ...st.deletions, [tombKey(ENTITY_FOR_COLL[key], id)]: nowIso() },
+      }));
       if (nextArr.length === current.length) return;
     } else {
       let model: { id: string };
@@ -1265,18 +1463,38 @@ function applyRealtime(
         if (activeUserId) void catchUpFromCloud(activeUserId);
         return;
       }
+      const stamped = model as { id: string; updatedAt?: string; createdAt?: string };
+
+      // A row we deleted here, re-broadcast by a device that hadn't heard about
+      // the delete yet. Re-assert it rather than letting the item reappear.
+      const tombstones = useDatebookStore.getState().deletions;
+      const kind = ENTITY_FOR_COLL[key];
+      if (isDeleted(tombstones, kind, stamped)) {
+        const bucket = pending[key] as unknown as { deletes: Set<string> };
+        bucket.deletes.add(model.id);
+        pending.deletions[tombKey(kind, model.id)] =
+          tombstones[tombKey(kind, model.id)] ?? nowIso();
+        scheduleFlush();
+        return;
+      }
+
       const idx = current.findIndex((x) => x.id === model.id);
-      if (key === "items" && idx !== -1) {
-        const edited = lastLocalEdit.get(model.id);
-        if (edited && Date.now() - edited < LOCAL_EDIT_TTL_MS) {
-          const prev = current[idx] as Item;
-          if (JSON.stringify(prev) !== JSON.stringify(model)) {
-            useDatebookStore.setState({
-              lastConflict: (model as Item).title || "an item",
-            });
-            // Local edit still in flight — keep it instead of reverting to cloud.
-            return;
+      if (idx !== -1) {
+        const prev = current[idx] as { id: string; updatedAt?: string; createdAt?: string };
+        const mine = time(prev.updatedAt ?? prev.createdAt);
+        const theirs = time(stamped.updatedAt ?? stamped.createdAt);
+        if (mine > theirs && JSON.stringify(prev) !== JSON.stringify(model)) {
+          // This device holds the newer edit. The old code dropped the remote
+          // row here and did nothing else, so whichever side lost the race stayed
+          // wrong until something happened to touch the row again — and it only
+          // looked back 30 seconds. Keep the local edit *and* push it.
+          const b = pending[key] as unknown as { upserts: Map<string, unknown> };
+          b.upserts.set(prev.id, prev);
+          scheduleFlush();
+          if (key === "items") {
+            useDatebookStore.setState({ lastConflict: (model as Item).title || "an item" });
           }
+          return;
         }
       }
       nextArr = idx === -1 ? [...current, model] : current.map((x, i) => (i === idx ? model : x));
@@ -1285,6 +1503,30 @@ function applyRealtime(
   } finally {
     applyingRemote = false;
   }
+}
+
+/** A delete recorded on another device. Apply it here so the row goes away even
+ *  if we missed the row's own DELETE event (a frozen mobile socket, say). */
+function applyRemoteTombstone(payload: RealtimePostgresChangesPayload<Record<string, unknown>>) {
+  if (payload.eventType === "DELETE") return;
+  const r = payload.new as { entity?: string; entity_id?: string; deleted_at?: string };
+  if (!r?.entity || !r.entity_id) return;
+  const kind = r.entity as EntityKind;
+  const coll = COLL_FOR_ENTITY[kind];
+  if (!coll) return;
+  const id = String(r.entity_id);
+  const key = tombKey(kind, id);
+  const at = r.deleted_at ? new Date(r.deleted_at).toISOString() : nowIso();
+
+  const st = useDatebookStore.getState();
+  if (time(st.deletions[key]) >= time(at)) return;
+
+  const rows = st[coll] as { id: string; updatedAt?: string; createdAt?: string }[];
+  const kept = rows.filter((x) => x.id !== id || time(x.updatedAt ?? x.createdAt) > time(at));
+  useDatebookStore.setState({
+    deletions: { ...st.deletions, [key]: at },
+    ...(kept.length !== rows.length ? ({ [coll]: kept } as Partial<DatebookState>) : {}),
+  });
 }
 
 /** Re-run the initial connect after a failure, with capped exponential backoff.
@@ -1350,6 +1592,7 @@ async function catchUpFromCloud(userId: string) {
       return;
     }
     const local = useDatebookStore.getState();
+    const tombstones = pruneTombstones(mergeTombstones(local.deletions, cloud.deletions));
     // Nothing is queued and nothing is in flight, so every local row has
     // already been accepted by the cloud. Anything the cloud no longer has was
     // therefore deleted on another device — union-merging it back is how a
@@ -1370,7 +1613,8 @@ async function catchUpFromCloud(userId: string) {
           : defaultReminderPresets,
         importSources: cloud.importSources,
         settings: cloud.settings ?? local.settings,
-      }
+      },
+      tombstones
     );
     applyingRemote = true;
     useDatebookStore.setState({
@@ -1378,9 +1622,14 @@ async function catchUpFromCloud(userId: string) {
       categories: merged.categories,
       reminderPresets: merged.reminderPresets,
       importSources: merged.importSources,
-      ...(cloud.settings ? { settings: merged.settings } : {}),
+      settings: merged.settings,
+      deletions: tombstones,
     });
     applyingRemote = false;
+    // The reconcile ran behind `applyingRemote`, so the subscriber saw none of
+    // it — queue the difference explicitly, or anything merged in locally
+    // (offline edits, deletes) would never make it back up.
+    queueDeltaAgainstCloud(merged, cloud);
     if (pendingWork()) scheduleFlush();
   } catch (err) {
     applyingRemote = false;
@@ -1428,7 +1677,14 @@ async function subscribeRealtime(userId: string) {
     /* best effort — the subscribe callback retries on failure anyway */
   }
   const ch = supabase.channel(`datebook:${userId}`);
-  const tables = ["categories", "items", "reminder_presets", "import_sources", "user_settings"];
+  const tables = [
+    "categories",
+    "items",
+    "reminder_presets",
+    "import_sources",
+    "user_settings",
+    "deletions",
+  ];
   for (const table of tables) {
     ch.on(
       "postgres_changes",
@@ -1481,6 +1737,12 @@ function bindConnectivityListeners() {
     if (now - lastResumeAt < 2500) return;
     lastResumeAt = now;
 
+    // The write queue gives up after a capped run of failures so a poison write
+    // can't hammer the server. Coming back from offline/background is exactly
+    // the event that makes those writes worth trying again, so reset the budget
+    // — otherwise one flaky patch left sync dead until the user tapped "Retry".
+    clearFlushRetry();
+
     // Session never came up (a failed initial connect that exhausted its
     // retries) — relaunch it now that the tab/network is back.
     if (!activeUserId) {
@@ -1500,6 +1762,7 @@ function bindConnectivityListeners() {
       }
       await subscribeRealtime(uid);
       void catchUpFromCloud(uid);
+      if (pendingWork()) scheduleFlush();
     })();
   };
   document.addEventListener("visibilitychange", resume);
