@@ -13,7 +13,7 @@ export function ConflictToast() {
     // Stacked above the undo toast rather than on top of it — both used to sit at
     // the same offset, so a delete during a sync conflict rendered one pill
     // directly over the other.
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+var(--tab-bar-rest)+9.5rem)] z-50 flex justify-center px-4 md:bottom-[5.5rem]">
+    <div className="viewport-pinned-bottom pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+var(--tab-bar-rest)+9.5rem)] z-50 flex justify-center px-4 md:bottom-[5.5rem]">
       <AnimatePresence>
         {lastConflict && (
           <motion.div

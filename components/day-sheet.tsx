@@ -67,7 +67,7 @@ export function DaySheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div className="viewport-pinned-overlay fixed inset-0 z-50 lg:hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -98,7 +98,7 @@ export function DaySheet({
             close();
           }
         }}
-        className="fixed inset-x-0 bottom-0 z-50 flex min-h-[min(72dvh,640px)] max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
+        className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-50 flex min-h-[min(72dvh,640px)] max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
         style={{ paddingBottom: "var(--safe-bottom)" }}
       >
         <div

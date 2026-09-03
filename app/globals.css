@@ -339,9 +339,15 @@
   --viewport-pan: 0px;
   --viewport-shrink: 0px;
   /* Bottom safe area. Capped above any inset a device actually reports
-     (34px iOS home indicator, ~48px Android nav). useKeyboardInset() publishes
-     the measured value; it no longer zeros this from a screen-height gap. */
+     (34px iOS home indicator, ~48px Android nav). useKeyboardInset() republishes
+     the measured value; nothing subtracts from it any more — a short layout
+     viewport is --fixed-drop's problem, not this one's. */
   --safe-bottom: min(env(safe-area-inset-bottom, 0px), 48px);
+  /* How far bottom chrome has to come back down to sit on the real window
+     edge. Non-zero only in an installed iOS app that has launched before
+     WebKit published the true viewport; measured, clamped, and unwound to 0
+     the moment `position: fixed` resolves honestly. */
+  --fixed-drop: 0px;
   /* Air between the tab pill and the home indicator / screen edge. Keeps the
      bar from sitting flush on the bottom. Added on top of --safe-bottom. */
   --tab-bar-rest: 0.75rem;
@@ -393,9 +399,13 @@
 
 html {
   height: 100%;
-  /* Beats the `h-full` class on <html> (higher specificity) so iOS uses the
-     real window rather than the layout viewport that still excludes the home
-     indicator on a cold launch. */
+  /* Beats the `h-full` class on <html> (higher specificity) so the page box
+     tracks the window rather than a percentage of it. Note this is *not* a
+     cure for the cold-launch viewport: `-webkit-fill-available` (like
+     `100dvh`) reads short until WebKit publishes the real window, which is
+     what `--fixed-drop` measures and corrects. `100vh` is the only length
+     that is honest from a cold standalone launch, but using it here would
+     push the page under the address bar in a browser tab. */
   height: -webkit-fill-available;
   background-color: var(--surface-base);
   -webkit-text-size-adjust: 100%;
@@ -472,8 +482,23 @@ html.scroll-locked body {
   translate: 0 var(--viewport-pan, 0px);
 }
 
+/* Bottom chrome also carries `--fixed-drop`, which lands it on the real window
+   edge while iOS is still resolving `position: fixed` against a layout viewport
+   that is short by the safe areas (the cold-launch bug that left the tab bar
+   floating an inch high until you opened Agenda). It is a measured residual
+   that the probe in useKeyboardInset() re-reads every pass, so it converges and
+   then unwinds itself — it can never run away and push the bar off screen. */
 .viewport-pinned-bottom {
-  translate: 0 calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px));
+  translate: 0
+    calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px) + var(--fixed-drop, 0px));
+}
+
+/* A full-screen overlay (`fixed inset-0`) is laid out against the same short
+   viewport, so its scrim stops above the window edge. Over-constrained
+   absolute boxes grow by a negative bottom margin, which costs no specificity
+   fight with Tailwind's `inset-0`. */
+.viewport-pinned-overlay {
+  margin-bottom: calc(0px - var(--fixed-drop, 0px));
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
