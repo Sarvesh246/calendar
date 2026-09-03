@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SAFE_BOTTOM, resolveViewportOffsets, type ViewportMetrics } from "./viewport-offsets";
+import {
+  LAUNCH_WINDOW_MS,
+  MAX_SAFE_BOTTOM,
+  resolveSafeBottom,
+  resolveViewportOffsets,
+  type ViewportMetrics,
+} from "./viewport-offsets";
 
-/** An iPhone-shaped installed app, at rest, with an honest cover viewport. */
+/** An iPhone-shaped installed app, at rest, with an honest cover viewport.
+ *  `sinceLaunch` defaults past the launch window so resting tests do not
+ *  inherit the Agenda-style relayout that is only armed after a cold start. */
 function metrics(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
   const layoutHeight = over.layoutHeight ?? 852;
   return {
     layoutHeight,
     layoutWidth: 393,
     innerHeight: layoutHeight,
+    chromeGap: 0,
     visibleHeight: layoutHeight,
     offsetTop: 0,
     scale: 1,
@@ -18,6 +27,7 @@ function metrics(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
     phoneChrome: true,
     typing: false,
     keyboardBase: null,
+    sinceLaunch: LAUNCH_WINDOW_MS + 1,
     ...over,
   };
 }
@@ -29,6 +39,7 @@ describe("at rest", () => {
       shrink: 0,
       keyboardInset: 0,
       safeBottom: 34,
+      needsRelayout: false,
     });
   });
 
@@ -37,19 +48,33 @@ describe("at rest", () => {
   });
 });
 
-describe("launch-time layout viewport that already excludes the home indicator", () => {
-  it("strips env() padding so the inset is not counted twice", () => {
-    const out = resolveViewportOffsets(metrics({ layoutHeight: 852 - 34 }));
-    expect(out.safeBottom).toBe(0);
-    expect(out.pan).toBe(0);
-    expect(out.shrink).toBe(0);
+describe("safe-area padding", () => {
+  it("does not strip padding just because screen.height is a home-indicator taller", () => {
+    // The regression that sat the pill on the physical bottom edge: iOS
+    // reports a 34px screen gap on an already-honest layout viewport
+    // (Dynamic Island / Display Zoom). Subtracting it dropped --safe-bottom
+    // to 0 on every screen.
+    const out = resolveViewportOffsets(
+      metrics({ layoutHeight: 852, visibleHeight: 852, screenHeight: 852 + 34 })
+    );
+    expect(out.safeBottom).toBe(34);
+    expect(out.needsRelayout).toBe(false);
   });
 
-  it("restores padding the moment the layout viewport covers the screen", () => {
-    expect(resolveViewportOffsets(metrics({ layoutHeight: 852 })).safeBottom).toBe(34);
+  it("does not strip padding when visual and layout agree, even if both are short of the screen", () => {
+    // Relayout's job, not padding's. Zeroing env() here is what made the bar
+    // too low; Agenda then looked right only because scrolling grew the layout.
+    const out = resolveViewportOffsets(
+      metrics({ layoutHeight: 818, visibleHeight: 818, screenHeight: 852 })
+    );
+    expect(out.safeBottom).toBe(34);
   });
 
-  it("strips padding when the visible area is taller than the layout viewport", () => {
+  it("subtracts only the visible overlap, not the whole inset", () => {
+    expect(resolveSafeBottom(metrics({ layoutHeight: 832, visibleHeight: 852 }))).toBe(14);
+  });
+
+  it("strips env() padding only when the visible area is actually taller than the layout", () => {
     const out = resolveViewportOffsets(
       metrics({
         standalone: false,
@@ -61,31 +86,70 @@ describe("launch-time layout viewport that already excludes the home indicator",
       })
     );
     expect(out.safeBottom).toBe(0);
+    expect(out.needsRelayout).toBe(true);
   });
 
-  it("leaves browser chrome padding alone when the shortfall is not a home indicator", () => {
+  it("restores padding the moment the layout viewport covers the screen", () => {
+    expect(resolveViewportOffsets(metrics({ layoutHeight: 852 })).safeBottom).toBe(34);
+  });
+
+  it("leaves browser chrome padding alone when the shortfall is not visible", () => {
     const out = resolveViewportOffsets(
-      metrics({ standalone: false, layoutHeight: 780, screenHeight: 852 })
+      metrics({ standalone: false, layoutHeight: 780, visibleHeight: 780, screenHeight: 852 })
     );
-    expect(out.safeBottom).toBe(34);
-  });
-
-  it("does not strip padding when the window does not span the screen's width", () => {
-    const out = resolveViewportOffsets(metrics({ layoutHeight: 818, layoutWidth: 320 }));
     expect(out.safeBottom).toBe(34);
   });
 
   it("does not touch chrome that isn't on screen", () => {
     const out = resolveViewportOffsets(metrics({ phoneChrome: false, layoutHeight: 818 }));
     expect(out.safeBottom).toBe(34);
+    expect(out.needsRelayout).toBe(false);
   });
 
-  it("ignores a screen gap too large to be the home indicator", () => {
-    expect(resolveViewportOffsets(metrics({ layoutHeight: 852 - 80 })).safeBottom).toBe(34);
+  it("clamps an inflated env() inset to the ceiling", () => {
+    expect(resolveSafeBottom(metrics({ safeInset: 120 }))).toBe(MAX_SAFE_BOTTOM);
   });
 
-  it("clamps an inflated env() inset to the home-indicator ceiling", () => {
-    expect(resolveViewportOffsets(metrics({ safeInset: 120 })).safeBottom).toBe(MAX_SAFE_BOTTOM);
+  it("keeps a 48px Android inset instead of clipping it to the iOS home indicator", () => {
+    expect(resolveSafeBottom(metrics({ safeInset: 48 }))).toBe(48);
+  });
+
+  it("keeps full padding while typing so the bar does not jump when the keyboard opens", () => {
+    expect(resolveSafeBottom(metrics({ typing: true, visibleHeight: 552, offsetTop: 300 }))).toBe(34);
+  });
+});
+
+describe("launch-time relayout (what Agenda did by scrolling)", () => {
+  it("asks for a layout pass during the launch window even when geometry looks honest", () => {
+    const out = resolveViewportOffsets(metrics({ sinceLaunch: 0 }));
+    expect(out.safeBottom).toBe(34);
+    expect(out.needsRelayout).toBe(true);
+    expect(out.pan).toBe(0);
+    expect(out.shrink).toBe(0);
+  });
+
+  it("asks for a layout pass when a bottom probe still sits above the visual edge", () => {
+    const out = resolveViewportOffsets(metrics({ chromeGap: 34 }));
+    expect(out.needsRelayout).toBe(true);
+    expect(out.safeBottom).toBe(34);
+    expect(out.pan).toBe(0);
+  });
+
+  it("does not treat a keyboard-sized probe gap as stale fixed chrome", () => {
+    expect(resolveViewportOffsets(metrics({ chromeGap: 300 })).needsRelayout).toBe(false);
+  });
+
+  it("stands down after the launch window on an honest viewport", () => {
+    expect(resolveViewportOffsets(metrics({ sinceLaunch: LAUNCH_WINDOW_MS + 1 })).needsRelayout).toBe(
+      false
+    );
+  });
+
+  it("does not relayout while a keyboard session is open", () => {
+    const out = resolveViewportOffsets(
+      metrics({ sinceLaunch: 0, typing: true, visibleHeight: 552, offsetTop: 300, chromeGap: 34 })
+    );
+    expect(out.needsRelayout).toBe(false);
   });
 });
 
@@ -138,5 +202,6 @@ describe("keyboard up", () => {
       metrics({ visibleHeight: 552, offsetTop: 300, typing: true, scale: 2 })
     );
     expect(out.pan).toBe(0);
+    expect(out.needsRelayout).toBe(false);
   });
 });

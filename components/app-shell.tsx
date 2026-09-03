@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onCalendar ? "min-h-dvh md:h-dvh md:overflow-hidden" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(var(--safe-bottom)+1.25rem)]"
-          : "pb-[calc(var(--safe-bottom)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
+          : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar />}
@@ -139,7 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={openAdd}
           aria-label="Add item"
           className="viewport-pinned-bottom fixed right-4 z-40 md:hidden"
-          style={{ bottom: "calc(var(--safe-bottom) + 5.25rem)" }}
+          style={{ bottom: "calc(var(--safe-bottom) + var(--tab-bar-rest) + 5.25rem)" }}
         >
           <Plus className="h-6 w-6" strokeWidth={2.25} />
         </Button>

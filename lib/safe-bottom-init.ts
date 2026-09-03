@@ -1,25 +1,19 @@
-/** Runs before first paint so a cold PWA launch does not flash the pill 34px
- *  too high while React is still booting. Same rule as `resolveSafeBottom`. */
+/** Runs before first paint. Navigating to Agenda always landed the tab bar
+ *  correctly because that page is long enough to scroll, which makes iOS
+ *  re-resolve `position: fixed` against the real window. Today and Calendar
+ *  often cannot scroll, so a cold launch left the bar an inset too high
+ *  until you switched tabs.
+ *
+ *  A 1px scroll-and-back is that same unlock, done before React boots. It
+ *  does not touch `--safe-bottom`: zeroing that from `screen.height` is what
+ *  sat the pill on the physical bottom edge. */
 export const safeBottomInitScript = `
 (function () {
   try {
-    var nav = window.navigator;
-    var standalone = nav.standalone === true ||
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.matchMedia("(display-mode: fullscreen)").matches ||
-      window.matchMedia("(display-mode: minimal-ui)").matches;
-    if (!standalone || !window.matchMedia("(max-width: 767px)").matches) return;
-    var s = window.screen;
-    if (!s || !s.width || !s.height) return;
-    var long = Math.max(s.width, s.height);
-    var short = Math.min(s.width, s.height);
-    var portrait = window.matchMedia("(orientation: portrait)").matches;
-    var screenH = portrait ? long : short;
-    var screenW = portrait ? short : long;
-    var root = document.documentElement;
-    if (Math.abs(screenW - root.clientWidth) > 2) return;
-    var gap = screenH - root.clientHeight;
-    if (gap >= 18 && gap <= 40) root.style.setProperty("--safe-bottom", "0px");
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    var y = window.scrollY || 0;
+    window.scrollTo(0, y + 1);
+    window.scrollTo(0, y);
   } catch (e) {}
 })();
 `;
