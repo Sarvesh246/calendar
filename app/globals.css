@@ -338,6 +338,18 @@
      the window edge while the keyboard is up — also useKeyboardInset(). */
   --viewport-pan: 0px;
   --viewport-shrink: 0px;
+  /* …and how far it has to be pushed down because the layout viewport the
+     browser resolved `bottom: 0` against is shorter than the window actually on
+     screen. Only ever non-zero while a launch is still settling. */
+  --viewport-underflow: 0px;
+  /* Bottom safe area, with a ceiling above every inset a device actually
+     reports — iOS's home indicator is 34px (21px landscape, 20px on iPad), and
+     Android's tallest navigation bar is around 48px. A launch or a keyboard
+     close can leave a standalone window briefly reporting something far larger,
+     and bottom chrome padded by that figure sits that far clear of the window
+     edge until something re-reads it. The ceiling is high enough that an honest
+     value always passes through untouched. */
+  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 60px);
   /* Space reserved so titles clear the floating glass cluster. The page
      itself stays continuous — no opaque header strip. */
   --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
@@ -449,8 +461,17 @@ html.scroll-locked body {
   translate: 0 var(--viewport-pan, 0px);
 }
 
+/* `--viewport-underflow` is the resting term: it is 0 whenever the layout
+   viewport agrees with the window, and on a cold PWA launch — where iOS can
+   resolve `bottom: 0` against a viewport that still excludes the home
+   indicator, so the chrome's own safe-area padding lifts it clear of the window
+   a second time — it is exactly the distance back down to the real edge. Top-
+   anchored chrome deliberately doesn't take it: a short layout viewport still
+   starts in the right place, it just ends early. */
 .viewport-pinned-bottom {
-  translate: 0 calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px));
+  translate: 0 calc(
+    var(--viewport-pan, 0px) + var(--viewport-shrink, 0px) + var(--viewport-underflow, 0px)
+  );
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
