@@ -25,30 +25,53 @@ function isTypingTarget(el: Element | null): boolean {
 
 /** Post-launch re-reads. iOS can still be settling its viewport well after the
  *  first paint — a cold PWA launch spends a second or more behind the splash
- *  screen — and it doesn't reliably announce the last of it, which left the
- *  first reading standing until something else (a route change) happened to
- *  fire an event. Pure re-measurement: it can only make `pan`/`shrink` reflect
- *  the current, honest geometry sooner, never invent a correction that reading
- *  once at mount wouldn't already justify. Runs from mount and again on every
- *  resume. */
-const SETTLE_MS = [50, 150, 400, 800, 1500, 3000];
+ *  screen — and it doesn't reliably announce the last of it. Runs from mount
+ *  and again on every resume. */
+const SETTLE_MS = [0, 50, 120, 250, 400, 700, 1000, 1500, 2200, 3000, 4500, 6000, 8000, 10000];
+
+/** Relayout nudges are cheap but not free; a handful per launch is plenty. */
+const MAX_NUDGES = 10;
+const NUDGE_SPACING_MS = 150;
+
+function isStandaloneWindow(): boolean {
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  if (nav.standalone === true) return true;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.matchMedia("(display-mode: minimal-ui)").matches
+  );
+}
+
+function screenExtent(): { screenWidth: number; screenHeight: number } {
+  const s = window.screen;
+  if (!s || !s.width || !s.height) return { screenWidth: 0, screenHeight: 0 };
+  const long = Math.max(s.width, s.height);
+  const short = Math.min(s.width, s.height);
+  return window.matchMedia("(orientation: portrait)").matches
+    ? { screenWidth: short, screenHeight: long }
+    : { screenWidth: long, screenHeight: short };
+}
+
+/** How far a `position: fixed; bottom: 0` probe sits above the window bottom. */
+function measureChromeGap(vv: VisualViewport, probe: HTMLElement): number {
+  const bottom = probe.getBoundingClientRect().bottom;
+  const target = Math.max(vv.offsetTop + vv.height, window.innerHeight);
+  return Math.round(target - bottom);
+}
+
+/** Runtime safe-area read, capped to the same ceiling as the CSS fallback. */
+function measureSafeBottom(probe: HTMLElement): number {
+  const raw = probe.getBoundingClientRect().height;
+  return Math.max(0, Math.min(Math.round(raw), 60));
+}
 
 /**
  * Publishes, on `<html>`:
- *  - `--keyboard-inset`: the slice of the layout viewport currently hidden below
- *    the visible area — the keyboard **plus** any distance iOS has panned the
- *    page up to reveal the focused field. Anything anchored to the bottom can add
- *    this to stay glued just above the keyboard no matter how iOS shifts things.
- *  - `--visible-height`: the height actually visible above the keyboard.
- *  - `--viewport-pan` / `--viewport-shrink`: how far the app's own fixed chrome
- *    (tab bar, FAB, header cluster) has to be pushed back down to stay welded to
- *    the device window while the keyboard is up — see below.
- *
- * iOS never shrinks the layout viewport for the keyboard (only the *visual*
- * viewport), and it also scrolls the visual viewport — so `document.
- * documentElement.clientHeight - visualViewport.height - visualViewport.offsetTop`
- * is the honest "how much is hidden right now" figure, self-correcting for the
- * pan. It's clamped to 0 unless a text field is focused.
+ *  - `--keyboard-inset`: hidden area below the visible viewport (keyboard + pan)
+ *  - `--visible-height`: height visible above the keyboard
+ *  - `--viewport-pan` / `--viewport-shrink` / `--viewport-underflow`: fixed-chrome
+ *    corrections — see `lib/viewport-offsets.ts`
  */
 export function useKeyboardInset() {
   useEffect(() => {
@@ -56,77 +79,101 @@ export function useKeyboardInset() {
     const root = document.documentElement;
     if (!vv) return;
 
-    // Layout-viewport height from just before the keyboard opened, captured on
-    // `focusin` (see below). Null whenever no keyboard is up.
+    const gapProbe = document.createElement("div");
+    gapProbe.setAttribute("aria-hidden", "true");
+    gapProbe.style.cssText =
+      "position:fixed;left:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none;";
+
+    const safeProbe = document.createElement("div");
+    safeProbe.setAttribute("aria-hidden", "true");
+    safeProbe.style.cssText =
+      "position:fixed;left:0;bottom:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;box-sizing:content-box;";
+
+    document.body.appendChild(gapProbe);
+    document.body.appendChild(safeProbe);
+
     let keyboardBase: number | null = null;
+    let launchedAt = Date.now();
+    let nudges = 0;
+    let lastNudge = 0;
+
+    /** Force a real layout pass — the part of "navigate to another tab" that
+     *  actually fixed the launch bug. Undone within the same task. */
+    const nudgeRelayout = () => {
+      const now = Date.now();
+      if (nudges >= MAX_NUDGES || now - lastNudge < NUDGE_SPACING_MS) return;
+      nudges += 1;
+      lastNudge = now;
+
+      const y = window.scrollY;
+      root.style.paddingBottom = "0.02px";
+      void root.offsetHeight;
+      root.style.paddingBottom = "";
+      void root.offsetHeight;
+      if (y === 0) {
+        window.scrollTo(0, 1);
+        window.scrollTo(0, 0);
+      }
+    };
 
     let raf = 0;
     const apply = () => {
       raf = 0;
-      const typing = isTypingTarget(document.activeElement);
-      const layoutHeight = root.clientHeight;
-
-      root.style.setProperty("--visible-height", `${Math.round(vv.height)}px`);
-
+      const screen = screenExtent();
       const metrics: ViewportMetrics = {
-        layoutHeight,
+        layoutHeight: root.clientHeight,
+        layoutWidth: root.clientWidth,
+        innerHeight: window.innerHeight,
+        chromeGap: measureChromeGap(vv, gapProbe),
         visibleHeight: vv.height,
         offsetTop: vv.offsetTop,
         scale: vv.scale,
-        typing,
+        screenHeight: screen.screenHeight,
+        screenWidth: screen.screenWidth,
+        standalone: isStandaloneWindow(),
+        phoneChrome: window.matchMedia("(max-width: 767px)").matches,
+        typing: isTypingTarget(document.activeElement),
         keyboardBase,
+        sinceLaunch: Date.now() - launchedAt,
       };
+
       const next = resolveViewportOffsets(metrics);
       keyboardBase = next.keyboardBase;
 
-      // Two different things move a `position: fixed` element off the window
-      // when the keyboard opens, and which one you get depends on the browser:
-      //
-      //  - pan: iOS scrolls the *visual* viewport up inside an unchanged layout
-      //    viewport to reveal the focused field. Fixed elements are laid out
-      //    against the layout viewport, so they ride the pan — the bottom tab
-      //    bar climbs up and floats above the keyboard, and it stays there until
-      //    iOS unwinds the pan on its own schedule, well after the sheet that
-      //    opened the keyboard has gone.
-      //  - shrink: browsers that resize the layout viewport instead (iOS
-      //    standalone, `interactive-widget: resizes-content`) lift bottom-
-      //    anchored chrome by the keyboard's height in one jump.
-      //
-      // Both are published as the distance to push chrome back *down*, so one
-      // rule pins it to the real window edge either way and the page keeps
-      // running behind the keyboard instead of detaching from it.
+      root.style.setProperty("--safe-bottom", `${measureSafeBottom(safeProbe)}px`);
+      root.style.setProperty("--visible-height", `${Math.round(vv.height)}px`);
       root.style.setProperty("--viewport-pan", `${next.pan}px`);
       root.style.setProperty("--viewport-shrink", `${next.shrink}px`);
+      root.style.setProperty("--viewport-underflow", `${next.underflow}px`);
       root.style.setProperty("--keyboard-inset", `${next.keyboardInset}px`);
+
+      if (next.needsRelayout) nudgeRelayout();
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(apply);
     };
 
     let timers: ReturnType<typeof setTimeout>[] = [];
-    /** Re-read across the window in which a launch-time reading can still be
-     *  wrong, so none of it depends on an event the browser may never send. */
     const settle = () => {
+      launchedAt = Date.now();
+      nudges = 0;
       apply();
-      SETTLE_MS.forEach((ms) => timers.push(setTimeout(schedule, ms)));
+      SETTLE_MS.forEach((ms) =>
+        timers.push(
+          setTimeout(() => {
+            schedule();
+            nudgeRelayout();
+          }, ms)
+        )
+      );
     };
 
     const onFocusIn = () => {
-      // Taken the instant focus lands, before the keyboard has had a chance to
-      // resize anything, so it is honestly the pre-keyboard height. Reading it
-      // off a viewport event instead was a race: if the resize arrived first —
-      // or before `document.activeElement` had caught up — the "resting" height
-      // was recorded as the already-shrunken one and the correction silently
-      // did nothing for the rest of that keyboard session. Only the first field
-      // of a session sets it; moving between fields must not re-baseline
-      // against a viewport the keyboard has already shortened.
       if (keyboardBase === null && isTypingTarget(document.activeElement)) {
         keyboardBase = root.clientHeight;
       }
       schedule();
     };
-    // focusout fires before the keyboard animates away, and the last viewport
-    // event can land before the browser has finished handing the shift back.
     const onFocusOut = () => {
       schedule();
       timers.push(setTimeout(schedule, 250), setTimeout(schedule, 500));
@@ -142,14 +189,10 @@ export function useKeyboardInset() {
     vv.addEventListener("scroll", schedule);
     window.addEventListener("focusin", onFocusIn);
     window.addEventListener("focusout", onFocusOut);
-    // Belt and braces against a reading going stale with no viewport event to
-    // correct it: rotation, and a PWA resumed from the background.
     window.addEventListener("resize", schedule);
     window.addEventListener("orientationchange", schedule);
     window.addEventListener("pageshow", onResume);
     document.addEventListener("visibilitychange", onResume);
-    // The layout viewport can change size without a `resize` event; this is the
-    // one signal that always fires when it does.
     const ro = new ResizeObserver(schedule);
     ro.observe(root);
 
@@ -166,9 +209,13 @@ export function useKeyboardInset() {
       window.removeEventListener("orientationchange", schedule);
       window.removeEventListener("pageshow", onResume);
       document.removeEventListener("visibilitychange", onResume);
+      gapProbe.remove();
+      safeProbe.remove();
+      root.style.removeProperty("--safe-bottom");
       root.style.setProperty("--keyboard-inset", "0px");
       root.style.setProperty("--viewport-pan", "0px");
       root.style.setProperty("--viewport-shrink", "0px");
+      root.style.setProperty("--viewport-underflow", "0px");
     };
   }, []);
 }
