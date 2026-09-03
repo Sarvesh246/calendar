@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { AppShell } from "@/components/app-shell";
 import { MotionProvider } from "@/components/motion-provider";
 import { SplashScreenLinks } from "@/components/splash-screen-links";
+import { safeBottomInitScript } from "@/lib/safe-bottom-init";
 
 export const metadata: Metadata = {
   title: "Datebook",
@@ -45,6 +46,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
+        </Script>
+        <Script id="safe-bottom-init" strategy="beforeInteractive">
+          {safeBottomInitScript}
         </Script>
         <ThemeProvider>
           <MotionProvider>

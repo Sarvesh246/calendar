@@ -338,14 +338,10 @@
      the window edge while the keyboard is up — also useKeyboardInset(). */
   --viewport-pan: 0px;
   --viewport-shrink: 0px;
-  /* How far bottom chrome must be pushed down while the layout viewport itself
-     is still shorter than the window — also useKeyboardInset(). Zero once the
-     layout is honest, even if fixed chrome has not relaid out yet. */
-  --viewport-underflow: 0px;
-  /* Bottom safe area — overridden at runtime by useKeyboardInset() once its
-     probe has mounted; the env() fallback here covers the first paint only.
-     Capped above every inset a device actually reports. */
-  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 60px);
+  /* Bottom safe area. Capped at the iOS home indicator so a launch-time lie
+     from env() cannot park the tab bar 60px high. useKeyboardInset() overrides
+     this with 0px when the layout viewport already excludes that inset. */
+  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 34px);
   /* Space reserved so titles clear the floating glass cluster. The page
      itself stays continuous — no opaque header strip. */
   --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
@@ -457,14 +453,8 @@ html.scroll-locked body {
   translate: 0 var(--viewport-pan, 0px);
 }
 
-/* `--viewport-underflow` only applies while the layout viewport is still
-   short. Once the browser corrects it, underflow goes to zero and a relayout
-   nudge re-resolves fixed chrome — never both at once, which is what clipped
-   the tab bar off screen. */
 .viewport-pinned-bottom {
-  translate: 0 calc(
-    var(--viewport-pan, 0px) + var(--viewport-shrink, 0px) + var(--viewport-underflow, 0px)
-  );
+  translate: 0 calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px));
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
