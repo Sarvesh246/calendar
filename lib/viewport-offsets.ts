@@ -1,30 +1,18 @@
 /**
  * Pure geometry behind the fixed-chrome corrections published by
  * `useKeyboardInset()`. Kept free of the DOM so every case can be exercised
- * against faked viewport metrics (see `viewport-offsets.test.ts`) — the real
- * ones only occur on a device, and the interesting ones only during the first
- * second of a cold PWA launch.
+ * against faked viewport metrics (see `viewport-offsets.test.ts`).
  */
 
-/** Largest resting correction that can possibly be a mis-resolved viewport.
- *
- *  The gap it corrects is a safe-area inset counted twice, and no iOS device
- *  has insets anywhere near this: the home indicator is 34px, the tallest
- *  status bar 59px, both together 93px. An on-screen keyboard, by contrast, is
- *  250-350px. Refusing anything larger is what lets the resting correction stay
- *  armed permanently without ever mistaking a keyboard — or a date picker, or
- *  an autofill bar, none of which focus a text field — for a launch-time
- *  viewport bug. */
-export const MAX_REST_CORRECTION = 120;
+/** iOS home indicator. Inflated `env(safe-area-inset-bottom)` values get
+ *  clamped here so a launch-time lie cannot park the tab bar 60px high. */
+export const MAX_SAFE_BOTTOM = 34;
 
-/** How long after a launch or a resume the screen-extent check stays armed.
- *
- *  It is the one check that trusts something outside the page (`window.screen`)
- *  over the browser's own layout viewport, and the state it detects belongs to
- *  the moments right after launch. Past this it stands down, so a device where
- *  the window legitimately doesn't span the screen can be wrong about it for a
- *  few seconds at worst rather than forever. */
-export const LAUNCH_WINDOW_MS = 10_000;
+/** A layout-vs-screen gap in this band is the home indicator counted twice
+ *  (21px landscape, 34px portrait). Wider gaps are a lying `screen.height`
+ *  and must not strip padding — that would drop the pill onto the indicator. */
+const HOME_INDICATOR_MIN = 18;
+const HOME_INDICATOR_MAX = 40;
 
 export type ViewportMetrics = {
   /** `document.documentElement.clientHeight` — the layout viewport that
@@ -32,18 +20,11 @@ export type ViewportMetrics = {
   layoutHeight: number;
   /** `document.documentElement.clientWidth`. */
   layoutWidth: number;
-  /** `window.innerHeight` — often reflects the real window before the layout
-   *  viewport catches up on a cold PWA launch. */
+  /** `window.innerHeight`. */
   innerHeight: number;
-  /** Distance from a `position: fixed; bottom: 0` probe to the window bottom,
-   *  measured in CSS pixels. Used to detect stale fixed resolution once the
-   *  layout viewport has already corrected — never fed into the translate term,
-   *  which would double-correct and clip the tab bar off screen. */
-  chromeGap: number;
-  /** `visualViewport.height` — the part of it actually on screen. */
+  /** `visualViewport.height`. */
   visibleHeight: number;
-  /** `visualViewport.offsetTop` — how far the visible area has been scrolled
-   *  down inside the layout viewport. */
+  /** `visualViewport.offsetTop`. */
   offsetTop: number;
   /** `visualViewport.scale`. */
   scale: number;
@@ -51,85 +32,66 @@ export type ViewportMetrics = {
    *  0 when it can't be read. */
   screenHeight: number;
   screenWidth: number;
+  /** Measured `env(safe-area-inset-bottom)` in CSS pixels, already capped. */
+  safeInset: number;
   /** Running as an installed app rather than in browser chrome. */
   standalone: boolean;
-  /** The viewport is narrow enough that the mobile chrome (bottom tab bar,
-   *  FAB) is the chrome on screen. */
+  /** Narrow enough that the mobile tab bar is on screen. */
   phoneChrome: boolean;
   /** A text-entry field has focus. */
   typing: boolean;
   /** Layout height captured on `focusin`, or null when no keyboard session is
    *  open. */
   keyboardBase: number | null;
-  /** Milliseconds since the app launched or was resumed from the background. */
-  sinceLaunch: number;
 };
 
 export type ViewportOffsets = {
-  /** Push bottom chrome back down by this much to undo iOS panning the visual
-   *  viewport up inside an unchanged layout viewport. */
+  /** Push bottom chrome back down to undo iOS panning the visual viewport. */
   pan: number;
-  /** ...and by this much to undo a browser shrinking the layout viewport for
-   *  the keyboard outright. */
+  /** …and to undo a browser shrinking the layout viewport for the keyboard. */
   shrink: number;
-  /** ...and by this much while the *layout viewport itself* is still shorter
-   *  than the window. Zero once the layout is honest — even if fixed chrome
-   *  has not been relaid out yet — so a corrected viewport never gets a
-   *  translate piled on top and clipped off screen. */
-  underflow: number;
   /** Height currently hidden below the visible area — keyboard plus pan. */
   keyboardInset: number;
   /** `keyboardBase` carried forward, released once the keyboard has gone. */
   keyboardBase: number | null;
-  /** Worth forcing a layout pass so `position: fixed` re-resolves against the
-   *  real window — the half of "navigate to another tab" that actually fixed
-   *  the launch bug, and the only safe move once the layout viewport is
-   *  already whole but the probe still reads a gap. */
-  needsRelayout: boolean;
+  /** Padding the tab bar should use. 0 when the layout viewport already
+   *  excludes the home indicator, so `env()` would lift the pill twice. */
+  safeBottom: number;
 };
 
 /**
- * How far the layout viewport itself still falls short of the window on screen.
- * This is the only signal that may drive `--viewport-underflow` translate.
+ * How much of `env(safe-area-inset-bottom)` is already baked into the layout
+ * viewport. Subtracting that from the padding — never translating the bar —
+ * is what keeps the pill on the home-indicator edge without ever pushing it
+ * off the bottom of the screen.
  */
-function layoutShortfall(
-  m: ViewportMetrics,
-  state: { covered: boolean; pinchZoomed: boolean; keyboardBase: number | null }
-): number {
-  if (state.covered || state.pinchZoomed || m.typing || state.keyboardBase !== null) return 0;
-  if (!m.phoneChrome) return 0;
+export function resolveSafeBottom(m: ViewportMetrics): number {
+  const envSafe = Math.max(0, Math.min(Math.round(m.safeInset), MAX_SAFE_BOTTOM));
+  if (!m.phoneChrome) return envSafe;
+  if (m.typing) return envSafe;
 
-  // Primary signal: the visible area is taller than the layout viewport.
-  // Nothing legitimate produces that — it means the layout viewport is stale.
-  let gap = Math.round(m.visibleHeight) - m.layoutHeight;
+  // Visible area taller than the layout viewport: the layout is the short
+  // one, and padding by the full inset would double-count that gap.
+  const visualGap = Math.round(m.visibleHeight) - m.layoutHeight;
+  let alreadyInset = visualGap > 2 ? visualGap : 0;
 
-  // Secondary: innerHeight disagrees with the layout viewport, but only trust
-  // it when the primary signal already shows a gap (corroborating evidence).
-  const innerGap = m.innerHeight > 0 ? m.innerHeight - m.layoutHeight : 0;
-  if (innerGap > 0 && gap > 0) {
-    gap = Math.max(gap, innerGap);
-  }
-
-  // screen.height is too unreliable to drive a translate on its own — on some
-  // devices it exceeds the actual app window, producing a false positive that
-  // pushes the tab bar below the screen. Only trust it when we already have
-  // corroborating evidence from the primary signals above.
+  // The common launch case: visual and layout agree, both already exclude
+  // the home indicator, and `env()` still reports 34px. `screen.height` is
+  // the only outside reading that can see the missing strip. Trusted only
+  // for a home-indicator-sized gap on a full-width standalone window.
   if (
-    gap > 0 &&
+    alreadyInset === 0 &&
     m.standalone &&
-    m.sinceLaunch <= LAUNCH_WINDOW_MS &&
     m.screenHeight > 0 &&
     Math.abs(m.screenWidth - m.layoutWidth) <= 2
   ) {
-    gap = Math.max(gap, m.screenHeight - m.layoutHeight);
+    const screenGap = m.screenHeight - m.layoutHeight;
+    if (screenGap >= HOME_INDICATOR_MIN && screenGap <= HOME_INDICATOR_MAX) {
+      alreadyInset = screenGap;
+    }
   }
 
-  if (gap <= 2 || gap > MAX_REST_CORRECTION) return 0;
-  return gap;
-}
-
-function isPlausibleChromeGap(gap: number): boolean {
-  return gap > 2 && gap <= MAX_REST_CORRECTION;
+  return Math.max(0, envSafe - alreadyInset);
 }
 
 export function resolveViewportOffsets(m: ViewportMetrics): ViewportOffsets {
@@ -146,28 +108,17 @@ export function resolveViewportOffsets(m: ViewportMetrics): ViewportOffsets {
       ? 0
       : Math.min(Math.max(0, keyboardBase - m.layoutHeight), m.layoutHeight);
 
-  const underflow = layoutShortfall(m, { covered, pinchZoomed, keyboardBase });
-
   let keyboardInset = 0;
   if (m.typing) {
     const hidden = m.layoutHeight - m.visibleHeight - m.offsetTop;
     keyboardInset = hidden > 1 ? Math.round(hidden) : 0;
   }
 
-  const atRest = !m.typing && keyboardBase === null && !covered;
-  const staleFixed =
-    atRest &&
-    m.phoneChrome &&
-    underflow === 0 &&
-    isPlausibleChromeGap(m.chromeGap);
-
-  const needsRelayout =
-    staleFixed ||
-    underflow > 0 ||
-    (atRest &&
-      m.phoneChrome &&
-      m.standalone &&
-      m.sinceLaunch <= LAUNCH_WINDOW_MS);
-
-  return { pan, shrink, underflow, keyboardInset, keyboardBase, needsRelayout };
+  return {
+    pan,
+    shrink,
+    keyboardInset,
+    keyboardBase,
+    safeBottom: resolveSafeBottom(m),
+  };
 }
