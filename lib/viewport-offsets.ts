@@ -99,14 +99,23 @@ function layoutShortfall(
   if (state.covered || state.pinchZoomed || m.typing || state.keyboardBase !== null) return 0;
   if (!m.phoneChrome) return 0;
 
+  // Primary signal: the visible area is taller than the layout viewport.
+  // Nothing legitimate produces that — it means the layout viewport is stale.
   let gap = Math.round(m.visibleHeight) - m.layoutHeight;
 
+  // Secondary: innerHeight disagrees with the layout viewport, but only trust
+  // it when the primary signal already shows a gap (corroborating evidence).
   const innerGap = m.innerHeight > 0 ? m.innerHeight - m.layoutHeight : 0;
-  if (innerGap > 0 && (gap > 0 || (m.standalone && m.sinceLaunch <= LAUNCH_WINDOW_MS))) {
+  if (innerGap > 0 && gap > 0) {
     gap = Math.max(gap, innerGap);
   }
 
+  // screen.height is too unreliable to drive a translate on its own — on some
+  // devices it exceeds the actual app window, producing a false positive that
+  // pushes the tab bar below the screen. Only trust it when we already have
+  // corroborating evidence from the primary signals above.
   if (
+    gap > 0 &&
     m.standalone &&
     m.sinceLaunch <= LAUNCH_WINDOW_MS &&
     m.screenHeight > 0 &&

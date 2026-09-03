@@ -49,7 +49,11 @@ describe("at rest", () => {
 
 describe("launch-time layout viewport that falls short of the window", () => {
   it("translates bottom chrome down while the layout viewport is still short", () => {
-    const out = resolveViewportOffsets(metrics({ layoutHeight: 852 - 34 }));
+    // Visible area is taller than the stale layout viewport — the primary
+    // signal that the layout hasn't caught up yet.
+    const out = resolveViewportOffsets(
+      metrics({ layoutHeight: 852 - 34, visibleHeight: 852 })
+    );
     expect(out.underflow).toBe(34);
     expect(out.needsRelayout).toBe(true);
     expect(out.pan).toBe(0);
@@ -113,13 +117,15 @@ describe("launch-time layout viewport that falls short of the window", () => {
   });
 
   it("refuses a gap too large to be a safe-area inset", () => {
-    expect(resolveViewportOffsets(metrics({ layoutHeight: 852 - 300 })).underflow).toBe(0);
-    expect(
-      resolveViewportOffsets(metrics({ layoutHeight: 852 - MAX_REST_CORRECTION })).underflow
-    ).toBe(MAX_REST_CORRECTION);
-    expect(
-      resolveViewportOffsets(metrics({ layoutHeight: 852 - MAX_REST_CORRECTION - 1 })).underflow
-    ).toBe(0);
+    expect(resolveViewportOffsets(
+      metrics({ layoutHeight: 852 - 300, visibleHeight: 852 })
+    ).underflow).toBe(0);
+    expect(resolveViewportOffsets(
+      metrics({ layoutHeight: 852 - MAX_REST_CORRECTION, visibleHeight: 852 })
+    ).underflow).toBe(MAX_REST_CORRECTION);
+    expect(resolveViewportOffsets(
+      metrics({ layoutHeight: 852 - MAX_REST_CORRECTION - 1, visibleHeight: 852 })
+    ).underflow).toBe(0);
   });
 
   it("refuses a stale-fixed relayout nudge for a keyboard-sized probe gap", () => {
