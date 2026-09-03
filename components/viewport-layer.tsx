@@ -39,26 +39,36 @@ export function ViewportLayer({
   useEffect(() => {
     const el = ref.current;
     const vv = window.visualViewport;
-    if (!el || !vv) return;
+    if (!el) return;
 
     let raf = 0;
     const sync = () => {
       raf = 0;
-      el.style.width = `${vv.width}px`;
-      el.style.height = `${vv.height}px`;
-      el.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`;
+      if (vv) {
+        el.style.width = `${vv.width}px`;
+        el.style.height = `${vv.height}px`;
+        el.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`;
+        return;
+      }
+      el.style.width = `${window.innerWidth}px`;
+      el.style.height = `${window.innerHeight}px`;
+      el.style.transform = "none";
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(sync);
     };
 
     sync();
-    vv.addEventListener("resize", schedule);
-    vv.addEventListener("scroll", schedule);
+    vv?.addEventListener("resize", schedule);
+    vv?.addEventListener("scroll", schedule);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      vv.removeEventListener("resize", schedule);
-      vv.removeEventListener("scroll", schedule);
+      vv?.removeEventListener("resize", schedule);
+      vv?.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
     };
   }, []);
 

@@ -338,10 +338,13 @@
      the window edge while the keyboard is up — also useKeyboardInset(). */
   --viewport-pan: 0px;
   --viewport-shrink: 0px;
-  /* Bottom safe area. Capped at the iOS home indicator so a launch-time lie
-     from env() cannot park the tab bar 60px high. useKeyboardInset() overrides
-     this with 0px when the layout viewport already excludes that inset. */
-  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 34px);
+  /* Bottom safe area. Capped above any inset a device actually reports
+     (34px iOS home indicator, ~48px Android nav). useKeyboardInset() publishes
+     the measured value; it no longer zeros this from a screen-height gap. */
+  --safe-bottom: min(env(safe-area-inset-bottom, 0px), 48px);
+  /* Air between the tab pill and the home indicator / screen edge. Keeps the
+     bar from sitting flush on the bottom. Added on top of --safe-bottom. */
+  --tab-bar-rest: 0.75rem;
   /* Space reserved so titles clear the floating glass cluster. The page
      itself stays continuous — no opaque header strip. */
   --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
@@ -390,15 +393,31 @@
 
 html {
   height: 100%;
+  /* Beats the `h-full` class on <html> (higher specificity) so iOS uses the
+     real window rather than the layout viewport that still excludes the home
+     indicator on a cold launch. */
+  height: -webkit-fill-available;
   background-color: var(--surface-base);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overscroll-behavior: none;
 }
 
+html.h-full {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
+body.min-h-full {
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 body {
   min-height: 100%;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   background-color: var(--surface-base);
   background-image: var(--ambient);
   background-attachment: fixed;
