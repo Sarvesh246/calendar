@@ -35,6 +35,11 @@ const SETTLE_MS = [0, 50, 150, 400, 800, 1500, 3000, 5000, 8000];
 const MAX_NUDGES = 8;
 const NUDGE_SPACING_MS = 200;
 
+/** How many times one pass may re-measure while `--fixed-drop` is still
+ *  moving. Reading a rect flushes layout, so the correction converges inside
+ *  a single frame instead of stepping towards the right place over several. */
+const MAX_DROP_PASSES = 4;
+
 function isStandaloneWindow(): boolean {
   const nav = window.navigator as Navigator & { standalone?: boolean };
   if (nav.standalone === true) return true;
@@ -45,36 +50,23 @@ function isStandaloneWindow(): boolean {
   );
 }
 
-function screenExtent(): { screenWidth: number; screenHeight: number } {
-  const s = window.screen;
-  if (!s || !s.width || !s.height) return { screenWidth: 0, screenHeight: 0 };
-  const long = Math.max(s.width, s.height);
-  const short = Math.min(s.width, s.height);
-  return window.matchMedia("(orientation: portrait)").matches
-    ? { screenWidth: short, screenHeight: long }
-    : { screenWidth: long, screenHeight: short };
-}
-
 function measureSafeInset(probe: HTMLElement): number {
   const raw = probe.getBoundingClientRect().height;
   return Math.max(0, Math.min(Math.round(raw), MAX_SAFE_BOTTOM));
-}
-
-/** How far a `position: fixed; bottom: 0` probe sits above the visual bottom. */
-function measureChromeGap(visibleBottom: number, probe: HTMLElement): number {
-  return Math.round(visibleBottom - probe.getBoundingClientRect().bottom);
 }
 
 /**
  * Publishes, on `<html>`:
  *  - `--keyboard-inset` / `--visible-height` — keyboard geometry
  *  - `--viewport-pan` / `--viewport-shrink` — keyboard-only chrome pins
- *  - `--safe-bottom` — tab-bar padding (env inset; never stripped because
- *    `screen.height` looked larger than the layout viewport)
+ *  - `--safe-bottom` — the `env()` bottom inset, never stripped
+ *  - `--fixed-drop` — how far bottom chrome has to come back down to reach the
+ *    real window edge while iOS is still reporting a short layout viewport
  *
- * Resting chrome is never translated. A stale layout viewport is fixed the
- * same way navigating to Agenda always did: force `position: fixed` to
- * re-resolve, including a 1px scroll-and-back on pages that cannot scroll.
+ * `--fixed-drop` is a measured residual, not a guess: the `bottom: 0` probe
+ * carries the variable, so each pass reads what the current correction has not
+ * accounted for and the value settles on its own — including back to 0 when
+ * WebKit finally publishes the real window.
  */
 export function useKeyboardInset() {
   const pathname = usePathname();
@@ -84,10 +76,20 @@ export function useKeyboardInset() {
     const vv = window.visualViewport;
     const root = document.documentElement;
 
+    // Where `position: fixed; bottom: 0` actually lands. Carries --fixed-drop
+    // so it reports the *residual* error, exactly like the tab bar does.
     const gapProbe = document.createElement("div");
     gapProbe.setAttribute("aria-hidden", "true");
     gapProbe.style.cssText =
-      "position:fixed;left:0;bottom:0;width:1px;height:0;visibility:hidden;pointer-events:none;";
+      "position:fixed;left:0;bottom:0;width:1px;height:0;visibility:hidden;pointer-events:none;translate:0 var(--fixed-drop,0px);";
+
+    // Where the real window bottom is. `100vh` is the one length WebKit gets
+    // right from a cold standalone launch — `100dvh`, `-webkit-fill-available`
+    // and `clientHeight` are all still short at that point.
+    const vhProbe = document.createElement("div");
+    vhProbe.setAttribute("aria-hidden", "true");
+    vhProbe.style.cssText =
+      "position:fixed;left:0;top:0;width:1px;height:100vh;visibility:hidden;pointer-events:none;";
 
     const safeProbe = document.createElement("div");
     safeProbe.setAttribute("aria-hidden", "true");
@@ -95,9 +97,14 @@ export function useKeyboardInset() {
       "position:fixed;left:0;bottom:0;width:1px;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;box-sizing:content-box;";
 
     document.body.appendChild(gapProbe);
+    document.body.appendChild(vhProbe);
     document.body.appendChild(safeProbe);
 
     let keyboardBase: number | null = null;
+    let fixedDrop = Number.parseFloat(
+      getComputedStyle(root).getPropertyValue("--fixed-drop")
+    );
+    if (!Number.isFinite(fixedDrop)) fixedDrop = 0;
     let launchedAt = Date.now();
     let nudges = 0;
     let lastNudge = 0;
@@ -112,15 +119,25 @@ export function useKeyboardInset() {
       void root.offsetHeight;
     };
 
-    /** 1px scroll-and-back — the half of opening Agenda that unlocked the
-     *  large viewport on pages that cannot scroll. Phone-only; skipped if
-     *  the user has already scrolled. */
+    /** A 1px scroll-and-back — the half of opening Agenda that made WebKit
+     *  publish the real window. On a page with no scroll range the old version
+     *  was a no-op, which is exactly why Today and Calendar never recovered on
+     *  their own; lend the document a pixel of range for the round trip. */
     const unlockShortViewport = () => {
       if (!phoneChrome()) return;
       if (window.scrollY !== 0) return;
-      if (root.scrollHeight > root.clientHeight + 1) return;
+      if (root.scrollHeight > root.clientHeight + 1) {
+        window.scrollTo(0, 1);
+        window.scrollTo(0, 0);
+        return;
+      }
+      const before = root.style.minHeight;
+      root.style.minHeight = `${root.clientHeight + 1}px`;
+      void root.offsetHeight;
       window.scrollTo(0, 1);
       window.scrollTo(0, 0);
+      root.style.minHeight = before;
+      void root.offsetHeight;
     };
 
     /**
@@ -137,21 +154,24 @@ export function useKeyboardInset() {
       unlockShortViewport();
     };
 
-    const apply = () => {
-      const screen = screenExtent();
+    const readMetrics = (): ViewportMetrics => {
       const visibleHeight = vv ? vv.height : window.innerHeight;
       const offsetTop = vv ? vv.offsetTop : 0;
-      const visibleBottom = offsetTop + visibleHeight;
-      const metrics: ViewportMetrics = {
+      // The window bottom in client coordinates. All three readings agree once
+      // the viewport has settled; before that whichever is largest is the one
+      // WebKit has already updated.
+      const windowBottom = Math.max(
+        vhProbe.getBoundingClientRect().bottom,
+        offsetTop + visibleHeight,
+        window.innerHeight
+      );
+      return {
         layoutHeight: root.clientHeight,
-        layoutWidth: root.clientWidth,
-        innerHeight: window.innerHeight,
-        chromeGap: measureChromeGap(Math.max(visibleBottom, window.innerHeight), gapProbe),
         visibleHeight,
         offsetTop,
         scale: vv ? vv.scale : 1,
-        screenHeight: screen.screenHeight,
-        screenWidth: screen.screenWidth,
+        fixedGap: Math.round(windowBottom - gapProbe.getBoundingClientRect().bottom),
+        fixedDrop,
         safeInset: measureSafeInset(safeProbe),
         standalone: isStandaloneWindow(),
         phoneChrome: phoneChrome(),
@@ -159,12 +179,28 @@ export function useKeyboardInset() {
         keyboardBase,
         sinceLaunch: Date.now() - launchedAt,
       };
+    };
 
-      const next = resolveViewportOffsets(metrics);
+    const apply = () => {
+      let metrics = readMetrics();
+      let next = resolveViewportOffsets(metrics);
+
+      // Reading a rect flushes layout, so writing --fixed-drop and measuring
+      // again lands the bar in one frame rather than creeping towards it.
+      for (let pass = 1; pass < MAX_DROP_PASSES; pass += 1) {
+        if (next.fixedDrop === fixedDrop) break;
+        fixedDrop = next.fixedDrop;
+        root.style.setProperty("--fixed-drop", `${fixedDrop}px`);
+        metrics = readMetrics();
+        next = resolveViewportOffsets(metrics);
+      }
+
       keyboardBase = next.keyboardBase;
+      fixedDrop = next.fixedDrop;
 
+      root.style.setProperty("--fixed-drop", `${fixedDrop}px`);
       root.style.setProperty("--safe-bottom", `${next.safeBottom}px`);
-      root.style.setProperty("--visible-height", `${Math.round(visibleHeight)}px`);
+      root.style.setProperty("--visible-height", `${Math.round(metrics.visibleHeight)}px`);
       root.style.setProperty("--viewport-pan", `${next.pan}px`);
       root.style.setProperty("--viewport-shrink", `${next.shrink}px`);
       root.style.setProperty("--keyboard-inset", `${next.keyboardInset}px`);
@@ -247,9 +283,11 @@ export function useKeyboardInset() {
       window.removeEventListener("pageshow", onResume);
       document.removeEventListener("visibilitychange", onResume);
       gapProbe.remove();
+      vhProbe.remove();
       safeProbe.remove();
       onRouteRef.current = () => {};
       root.style.removeProperty("--safe-bottom");
+      root.style.setProperty("--fixed-drop", "0px");
       root.style.setProperty("--keyboard-inset", "0px");
       root.style.setProperty("--viewport-pan", "0px");
       root.style.setProperty("--viewport-shrink", "0px");

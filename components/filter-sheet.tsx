@@ -61,7 +61,7 @@ export function FilterSheet() {
     // was an unconditional early return — it simply blinked into existence.
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="viewport-pinned-overlay fixed inset-0 z-50 md:hidden">
           <motion.button
             type="button"
             aria-label="Close filter"

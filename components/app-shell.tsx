@@ -155,7 +155,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="viewport-pinned-top overlay-scrim-light fixed inset-0 z-[45]"
+            className="viewport-pinned-top viewport-pinned-overlay overlay-scrim-light fixed inset-0 z-[45]"
             onClick={closeQuickAdd}
             onPointerDown={closeQuickAdd}
           />
