@@ -22,7 +22,7 @@ export function UndoToast() {
   }, [lastDeleted]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-50 flex justify-center px-4 md:bottom-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+5.75rem)] z-50 flex justify-center px-4 md:bottom-6">
       <AnimatePresence>
         {lastDeleted && (
           <motion.div

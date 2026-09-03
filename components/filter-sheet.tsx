@@ -80,7 +80,7 @@ export function FilterSheet() {
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
-            className="bg-surface border border-line absolute inset-x-0 bottom-0 rounded-t-2xl px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
+            className="bg-surface border border-line absolute inset-x-0 bottom-0 rounded-t-2xl px-4 pb-[max(var(--safe-bottom),1rem)] pt-3"
           >
             <span
               aria-hidden

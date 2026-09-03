@@ -99,7 +99,7 @@ export function DaySheet({
           }
         }}
         className="fixed inset-x-0 bottom-0 z-50 flex min-h-[min(72dvh,640px)] max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={{ paddingBottom: "var(--safe-bottom)" }}
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
