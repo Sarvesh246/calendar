@@ -245,9 +245,13 @@ export function AIDrawer() {
           // the keyboard with its top clear of the notch.
           maxHeight: "min(560px, calc(100% - env(safe-area-inset-top) - 1.25rem))",
           height: "70dvh",
+          // Lifted clear of the home indicator (rather than flush at `bottom-3`)
+          // so the sheet's own rounded corners stay fully visible instead of
+          // reading as clipped by the screen edge.
+          bottom: "max(0.9rem, calc(env(safe-area-inset-bottom) + 0.65rem))",
         }}
         className={cn(
-          "absolute inset-x-3 bottom-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-lg border border-line bg-surface",
+          "absolute inset-x-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-[22px] border border-line bg-surface shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
           open
             ? "animate-[sheet-in_340ms_var(--ease-standard)]"
             : "animate-[sheet-out_160ms_ease-in_forwards]"

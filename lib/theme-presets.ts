@@ -1,3 +1,4 @@
+import { DEFAULT_CUSTOM_THEME } from "./custom-theme";
 import type { AppearancePreset } from "./types";
 
 export const presetMeta: Record<
@@ -59,6 +60,11 @@ export const presetMeta: Record<
     description: "High-contrast black and white.",
     swatch: ["#000000", "#0a0a0a", "#fafafa"],
   },
+  custom: {
+    label: "Custom",
+    description: "Pick your own background, surface, and accent.",
+    swatch: [DEFAULT_CUSTOM_THEME.background, DEFAULT_CUSTOM_THEME.surface, DEFAULT_CUSTOM_THEME.accent],
+  },
 };
 
 export const presetThemeColor: Record<AppearancePreset, string> = {
@@ -73,6 +79,7 @@ export const presetThemeColor: Record<AppearancePreset, string> = {
   sakura: "#fdf2f4",
   aurora: "#eef1f4",
   mono: "#000000",
+  custom: DEFAULT_CUSTOM_THEME.background,
 };
 
 export const presetOrder: AppearancePreset[] = [
@@ -87,4 +94,5 @@ export const presetOrder: AppearancePreset[] = [
   "sakura",
   "aurora",
   "mono",
+  "custom",
 ];
