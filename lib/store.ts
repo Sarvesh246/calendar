@@ -40,6 +40,7 @@ import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge
 import {
   sanitizeCategories,
   sanitizeImportSources,
+  sanitizeReminderPresets,
   sanitizeSettings,
 } from "./sanitize-store";
 import type { DatebookBackup } from "./backup";
@@ -548,7 +549,7 @@ export const useDatebookStore = create<DatebookState>()(
           items: (backup.items ?? []).map((i) => ({ ...i, updatedAt: stamp })),
           categories: categories.map((c) => ({ ...c, updatedAt: stamp })),
           reminderPresets: backup.reminderPresets?.length
-            ? backup.reminderPresets
+            ? sanitizeReminderPresets(backup.reminderPresets)
             : [...defaultReminderPresets],
           importSources: importSources.map((i) => ({ ...i, updatedAt: stamp })),
           settings: { ...(backup.settings ?? prev.settings), updatedAt: stamp },
@@ -1001,6 +1002,9 @@ export const useDatebookStore = create<DatebookState>()(
         if (state?.importSources) {
           state.importSources = sanitizeImportSources(state.importSources);
         }
+        if (state?.reminderPresets) {
+          state.reminderPresets = sanitizeReminderPresets(state.reminderPresets);
+        }
         if (state?.settings) {
           state.settings = sanitizeSettings(state.settings);
         }
@@ -1019,14 +1023,16 @@ export const useDatebookStore = create<DatebookState>()(
         if (!state) return;
         const categories = sanitizeCategories(state.categories);
         const importSources = sanitizeImportSources(state.importSources);
+        const reminderPresets = sanitizeReminderPresets(state.reminderPresets);
         const settings = sanitizeSettings(state.settings);
         if (
           categories !== state.categories ||
           importSources !== state.importSources ||
+          reminderPresets !== state.reminderPresets ||
           settings !== state.settings
         ) {
           queueMicrotask(() => {
-            useDatebookStore.setState({ categories, importSources, settings });
+            useDatebookStore.setState({ categories, importSources, reminderPresets, settings });
           });
         }
       },

@@ -184,11 +184,30 @@ export function rowToItem(r: Row): Item {
   };
 }
 
+/** `reminder_presets.label` is NOT NULL with no default — a preset carried over
+ *  from a stale localStorage shape or a hand-edited backup can arrive with a
+ *  missing label, and that used to fail the whole upsert batch (and every
+ *  write queued behind it) instead of just that row. */
+export function safePresetLabel(v: unknown): string {
+  return typeof v === "string" && v.trim() ? v.trim() : "Reminder";
+}
+function safePresetOffset(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 15;
+}
 export function toPresetRow(p: ReminderPreset, userId: string): Row {
-  return { id: p.id, user_id: userId, label: p.label, offset_minutes: p.offsetMinutes };
+  return {
+    id: p.id,
+    user_id: userId,
+    label: safePresetLabel(p.label),
+    offset_minutes: safePresetOffset(p.offsetMinutes),
+  };
 }
 export function rowToPreset(r: Row): ReminderPreset {
-  return { id: r.id as string, label: r.label as string, offsetMinutes: r.offset_minutes as number };
+  return {
+    id: r.id as string,
+    label: safePresetLabel(r.label),
+    offsetMinutes: safePresetOffset(r.offset_minutes),
+  };
 }
 
 export function toImportSourceRow(s: ImportSource, userId: string): Row {

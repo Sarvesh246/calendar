@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildImportPlan } from "./calendar-import";
-import { sanitizeCategories, sanitizeSettings } from "./sanitize-store";
-import type { Category } from "./types";
+import { sanitizeCategories, sanitizeReminderPresets, sanitizeSettings } from "./sanitize-store";
+import type { Category, ReminderPreset } from "./types";
 
 describe("sanitizeCategories", () => {
   it("repairs categories missing a name", () => {
@@ -29,6 +29,24 @@ describe("sanitizeCategories", () => {
   it("returns the same array when nothing needs repairing", () => {
     const clean: Category[] = [{ id: "1", name: "Math", color: "#000" }];
     expect(sanitizeCategories(clean)).toBe(clean);
+  });
+});
+
+describe("sanitizeReminderPresets", () => {
+  it("repairs a preset missing a label or offset", () => {
+    const broken = [
+      { id: "rp-1", label: undefined, offsetMinutes: undefined },
+      { id: "rp-2", label: "  1 hour before  ", offsetMinutes: 60 },
+    ] as unknown as ReminderPreset[];
+    const next = sanitizeReminderPresets(broken);
+    expect(next[0].label).toBe("Reminder");
+    expect(next[0].offsetMinutes).toBe(15);
+    expect(next[1].label).toBe("1 hour before");
+  });
+
+  it("returns the same array when nothing needs repairing", () => {
+    const clean: ReminderPreset[] = [{ id: "rp-1", label: "15 minutes before", offsetMinutes: 15 }];
+    expect(sanitizeReminderPresets(clean)).toBe(clean);
   });
 });
 
