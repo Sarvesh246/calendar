@@ -22,6 +22,7 @@ import {
   rowToSettings,
   safeCategoryColor,
   safeCategoryName,
+  safePresetLabel,
   deletionsSupported,
   type CloudSnapshot,
   type PendingChanges,
@@ -38,6 +39,7 @@ import {
 import { expandRepeat } from "./repeat";
 import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
 import {
+  dedupeReminderPresets,
   sanitizeCategories,
   sanitizeImportSources,
   sanitizeReminderPresets,
@@ -96,6 +98,10 @@ interface DatebookState {
   addCategory: (category: Omit<Category, "id">) => Category;
   updateCategory: (id: string, patch: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
+
+  addReminderPreset: (preset: Omit<ReminderPreset, "id">) => ReminderPreset;
+  updateReminderPreset: (id: string, patch: Partial<Omit<ReminderPreset, "id">>) => void;
+  deleteReminderPreset: (id: string) => void;
 
   updateSettings: (patch: Partial<UserSettings>) => void;
 
@@ -302,6 +308,37 @@ export const useDatebookStore = create<DatebookState>()(
             i.categoryId === id ? { ...i, categoryId: fallback.id, updatedAt: nowIso() } : i
           ),
           deletions: addTombstones(get().deletions, "category", [id]),
+        });
+      },
+
+      addReminderPreset: (preset) => {
+        const newPreset: ReminderPreset = {
+          id: nanoid(),
+          label: safePresetLabel(preset.label),
+          offsetMinutes: safeOffsetMinutes(preset.offsetMinutes),
+        };
+        set({ reminderPresets: [...get().reminderPresets, newPreset] });
+        return newPreset;
+      },
+
+      updateReminderPreset: (id, patch) => {
+        const next = {
+          ...("label" in patch ? { label: safePresetLabel(patch.label) } : {}),
+          ...("offsetMinutes" in patch ? { offsetMinutes: safeOffsetMinutes(patch.offsetMinutes) } : {}),
+        };
+        set({
+          reminderPresets: get().reminderPresets.map((p) => (p.id === id ? { ...p, ...next } : p)),
+        });
+      },
+
+      deleteReminderPreset: (id) => {
+        set({
+          reminderPresets: get().reminderPresets.filter((p) => p.id !== id),
+          settings: {
+            ...get().settings,
+            defaultReminderPresetIds: get().settings.defaultReminderPresetIds.filter((pid) => pid !== id),
+          },
+          deletions: addTombstones(get().deletions, "reminder_preset", [id]),
         });
       },
 
@@ -969,7 +1006,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -1004,6 +1041,21 @@ export const useDatebookStore = create<DatebookState>()(
         }
         if (state?.reminderPresets) {
           state.reminderPresets = sanitizeReminderPresets(state.reminderPresets);
+        }
+        if (state && version < 7 && state.reminderPresets) {
+          // A sync-loop bug could keep re-adding the same preset under a fresh
+          // id, leaving stores with dozens of duplicate "Reminder" entries no
+          // one ever configured. One-time cleanup on upgrade.
+          state.reminderPresets = dedupeReminderPresets(state.reminderPresets);
+          const keep = new Set(state.reminderPresets.map((p) => p.id));
+          if (state.settings) {
+            state.settings = {
+              ...state.settings,
+              defaultReminderPresetIds: (state.settings.defaultReminderPresetIds ?? []).filter((id) =>
+                keep.has(id)
+              ),
+            };
+          }
         }
         if (state?.settings) {
           state.settings = sanitizeSettings(state.settings);
@@ -1077,6 +1129,10 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
 /* they don't loop back out as writes.                                  */
 
 const nowIso = () => new Date().toISOString();
+
+function safeOffsetMinutes(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 15;
+}
 
 /**
  * Items this device edited in the last few seconds.

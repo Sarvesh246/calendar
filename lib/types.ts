@@ -98,7 +98,8 @@ export type AppearancePreset =
   | "evergreen"
   | "slate"
   | "ember"
-  | "frost";
+  | "frost"
+  | "custom";
 export type LandingView = "today" | "calendar" | "agenda";
 export type Density = "compact" | "comfortable" | "spacious";
 /** How tapping a day on mobile calendar shows that day's items. */
@@ -112,6 +113,9 @@ export interface ReminderPreset {
 
 export interface UserSettings {
   preset: AppearancePreset;
+  /** User-picked colors for the "Custom" appearance preset — background,
+   *  surface (cards), and accent. Only meaningful when `preset === "custom"`. */
+  customTheme?: { background: string; surface: string; accent: string };
   landingView: LandingView;
   density: Density;
   weekStartsOn: 0 | 1; // 0 = Sunday, 1 = Monday

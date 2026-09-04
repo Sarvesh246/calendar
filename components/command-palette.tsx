@@ -109,7 +109,14 @@ export function CommandPalette() {
       // with `data-state="open"/"closed"` — that's where the positioning and
       // the animation trigger both need to live.
       overlayClassName="palette-overlay overlay-scrim-light fixed inset-0 z-50"
-      contentClassName="palette-panel fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] z-50 w-[calc(100%-1.5rem)] max-w-[560px] -translate-x-1/2"
+      // Centering lives entirely in `.palette-panel`'s `transform` (globals.css),
+      // not a Tailwind `-translate-x-1/2` utility — that utility compiles to the
+      // native CSS `translate` property in Tailwind v4, which stacks *on top of*
+      // the `transform: translateX(-50%)` the enter/exit keyframes animate,
+      // doubling the horizontal offset mid-animation. The panel would fly in
+      // from off-screen left before snapping to its real centered position the
+      // instant the animation ended. One property, one source of truth.
+      contentClassName="palette-panel fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] z-50 w-[calc(100%-1.5rem)] max-w-[560px]"
       className="block w-full overflow-hidden rounded-lg border border-line bg-surface"
       style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
     >

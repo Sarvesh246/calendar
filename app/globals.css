@@ -919,7 +919,7 @@ html[data-first-load="1"] .page-shell > * > * {
 @keyframes palette-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px) scale(0.97);
+    transform: translateX(-50%) translateY(-22px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -933,10 +933,15 @@ html[data-first-load="1"] .page-shell > * > * {
   }
   to {
     opacity: 0;
-    transform: translateX(-50%) translateY(-8px) scale(0.98);
+    transform: translateX(-50%) translateY(-14px) scale(0.97);
   }
 }
 
+/* Centering at rest — see the comment on `contentClassName` in
+   command-palette.tsx for why this can't be a Tailwind translate utility. */
+.palette-panel {
+  transform: translateX(-50%);
+}
 .palette-panel[data-state="open"] {
   animation: palette-in var(--motion-standard) var(--ease-standard);
 }

@@ -45,6 +45,32 @@ export function sanitizeReminderPresets(presets: ReminderPreset[]): ReminderPres
   return changed ? next : presets;
 }
 
+/** Settings only ever surfaces ~4 built-in presets plus whatever the user adds
+ *  by hand, so a list past this is corrupted data, not intent. */
+const MAX_REMINDER_PRESETS = 16;
+
+/** Collapse presets that share an offset down to one (a duplicate offset is
+ *  never a deliberate choice — two rows both meaning "15 minutes before" are
+ *  the same reminder), preferring whichever copy has a real label over the
+ *  generic "Reminder" fallback, and cap the result. Repairs a store that
+ *  picked up repeat entries from a stale sync loop. */
+export function dedupeReminderPresets(presets: ReminderPreset[]): ReminderPreset[] {
+  const byOffset = new Map<number, ReminderPreset>();
+  for (const p of presets) {
+    const existing = byOffset.get(p.offsetMinutes);
+    if (!existing || (existing.label === "Reminder" && p.label !== "Reminder")) {
+      byOffset.set(p.offsetMinutes, p);
+    }
+  }
+  let deduped = [...byOffset.values()];
+  if (deduped.length > MAX_REMINDER_PRESETS) {
+    deduped = deduped
+      .sort((a, b) => a.offsetMinutes - b.offsetMinutes)
+      .slice(0, MAX_REMINDER_PRESETS);
+  }
+  return deduped.length === presets.length ? presets : deduped;
+}
+
 export function sanitizeSettings(settings: UserSettings | undefined): UserSettings {
   const base = settings ?? ({} as UserSettings);
   const landingView = LANDING_VIEWS.has(base.landingView) ? base.landingView : "today";
