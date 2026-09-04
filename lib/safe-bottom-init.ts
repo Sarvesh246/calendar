@@ -1,4 +1,4 @@
-import { MAX_FIXED_DROP, MAX_SAFE_BOTTOM } from "@/lib/viewport-offsets";
+import { MAX_FIXED_DROP, MAX_SAFE_BOTTOM, MIN_WINDOW_HEIGHT } from "@/lib/viewport-offsets";
 
 /** Runs before first paint, so the tab bar is never painted in the wrong
  *  place and then corrected.
@@ -11,10 +11,12 @@ import { MAX_FIXED_DROP, MAX_SAFE_BOTTOM } from "@/lib/viewport-offsets";
  *  1. A 1px scroll-and-back is that geometry change — the half of "open
  *     Agenda" that actually fixed it. Today and Calendar usually have no
  *     scroll range, so lend the document a pixel for the round trip.
- *  2. Measure what is still wrong (`100vh` is the one length WebKit gets
- *     right from a cold start) and publish it as `--fixed-drop`, which the
- *     bottom chrome carries. `useKeyboardInset()` takes the value over on
- *     mount and keeps it converged from there.
+ *  2. Measure the real window (`100vh` is the one length WebKit gets right
+ *     from a cold start) and publish it twice: as `--window-height`, which
+ *     globals.css hangs on the page box so a short viewport is overflowed the
+ *     way a long page overflows it, and as `--fixed-drop`, which bottom
+ *     chrome carries until that lands. `useKeyboardInset()` takes both over
+ *     on mount and keeps them converged from there.
  *
  *  It never touches `--safe-bottom`: zeroing that from a screen-height gap is
  *  what sat the pill on the home indicator. */
@@ -45,6 +47,9 @@ export const safeBottomInitScript = `
         window.matchMedia("(display-mode: fullscreen)").matches ||
         window.matchMedia("(display-mode: minimal-ui)").matches;
       if (!standalone) return;
+      // Gates the page-box min-height rules in globals.css from the first
+      // frame, before React mounts.
+      root.setAttribute("data-standalone", "1");
 
       var vh = document.createElement("div");
       vh.style.cssText =
@@ -55,9 +60,13 @@ export const safeBottomInitScript = `
       var safe = document.createElement("div");
       safe.style.cssText =
         "position:fixed;left:0;bottom:0;width:1px;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;box-sizing:content-box;";
+      var pad = document.createElement("div");
+      pad.style.cssText =
+        "position:fixed;left:0;bottom:0;width:1px;height:0;padding-bottom:calc(var(--safe-bottom,0px) + var(--tab-bar-rest,0px));visibility:hidden;pointer-events:none;box-sizing:content-box;";
       host.appendChild(vh);
       host.appendChild(edge);
       host.appendChild(safe);
+      host.appendChild(pad);
 
       var vv = window.visualViewport;
       var windowBottom = Math.max(
@@ -67,16 +76,27 @@ export const safeBottomInitScript = `
       );
       var gap = Math.round(windowBottom - edge.getBoundingClientRect().bottom);
       var inset = Math.round(safe.getBoundingClientRect().height);
+      var headroom = Math.round(pad.getBoundingClientRect().height);
+      if (windowBottom >= ${MIN_WINDOW_HEIGHT}) {
+        root.style.setProperty("--window-height", Math.round(windowBottom) + "px");
+      }
       vh.remove();
       edge.remove();
       safe.remove();
+      pad.remove();
 
       // A viewport the browser inset for us reports no bottom inset, and its
       // gap is that inset — closing it would plant the pill on the home
       // indicator. Same guards and ceiling as resolveFixedDrop().
       if (inset === 0 && gap <= ${MAX_SAFE_BOTTOM}) return;
-      if (gap >= 2 && gap <= ${MAX_FIXED_DROP}) {
-        root.style.setProperty("--fixed-drop", gap + "px");
+      // The drop may only spend the tab bar's own bottom padding: WebKit clips
+      // the fixed layer at the layout viewport's edge, so a bigger translate
+      // shaves visible chrome off. --window-height is what actually fixes it.
+      if (gap >= 2) {
+        root.style.setProperty(
+          "--fixed-drop",
+          Math.min(gap, headroom, ${MAX_FIXED_DROP}) + "px"
+        );
       }
     } catch (e) {}
   }

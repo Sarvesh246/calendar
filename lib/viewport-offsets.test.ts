@@ -3,9 +3,11 @@ import {
   LAUNCH_WINDOW_MS,
   MAX_FIXED_DROP,
   MAX_SAFE_BOTTOM,
+  MIN_WINDOW_HEIGHT,
   resolveFixedDrop,
   resolveSafeBottom,
   resolveViewportOffsets,
+  resolveWindowHeight,
   type ViewportMetrics,
 } from "./viewport-offsets";
 
@@ -21,6 +23,9 @@ function metrics(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
     scale: 1,
     fixedGap: 0,
     fixedDrop: 0,
+    // 34px home indicator + 12px --tab-bar-rest, the tab bar's own padding.
+    dropHeadroom: 46,
+    windowHeight: 852,
     safeInset: 34,
     standalone: true,
     phoneChrome: true,
@@ -31,15 +36,18 @@ function metrics(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
   };
 }
 
-/** The state the bug reports came from: an installed app cold-launched with
- *  `viewport-fit=cover`, where WebKit is still resolving `position: fixed`
- *  against a layout viewport short by the top and bottom safe areas. The
- *  visual viewport and `100vh` already describe the real 852px window. */
+/** The state the bug reports came from, measured off the screenshots: an
+ *  installed app cold-launched with `viewport-fit=cover`, where WebKit is
+ *  still resolving `position: fixed` against a layout viewport short by the
+ *  59px top inset, while `100vh` already describes the real 852px window.
+ *  WebKit also clips the fixed layer at 793, which is why the drop cannot
+ *  simply spend all 59. */
 function coldLaunch(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
   return metrics({
-    layoutHeight: 759,
-    visibleHeight: 852,
-    fixedGap: 93,
+    layoutHeight: 793,
+    visibleHeight: 793,
+    fixedGap: 59,
+    windowHeight: 852,
     sinceLaunch: 0,
     ...over,
   });
@@ -99,26 +107,39 @@ describe("safe-area padding", () => {
 });
 
 describe("fixed-position drop (the cold-launch bar)", () => {
-  it("closes the measured gap to the real window edge", () => {
-    expect(resolveFixedDrop(coldLaunch())).toBe(93);
+  it("closes the measured gap as far as the clip lets it", () => {
+    // 59px is missing, but WebKit clips the fixed layer at the layout
+    // viewport, so only the bar's own 46px of bottom padding can be spent
+    // without shaving the pill. --window-height covers the rest by making the
+    // viewport honest.
+    expect(resolveFixedDrop(coldLaunch())).toBe(46);
+  });
+
+  it("closes a shortfall that fits inside the padding outright", () => {
+    expect(resolveFixedDrop(coldLaunch({ fixedGap: 34 }))).toBe(34);
   });
 
   it("lands the pill a safe area plus its rest above the window edge", () => {
-    // 852 window, `bottom: 0` landing at 759, drop 93, then the bar's own
+    // 852 window, `bottom: 0` landing at 818, drop 34, then the bar's own
     // padding: 34 of home indicator and 12 of --tab-bar-rest above that.
-    const out = resolveViewportOffsets(coldLaunch());
-    expect(759 + out.fixedDrop - out.safeBottom).toBe(852 - 34);
+    const out = resolveViewportOffsets(coldLaunch({ layoutHeight: 818, fixedGap: 34 }));
+    expect(818 + out.fixedDrop - out.safeBottom).toBe(852 - 34);
+  });
+
+  it("never translates a visible pixel past the fixed layer's clip", () => {
+    expect(resolveFixedDrop(coldLaunch({ fixedGap: 400 }))).toBe(46);
+    expect(resolveFixedDrop(coldLaunch({ dropHeadroom: 0, fixedGap: 59 }))).toBe(0);
   });
 
   it("holds still once the correction has landed", () => {
-    expect(resolveFixedDrop(coldLaunch({ fixedDrop: 93, fixedGap: 0 }))).toBe(93);
+    expect(resolveFixedDrop(coldLaunch({ fixedDrop: 46, fixedGap: 0 }))).toBe(46);
   });
 
   it("unwinds itself when WebKit finally publishes the real window", () => {
-    // Same correction still applied, but `bottom: 0` now resolves 93px lower,
-    // so the probe reads 93px past the edge and gives the whole thing back.
+    // Same correction still applied, but `bottom: 0` now resolves 46px lower,
+    // so the probe reads 46px past the edge and gives the whole thing back.
     expect(
-      resolveFixedDrop(metrics({ fixedDrop: 93, fixedGap: -93, layoutHeight: 852 }))
+      resolveFixedDrop(metrics({ fixedDrop: 46, fixedGap: -46, layoutHeight: 852 }))
     ).toBe(0);
   });
 
@@ -127,12 +148,12 @@ describe("fixed-position drop (the cold-launch bar)", () => {
   });
 
   it("ignores sub-pixel rounding so the bar cannot jitter", () => {
-    expect(resolveFixedDrop(metrics({ fixedDrop: 93, fixedGap: 1 }))).toBe(93);
-    expect(resolveFixedDrop(metrics({ fixedDrop: 93, fixedGap: -1 }))).toBe(93);
+    expect(resolveFixedDrop(metrics({ fixedDrop: 46, fixedGap: 1 }))).toBe(46);
+    expect(resolveFixedDrop(metrics({ fixedDrop: 46, fixedGap: -1 }))).toBe(46);
   });
 
   it("refuses a reading too large to be a safe-area shortfall", () => {
-    expect(resolveFixedDrop(metrics({ fixedGap: 400 }))).toBe(MAX_FIXED_DROP);
+    expect(resolveFixedDrop(metrics({ fixedGap: 400, dropHeadroom: 999 }))).toBe(MAX_FIXED_DROP);
   });
 
   it("never pushes chrome into a home indicator the browser already inset for", () => {
@@ -153,27 +174,66 @@ describe("fixed-position drop (the cold-launch bar)", () => {
   it("freezes at its resting value while the keyboard is up", () => {
     expect(
       resolveFixedDrop(
-        coldLaunch({ fixedDrop: 93, typing: true, visibleHeight: 452, offsetTop: 300, fixedGap: 300 })
+        coldLaunch({ fixedDrop: 46, typing: true, visibleHeight: 452, offsetTop: 300, fixedGap: 300 })
       )
-    ).toBe(93);
+    ).toBe(46);
   });
 
   it("freezes through the keyboard's closing animation", () => {
     expect(
-      resolveFixedDrop(coldLaunch({ fixedDrop: 93, keyboardBase: 852, fixedGap: 300 }))
-    ).toBe(93);
+      resolveFixedDrop(coldLaunch({ fixedDrop: 46, keyboardBase: 852, fixedGap: 300 }))
+    ).toBe(46);
   });
 
   it("keeps out of a viewport the user moved by pinching", () => {
-    expect(resolveFixedDrop(coldLaunch({ fixedDrop: 93, scale: 2, fixedGap: 200 }))).toBe(93);
+    expect(resolveFixedDrop(coldLaunch({ fixedDrop: 46, scale: 2, fixedGap: 200 }))).toBe(46);
   });
 
   it("resumes on the pass after the keyboard releases", () => {
     const out = resolveViewportOffsets(
-      metrics({ typing: false, keyboardBase: 852, layoutHeight: 852, fixedGap: 93 })
+      metrics({ typing: false, keyboardBase: 852, layoutHeight: 852, fixedGap: 34 })
     );
     expect(out.keyboardBase).toBeNull();
-    expect(out.fixedDrop).toBe(93);
+    expect(out.fixedDrop).toBe(34);
+  });
+});
+
+describe("page-box floor (what Agenda was doing all along)", () => {
+  it("publishes the real window so a short viewport is overflowed", () => {
+    // 852 floor against a 793 layout viewport: 59px of overflow, which is the
+    // geometry change that makes WebKit publish the real window.
+    expect(resolveWindowHeight(coldLaunch())).toBe(852);
+  });
+
+  it("self-cancels once the viewport is honest", () => {
+    // Still published, but now equal to the viewport — nothing overflows.
+    const m = metrics({ layoutHeight: 852, windowHeight: 852 });
+    expect(resolveWindowHeight(m)).toBe(m.layoutHeight);
+  });
+
+  it("stays out of browser chrome, where 100vh is the address bar's business", () => {
+    expect(resolveWindowHeight(coldLaunch({ standalone: false }))).toBe(0);
+  });
+
+  it("leaves desktop layouts alone", () => {
+    expect(resolveWindowHeight(coldLaunch({ phoneChrome: false }))).toBe(0);
+  });
+
+  it("says nothing while the keyboard is up, so the page is not pinned to it", () => {
+    expect(resolveWindowHeight(coldLaunch({ typing: true, visibleHeight: 452 }))).toBe(0);
+    expect(resolveWindowHeight(coldLaunch({ keyboardBase: 852 }))).toBe(0);
+    expect(resolveWindowHeight(coldLaunch({ scale: 2 }))).toBe(0);
+  });
+
+  it("refuses a reading too small to be a phone window", () => {
+    expect(resolveWindowHeight(coldLaunch({ windowHeight: MIN_WINDOW_HEIGHT - 1 }))).toBe(0);
+    expect(resolveWindowHeight(coldLaunch({ windowHeight: MIN_WINDOW_HEIGHT }))).toBe(
+      MIN_WINDOW_HEIGHT
+    );
+  });
+
+  it("rides along with the rest of the offsets", () => {
+    expect(resolveViewportOffsets(coldLaunch()).windowHeight).toBe(852);
   });
 });
 
@@ -201,10 +261,10 @@ describe("launch-time relayout (what Agenda did by scrolling)", () => {
     // Nothing left to measure: the probe carries the drop, so the residual is
     // zero even though the layout viewport is still short.
     const out = resolveViewportOffsets(
-      metrics({ layoutHeight: 759, visibleHeight: 759, fixedDrop: 93, fixedGap: 0 })
+      metrics({ layoutHeight: 793, visibleHeight: 793, fixedDrop: 46, fixedGap: 0 })
     );
     expect(out.needsRelayout).toBe(false);
-    expect(out.fixedDrop).toBe(93);
+    expect(out.fixedDrop).toBe(46);
   });
 
   it("does not relayout while a keyboard session is open", () => {
@@ -277,13 +337,19 @@ describe("keyboard up", () => {
 describe("convergence", () => {
   /** Mirrors the hook's loop: the probe carries the drop, so each pass reads
    *  what is left over after the last one. */
-  function converge(windowBottom: number, fixedBottomAt: number, passes = 6): number {
+  function converge(
+    windowBottom: number,
+    fixedBottomAt: number,
+    passes = 6,
+    dropHeadroom = 46
+  ): number {
     let drop = 0;
     for (let i = 0; i < passes; i += 1) {
       drop = resolveFixedDrop(
         metrics({
           layoutHeight: fixedBottomAt,
           visibleHeight: windowBottom,
+          dropHeadroom,
           fixedDrop: drop,
           fixedGap: windowBottom - (fixedBottomAt + drop),
         })
@@ -293,14 +359,18 @@ describe("convergence", () => {
   }
 
   it("settles on the shortfall and stays there", () => {
-    expect(converge(852, 759)).toBe(93);
+    expect(converge(852, 818)).toBe(34);
   });
 
   it("settles on zero when nothing is wrong", () => {
     expect(converge(852, 852)).toBe(0);
   });
 
+  it("settles at the clip budget on a shortfall bigger than the padding", () => {
+    expect(converge(852, 793)).toBe(46);
+  });
+
   it("settles at the ceiling rather than running away on a nonsense reading", () => {
-    expect(converge(2000, 759)).toBe(MAX_FIXED_DROP);
+    expect(converge(2000, 759, 8, 999)).toBe(MAX_FIXED_DROP);
   });
 });

@@ -55,6 +55,14 @@ function measureSafeInset(probe: HTMLElement): number {
   return Math.max(0, Math.min(Math.round(raw), MAX_SAFE_BOTTOM));
 }
 
+/** The padding under the tab pill, in CSS pixels, measured rather than parsed
+ *  — custom properties come back as their specified token (`0.75rem`), not a
+ *  used length. That padding is the whole budget `--fixed-drop` has before it
+ *  starts pushing visible chrome past the fixed layer's clip. */
+function measureDropHeadroom(probe: HTMLElement): number {
+  return Math.max(0, Math.round(probe.getBoundingClientRect().height));
+}
+
 /**
  * Publishes, on `<html>`:
  *  - `--keyboard-inset` / `--visible-height` — keyboard geometry
@@ -62,11 +70,18 @@ function measureSafeInset(probe: HTMLElement): number {
  *  - `--safe-bottom` — the `env()` bottom inset, never stripped
  *  - `--fixed-drop` — how far bottom chrome has to come back down to reach the
  *    real window edge while iOS is still reporting a short layout viewport
+ *  - `--window-height` — the real window height, hung on the page box as a
+ *    `min-height` so a stale layout viewport is overflowed
  *
  * `--fixed-drop` is a measured residual, not a guess: the `bottom: 0` probe
  * carries the variable, so each pass reads what the current correction has not
  * accounted for and the value settles on its own — including back to 0 when
  * WebKit finally publishes the real window.
+ *
+ * `--window-height` is what makes that happen rather than waiting for it.
+ * WebKit clips fixed chrome to the layout viewport, so the drop can only ever
+ * spend the tab bar's own bottom padding; the actual cure is to overflow the
+ * short viewport, which is all Agenda was ever doing.
  */
 export function useKeyboardInset() {
   const pathname = usePathname();
@@ -96,9 +111,26 @@ export function useKeyboardInset() {
     safeProbe.style.cssText =
       "position:fixed;left:0;bottom:0;width:1px;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none;box-sizing:content-box;";
 
+    // Mirrors the tab bar's own padding, so the drop's ceiling is the real
+    // one rather than a number copied out of the stylesheet.
+    const headroomProbe = document.createElement("div");
+    headroomProbe.setAttribute("aria-hidden", "true");
+    headroomProbe.style.cssText =
+      "position:fixed;left:0;bottom:0;width:1px;height:0;padding-bottom:calc(var(--safe-bottom,0px) + var(--tab-bar-rest,0px));visibility:hidden;pointer-events:none;box-sizing:content-box;";
+
     document.body.appendChild(gapProbe);
     document.body.appendChild(vhProbe);
     document.body.appendChild(safeProbe);
+    document.body.appendChild(headroomProbe);
+
+    /** Gates the `min-height` rules in globals.css. An attribute rather than a
+     *  `display-mode` media query because iOS home-screen apps predating
+     *  16.4 only ever admit to `navigator.standalone`. */
+    const syncStandaloneFlag = () => {
+      if (isStandaloneWindow()) root.setAttribute("data-standalone", "1");
+      else root.removeAttribute("data-standalone");
+    };
+    syncStandaloneFlag();
 
     let keyboardBase: number | null = null;
     let fixedDrop = Number.parseFloat(
@@ -131,8 +163,11 @@ export function useKeyboardInset() {
         window.scrollTo(0, 0);
         return;
       }
+      // Max, not clientHeight: `--window-height` may already be holding the
+      // page box taller than the viewport, and lending from below would
+      // shrink it for a frame.
       const before = root.style.minHeight;
-      root.style.minHeight = `${root.clientHeight + 1}px`;
+      root.style.minHeight = `${Math.max(root.scrollHeight, root.clientHeight) + 1}px`;
       void root.offsetHeight;
       window.scrollTo(0, 1);
       window.scrollTo(0, 0);
@@ -172,6 +207,8 @@ export function useKeyboardInset() {
         scale: vv ? vv.scale : 1,
         fixedGap: Math.round(windowBottom - gapProbe.getBoundingClientRect().bottom),
         fixedDrop,
+        dropHeadroom: measureDropHeadroom(headroomProbe),
+        windowHeight: Math.round(windowBottom),
         safeInset: measureSafeInset(safeProbe),
         standalone: isStandaloneWindow(),
         phoneChrome: phoneChrome(),
@@ -199,6 +236,9 @@ export function useKeyboardInset() {
       fixedDrop = next.fixedDrop;
 
       root.style.setProperty("--fixed-drop", `${fixedDrop}px`);
+      if (next.windowHeight > 0) {
+        root.style.setProperty("--window-height", `${next.windowHeight}px`);
+      }
       root.style.setProperty("--safe-bottom", `${next.safeBottom}px`);
       root.style.setProperty("--visible-height", `${Math.round(metrics.visibleHeight)}px`);
       root.style.setProperty("--viewport-pan", `${next.pan}px`);
@@ -223,6 +263,7 @@ export function useKeyboardInset() {
       launchedAt = Date.now();
       nudges = 0;
       lastNudge = 0;
+      syncStandaloneFlag();
       apply();
       SETTLE_MS.forEach((ms) => timers.push(setTimeout(schedule, ms)));
     };
@@ -285,8 +326,10 @@ export function useKeyboardInset() {
       gapProbe.remove();
       vhProbe.remove();
       safeProbe.remove();
+      headroomProbe.remove();
       onRouteRef.current = () => {};
       root.style.removeProperty("--safe-bottom");
+      root.style.removeProperty("--window-height");
       root.style.setProperty("--fixed-drop", "0px");
       root.style.setProperty("--keyboard-inset", "0px");
       root.style.setProperty("--viewport-pan", "0px");
