@@ -7,9 +7,9 @@
  * `viewport-fit=cover`, WebKit does not publish the real window to the layout
  * engine until the viewport has been "exercised" by a geometry change. Until
  * then `document.documentElement.clientHeight` (and `100dvh`, and
- * `-webkit-fill-available`) read short by the safe areas — ~93px on an iPhone
- * with a Dynamic Island — while `100vh`, `visualViewport` and
- * `window.innerHeight` already describe the real window. `position: fixed;
+ * `-webkit-fill-available`) read short by a safe area — 59px, the top inset,
+ * on the iPhone this was measured on — while `100vh` and `window.innerHeight`
+ * already describe the real window. `position: fixed;
  * bottom: 0` resolves against the short one, so the tab bar hangs an inch
  * above the screen edge. Scrolling a long page (Agenda) is a geometry change,
  * which is why that one tab always looked right and "reset" the bar.
@@ -21,6 +21,24 @@
  * reads what is *left over* after the correction already applied — the loop
  * converges to zero and unwinds itself the moment WebKit publishes the real
  * window.
+ *
+ * `--fixed-drop` alone is not enough, though, and the screenshots showed why:
+ * WebKit paints fixed chrome into a layer the size of the layout viewport and
+ * clips it there, so translating the tab bar past that edge shaved its bottom
+ * off. Two things follow.
+ *
+ * `--window-height` is the real answer. Agenda was never healed by scrolling —
+ * it was healed by *being long*: a document taller than the layout viewport is
+ * the geometry change that makes WebKit publish the real window. Publishing the
+ * measured window height as a `min-height` gives every screen that same
+ * property, and costs nothing once the viewport is honest, because then it
+ * equals the viewport exactly. (The community writes this as
+ * `min-height: calc(100% + env(safe-area-inset-top))`; measuring is the same
+ * number while stale and, unlike that form, stops overflowing once healed.)
+ *
+ * `--fixed-drop` is then the fallback for the frames before that lands, and is
+ * capped at the chrome's own bottom padding so it can only ever push padding
+ * past the clip, never a pixel anybody can see.
  */
 
 /** Ceiling on `env(safe-area-inset-bottom)`. The iOS home indicator is 34px;
@@ -38,6 +56,11 @@ export const LAUNCH_WINDOW_MS = 10_000;
  *  this is a misreading, and honouring it would push the tab bar off the
  *  bottom of the screen — the failure mode this correction must never have. */
 export const MAX_FIXED_DROP = 120;
+
+/** Floor on the published `--window-height`. Below this a reading is a
+ *  keyboard or a measurement accident, not a phone window, and using it as a
+ *  `min-height` would collapse the page. */
+export const MIN_WINDOW_HEIGHT = 320;
 
 /** Residuals under this are rendering rounding, not a displaced viewport.
  *  Without it a ±1px flip-flop would jitter the bar every frame. */
@@ -61,6 +84,15 @@ export type ViewportMetrics = {
   fixedGap: number;
   /** The `--fixed-drop` in force when `fixedGap` was measured. */
   fixedDrop: number;
+  /** How far bottom chrome can be pushed past the layout viewport's bottom
+   *  edge before a visible pixel crosses it — the tab bar's own bottom
+   *  padding (`--safe-bottom` plus `--tab-bar-rest`). WebKit clips the fixed
+   *  layer at that edge, so this is the whole budget the drop has. */
+  dropHeadroom: number;
+  /** Real window height in CSS pixels, from the same reading `fixedGap` is
+   *  measured against. Published so the page box can overflow a stale layout
+   *  viewport the way a long page does. */
+  windowHeight: number;
   /** Measured `env(safe-area-inset-bottom)` in CSS pixels, already capped. */
   safeInset: number;
   /** Running as an installed app rather than in browser chrome. */
@@ -90,14 +122,21 @@ export type ViewportOffsets = {
   /** Standing correction that lands `position: fixed; bottom: 0` on the real
    *  window edge while the layout viewport is still short. Converges to 0. */
   fixedDrop: number;
+  /** `min-height` for the page box, so a stale layout viewport is overflowed
+   *  and WebKit publishes the real window. 0 when there is nothing to say. */
+  windowHeight: number;
   /** Force a layout pass so `position: fixed` re-resolves against the real
    *  window — the half of "navigate to Agenda" that actually fixed the
    *  launch bug. Never a translate. */
   needsRelayout: boolean;
 };
 
-function clampDrop(px: number): number {
-  return Math.max(0, Math.min(Math.round(px), MAX_FIXED_DROP));
+function clampDrop(px: number, headroom: number): number {
+  // The drop may spend the chrome's own bottom padding and not a pixel more:
+  // WebKit clips the fixed layer at the layout viewport's bottom edge, so
+  // anything past that budget is simply not painted.
+  const ceiling = Math.min(MAX_FIXED_DROP, Math.max(0, Math.round(headroom)));
+  return Math.max(0, Math.min(Math.round(px), ceiling));
 }
 
 /**
@@ -128,7 +167,7 @@ export function resolveSafeBottom(m: ViewportMetrics): number {
  * unwinds the drop to 0 by itself.
  */
 export function resolveFixedDrop(m: ViewportMetrics): number {
-  const current = clampDrop(m.fixedDrop);
+  const current = clampDrop(m.fixedDrop, m.dropHeadroom);
 
   // Installed phone app only. In a browser tab `100vh` deliberately runs past
   // the visible area — that space is the address bar — so closing the gap
@@ -147,7 +186,27 @@ export function resolveFixedDrop(m: ViewportMetrics): number {
   // the one thing this correction must never do.
   if (m.safeInset === 0 && residual > 0 && residual <= MAX_SAFE_BOTTOM) return current;
 
-  return clampDrop(current + residual);
+  return clampDrop(current + residual, m.dropHeadroom);
+}
+
+/**
+ * The `min-height` to hang on the page box.
+ *
+ * This is the half of the fix that actually retires the problem. Agenda looked
+ * right from the first frame not because anyone scrolled it but because it is
+ * long: a document taller than the layout viewport is the geometry change that
+ * makes WebKit publish the real window. Handing every screen the measured
+ * window height as a floor reproduces that, and self-cancels — once the
+ * viewport is honest the floor equals the viewport and nothing overflows.
+ *
+ * Installed phone app only, and never mid-keyboard: a shrunken viewport is not
+ * a smaller window, and pinning the page to it would fight the browser.
+ */
+export function resolveWindowHeight(m: ViewportMetrics): number {
+  if (!m.phoneChrome || !m.standalone) return 0;
+  if (m.typing || m.keyboardBase !== null || m.scale > 1.01) return 0;
+  const height = Math.round(m.windowHeight);
+  return height >= MIN_WINDOW_HEIGHT ? height : 0;
 }
 
 function resolveNeedsRelayout(
@@ -199,6 +258,7 @@ export function resolveViewportOffsets(m: ViewportMetrics): ViewportOffsets {
     keyboardBase,
     safeBottom: resolveSafeBottom(m),
     fixedDrop: resolveFixedDrop({ ...m, keyboardBase }),
+    windowHeight: resolveWindowHeight({ ...m, keyboardBase }),
     needsRelayout: resolveNeedsRelayout(m, { pinchZoomed, keyboardBase }),
   };
 }

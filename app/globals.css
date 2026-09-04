@@ -345,9 +345,15 @@
   --safe-bottom: min(env(safe-area-inset-bottom, 0px), 48px);
   /* How far bottom chrome has to come back down to sit on the real window
      edge. Non-zero only in an installed iOS app that has launched before
-     WebKit published the true viewport; measured, clamped, and unwound to 0
-     the moment `position: fixed` resolves honestly. */
+     WebKit published the true viewport; measured, clamped to the tab bar's
+     own bottom padding (WebKit clips the fixed layer at the layout viewport,
+     so a bigger translate would shave the pill), and unwound to 0 the moment
+     `position: fixed` resolves honestly. */
   --fixed-drop: 0px;
+  /* The real window height, measured by useKeyboardInset(). Used as a page-box
+     floor in the installed app (see below); `100vh` is the pre-JS stand-in
+     because it is the one length WebKit gets right from a cold launch. */
+  --window-height: 100vh;
   /* Air between the tab pill and the home indicator / screen edge. Keeps the
      bar from sitting flush on the bottom. Added on top of --safe-bottom. */
   --tab-bar-rest: 0.75rem;
@@ -454,6 +460,42 @@ body {
 @media (max-width: 767px) {
   body {
     background-attachment: scroll;
+  }
+}
+
+/* The cure for the cold-launch viewport, as opposed to the cover-up.
+
+   Agenda was never healed by scrolling — it was healed by being *long*. A
+   document taller than the layout viewport is the geometry change that makes
+   WebKit publish the real window; Today and Calendar are short, so they stayed
+   on the stale one and their fixed chrome kept getting clipped at its edge.
+   Giving the page box the measured window height as a floor hands every screen
+   that same property.
+
+   It self-cancels: once the viewport is honest the floor equals the viewport
+   and nothing overflows. That is the advantage over the usual
+   `min-height: calc(100% + env(safe-area-inset-top))`, which is the same
+   number while stale but leaves the page permanently scrollable afterwards.
+
+   Installed app only — in a browser tab `100vh` runs under the address bar by
+   design, and this would make every page scroll by its height. Keyed on an
+   attribute rather than `display-mode` because iOS home-screen apps predating
+   16.4 only ever admit to `navigator.standalone`. */
+@media (max-width: 767px) {
+  html[data-standalone="1"],
+  html[data-standalone="1"].h-full {
+    min-height: var(--window-height, 100vh);
+  }
+
+  html[data-standalone="1"] body,
+  html[data-standalone="1"] body.min-h-full {
+    min-height: var(--window-height, 100vh);
+  }
+
+  /* The app shell sizes itself with `min-h-dvh`, and `100dvh` is short from a
+     cold launch for exactly the same reason. */
+  html[data-standalone="1"] .min-h-dvh {
+    min-height: var(--window-height, 100vh);
   }
 }
 
