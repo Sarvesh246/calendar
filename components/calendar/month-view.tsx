@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addMonths } from "date-fns";
-import { motion, useMotionValue, animate, useTransform } from "framer-motion";
+import { motion, useMotionValue, animate, useTransform, type PanInfo } from "framer-motion";
 import { isSameDay, isToday, format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
@@ -329,10 +329,13 @@ export function MonthView({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const swipeStart = useRef<{ x: number; y: number; t: number } | null>(null);
-  const dragging = useRef(false);
   const dragX = useMotionValue(0);
   const trackX = useTransform(dragX, (v) => (width ? -width + v : 0));
+  // A released drag ends on a pointerup over whichever day cell is under the
+  // finger, which the browser then turns into a click on that button — so a
+  // swipe used to also select the day it happened to land on. Mirrors the
+  // `didDrag` guard the tab-bar pill uses for the same reason.
+  const didPan = useRef(false);
 
   const prevAnchor = useMemo(() => addMonths(anchor, -1), [anchor]);
   const nextAnchor = useMemo(() => addMonths(anchor, 1), [anchor]);
@@ -360,33 +363,30 @@ export function MonthView({
     dragX.set(0);
   }, [anchor, dragX]);
 
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.changedTouches[0];
-    const now = Date.now();
-    swipeStart.current = { x: t.clientX, y: t.clientY, t: now };
-    dragging.current = true;
-  }
-
-  function onTouchMove(e: React.TouchEvent) {
-    if (!dragging.current || swipeStart.current == null || !width) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - swipeStart.current.x;
-    const dy = t.clientY - swipeStart.current.y;
+  // Driven by framer's own pan-gesture recognizer (a native PanSession, not
+  // React's synthetic touch events) rather than raw onTouchStart/Move/End —
+  // that manual path re-dispatched through React on every touchmove and left
+  // the browser to decide, frame by frame, whether the gesture was a scroll
+  // or a swipe, which is what read as dropped frames/choppiness once the grid
+  // got busy. `onPan` batches to one update per animation frame and, paired
+  // with `touch-action: pan-y` below, tells the browser up front that
+  // horizontal motion here is ours, so the very first frame of a swipe is as
+  // smooth as the rest of it. It also picks up mouse/trackpad dragging for
+  // free, which the touch-only version never supported on desktop.
+  function onPan(_event: PointerEvent, info: PanInfo) {
+    if (!width) return;
+    const { x: dx, y: dy } = info.offset;
     if (Math.abs(dx) > Math.abs(dy)) {
+      if (Math.abs(dx) > 4) didPan.current = true;
       const max = width * 0.92;
       dragX.set(Math.max(-max, Math.min(max, dx)));
     }
   }
 
-  function onTouchEnd(e: React.TouchEvent) {
-    if (swipeStart.current == null || !width) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - swipeStart.current.x;
-    const dy = t.clientY - swipeStart.current.y;
-    const dt = Math.max(1, Date.now() - swipeStart.current.t);
-    const vx = (dx / dt) * 1000;
-    swipeStart.current = null;
-    dragging.current = false;
+  function onPanEnd(_event: PointerEvent, info: PanInfo) {
+    if (!width) return;
+    const { x: dx, y: dy } = info.offset;
+    const vx = info.velocity.x;
 
     const threshold = width * 0.18;
     const fling = Math.abs(vx) > 620;
@@ -395,6 +395,12 @@ export function MonthView({
       if (dx < -threshold || (fling && vx < 0)) commit = 1;
       else if (dx > threshold || (fling && vx > 0)) commit = -1;
     }
+
+    // The click that follows this pointerup (if any) fires synchronously
+    // before this timeout runs, so it still sees `didPan.current` — this only
+    // clears a flag nothing ended up checking (a release over the gap between
+    // cells), so the next real tap is never swallowed.
+    if (didPan.current) setTimeout(() => (didPan.current = false), 0);
 
     if (commit) {
       haptic("light");
@@ -409,22 +415,33 @@ export function MonthView({
     void animate(dragX, 0, motionTokens.springSnappy);
   }
 
+  const guardedSelectDate = useCallback(
+    (date: Date) => {
+      if (didPan.current) {
+        didPan.current = false;
+        return;
+      }
+      onSelectDate(date);
+    },
+    [onSelectDate]
+  );
+
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
 
   const panelProps = {
     byDay,
     selectedDate,
-    onSelectDate,
+    onSelectDate: guardedSelectDate,
     weekStartsOn,
     colorOf,
     animateSelection: ringAnimated,
   };
 
   return (
-    <div
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+    <motion.div
+      onPan={onPan}
+      onPanEnd={onPanEnd}
+      style={{ touchAction: "pan-y" }}
       className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 sm:p-3"
     >
       <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
@@ -439,7 +456,10 @@ export function MonthView({
         ))}
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden">
-        <motion.div className="flex h-full" style={{ x: trackX, width: width ? width * 3 : "300%" }}>
+        <motion.div
+          className="flex h-full"
+          style={{ x: trackX, width: width ? width * 3 : "300%", willChange: "transform" }}
+        >
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
             <MonthGridPanel anchor={prevAnchor} {...panelProps} showSelectionRing={false} />
           </div>
@@ -451,6 +471,6 @@ export function MonthView({
           </div>
         </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
