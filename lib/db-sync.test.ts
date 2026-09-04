@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   FALLBACK_CATEGORY_COLOR,
   rowToCategory,
+  rowToPreset,
   toCategoryRow,
   toItemRow,
+  toPresetRow,
   toSettingsRow,
 } from "./db-sync";
-import type { Category, Item, UserSettings } from "./types";
+import type { Category, Item, ReminderPreset, UserSettings } from "./types";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 
@@ -83,6 +85,33 @@ describe("toItemRow", () => {
 
   it("rejects an unparseable timestamp instead of writing it", () => {
     expect(() => toItemRow(item({ at: "not a date" }), USER)).toThrow(RangeError);
+  });
+});
+
+describe("toPresetRow", () => {
+  it("never emits a null label or offset", () => {
+    // `reminder_presets.label`/`.offset_minutes` are NOT NULL with no default;
+    // an undefined value is dropped by JSON.stringify on the way out and lands
+    // as a missing column, which fails the insert with "null value in column
+    // \"label\"" and, since presets push before items, stalls the whole queue.
+    const broken = { id: "rp-1" } as unknown as ReminderPreset;
+    const row = toPresetRow(broken, USER);
+    expect(row.label).toBe("Reminder");
+    expect(row.offset_minutes).toBe(15);
+  });
+
+  it("keeps good values, trimming the label", () => {
+    const row = toPresetRow({ id: "rp-1", label: " 1 hour before ", offsetMinutes: 60 }, USER);
+    expect(row.label).toBe("1 hour before");
+    expect(row.offset_minutes).toBe(60);
+  });
+});
+
+describe("rowToPreset", () => {
+  it("substitutes a fallback for a null label or offset rather than propagating it", () => {
+    const preset = rowToPreset({ id: "rp-1", label: null, offset_minutes: null });
+    expect(preset.label).toBe("Reminder");
+    expect(preset.offsetMinutes).toBe(15);
   });
 });
 
