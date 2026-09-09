@@ -37,7 +37,12 @@ import {
   type TombstoneMap,
 } from "./tombstones";
 import { expandRepeat } from "./repeat";
-import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import {
+  collapseBySourceUid,
+  dedupeCategories,
+  mergeCalendars,
+  type CalendarSnapshot,
+} from "./merge-calendars";
 import {
   dedupeReminderPresets,
   sanitizeCategories,
@@ -372,9 +377,34 @@ export const useDatebookStore = create<DatebookState>()(
         let added = 0;
         let updated = 0;
 
+        // Claim back items this feed owns but is no longer tagged with.
+        //
+        // Two devices that subscribed to the same URL separately produce two
+        // source rows, and collapsing those leaves half the items pointing at
+        // the id that lost. Those rows are still this feed's — it is publishing
+        // their UID right now — so re-tag them instead of importing a second
+        // copy under a fresh id, which is what put a completed assignment back
+        // on the list as an incomplete, overdue twin. Items belonging to a
+        // *live* source are left alone, so two feeds can't tug at the same row.
+        const liveSourceIds = new Set(state.importSources.map((s) => s.id));
+        const adoptable = (item: Item): boolean =>
+          Boolean(item.sourceUid) &&
+          item.sourceId !== sourceId &&
+          incoming.has(item.sourceUid as string) &&
+          (!item.sourceId || !liveSourceIds.has(item.sourceId));
+        const claimed = baseItems.map((item) =>
+          adoptable(item) ? { ...item, sourceId, updatedAt: nowIso() } : item
+        );
+
+        // Now that every copy agrees on the source, two rows for one feed event
+        // collapse into one — otherwise both are matched against the same draft
+        // and both kept, and since only one carries the tick the other stays
+        // incomplete and overdue.
+        const collapsed = collapseBySourceUid(claimed);
+
         // Update items already tied to this source; leave the user's status and
         // any locally edited feed fields alone.
-        const merged = baseItems.map((item) => {
+        const merged = collapsed.items.map((item) => {
           if (item.sourceId !== sourceId || !item.sourceUid) return item;
           const draft = incoming.get(item.sourceUid);
           if (!draft) return item;
@@ -398,7 +428,9 @@ export const useDatebookStore = create<DatebookState>()(
         );
         const droppedIds = new Set(dropped.map((i) => i.id));
         const pruned = merged.filter((i) => !droppedIds.has(i.id));
-        const removed = dropped.length;
+        // A collapsed duplicate really is gone from the calendar, so it belongs
+        // in the same count the user sees as "removed".
+        const removed = dropped.length + collapsed.dropped.length;
 
         for (const draft of drafts) {
           if (known.has(draft.sourceUid)) continue;
@@ -426,9 +458,9 @@ export const useDatebookStore = create<DatebookState>()(
             : [...state.importSources, source],
           // An event dropped from the feed is a delete like any other — without a
           // tombstone the other device pushes it straight back. Same for the
-          // duplicate categories collapsed above.
+          // duplicate categories and duplicate feed rows collapsed above.
           deletions: addTombstones(
-            addTombstones(state.deletions, "item", [...droppedIds]),
+            addTombstones(state.deletions, "item", [...droppedIds, ...collapsed.dropped]),
             "category",
             [...remap.keys()]
           ),

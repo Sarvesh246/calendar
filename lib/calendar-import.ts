@@ -1,6 +1,7 @@
 import { nanoid } from "./nanoid";
 import { parseIcs, type IcsEvent } from "./ics";
 import { snapshotFrom } from "./source-snapshot";
+import { categoryKey } from "./merge-calendars";
 import { authHeaders } from "./auth-headers";
 import type { Category, Item, ItemType } from "./types";
 
@@ -88,6 +89,11 @@ function detectType(ev: IcsEvent): ItemType {
   if (ev.kind === "todo") return "task";
   const hay = `${ev.uid} ${ev.url ?? ""}`.toLowerCase();
   if (/(assignment|quiz|discussion_topic|homework)/.test(hay)) return "assignment";
+  // Canvas publishes its own calendar entries as `event-calendar-event-…`.
+  // Those are meetings even when the feed omits DTEND — typing them as
+  // assignments gave them a status and put them on the overdue list the moment
+  // they passed.
+  if (/calendar[-_]event/.test(hay)) return "event";
   // A point-in-time entry with no end is a due date, not a meeting.
   if (!ev.end) return "assignment";
   return "event";
@@ -114,7 +120,7 @@ export function buildImportPlan(
   const byName = new Map<string, Category>();
   for (const c of existingCategories) {
     const name = typeof c.name === "string" && c.name.trim() ? c.name.trim() : "Uncategorized";
-    const key = name.toLowerCase();
+    const key = categoryKey(name);
     if (!byName.has(key)) byName.set(key, c);
   }
 
@@ -122,7 +128,7 @@ export function buildImportPlan(
     // `course ?? fallbackName` kept an empty string — a summary ending in an
     // empty bracket ("Essay [ ]") produced a nameless category per sync.
     const wanted = (course ?? "").trim() || fallbackName;
-    const key = wanted.toLowerCase();
+    const key = categoryKey(wanted);
     const hit = byName.get(key);
     if (hit) return hit.id;
     const created: Category = {

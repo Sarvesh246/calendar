@@ -33,9 +33,23 @@ export function mergeCalendars(
   cloud: CalendarSnapshot,
   tombstones: TombstoneMap = {}
 ): CalendarSnapshot {
-  const { categories, remap } = dedupeCategories(
+  const { categories: deduped, remap } = dedupeCategories(
     reconcile("category", local.categories, cloud.categories, tombstones)
   );
+  const sources = dedupeByUrl(
+    reconcile("import_source", local.importSources, cloud.importSources, tombstones)
+  );
+  // A feed row that loses the dedupe takes its items' `sourceId` with it —
+  // otherwise every item that pointed at it is orphaned, and the next re-sync
+  // can no longer tell those came from this feed, so it imports a second copy.
+  const categories = repointSources(deduped, sources.remap);
+  const items = collapseBySourceUid(
+    repointSources(
+      repointCategories(mergeItems(local.items, cloud.items, tombstones), remap),
+      sources.remap
+    ),
+    new Set(local.items.map((i) => i.id))
+  ).items;
   return {
     categories,
     reminderPresets: reconcile(
@@ -44,15 +58,156 @@ export function mergeCalendars(
       cloud.reminderPresets,
       tombstones
     ),
-    importSources: dedupeByUrl(
-      reconcile("import_source", local.importSources, cloud.importSources, tombstones)
-    ),
-    items: repointCategories(mergeItems(local.items, cloud.items, tombstones), remap),
+    importSources: sources.sources,
+    items,
     settings: pickSettings(local.settings, cloud.settings),
   };
 }
 
-function categoryKey(name: string): string {
+/** Follow a remap's chains so every entry points at a final survivor. */
+function resolveChains(remap: Map<string, string>) {
+  for (const [from, to] of remap) {
+    let dest = to;
+    for (let i = 0; i < 8 && remap.has(dest); i += 1) dest = remap.get(dest) as string;
+    remap.set(from, dest);
+  }
+}
+
+function repointSources<T extends { sourceId?: string }>(
+  rows: T[],
+  remap: Map<string, string>
+): T[] {
+  if (remap.size === 0) return rows;
+  return rows.map((r) => {
+    const to = r.sourceId ? remap.get(r.sourceId) : undefined;
+    return to ? { ...r, sourceId: to } : r;
+  });
+}
+
+/**
+ * Which of two rows describing the same thing keeps its id.
+ *
+ * Deliberately independent of which device is asking. "Keep the local one" is
+ * not: two devices reconciling the same duplicate pair at the same moment each
+ * keep their own id and tombstone the other's, and the row vanishes from both.
+ * Oldest wins (the original import — the id other devices most likely already
+ * reference), then lowest id, so every device reaches the same answer.
+ */
+function pickSurvivor<T extends Stamped>(a: T, b: T): T {
+  const at = time(a.createdAt);
+  const bt = time(b.createdAt);
+  if (at !== bt) return at < bt ? a : b;
+  return a.id <= b.id ? a : b;
+}
+
+/**
+ * Collapse rows that are the same feed event under different ids.
+ *
+ * A Canvas event has one UID but gets a fresh local id on every device that
+ * imports it, so two devices that subscribed before they had ever synced push
+ * two rows for one assignment. The old code only caught the case where the
+ * local row was missing from the cloud — once both copies had been pushed,
+ * every later reconcile saw two cloud rows and kept them both. On screen that
+ * is the assignment listed twice, and since only one copy carries the tick, the
+ * other sits there incomplete and overdue.
+ *
+ * Status is folded across the whole group, so the surviving row keeps the
+ * furthest-along progress whichever copy it was recorded on.
+ *
+ * Rows are grouped per feed, not by UID alone: two unrelated calendars can
+ * legitimately publish the same UID, and fusing two genuinely different events
+ * loses one of them. The two devices' feed rows have already been collapsed and
+ * repointed by then, so both copies of a shared subscription agree on it.
+ */
+export function collapseBySourceUid(
+  items: Item[],
+  /** Ids of the local copies. Used only to break an exact `updatedAt` tie —
+   *  the local side is the only one that can hold an edit the cloud has not
+   *  seen yet. The surviving *id* never depends on this. */
+  localIds: ReadonlySet<string> = new Set()
+): { items: Item[]; dropped: string[] } {
+  const groups = new Map<string, Item[]>();
+  let duplicated = false;
+  for (const i of items) {
+    const key = feedKey(i);
+    if (!key) continue;
+    const group = groups.get(key);
+    if (group) {
+      group.push(i);
+      duplicated = true;
+    } else {
+      groups.set(key, [i]);
+    }
+  }
+  if (!duplicated) return { items, dropped: [] };
+
+  const winners = new Map<string, Item>();
+  const dropped: string[] = [];
+  for (const [uid, group] of groups) {
+    if (group.length === 1) {
+      winners.set(uid, group[0]);
+      continue;
+    }
+    // Sorted so the fold order — and every tie it breaks — is identical on
+    // every device.
+    const sorted = [...group].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const keep = sorted.reduce(pickSurvivor);
+    let merged = keep;
+    let mergedIsLocal = localIds.has(keep.id);
+    for (const other of sorted) {
+      if (other.id === keep.id) continue;
+      dropped.push(other.id);
+      const folded = foldDuplicate(merged, mergedIsLocal, other, localIds.has(other.id));
+      merged = folded.item;
+      mergedIsLocal = folded.isLocal;
+    }
+    winners.set(uid, { ...merged, id: keep.id });
+  }
+
+  const emitted = new Set<string>();
+  const out: Item[] = [];
+  for (const i of items) {
+    const key = feedKey(i);
+    if (!key) {
+      out.push(i);
+      continue;
+    }
+    if (emitted.has(key)) continue;
+    emitted.add(key);
+    out.push(winners.get(key) as Item);
+  }
+  return { items: out, dropped };
+}
+
+/** Identity of the feed event a row came from, or null when it isn't imported. */
+function feedKey(i: Item): string | null {
+  return i.sourceUid ? `${i.sourceId ?? ""}::${i.sourceUid}` : null;
+}
+
+/** Fold one duplicate into another: newest content wins, status is merged on
+ *  its own clock, and an exact timestamp tie goes to the local copy. */
+function foldDuplicate(
+  a: Item,
+  aIsLocal: boolean,
+  b: Item,
+  bIsLocal: boolean
+): { item: Item; isLocal: boolean } {
+  const at = time(a.updatedAt ?? a.createdAt);
+  const bt = time(b.updatedAt ?? b.createdAt);
+  const takeB = bt > at || (bt === at && bIsLocal && !aIsLocal);
+  const base = takeB ? b : a;
+  return {
+    item: withStatusFrom(base, pickStatusFrom(a, b)),
+    isLocal: takeB ? bIsLocal : aIsLocal,
+  };
+}
+
+/** The one way a category name is matched, everywhere. `buildImportPlan` used a
+ *  slightly looser key (no internal-whitespace collapsing), so a course whose
+ *  name came through with a double space was minted fresh on every sync and
+ *  collapsed again by the next merge — a duplicate, a tombstone and a write
+ *  every time round. */
+export function categoryKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
@@ -93,11 +248,7 @@ export function dedupeCategories(categories: Category[]): {
     remap.set(drop.id, keep.id);
   }
   // A dropped category may itself have been a target earlier in the loop.
-  for (const [from, to] of remap) {
-    let dest = to;
-    for (let i = 0; i < 8 && remap.has(dest); i += 1) dest = remap.get(dest)!;
-    remap.set(from, dest);
-  }
+  resolveChains(remap);
   return { categories: [...winners.values()], remap };
 }
 
@@ -139,15 +290,34 @@ function reconcile<T extends Stamped>(
   return [...byId.values()].filter((row) => !isDeleted(tombstones, kind, row));
 }
 
-/** Two devices that subscribed to the same feed independently produce two source
- *  rows with different ids — collapse them so the feed isn't listed twice. */
-function dedupeByUrl(sources: ImportSource[]): ImportSource[] {
+/**
+ * Two devices that subscribed to the same feed independently produce two source
+ * rows with different ids — collapse them so the feed isn't listed twice.
+ *
+ * The survivor's id is chosen device-independently and reported back, because
+ * items and auto-created categories point at it: dropping a row without
+ * repointing them strands them on a source that no longer exists.
+ */
+function dedupeByUrl(sources: ImportSource[]): {
+  sources: ImportSource[];
+  remap: Map<string, string>;
+} {
   const byUrl = new Map<string, ImportSource>();
+  const remap = new Map<string, string>();
   for (const s of sources) {
-    const existing = byUrl.get(s.url);
-    byUrl.set(s.url, existing ? newer(s, existing) : s);
+    const held = byUrl.get(s.url);
+    if (!held) {
+      byUrl.set(s.url, s);
+      continue;
+    }
+    const keep = pickSurvivor(held, s);
+    const drop = keep === held ? s : held;
+    // The survivor's identity, but the freshest sync state.
+    byUrl.set(s.url, { ...newer(held, s), id: keep.id, addedAt: keep.addedAt });
+    remap.set(drop.id, keep.id);
   }
-  return [...byUrl.values()];
+  resolveChains(remap);
+  return { sources: [...byUrl.values()], remap };
 }
 
 /** Content fields go to the newer edit; status is decided separately below. */
@@ -180,9 +350,8 @@ function pickStatusFrom(local: Item, cloud: Item): Item {
   return local;
 }
 
-function pickItem(local: Item, cloud: Item): Item {
-  const base = pickContent(local, cloud);
-  const statusSide = pickStatusFrom(local, cloud);
+/** `base`'s content, carrying `statusSide`'s progress. */
+function withStatusFrom(base: Item, statusSide: Item): Item {
   if (statusSide.status === base.status && statusSide.completedAt === base.completedAt) {
     return base;
   }
@@ -194,28 +363,17 @@ function pickItem(local: Item, cloud: Item): Item {
   return next;
 }
 
+function pickItem(local: Item, cloud: Item): Item {
+  return withStatusFrom(pickContent(local, cloud), pickStatusFrom(local, cloud));
+}
+
+/** Union by id. Rows that share a `sourceUid` under different ids are collapsed
+ *  afterwards by `collapseBySourceUid`, which does it device-independently. */
 function mergeItems(local: Item[], cloud: Item[], tombstones: TombstoneMap): Item[] {
   const byId = new Map(cloud.map((i) => [i.id, i]));
-  const uidToId = new Map(
-    cloud.filter((i) => i.sourceUid).map((i) => [i.sourceUid as string, i.id])
-  );
   for (const item of local) {
-    // The same feed event imported separately on two devices has two ids but one
-    // sourceUid — collapse onto the local id rather than showing it twice.
-    if (item.sourceUid && uidToId.has(item.sourceUid) && !byId.has(item.id)) {
-      const cloudId = uidToId.get(item.sourceUid)!;
-      const twin = byId.get(cloudId);
-      byId.delete(cloudId);
-      // Don't lose the cloud twin's progress just because the ids differ.
-      if (twin) {
-        byId.set(item.id, { ...pickItem(item, { ...twin, id: item.id }), id: item.id });
-        uidToId.set(item.sourceUid, item.id);
-        continue;
-      }
-    }
     const existing = byId.get(item.id);
     byId.set(item.id, existing ? pickItem(item, existing) : item);
-    if (item.sourceUid) uidToId.set(item.sourceUid, item.id);
   }
   return [...byId.values()].filter((row) => !isDeleted(tombstones, "item", row));
 }

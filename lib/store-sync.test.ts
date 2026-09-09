@@ -216,3 +216,133 @@ describe("settings", () => {
     expect(merged.settings.preset).toBe("noir");
   });
 });
+
+
+describe("Canvas feed re-sync", () => {
+  const FEED = "https://canvas.example/feed.ics";
+  const DUE = "2026-09-05T23:59:00.000Z";
+  const TICKED = "2026-09-04T10:00:00.000Z";
+
+  /** One assignment, exactly as a Canvas feed publishes it. */
+  const feed = (over: Partial<{ uid: string; summary: string }> = {}) => ({
+    calendarName: "Canvas",
+    events: [
+      {
+        uid: over.uid ?? "canvas-uid-1",
+        summary: over.summary ?? "Essay 1 [ENGL 101]",
+        start: DUE,
+        allDay: false,
+      },
+    ],
+  });
+
+  const source = (id: string) => ({
+    id,
+    url: FEED,
+    name: "Canvas",
+    addedAt: "2026-09-01T00:00:00.000Z",
+    lastSyncedAt: "2026-09-01T00:00:00.000Z",
+    itemCount: 1,
+  });
+
+  const importedItem = (over: Partial<Item>): Item => ({
+    id: "item-1",
+    categoryId: "cat-1",
+    type: "assignment",
+    title: "Essay 1",
+    at: DUE,
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    sourceUid: "canvas-uid-1",
+    ...over,
+  });
+
+  beforeEach(reset);
+
+  it("re-syncing the same feed neither duplicates items nor courses", () => {
+    store().applyImport(FEED, feed());
+    const afterFirst = store().items.length;
+    const courses = store().categories.length;
+    const second = store().applyImport(FEED, feed());
+    expect(store().items).toHaveLength(afterFirst);
+    expect(store().categories).toHaveLength(courses);
+    expect(second).toEqual({ added: 0, updated: 0, removed: 0 });
+    expect(store().importSources).toHaveLength(1);
+  });
+
+  it("leaves a completed assignment completed across a re-sync", () => {
+    store().applyImport(FEED, feed());
+    const imported = store().items.find((i) => i.sourceUid === "canvas-uid-1") as Item;
+    store().setItemStatus(imported.id, "done");
+    store().applyImport(FEED, feed());
+    const after = store().items.filter((i) => i.sourceUid === "canvas-uid-1");
+    expect(after).toHaveLength(1);
+    expect(after[0].status).toBe("done");
+  });
+
+  it("keeps a completed assignment that has dropped out of the feed", () => {
+    store().applyImport(FEED, feed());
+    const imported = store().items.find((i) => i.sourceUid === "canvas-uid-1") as Item;
+    store().setItemStatus(imported.id, "done");
+    // Canvas stops publishing it once the term rolls over.
+    store().applyImport(FEED, { calendarName: "Canvas", events: [] });
+    expect(store().items.find((i) => i.id === imported.id)?.status).toBe("done");
+  });
+
+  it("claims back an item whose source row lost a dedupe", () => {
+    // Two devices subscribed separately, so there were two source rows; the
+    // merge collapsed them and this item is still tagged with the loser. It is
+    // the same Canvas event, so importing it again must not mint a second copy
+    // — which is how a ticked-off assignment reappeared as todo and overdue.
+    useDatebookStore.setState({
+      importSources: [source("src-live")],
+      items: [
+        importedItem({
+          sourceId: "src-dead",
+          status: "done",
+          statusAt: TICKED,
+          completedAt: TICKED,
+        }),
+      ],
+    });
+    const result = store().applyImport(FEED, feed());
+    const items = store().items.filter((i) => i.sourceUid === "canvas-uid-1");
+    expect(result.added).toBe(0);
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe("item-1");
+    expect(items[0].sourceId).toBe("src-live");
+    expect(items[0].status).toBe("done");
+  });
+
+  it("collapses two rows for one feed event, keeping the tick", () => {
+    useDatebookStore.setState({
+      importSources: [source("src-live")],
+      items: [
+        importedItem({
+          id: "item-done",
+          sourceId: "src-live",
+          status: "done",
+          statusAt: TICKED,
+          completedAt: TICKED,
+        }),
+        importedItem({ id: "item-todo", sourceId: "src-live", status: "todo" }),
+      ],
+    });
+    const result = store().applyImport(FEED, feed());
+    const items = store().items.filter((i) => i.sourceUid === "canvas-uid-1");
+    expect(items).toHaveLength(1);
+    expect(items[0].status).toBe("done");
+    expect(result.removed).toBe(1);
+    // The copy that lost has to be tombstoned, or the other device pushes it back.
+    expect(store().deletions[tombKey("item", "item-todo")]).toBeTruthy();
+  });
+
+  it("does not claim an item that belongs to another live feed", () => {
+    useDatebookStore.setState({
+      importSources: [source("src-live"), { ...source("src-other"), url: "https://other/f.ics" }],
+      items: [importedItem({ id: "other-feed", sourceId: "src-other" })],
+    });
+    store().applyImport(FEED, feed());
+    expect(store().items.find((i) => i.id === "other-feed")?.sourceId).toBe("src-other");
+  });
+});
