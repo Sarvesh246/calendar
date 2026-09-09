@@ -15,6 +15,7 @@ function reset() {
     lastDeleted: null,
     mode: "local",
     userId: null,
+    syncNotices: [],
   });
 }
 
@@ -194,6 +195,22 @@ describe("cross-device edits", () => {
       [tombKey("item", item.id)]: new Date(time(item.updatedAt) + 1000).toISOString(),
     });
     expect(merged.items).toHaveLength(0);
+  });
+});
+
+describe("sync notices", () => {
+  it("starts empty and dismisses by id", () => {
+    expect(store().syncNotices).toEqual([]);
+    useDatebookStore.setState({
+      syncNotices: [
+        { id: "n1", itemId: "a", title: "Essay", kind: "remote", rev: 0 },
+        { id: "n2", itemId: "b", title: "Quiz", kind: "conflict", rev: 0 },
+      ],
+    });
+    store().dismissSyncNotice("n1");
+    expect(store().syncNotices.map((n) => n.id)).toEqual(["n2"]);
+    store().clearSyncNotices();
+    expect(store().syncNotices).toEqual([]);
   });
 });
 

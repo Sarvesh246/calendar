@@ -590,9 +590,25 @@ button, a, [role="button"], summary, input, textarea, select, label {
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
+/* Same glass recipe as the tab bar — a compact card that sits just above it. */
+.sync-notice-card {
+  isolation: isolate;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--line-strong) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    0 10px 28px color-mix(in srgb, black 14%, transparent);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
 @supports not ((backdrop-filter: blur(1px))) {
   .mobile-tab-bar,
   .mobile-header-cluster {
+    background: var(--surface-elevated);
+  }
+  .sync-notice-card {
     background: var(--surface-elevated);
   }
 }
@@ -987,6 +1003,11 @@ html[data-first-load="1"] .page-shell > * > * {
 .toast-drain {
   transform-origin: left center;
   animation: toast-drain linear forwards;
+}
+
+.sync-notice-card:hover .toast-drain,
+.sync-notice-card:active .toast-drain {
+  animation-play-state: paused;
 }
 
 /* A completed item gets one quiet acknowledgement, not a confetti burst. */
