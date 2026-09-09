@@ -61,6 +61,16 @@ import type {
   RepeatRule,
   UserSettings,
 } from "./types";
+import {
+  decideRemoteItemNotice,
+  dismissSyncNotice as dropSyncNotice,
+  isOwnWriteEcho,
+  mergeNoticeBatch,
+  NOTICE_COALESCE_MS,
+  LOCAL_WRITE_WINDOW_MS,
+  type NoticeDraft,
+  type SyncNotice,
+} from "./sync-notice";
 
 export interface ImportResult {
   added: number;
@@ -92,7 +102,8 @@ interface DatebookState {
   syncStatus: SyncStatus;
   cloudError: string | null;
   mergeOffer: MergeOffer | null;
-  lastConflict: string | null;
+  /** Quiet, replaceable cards for other-device edits. Transient. */
+  syncNotices: SyncNotice[];
 
   addItem: (item: Omit<Item, "id" | "createdAt">) => Item;
   updateItem: (id: string, patch: Partial<Item>) => void;
@@ -124,7 +135,8 @@ interface DatebookState {
   resetAllData: () => void;
   replaceFromBackup: (backup: DatebookBackup) => void;
   setItemRepeat: (id: string, rule: RepeatRule | undefined) => void;
-  clearConflict: () => void;
+  dismissSyncNotice: (id: string) => void;
+  clearSyncNotices: () => void;
 
   /** Load the signed-in user's data, adopt/merge local data, and start realtime sync. */
   connectCloud: (userId: string) => Promise<void>;
@@ -173,7 +185,7 @@ export const useDatebookStore = create<DatebookState>()(
       syncStatus: "idle",
       cloudError: null,
       mergeOffer: null,
-      lastConflict: null,
+      syncNotices: [],
 
       addItem: (item) => {
         const createdAt = new Date().toISOString();
@@ -214,9 +226,13 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       updateItem: (id, patch) => {
-        noteLocalEdit(id);
         set({
-          items: get().items.map((i) => (i.id === id ? mergeItem(i, patch) : i)),
+          items: get().items.map((i) => {
+            if (i.id !== id) return i;
+            const next = mergeItem(i, patch);
+            noteLocalWrite(id, next.updatedAt ?? nowIso());
+            return next;
+          }),
         });
       },
 
@@ -246,34 +262,38 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       cycleItemStatus: (id) => {
-        noteLocalEdit(id);
         const order: ItemStatus[] = ["todo", "doing", "done"];
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
             const current = i.status ?? "todo";
-            const next = order[(order.indexOf(current) + 1) % order.length];
-            return mergeItem(i, { status: next });
+            const nextStatus = order[(order.indexOf(current) + 1) % order.length];
+            const next = mergeItem(i, { status: nextStatus });
+            noteLocalWrite(id, next.updatedAt ?? nowIso());
+            return next;
           }),
         });
       },
 
       setItemStatus: (id, status) => {
-        noteLocalEdit(id);
         set({
-          items: get().items.map((i) =>
-            i.id === id && i.type !== "event" ? mergeItem(i, { status }) : i
-          ),
+          items: get().items.map((i) => {
+            if (i.id !== id || i.type === "event") return i;
+            const next = mergeItem(i, { status });
+            noteLocalWrite(id, next.updatedAt ?? nowIso());
+            return next;
+          }),
         });
       },
 
       toggleItemDone: (id) => {
-        noteLocalEdit(id);
         set({
           items: get().items.map((i) => {
             if (i.id !== id || i.type === "event") return i;
             const current = i.status ?? "todo";
-            return mergeItem(i, { status: current === "done" ? "todo" : "done" });
+            const next = mergeItem(i, { status: current === "done" ? "todo" : "done" });
+            noteLocalWrite(id, next.updatedAt ?? nowIso());
+            return next;
           }),
         });
       },
@@ -528,9 +548,12 @@ export const useDatebookStore = create<DatebookState>()(
           label: `Snoozed ${minutes} min`,
         };
         set({
-          items: get().items.map((i) =>
-            i.id === id ? mergeItem(i, { reminders: [...(i.reminders ?? []), reminder] }) : i
-          ),
+          items: get().items.map((i) => {
+            if (i.id !== id) return i;
+            const next = mergeItem(i, { reminders: [...(i.reminders ?? []), reminder] });
+            noteLocalWrite(id, next.updatedAt ?? nowIso());
+            return next;
+          }),
         });
       },
 
@@ -539,10 +562,12 @@ export const useDatebookStore = create<DatebookState>()(
         if (!item) return;
         const others = get().items.filter((i) => i.id !== id);
         if (!rule) {
+          const stamp = nowIso();
+          noteLocalWrite(id, stamp);
           set({
             items: get().items.map((i) => {
               if (i.id !== id) return i;
-              const next = { ...i, updatedAt: nowIso() };
+              const next = { ...i, updatedAt: stamp };
               delete next.repeat;
               delete next.repeatId;
               return next;
@@ -552,9 +577,11 @@ export const useDatebookStore = create<DatebookState>()(
         }
         const seriesId = item.repeatId ?? nanoid();
         const occs = expandRepeat(item.at, item.endAt, rule);
+        const stamp = nowIso();
+        noteLocalWrite(id, stamp);
         const created: Item[] = occs.map((occ, idx) => {
           if (idx === 0) {
-            return { ...item, ...occ, repeat: rule, repeatId: seriesId, updatedAt: nowIso() };
+            return { ...item, ...occ, repeat: rule, repeatId: seriesId, updatedAt: stamp };
           }
           const nid = nanoid();
           return {
@@ -627,7 +654,9 @@ export const useDatebookStore = create<DatebookState>()(
         });
       },
 
-      clearConflict: () => set({ lastConflict: null }),
+      dismissSyncNotice: (id) =>
+        set((s) => ({ syncNotices: dropSyncNotice(s.syncNotices, id) })),
+      clearSyncNotices: () => set({ syncNotices: [] }),
 
       connectCloud: async (userId) => {
         if (!supabase || activeUserId === userId || connecting) return;
@@ -922,9 +951,10 @@ export const useDatebookStore = create<DatebookState>()(
           syncStatus: "idle",
           cloudError: null,
           mergeOffer: null,
-          lastConflict: null,
+          syncNotices: [],
         });
         applyingRemote = false;
+        clearNoticeQueue();
 
         // Drop the consumed snapshot so the next sign-in re-captures whatever the
         // user does as a guest from here, instead of restoring this stale copy.
@@ -1179,29 +1209,57 @@ function safeOffsetMinutes(v: unknown): number {
 }
 
 /**
- * Items this device edited in the last few seconds.
- *
- * Purely for deciding whether a remote change is worth a toast — conflicts
- * themselves are resolved by timestamp. Without it the app announced "another
- * device updated this" for the echo of the user's *own* write, on the device
- * they made it on.
+ * Items this device edited in the last few seconds, keyed by the stamp we
+ * actually wrote. Echoes of those writes must not toast on this device; a
+ * *newer* stamp from another device still can.
  */
-const CONFLICT_NOTICE_WINDOW_MS = 45_000;
-const recentLocalEdits = new Map<string, number>();
+const recentLocalWrites = new Map<string, { at: number; updatedAt: string }>();
 
-function noteLocalEdit(id: string) {
+function noteLocalWrite(id: string, updatedAt: string) {
   const now = Date.now();
-  recentLocalEdits.set(id, now);
-  if (recentLocalEdits.size > 200) {
-    for (const [key, at] of recentLocalEdits) {
-      if (now - at > CONFLICT_NOTICE_WINDOW_MS) recentLocalEdits.delete(key);
+  recentLocalWrites.set(id, { at: now, updatedAt });
+  if (recentLocalWrites.size > 200) {
+    for (const [key, rec] of recentLocalWrites) {
+      if (now - rec.at > LOCAL_WRITE_WINDOW_MS) recentLocalWrites.delete(key);
     }
   }
 }
 
+function lastLocalUpdatedAt(id: string): string | undefined {
+  const rec = recentLocalWrites.get(id);
+  if (!rec || Date.now() - rec.at > LOCAL_WRITE_WINDOW_MS) return undefined;
+  return rec.updatedAt;
+}
+
 function editedHereRecently(id: string): boolean {
-  const at = recentLocalEdits.get(id);
-  return at !== undefined && Date.now() - at < CONFLICT_NOTICE_WINDOW_MS;
+  const rec = recentLocalWrites.get(id);
+  return rec !== undefined && Date.now() - rec.at < LOCAL_WRITE_WINDOW_MS;
+}
+
+/** Coalesce a burst of per-row realtime events into one stack update so a
+ *  feed re-sync doesn't spawn a card per assignment. */
+let noticeBuf: NoticeDraft[] = [];
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function enqueueSyncNotice(draft: NoticeDraft) {
+  noticeBuf.push(draft);
+  if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    noticeTimer = null;
+    const batch = noticeBuf;
+    noticeBuf = [];
+    useDatebookStore.setState((s) => ({
+      syncNotices: mergeNoticeBatch(s.syncNotices, batch),
+    }));
+  }, NOTICE_COALESCE_MS);
+}
+
+function clearNoticeQueue() {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer);
+    noticeTimer = null;
+  }
+  noticeBuf = [];
 }
 
 function addTombstones(current: TombstoneMap, kind: EntityKind, ids: string[]): TombstoneMap {
@@ -1244,6 +1302,7 @@ let pendingMerge: { userId: string; cloud: CloudSnapshot } | null = null;
 let desiredUserId: string | null = null;
 let channel: RealtimeChannel | null = null;
 let deletionsChannel: RealtimeChannel | null = null;
+let itemsBroadcastChannel: RealtimeChannel | null = null;
 
 // Resilience: the initial cloud connect and the realtime channel both retry with
 // backoff instead of stopping at the first failure, and a backgrounded tab
@@ -1457,12 +1516,17 @@ function accumulate<T extends { id: string }>(
   return true;
 }
 
+// Short on purpose: this is the gap the other device waits before the write
+// even leaves. 350ms plus the realtime round-trip felt like the other phone
+// was frozen; 80ms still batches a double-tap on status without being visible.
+const FLUSH_DEBOUNCE_MS = 80;
+
 function scheduleFlush() {
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => {
     flushTimer = null;
     void flush();
-  }, 350);
+  }, FLUSH_DEBOUNCE_MS);
 }
 
 function drain<T extends { id: string }>(bucket: { upserts: Map<string, T>; deletes: Set<string> }) {
@@ -1516,6 +1580,11 @@ async function flush() {
     clearFlushRetry();
     useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
     ok = true;
+    // Fan the items out over the realtime channel so other open devices apply
+    // them immediately, instead of waiting on postgres_changes (which is also
+    // how this device used to toast on its own echo). `self: false` so we
+    // don't ingest our own broadcast.
+    if (batch.items.upserts.length) broadcastItemUpserts(batch.items.upserts);
   } catch (err) {
     requeue(batch);
     console.error("[datebook] cloud sync failed:", err);
@@ -1580,6 +1649,109 @@ const COLL_FOR_ENTITY: Record<EntityKind, CollKey> = {
   reminder_preset: "reminderPresets",
   import_source: "importSources",
 };
+
+const ITEM_BROADCAST_EVENT = "item-upserts";
+
+function isItemLike(v: unknown): v is Item {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Partial<Item>;
+  return typeof o.id === "string" && typeof o.title === "string" && typeof o.at === "string";
+}
+
+function ingestRemoteItem(
+  current: Item[],
+  model: Item
+): {
+  items: Item[];
+  notice: NoticeDraft | null;
+  pushLocal?: Item;
+  pushDelete?: string;
+} {
+  const tombstones = useDatebookStore.getState().deletions;
+  if (isDeleted(tombstones, "item", model)) {
+    return { items: current, notice: null, pushDelete: model.id };
+  }
+  // Echo of a write we just made — leave the in-memory row alone so an editor
+  // mid-keystroke isn't reset by the mapper-normalized copy coming back.
+  if (isOwnWriteEcho(model.updatedAt, lastLocalUpdatedAt(model.id))) {
+    return { items: current, notice: null };
+  }
+  const idx = current.findIndex((x) => x.id === model.id);
+  if (idx === -1) {
+    return { items: [...current, model], notice: null };
+  }
+  const prev = current[idx];
+  const mine = time(prev.updatedAt ?? prev.createdAt);
+  const theirs = time(model.updatedAt ?? model.createdAt);
+  if (mine > theirs && JSON.stringify(prev) !== JSON.stringify(model)) {
+    return { items: current, notice: null, pushLocal: prev };
+  }
+  return {
+    items: current.map((x, i) => (i === idx ? model : x)),
+    notice: decideRemoteItemNotice({
+      prev,
+      remote: model,
+      lastWrittenAt: lastLocalUpdatedAt(model.id),
+      editedHereRecently: editedHereRecently(model.id),
+    }),
+  };
+}
+
+function commitIngestSideEffects(result: ReturnType<typeof ingestRemoteItem>) {
+  if (result.pushDelete) {
+    const tombstones = useDatebookStore.getState().deletions;
+    pending.items.deletes.add(result.pushDelete);
+    pending.deletions[tombKey("item", result.pushDelete)] =
+      tombstones[tombKey("item", result.pushDelete)] ?? nowIso();
+    scheduleFlush();
+  }
+  if (result.pushLocal) {
+    pending.items.upserts.set(result.pushLocal.id, result.pushLocal);
+    pending.items.deletes.delete(result.pushLocal.id);
+    scheduleFlush();
+  }
+  if (result.notice) enqueueSyncNotice(result.notice);
+}
+
+function applyIncomingItems(models: Item[]) {
+  if (models.length === 0) return;
+  const wasApplying = applyingRemote;
+  applyingRemote = true;
+  try {
+    let items = useDatebookStore.getState().items;
+    let changed = false;
+    for (const model of models) {
+      const result = ingestRemoteItem(items, model);
+      commitIngestSideEffects(result);
+      if (result.items !== items) {
+        items = result.items;
+        changed = true;
+      }
+    }
+    if (changed) useDatebookStore.setState({ items });
+  } finally {
+    applyingRemote = wasApplying;
+  }
+}
+
+function applyBroadcastPayload(payload: unknown) {
+  const items = (payload as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) return;
+  applyIncomingItems(items.filter(isItemLike));
+}
+
+function broadcastItemUpserts(items: Item[]) {
+  if (!itemsBroadcastChannel || items.length === 0) return;
+  void itemsBroadcastChannel
+    .send({
+      type: "broadcast",
+      event: ITEM_BROADCAST_EVENT,
+      payload: { items },
+    })
+    .catch(() => {
+      /* broadcast is a fast path; postgres_changes still delivers the row */
+    });
+}
 
 function applyRealtime(
   table: string,
@@ -1650,38 +1822,31 @@ function applyRealtime(
         return;
       }
 
-      const idx = current.findIndex((x) => x.id === model.id);
-      if (idx !== -1) {
-        const prev = current[idx] as { id: string; updatedAt?: string; createdAt?: string };
-        const mine = time(prev.updatedAt ?? prev.createdAt);
-        const theirs = time(stamped.updatedAt ?? stamped.createdAt);
-        if (mine > theirs && JSON.stringify(prev) !== JSON.stringify(model)) {
-          // This device holds the newer edit. The old code dropped the remote
-          // row here and did nothing else, so whichever side lost the race stayed
-          // wrong until something happened to touch the row again — and it only
-          // looked back 30 seconds. Keep the local edit *and* push it.
-          //
-          // No toast: what's on screen is what the user just did, and nothing
-          // about it changed.
-          const b = pending[key] as unknown as { upserts: Map<string, unknown> };
-          b.upserts.set(prev.id, prev);
-          scheduleFlush();
-          return;
-        }
-        // The remote row wins and is about to replace what's on screen. Worth
-        // mentioning only if the user touched this item here moments ago —
-        // otherwise it's just sync doing its job, and announcing it on the very
-        // device that made the change (the echo of our own write) was noise.
-        if (
-          key === "items" &&
-          editedHereRecently(model.id) &&
-          JSON.stringify(prev) !== JSON.stringify(model)
-        ) {
-          recentLocalEdits.delete(model.id);
-          useDatebookStore.setState({ lastConflict: (model as Item).title || "an item" });
+      if (key === "items") {
+        const result = ingestRemoteItem(current as Item[], model as Item);
+        commitIngestSideEffects(result);
+        if (result.pushDelete || result.pushLocal) return;
+        nextArr = result.items;
+      } else {
+        const idx = current.findIndex((x) => x.id === model.id);
+        if (idx !== -1) {
+          const prev = current[idx] as { id: string; updatedAt?: string; createdAt?: string };
+          const mine = time(prev.updatedAt ?? prev.createdAt);
+          const theirs = time(stamped.updatedAt ?? stamped.createdAt);
+          if (mine > theirs && JSON.stringify(prev) !== JSON.stringify(model)) {
+            // This device holds the newer edit. Keep it *and* push it so the
+            // other side catches up, instead of silently dropping the remote
+            // and leaving the two devices split.
+            const b = pending[key] as unknown as { upserts: Map<string, unknown> };
+            b.upserts.set(prev.id, prev);
+            scheduleFlush();
+            return;
+          }
+          nextArr = current.map((x, i) => (i === idx ? model : x));
+        } else {
+          nextArr = [...current, model];
         }
       }
-      nextArr = idx === -1 ? [...current, model] : current.map((x, i) => (i === idx ? model : x));
     }
     useDatebookStore.setState({ [key]: nextArr } as Partial<DatebookState>);
   } finally {
@@ -1895,6 +2060,7 @@ async function subscribeRealtime(userId: string) {
   });
   channel = ch;
   subscribeDeletions(userId);
+  subscribeItemBroadcast(userId);
 }
 
 /** Live deletes, on their own channel.
@@ -1927,6 +2093,28 @@ function subscribeDeletions(userId: string) {
   deletionsChannel = ch;
 }
 
+/** Fast path for item edits: other open devices apply the row immediately
+ *  instead of waiting on postgres_changes. Own broadcasts are not delivered
+ *  (`self: false`), which is what keeps the originating device from toasting. */
+function subscribeItemBroadcast(userId: string) {
+  if (!supabase) return;
+  const ch = supabase.channel(`datebook-items:${userId}`, {
+    config: { broadcast: { ack: false, self: false } },
+  });
+  ch.on("broadcast", { event: ITEM_BROADCAST_EVENT }, ({ payload }) => {
+    applyBroadcastPayload(payload);
+  });
+  ch.subscribe((status) => {
+    if (itemsBroadcastChannel !== ch) return;
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      console.warn("[datebook] live item broadcast unavailable — edits still sync via postgres.");
+      if (supabase) void supabase.removeChannel(ch);
+      if (itemsBroadcastChannel === ch) itemsBroadcastChannel = null;
+    }
+  });
+  itemsBroadcastChannel = ch;
+}
+
 function unsubscribeRealtime() {
   if (realtimeRetryTimer) {
     clearTimeout(realtimeRetryTimer);
@@ -1937,6 +2125,8 @@ function unsubscribeRealtime() {
   channel = null;
   if (deletionsChannel && supabase) void supabase.removeChannel(deletionsChannel);
   deletionsChannel = null;
+  if (itemsBroadcastChannel && supabase) void supabase.removeChannel(itemsBroadcastChannel);
+  itemsBroadcastChannel = null;
 }
 
 /** Rejoin realtime + reconcile when the tab returns to the foreground or the
