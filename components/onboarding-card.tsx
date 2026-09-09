@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Cloud, Link2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
+import { useHasMounted } from "@/lib/use-has-mounted";
 import { motion as motionTokens } from "@/lib/motion";
 
 export function OnboardingCard() {
@@ -11,8 +12,12 @@ export function OnboardingCard() {
   const sources = useDatebookStore((s) => s.importSources);
   const dismissed = useDatebookStore((s) => s.settings.onboardingDismissed);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
+  // The server (and the first client render) sees the store's defaults — no
+  // items, no dismissal — so without this gate every load of a *populated*
+  // calendar flashed "Datebook starts empty" until the persisted state landed.
+  const mounted = useHasMounted();
 
-  const show = !dismissed && items.length === 0 && sources.length === 0;
+  const show = mounted && !dismissed && items.length === 0 && sources.length === 0;
 
   return (
     // Dismissing used to unmount the card outright, so the page below jumped up

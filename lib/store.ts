@@ -42,6 +42,7 @@ import {
   dedupeReminderPresets,
   sanitizeCategories,
   sanitizeImportSources,
+  sanitizeItems,
   sanitizeReminderPresets,
   sanitizeSettings,
 } from "./sanitize-store";
@@ -1077,14 +1078,25 @@ export const useDatebookStore = create<DatebookState>()(
         const importSources = sanitizeImportSources(state.importSources);
         const reminderPresets = sanitizeReminderPresets(state.reminderPresets);
         const settings = sanitizeSettings(state.settings);
+        // Also repairs a store that was already corrupted before this ran, so an
+        // install bricked by an unrenderable item heals on the next load instead
+        // of needing localStorage cleared by hand.
+        const items = sanitizeItems(state.items);
         if (
           categories !== state.categories ||
           importSources !== state.importSources ||
           reminderPresets !== state.reminderPresets ||
-          settings !== state.settings
+          settings !== state.settings ||
+          items !== state.items
         ) {
           queueMicrotask(() => {
-            useDatebookStore.setState({ categories, importSources, reminderPresets, settings });
+            useDatebookStore.setState({
+              categories,
+              importSources,
+              reminderPresets,
+              settings,
+              items,
+            });
           });
         }
       },

@@ -1,5 +1,14 @@
 import { safeCategoryColor, safeCategoryName, safePresetLabel } from "./db-sync";
-import type { Category, ImportSource, LandingView, ReminderPreset, UserSettings } from "./types";
+import type {
+  Category,
+  ImportSource,
+  Item,
+  ItemStatus,
+  ItemType,
+  LandingView,
+  ReminderPreset,
+  UserSettings,
+} from "./types";
 
 const LANDING_VIEWS = new Set<LandingView>(["today", "calendar", "agenda"]);
 
@@ -76,4 +85,81 @@ export function sanitizeSettings(settings: UserSettings | undefined): UserSettin
   const landingView = LANDING_VIEWS.has(base.landingView) ? base.landingView : "today";
   if (landingView === base.landingView && settings) return settings;
   return { ...base, landingView };
+}
+
+const ITEM_TYPES = new Set<ItemType>(["event", "assignment", "task"]);
+const ITEM_STATUSES = new Set<ItemStatus>(["todo", "doing", "done"]);
+
+function isoOrUndefined(v: unknown): string | undefined {
+  if (typeof v !== "string" && typeof v !== "number") return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+/**
+ * Repair — or drop — items that can't be rendered.
+ *
+ * `at` is the one field with no safe default: every view formats it, and
+ * date-fns `format` *throws* on an invalid date, so a single unparseable `at`
+ * takes down whichever page touches it. Persisted in localStorage, that is a
+ * crash the user cannot get out of by reloading. Restoring a hand-edited or
+ * truncated backup was the way in — `parseBackup` checked that `items` was an
+ * array and trusted every element of it.
+ *
+ * So: anything without a usable id or `at` is dropped, duplicate ids are
+ * collapsed (they also collide as React keys), and the remaining fields are
+ * coerced back into range rather than thrown away. Returns the original array
+ * when nothing needed fixing, so a clean rehydrate doesn't look like an edit to
+ * the sync engine.
+ */
+export function sanitizeItems(items: Item[] | undefined): Item[] {
+  if (!Array.isArray(items)) return [];
+  const out: Item[] = [];
+  const seen = new Set<string>();
+  let changed = false;
+
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      changed = true;
+      continue;
+    }
+    const i = raw as Item;
+    const at = isoOrUndefined(i.at);
+    if (typeof i.id !== "string" || !i.id || !at || seen.has(i.id)) {
+      changed = true;
+      continue;
+    }
+    seen.add(i.id);
+
+    const title = typeof i.title === "string" ? i.title : "";
+    const type: ItemType = ITEM_TYPES.has(i.type) ? i.type : "task";
+    const createdAt = isoOrUndefined(i.createdAt) ?? at;
+    const endAt = isoOrUndefined(i.endAt);
+    const status =
+      i.status !== undefined && ITEM_STATUSES.has(i.status) ? i.status : undefined;
+    const reminders = Array.isArray(i.reminders)
+      ? i.reminders.filter((r) => r && typeof r === "object")
+      : undefined;
+
+    const next: Item = { ...i, id: i.id, title, type, at, createdAt };
+    if (endAt) next.endAt = endAt;
+    else delete next.endAt;
+    if (status) next.status = status;
+    else delete next.status;
+    if (reminders?.length) next.reminders = reminders;
+    else delete next.reminders;
+    for (const key of ["completedAt", "statusAt", "updatedAt"] as const) {
+      const v = isoOrUndefined(i[key]);
+      if (v) next[key] = v;
+      else delete next[key];
+    }
+
+    if (JSON.stringify(next) === JSON.stringify(i)) out.push(i);
+    else {
+      changed = true;
+      out.push(next);
+    }
+  }
+
+  return changed ? out : items;
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildImportPlan } from "./calendar-import";
-import { sanitizeCategories, sanitizeReminderPresets, sanitizeSettings } from "./sanitize-store";
-import type { Category, ReminderPreset } from "./types";
+import {
+  sanitizeCategories,
+  sanitizeItems,
+  sanitizeReminderPresets,
+  sanitizeSettings,
+} from "./sanitize-store";
+import type { Category, Item, ReminderPreset } from "./types";
 
 describe("sanitizeCategories", () => {
   it("repairs categories missing a name", () => {
@@ -80,5 +85,74 @@ describe("buildImportPlan", () => {
     );
     expect(plan.newCategories).toHaveLength(0);
     expect(plan.drafts[0].categoryId).toBe("c2");
+  });
+});
+
+describe("sanitizeItems", () => {
+  const ok = (over: Partial<Item> = {}): Item => ({
+    id: "i1",
+    categoryId: "c1",
+    type: "event",
+    title: "Lecture",
+    at: "2026-09-09T12:00:00.000Z",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    ...over,
+  });
+
+  it("returns the same array when nothing needs repair", () => {
+    const items = [ok()];
+    expect(sanitizeItems(items)).toBe(items);
+  });
+
+  it("drops items whose `at` can't be parsed", () => {
+    // date-fns `format` throws on an invalid date, so one of these in the store
+    // white-screens every view that renders it — and survives a reload.
+    const out = sanitizeItems([ok(), ok({ id: "bad", at: "nonsense" })]);
+    expect(out.map((i) => i.id)).toEqual(["i1"]);
+  });
+
+  it("drops non-objects and items with no id", () => {
+    const out = sanitizeItems([
+      null,
+      42,
+      "x",
+      [],
+      ok({ id: "" }),
+      ok(),
+    ] as unknown as Item[]);
+    expect(out.map((i) => i.id)).toEqual(["i1"]);
+  });
+
+  it("collapses duplicate ids", () => {
+    const out = sanitizeItems([ok(), ok({ title: "Copy" })]);
+    expect(out).toHaveLength(1);
+    expect(out[0].title).toBe("Lecture");
+  });
+
+  it("normalizes out-of-range types, statuses and dates", () => {
+    const out = sanitizeItems([
+      ok({
+        type: "banana" as Item["type"],
+        status: "maybe" as Item["status"],
+        endAt: "nope",
+        createdAt: "nope",
+        title: 7 as unknown as string,
+      }),
+    ]);
+    expect(out[0].type).toBe("task");
+    expect(out[0].status).toBeUndefined();
+    expect(out[0].endAt).toBeUndefined();
+    expect(out[0].createdAt).toBe("2026-09-09T12:00:00.000Z");
+    expect(out[0].title).toBe("");
+  });
+
+  it("keeps a non-array reminders field from reaching the scheduler", () => {
+    const out = sanitizeItems([ok({ reminders: "oops" as unknown as Item["reminders"] })]);
+    expect(out[0].reminders).toBeUndefined();
+  });
+
+  it("handles a missing or non-array list", () => {
+    expect(sanitizeItems(undefined)).toEqual([]);
+    expect(sanitizeItems("nope" as unknown as Item[])).toEqual([]);
   });
 });
