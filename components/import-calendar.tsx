@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Check, Link2, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
-import { fetchCalendarFeed, normalizeFeedUrl } from "@/lib/calendar-import";
+import { fetchCalendarFeed, isHttpFeedUrl, normalizeFeedUrl } from "@/lib/calendar-import";
 import { cn } from "@/lib/utils";
 
 type Status =
@@ -17,6 +17,7 @@ type Status =
 
 export function ImportCalendar() {
   const sources = useDatebookStore((s) => s.importSources);
+  const feeds = sources.filter((s) => isHttpFeedUrl(s.url));
   const applyImport = useDatebookStore((s) => s.applyImport);
   const removeImportSource = useDatebookStore((s) => s.removeImportSource);
 
@@ -103,9 +104,9 @@ export function ImportCalendar() {
         )}
       </AnimatePresence>
 
-      {sources.length > 0 && (
+      {feeds.length > 0 && (
         <div className="flex flex-col gap-2">
-          {sources.map((source) => (
+          {feeds.map((source) => (
             <div
               key={source.id}
               className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5"

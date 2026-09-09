@@ -18,7 +18,7 @@ export interface ImportPlan {
   drafts: ImportedDraft[];
 }
 
-const PALETTE = [
+export const IMPORT_PALETTE = [
   "#007AFF",
   "#5856D6",
   "#AF52DE",
@@ -28,6 +28,11 @@ const PALETTE = [
   "#5AC8FA",
   "#8E8E93",
 ];
+
+/** True for a real calendar feed — not a synthetic `syllabus://` source. */
+export function isHttpFeedUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim());
+}
 
 /** Strip `webcal://`, trim — the canonical form we store and re-sync against. */
 export function normalizeFeedUrl(input: string): string {
@@ -134,7 +139,7 @@ export function buildImportPlan(
     const created: Category = {
       id: nanoid(),
       name: wanted,
-      color: PALETTE[(existingCategories.length + newCategories.length) % PALETTE.length],
+      color: IMPORT_PALETTE[(existingCategories.length + newCategories.length) % IMPORT_PALETTE.length],
       sourceId,
     };
     byName.set(key, created);
