@@ -3,7 +3,7 @@ export default function PrivacyPage() {
     <article className="mx-auto flex w-full max-w-[640px] flex-col gap-6 pb-8">
       <header>
         <h1 className="text-[26px] font-semibold tracking-tight text-ink">Privacy policy</h1>
-        <p className="mt-1 text-[13px] text-ink-soft">Last updated September 1, 2026</p>
+        <p className="mt-1 text-[13px] text-ink-soft">Last updated September 9, 2026</p>
       </header>
 
       <section className="flex flex-col gap-3 text-[14px] leading-relaxed text-ink-soft">
@@ -26,6 +26,7 @@ export default function PrivacyPage() {
         <h2 className="text-[15px] font-semibold text-ink">Third parties</h2>
         <p>
           Sign-in uses Google OAuth through Supabase. The assistant sends your question and relevant calendar context to Google Gemini when you use that feature.
+          A syllabus PDF you import is sent to Google Gemini for extraction and is not stored.
           Hosting is provided by Vercel. Each provider processes data according to its own policies.
         </p>
         <h2 className="text-[15px] font-semibold text-ink">Your choices</h2>

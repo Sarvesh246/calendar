@@ -14,6 +14,11 @@ import {
 } from "@/lib/custom-theme";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { ImportCalendar } from "@/components/import-calendar";
+import {
+  CategorySyllabusControl,
+  ImportSyllabus,
+  SyllabusImportProvider,
+} from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { serializeIcs } from "@/lib/ics";
@@ -136,50 +141,54 @@ export default function SettingsPage() {
         sub="Organize items by color and pull in events from other calendars."
         storageKey="calendar"
       >
+        <SyllabusImportProvider>
         <div className="flex flex-col gap-2">
           {categories.map((cat) => (
             <div
               key={cat.id}
-              className="flex items-center gap-3 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
+              className="flex flex-col gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
             >
-              <input
-                type="color"
-                value={cat.color}
-                onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-                aria-label={`${cat.name} color`}
-              />
-              <input
-                value={cat.name}
-                onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                // A category with no name is a blank row here, a blank chip on
-                // every card, and a NOT NULL column in the cloud. The field
-                // stays clearable while you retype it; leaving it empty is what
-                // gets repaired.
-                onBlur={(e) => {
-                  const name = e.target.value.trim();
-                  if (name !== cat.name) updateCategory(cat.id, { name: name || "Uncategorized" });
-                }}
-                aria-label={`${cat.name} name`}
-                className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
-              />
-              {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
-              <button
-                type="button"
-                onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-                className="text-[12px] font-medium text-ink-faint hover:text-ink"
-              >
-                {cat.archived ? "Restore" : "Archive"}
-              </button>
-              {categories.length > 1 && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={cat.color}
+                  onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
+                  className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+                  aria-label={`${cat.name} color`}
+                />
+                <input
+                  value={cat.name}
+                  onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
+                  // A category with no name is a blank row here, a blank chip on
+                  // every card, and a NOT NULL column in the cloud. The field
+                  // stays clearable while you retype it; leaving it empty is what
+                  // gets repaired.
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (name !== cat.name) updateCategory(cat.id, { name: name || "Uncategorized" });
+                  }}
+                  aria-label={`${cat.name} name`}
+                  className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
+                />
+                {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
                 <button
                   type="button"
-                  onClick={() => deleteCategory(cat.id)}
-                  className="text-[12px] font-medium text-warn"
+                  onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+                  className="text-[12px] font-medium text-ink-faint hover:text-ink"
                 >
-                  Delete
+                  {cat.archived ? "Restore" : "Archive"}
                 </button>
-              )}
+                {categories.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => deleteCategory(cat.id)}
+                    className="text-[12px] font-medium text-warn"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+              <CategorySyllabusControl category={cat} />
             </div>
           ))}
         </div>
@@ -226,6 +235,14 @@ export default function SettingsPage() {
 
         <Divider />
 
+        <Subheading title="Import a syllabus PDF" />
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Attach a syllabus. Datebook reads due dates and skips anything already on that class&apos;s calendar.
+        </p>
+        <ImportSyllabus />
+
+        <Divider />
+
         <Subheading title="Export" />
         <p className="text-[13px] leading-relaxed text-ink-soft">
           Download an .ics file for Google Calendar, Outlook, or Apple Calendar.
@@ -246,6 +263,7 @@ export default function SettingsPage() {
         >
           Download .ics
         </button>
+        </SyllabusImportProvider>
       </CollapsibleCard>
 
       <CollapsibleCard title="Reminders" sub="In-app alerts and default reminder timing." storageKey="reminders">

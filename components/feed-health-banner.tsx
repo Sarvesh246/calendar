@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
-import { fetchCalendarFeed } from "@/lib/calendar-import";
+import { fetchCalendarFeed, isHttpFeedUrl } from "@/lib/calendar-import";
 import { clearFeedBackoff, noteFeedFailure } from "@/lib/feed-retry";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
@@ -13,7 +13,7 @@ export function FeedHealthBanner() {
   const sources = useDatebookStore((s) => s.importSources);
   const applyImport = useDatebookStore((s) => s.applyImport);
   const markImportError = useDatebookStore((s) => s.markImportError);
-  const failed = sources.filter((s) => s.lastError);
+  const failed = sources.filter((s) => s.lastError && isHttpFeedUrl(s.url));
   const [busy, setBusy] = useState<string | null>(null);
   return (
     // A feed recovering should slide the banner away, not make the page snap

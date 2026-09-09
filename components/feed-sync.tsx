@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useDatebookStore } from "@/lib/store";
-import { fetchCalendarFeed, FeedFetchError } from "@/lib/calendar-import";
+import { fetchCalendarFeed, FeedFetchError, isHttpFeedUrl } from "@/lib/calendar-import";
 import { mayAttempt, noteFeedFailure, noteFeedSuccess } from "@/lib/feed-retry";
 
 const INTERVAL_MS = 30 * 60 * 1000;
@@ -35,6 +35,7 @@ export function FeedSync() {
           // local, so a device that was just turned away waits its turn instead
           // of asking again on the next tab focus — which is what kept the
           // rate limit permanently tripped.
+          if (!isHttpFeedUrl(source.url)) continue;
           if (!isStale(source.lastSyncedAt)) continue;
           if (!mayAttempt(source.url)) continue;
           try {

@@ -17,6 +17,15 @@ export const MAX_ASSISTANT_MESSAGE = 2_000;
 export const MAX_ASSISTANT_ITEMS = 180;
 export const MAX_ASSISTANT_BODY = 400_000;
 
+/** Incoming syllabus PDF bytes (Vercel body limit; typical syllabi are smaller). */
+export const MAX_SYLLABUS_PDF_BYTES = Math.floor(3.5 * 1024 * 1024);
+/** Whole multipart request: PDF plus small text fields. */
+export const MAX_SYLLABUS_BODY = MAX_SYLLABUS_PDF_BYTES + 32_768;
+/** Signed-in hourly cap — PDFs are far more expensive than chat turns. */
+export const SYLLABUS_HOURLY_AUTH = 10;
+export const SYLLABUS_HOURLY_ANON = 4;
+export const SYLLABUS_BURST = 2;
+
 export function clientKey(request: Request): string {
   const fwd = request.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]?.trim() || "unknown";

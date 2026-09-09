@@ -7,6 +7,13 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/
 import { nanoid } from "./nanoid";
 import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
 import { buildImportPlan, feedLabel, type FetchedCalendar } from "./calendar-import";
+import {
+  applySyllabusImportToSnapshot,
+  recountSyllabusItemCounts,
+  type SyllabusImportRequest,
+  type SyllabusImportResult,
+} from "./syllabus-import";
+import { collapseCrossSourceDuplicates, isSyllabusSource, syllabusSourceUrl } from "./syllabus-match";
 import { mergeImportedItem, importedFieldsChanged } from "./source-snapshot";
 import { supabase } from "./supabase/client";
 import {
@@ -128,6 +135,8 @@ interface DatebookState {
   /** Merge a fetched calendar feed into the store, keyed by `url` (re-syncs in
    *  place rather than duplicating). Returns what changed. */
   applyImport: (url: string, feed: FetchedCalendar) => ImportResult;
+  /** Merge a reviewed syllabus extract. Matches keep Canvas UIDs; new rows use `syl:`. */
+  applySyllabusImport: (request: SyllabusImportRequest) => SyllabusImportResult;
   markImportError: (url: string, message: string) => void;
   removeImportSource: (id: string, deleteItems: boolean) => void;
   deleteSeries: (repeatId: string) => void;
@@ -318,10 +327,27 @@ export const useDatebookStore = create<DatebookState>()(
         // The name is left exactly as typed (the field has to be clearable
         // mid-edit); it's repaired on blur and again on the way to the cloud.
         const next = "color" in patch ? { ...patch, color: safeCategoryColor(patch.color) } : patch;
+        const prev = get().categories.find((c) => c.id === id);
+        let importSources = get().importSources;
+        if (prev && typeof next.name === "string") {
+          const fromUrl = syllabusSourceUrl(prev.name);
+          const toUrl = syllabusSourceUrl(next.name);
+          if (fromUrl !== toUrl) {
+            const now = nowIso();
+            let rewritten = false;
+            const mapped = importSources.map((s) => {
+              if (!isSyllabusSource(s) || s.url !== fromUrl) return s;
+              rewritten = true;
+              return { ...s, url: toUrl, updatedAt: now };
+            });
+            if (rewritten) importSources = mapped;
+          }
+        }
         set({
           categories: get().categories.map((c) =>
             c.id === id ? { ...c, ...next, updatedAt: nowIso() } : c
           ),
+          importSources,
         });
       },
 
@@ -471,24 +497,57 @@ export const useDatebookStore = create<DatebookState>()(
           itemCount: drafts.length,
           updatedAt: now,
         };
+        const nextSources = existing
+          ? state.importSources.map((s) => (s.id === sourceId ? source : s))
+          : [...state.importSources, source];
+        // Syllabus rows for the same work stay until a feed copy exists; once it
+        // does, keep the feed (URL + UID), fold status, and tombstone the syllabus copy.
+        const cross = collapseCrossSourceDuplicates(
+          pruned,
+          nextSources,
+          Intl.DateTimeFormat().resolvedOptions().timeZone,
+          now
+        );
 
         set({
-          items: pruned,
+          items: cross.items,
           categories: [...categories, ...newCategories.map((c) => ({ ...c, updatedAt: now }))],
-          importSources: existing
-            ? state.importSources.map((s) => (s.id === sourceId ? source : s))
-            : [...state.importSources, source],
+          importSources: recountSyllabusItemCounts(nextSources, cross.items, now),
           // An event dropped from the feed is a delete like any other — without a
           // tombstone the other device pushes it straight back. Same for the
           // duplicate categories and duplicate feed rows collapsed above.
           deletions: addTombstones(
-            addTombstones(state.deletions, "item", [...droppedIds, ...collapsed.dropped]),
+            addTombstones(state.deletions, "item", [
+              ...droppedIds,
+              ...collapsed.dropped,
+              ...cross.dropped,
+            ]),
             "category",
             [...remap.keys()]
           ),
         });
 
         return { added, updated, removed };
+      },
+
+      applySyllabusImport: (request) => {
+        const state = get();
+        const applied = applySyllabusImportToSnapshot(
+          {
+            items: state.items,
+            categories: state.categories,
+            importSources: state.importSources,
+            deletions: state.deletions,
+          },
+          request
+        );
+        set({
+          items: applied.snapshot.items,
+          categories: applied.snapshot.categories,
+          importSources: applied.snapshot.importSources,
+          deletions: applied.snapshot.deletions,
+        });
+        return applied.result;
       },
 
       removeImportSource: (id, deleteItems) => {

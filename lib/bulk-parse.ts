@@ -59,7 +59,8 @@ function detectType(text: string): ItemType {
   return ASSIGNMENT_HINTS.test(text) ? "assignment" : "event";
 }
 
-function matchCategory(text: string, categories: Category[]): string | undefined {
+/** Match a course name or code (`ENGR-102`, `ENGL 101`) to an existing category. */
+export function matchCategory(text: string, categories: Category[]): string | undefined {
   for (const cat of categories) {
     const name = cat.name?.trim();
     if (!name) continue;
