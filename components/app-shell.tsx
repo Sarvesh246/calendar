@@ -9,9 +9,8 @@ import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
 import { ReminderScheduler } from "./reminder-scheduler";
-import { UndoToast } from "./undo-toast";
 import { DeferredFeedSync } from "./deferred-feed-sync";
-import { ConflictToast } from "./conflict-toast";
+import { ToastViewport } from "./toast-viewport";
 import { MobileHeaderActions } from "./mobile-header-actions";
 import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
@@ -188,8 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <CommandPalette />
       <AIDrawer />
       <ReminderScheduler />
-      <UndoToast />
-      <ConflictToast />
+      <ToastViewport />
       <DeferredFeedSync />
       <MergeCloudDialog />
       <StorageSync />
