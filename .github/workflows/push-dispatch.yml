@@ -5,6 +5,10 @@ on:
     - cron: "*/10 * * * *"
   workflow_dispatch:
 
+concurrency:
+  group: push-dispatch
+  cancel-in-progress: false
+
 jobs:
   dispatch:
     runs-on: ubuntu-latest
@@ -12,10 +16,49 @@ jobs:
       - name: Fire due reminders
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DISPATCH_URL: https://datebookcalendar.vercel.app/api/push/dispatch
         run: |
-          url="https://datebookcalendar.vercel.app/api/push/dispatch"
-          if [ -n "$CRON_SECRET" ]; then
-            curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$url"
-          else
-            curl -fsS "$url"
+          set -uo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error title=CRON_SECRET repository secret is not set::/api/push/dispatch rejects unauthenticated calls whenever push is configured on the deployment, so every scheduled run fails and no reminders are delivered. Add a repository secret named CRON_SECRET under Settings > Secrets and variables > Actions, with the same value as the CRON_SECRET environment variable on the Vercel deployment."
+            exit 1
           fi
+
+          body="$(mktemp)"
+          attempt=1
+          max_attempts=3
+          delay=5
+
+          while :; do
+            code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 60 \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "$DISPATCH_URL")" || code="000"
+
+            if [ "$code" = "200" ]; then
+              echo "dispatch ok: $(cat "$body")"
+              exit 0
+            fi
+
+            # 000 means curl never got a response (DNS, TLS, timeout, reset).
+            case "$code" in
+              000|408|429|5??) retryable=yes ;;
+              *) retryable=no ;;
+            esac
+
+            if [ "$retryable" = "yes" ] && [ "$attempt" -lt "$max_attempts" ]; then
+              echo "attempt ${attempt}/${max_attempts} failed (HTTP ${code}), retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 3))
+              continue
+            fi
+
+            if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+              echo "::error title=Dispatch rejected the CRON_SECRET (HTTP ${code})::The CRON_SECRET repository secret does not match the CRON_SECRET environment variable on the Vercel deployment, or that variable is unset there. Set both to the same value and redeploy."
+            else
+              echo "::error title=Dispatch failed (HTTP ${code})::$(head -c 400 "$body")"
+            fi
+            echo "response body: $(cat "$body")"
+            exit 1
+          done
