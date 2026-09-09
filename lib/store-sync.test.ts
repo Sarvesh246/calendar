@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useDatebookStore } from "./store";
 import { mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
 import { tombKey, time } from "./tombstones";
@@ -15,6 +15,7 @@ function reset() {
     lastDeleted: null,
     mode: "local",
     userId: null,
+    syncNotices: [],
   });
 }
 
@@ -194,6 +195,38 @@ describe("cross-device edits", () => {
       [tombKey("item", item.id)]: new Date(time(item.updatedAt) + 1000).toISOString(),
     });
     expect(merged.items).toHaveLength(0);
+  });
+});
+
+describe("sync notices", () => {
+  it("starts empty and dismisses by id", () => {
+    expect(store().syncNotices).toEqual([]);
+    useDatebookStore.setState({
+      syncNotices: [
+        { id: "n1", itemId: "a", title: "Essay", kind: "remote", rev: 0 },
+        { id: "n2", itemId: "b", title: "Quiz", kind: "conflict", rev: 0 },
+      ],
+    });
+    store().dismissSyncNotice("n1");
+    expect(store().syncNotices.map((n) => n.id)).toEqual(["n2"]);
+    store().clearSyncNotices();
+    expect(store().syncNotices).toEqual([]);
+  });
+
+  it("replaces a card for the same item instead of stacking another", () => {
+    vi.useFakeTimers();
+    store().pushSyncNotice({ itemId: "a", title: "Essay", kind: "remote" });
+    vi.advanceTimersByTime(120);
+    expect(store().syncNotices).toHaveLength(1);
+    expect(store().syncNotices[0].title).toBe("Essay");
+    const id = store().syncNotices[0].id;
+    store().pushSyncNotice({ itemId: "a", title: "Essay (revised)", kind: "remote" });
+    vi.advanceTimersByTime(120);
+    expect(store().syncNotices).toHaveLength(1);
+    expect(store().syncNotices[0].id).toBe(id);
+    expect(store().syncNotices[0].title).toBe("Essay (revised)");
+    expect(store().syncNotices[0].rev).toBe(1);
+    vi.useRealTimers();
   });
 });
 
