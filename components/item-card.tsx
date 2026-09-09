@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, MapPin } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { formatTime, isOverdue } from "@/lib/date-utils";
+import { eventRemainingLabel, formatTime, isOverdue } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -339,11 +339,24 @@ function CollapsedDescription({ show, text }: { show: boolean; text?: string }) 
 /* Event                                                               */
 /* ------------------------------------------------------------------ */
 
+function useEventRemaining(item: Item) {
+  const [, setTick] = useState(0);
+  const remaining = eventRemainingLabel(item);
+  const live = Boolean(remaining);
+  useEffect(() => {
+    if (!live) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [live, item.id]);
+  return remaining;
+}
+
 export function EventCard({ item, category }: { item: Item; category: Category | undefined }) {
   const clock24h = useClock24h();
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const color = category?.color ?? "#8a8a94";
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
+  const remaining = useEventRemaining(item);
 
   return (
     <motion.div
@@ -378,6 +391,11 @@ export function EventCard({ item, category }: { item: Item; category: Category |
         </div>
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 break-words text-[14px] font-medium text-ink">{item.title}</p>
+          {remaining && (
+            <p className="mt-0.5 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
+              {remaining}
+            </p>
+          )}
           {showLocation && item.location && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-ink-soft">
               <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />

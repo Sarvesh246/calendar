@@ -7,6 +7,7 @@ import type {
   UserSettings,
 } from "./types";
 import { tombKey, type EntityKind, type TombstoneMap } from "./tombstones";
+import { sanitizeCustomTheme } from "./custom-theme";
 
 /* ------------------------------------------------------------------ */
 /* Row <-> client-model mappers                                        */
@@ -50,7 +51,7 @@ export function safeCategoryColor(v: unknown): string {
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
   items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at"],
   import_sources: ["last_error"],
-  user_settings: ["hide_completed", "onboarding_dismissed", "mobile_day_details"],
+  user_settings: ["hide_completed", "onboarding_dismissed", "mobile_day_details", "custom_theme"],
 };
 const stripped: Record<string, Set<string>> = {
   items: new Set(),
@@ -250,10 +251,12 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
+    custom_theme: s.customTheme ?? null,
     updated_at: s.updatedAt ?? new Date().toISOString(),
   };
 }
 export function rowToSettings(r: Row): UserSettings {
+  const customTheme = sanitizeCustomTheme(r.custom_theme);
   return {
     preset: r.preset as UserSettings["preset"],
     landingView: r.landing_view as UserSettings["landingView"],
@@ -266,6 +269,7 @@ export function rowToSettings(r: Row): UserSettings {
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
     mobileDayDetails:
       r.mobile_day_details === "inline" ? "inline" : "sheet",
+    ...(customTheme ? { customTheme } : {}),
     ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
     ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };

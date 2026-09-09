@@ -467,11 +467,13 @@ function RailLink({
 }
 
 function SyncChip({ collapsed }: { collapsed: boolean }) {
-  const { configured, user } = useAuth();
+  const { configured, user, signingIn, signInWithGoogle } = useAuth();
   const syncStatus = useDatebookStore((s) => s.syncStatus);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   if (!configured) return null;
 
+  const guest = user === null;
   let icon = <Cloud className="h-4 w-4 shrink-0" strokeWidth={1.9} />;
   let label = "Sign in to sync";
   let cls = "text-ink-soft hover:bg-surface-sunken hover:text-ink";
@@ -489,25 +491,50 @@ function SyncChip({ collapsed }: { collapsed: boolean }) {
       label = "Synced";
       cls = "text-good hover:bg-surface-sunken";
     }
-  } else if (user === undefined) {
+  } else if (user === undefined || signingIn) {
     icon = <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={1.9} />;
-    label = "…";
+    label = signingIn ? "Signing in…" : "…";
   }
 
-  return (
-    <Link
-      href="/settings"
-      title={label}
-      className={cn(
-        "press-none flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium",
-        "transition-colors duration-[var(--motion-standard)]",
-        cls
-      )}
-    >
+  const chipClass = cn(
+    "press-none flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium",
+    "transition-colors duration-[var(--motion-standard)]",
+    cls
+  );
+
+  const inner = (
+    <>
       {icon}
       <span className="flex min-w-0">
         <RailLabel collapsed={collapsed}>{label}</RailLabel>
       </span>
+    </>
+  );
+
+  if (guest) {
+    return (
+      <button
+        type="button"
+        title={signInError ?? label}
+        disabled={signingIn}
+        onClick={async () => {
+          setSignInError(null);
+          try {
+            await signInWithGoogle();
+          } catch (err) {
+            setSignInError(err instanceof Error ? err.message : "Couldn't start sign-in.");
+          }
+        }}
+        className={chipClass}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <Link href="/settings" title={label} className={chipClass}>
+      {inner}
     </Link>
   );
 }

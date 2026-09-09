@@ -129,3 +129,68 @@ export function buildCustomThemeVars(colors: CustomThemeColors): Record<string, 
  *  cleanly when switching away, since an inline style always outranks the
  *  static `:root[data-preset]` rules a built-in preset relies on. */
 export const CUSTOM_THEME_VAR_NAMES = Object.keys(buildCustomThemeVars(DEFAULT_CUSTOM_THEME));
+
+const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** Expand `#abc` → `#aabbcc` and lowercase. Returns null when the string
+ *  isn't a usable hex color (native `<input type="color">` also needs this). */
+export function normalizeThemeHex(hex: string): string | null {
+  const v = hex.trim();
+  if (!HEX_RE.test(v)) return null;
+  if (v.length === 4) {
+    return `#${[...v.slice(1)].map((c) => c + c).join("")}`.toLowerCase();
+  }
+  return v.toLowerCase();
+}
+
+export function sanitizeCustomTheme(raw: unknown): CustomThemeColors | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const background = typeof o.background === "string" ? normalizeThemeHex(o.background) : null;
+  const surface = typeof o.surface === "string" ? normalizeThemeHex(o.surface) : null;
+  const accent = typeof o.accent === "string" ? normalizeThemeHex(o.accent) : null;
+  if (!background || !surface || !accent) return undefined;
+  return { background, surface, accent };
+}
+
+type ThemeRoot = {
+  style: {
+    setProperty: (name: string, value: string) => void;
+    removeProperty: (name: string) => void;
+  };
+  setAttribute?: (name: string, value: string) => void;
+};
+
+function defaultRoot(): ThemeRoot | null {
+  return typeof document === "undefined" ? null : document.documentElement;
+}
+
+function applyThemeColorMeta(color: string) {
+  if (typeof document === "undefined") return;
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    meta.setAttribute("content", color);
+  }
+}
+
+/** Write derived custom-theme tokens onto `html` the same frame a color
+ *  field changes — ThemeProvider's effect is a reconciler for reload / sync,
+ *  not the live path. Also stamps `data-preset="custom"` so the static
+ *  `:root[data-preset=…]` rules for built-ins don't fight leftover state. */
+export function applyCustomThemeToDocument(colors: CustomThemeColors, root?: ThemeRoot | null) {
+  const el = root ?? defaultRoot();
+  if (!el) return;
+  const next = sanitizeCustomTheme(colors) ?? DEFAULT_CUSTOM_THEME;
+  const vars = buildCustomThemeVars(next);
+  for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value);
+  el.style.setProperty("color-scheme", customThemeColorScheme(next));
+  el.setAttribute?.("data-preset", "custom");
+  if (!root) applyThemeColorMeta(next.background);
+}
+
+/** Strip inline custom vars so a built-in `:root[data-preset]` block can win. */
+export function clearCustomThemeFromDocument(root?: ThemeRoot | null) {
+  const el = root ?? defaultRoot();
+  if (!el) return;
+  for (const name of CUSTOM_THEME_VAR_NAMES) el.style.removeProperty(name);
+  el.style.removeProperty("color-scheme");
+}

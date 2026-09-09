@@ -13,18 +13,22 @@ function evictStale(now: number, windowMs: number) {
   }
 }
 
+export { MAX_SYLLABUS_BODY, MAX_SYLLABUS_PDF_BYTES } from "./syllabus-limits";
+
 export const MAX_ASSISTANT_MESSAGE = 2_000;
 export const MAX_ASSISTANT_ITEMS = 180;
 export const MAX_ASSISTANT_BODY = 400_000;
+/** Per signed-in user, not global — a class can import the same week in parallel. */
+export const SYLLABUS_HOURLY_AUTH = 30;
+/** Per anonymous IP only (campus NAT). Signed-in users never share this bucket. */
+export const SYLLABUS_HOURLY_ANON = 20;
+/** Per-user (or per-IP if anonymous) per minute. Must absorb Gemini retries + a tap-again. */
+export const SYLLABUS_BURST = 8;
 
-/** Incoming syllabus PDF bytes (Vercel body limit; typical syllabi are smaller). */
-export const MAX_SYLLABUS_PDF_BYTES = Math.floor(3.5 * 1024 * 1024);
-/** Whole multipart request: PDF plus small text fields. */
-export const MAX_SYLLABUS_BODY = MAX_SYLLABUS_PDF_BYTES + 32_768;
-/** Signed-in hourly cap — PDFs are far more expensive than chat turns. */
-export const SYLLABUS_HOURLY_AUTH = 10;
-export const SYLLABUS_HOURLY_ANON = 4;
-export const SYLLABUS_BURST = 2;
+/** Rate-limit bucket: one key per user, or per IP when nobody is signed in. */
+export function syllabusLimitKey(user: { id: string } | null, ip: string): string {
+  return user ? `syllabus:user:${user.id}` : `syllabus:ip:${ip}`;
+}
 
 export function clientKey(request: Request): string {
   const fwd = request.headers.get("x-forwarded-for");
@@ -114,17 +118,13 @@ export async function durableHourlyLimit(key: string, max: number): Promise<bool
     const { data } = await sb.from("rate_limits").select("count, window_start").eq("key", key).maybeSingle();
     const windowStart = data?.window_start ? new Date(data.window_start as string) : null;
     if (!data || !windowStart || windowStart < hour) {
-      const { error } = await sb
-        .from("rate_limits")
-        .upsert({ key, window_start: hour.toISOString(), count: 1 });
-      return !error;
+      // Fail-open: a store blip must not 429 a class mid-import.
+      await sb.from("rate_limits").upsert({ key, window_start: hour.toISOString(), count: 1 });
+      return true;
     }
     if ((data.count as number) >= max) return false;
-    const { error } = await sb
-      .from("rate_limits")
-      .update({ count: (data.count as number) + 1 })
-      .eq("key", key);
-    return !error;
+    await sb.from("rate_limits").update({ count: (data.count as number) + 1 }).eq("key", key);
+    return true;
   } catch {
     return true;
   }

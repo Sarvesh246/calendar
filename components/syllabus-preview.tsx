@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/date-utils";
 import { motion as motionTokens } from "@/lib/motion";
 import {
+  syllabusDecisionChecked,
+  syllabusRowAddsItem,
   summarizeSyllabusMatches,
   type SyllabusMatch,
   type SyllabusRowDecision,
@@ -31,11 +33,7 @@ function dueLabel(at: string, clock24h: boolean): string {
   return `${day} · ${formatTime(at, clock24h)}`;
 }
 
-function isChecked(decision: SyllabusRowDecision): boolean {
-  return decision === "import";
-}
-
-/** Review sheet for a parsed syllabus. Opt-out on new rows; matches stay off. */
+/** Review sheet for a parsed syllabus. New rows start on; already-in-Datebook rows start linked. */
 export function SyllabusPreview({
   classLabel,
   warning,
@@ -57,9 +55,7 @@ export function SyllabusPreview({
 }) {
   const { newCount, alreadyCount, checkCount } = summarizeSyllabusMatches(matches);
   const addCount = matches.reduce((n, m, i) => {
-    if (decisions[i] !== "import") return n;
-    if (m.verdict === "matched") return n;
-    return n + 1;
+    return n + (syllabusRowAddsItem(decisions[i] ?? "skip", m.verdict) ? 1 : 0);
   }, 0);
   const canApply = addCount > 0 || decisions.some((d) => d === "link");
 
@@ -102,7 +98,7 @@ export function SyllabusPreview({
               <PreviewRow
                 key={`new-${row.index}`}
                 match={row.match}
-                checked={isChecked(row.decision)}
+                checked={syllabusDecisionChecked(row.decision, row.match.verdict)}
                 clock24h={clock24h}
                 onToggle={() => onToggle(row.index)}
               />
@@ -115,7 +111,7 @@ export function SyllabusPreview({
               <PreviewRow
                 key={`already-${row.index}`}
                 match={row.match}
-                checked={isChecked(row.decision)}
+                checked={syllabusDecisionChecked(row.decision, row.match.verdict)}
                 clock24h={clock24h}
                 showExistingTitle
                 onToggle={() => onToggle(row.index)}
@@ -129,7 +125,7 @@ export function SyllabusPreview({
               <PreviewRow
                 key={`check-${row.index}`}
                 match={row.match}
-                checked={isChecked(row.decision)}
+                checked={syllabusDecisionChecked(row.decision, row.match.verdict)}
                 clock24h={clock24h}
                 showExistingTitle
                 onToggle={() => onToggle(row.index)}

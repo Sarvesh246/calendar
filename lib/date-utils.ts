@@ -273,6 +273,46 @@ export function openItemsOnDay(items: Item[]) {
   return items.filter((i) => i.type === "event" || i.status !== "done");
 }
 
+const MIN_PER_HOUR = 60;
+const MIN_PER_DAY = 24 * 60;
+
+/**
+ * Remaining-time copy for an event still going.
+ *
+ * iOS timer voice: minutes under an hour, hours + minutes under a day,
+ * days (+ hours) after that. Never raw minute dumps like "1672m left".
+ */
+export function formatRemainingLabel(ms: number): string {
+  const totalMin = Math.max(1, Math.round(Math.max(0, ms) / 60_000));
+
+  if (totalMin < MIN_PER_HOUR) {
+    return `${totalMin} min left`;
+  }
+
+  if (totalMin < MIN_PER_DAY) {
+    const hours = Math.floor(totalMin / MIN_PER_HOUR);
+    const minutes = totalMin % MIN_PER_HOUR;
+    return minutes === 0 ? `${hours} hr left` : `${hours} hr ${minutes} min left`;
+  }
+
+  const days = Math.floor(totalMin / MIN_PER_DAY);
+  const hours = Math.floor((totalMin % MIN_PER_DAY) / MIN_PER_HOUR);
+  const dayPart = days === 1 ? "1 day" : `${days} days`;
+  return hours === 0 ? `${dayPart} left` : `${dayPart} ${hours} hr left`;
+}
+
+/** Remaining label if `item` is an event happening at `now`. */
+export function eventRemainingLabel(item: Item, now = new Date()): string | undefined {
+  if (item.type !== "event" || !item.endAt) return undefined;
+  const start = new Date(item.at).getTime();
+  const end = new Date(item.endAt).getTime();
+  const t = now.getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || t < start || t >= end) {
+    return undefined;
+  }
+  return formatRemainingLabel(end - t);
+}
+
 export function formatDaySummary(events: number, due: number, overdue: number) {
   const parts: string[] = [];
   if (overdue) parts.push(`${overdue} overdue`);

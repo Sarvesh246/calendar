@@ -60,6 +60,21 @@ describe("sanitizeSettings", () => {
     expect(sanitizeSettings({ landingView: "home" } as never).landingView).toBe("today");
     expect(sanitizeSettings(undefined).landingView).toBe("today");
   });
+
+  it("keeps a valid custom theme and drops a broken one", () => {
+    const customTheme = { background: "#f3f0ff", surface: "#ffffff", accent: "#7c5cf0" };
+    const kept = sanitizeSettings({
+      landingView: "today",
+      customTheme,
+    } as never);
+    expect(kept.customTheme).toEqual(customTheme);
+
+    const dropped = sanitizeSettings({
+      landingView: "today",
+      customTheme: { background: "nope", surface: "#fff", accent: "#000" },
+    } as never);
+    expect(dropped.customTheme).toBeUndefined();
+  });
 });
 
 describe("buildImportPlan", () => {

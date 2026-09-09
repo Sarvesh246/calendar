@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { focusQueue, formatTime, relativeDueLabel } from "@/lib/date-utils";
+import { eventRemainingLabel, focusQueue, formatTime, relativeDueLabel } from "@/lib/date-utils";
 import { applyItemFilters } from "@/lib/filters";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
@@ -20,6 +20,7 @@ export function FocusView() {
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const [celebrating, setCelebrating] = useState(false);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -31,6 +32,13 @@ export function FocusView() {
 
   const { current, next } = focusQueue(items);
   const currentCategory = useCategory(current?.categoryId);
+  const remaining = current ? eventRemainingLabel(current) : undefined;
+
+  useEffect(() => {
+    if (!remaining) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [Boolean(remaining), current?.id]);
 
   function completeCurrent() {
     if (!current || current.type === "event" || celebrating) return;
@@ -77,9 +85,11 @@ export function FocusView() {
             <h1 className="mt-2 max-w-[26ch] text-[32px] font-semibold leading-tight text-ink sm:text-[36px]">
               {current.title}
             </h1>
-            <p className="mt-2 text-[15px] text-ink-soft">
+            <p className="mt-2 text-[15px] text-ink-soft" suppressHydrationWarning>
               {current.type === "event"
-                ? formatTime(current.at, clock24h)
+                ? [current.allDay ? "All day" : formatTime(current.at, clock24h), remaining]
+                    .filter(Boolean)
+                    .join(" · ")
                 : relativeDueLabel(current.at, { allDay: current.allDay })}
             </p>
             <AnimatePresence>

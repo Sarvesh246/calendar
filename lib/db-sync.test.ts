@@ -3,6 +3,7 @@ import {
   FALLBACK_CATEGORY_COLOR,
   rowToCategory,
   rowToPreset,
+  rowToSettings,
   toCategoryRow,
   toItemRow,
   toPresetRow,
@@ -130,5 +131,25 @@ describe("toSettingsRow", () => {
       mobileDayDetails: "inline",
     };
     expect(toSettingsRow(settings, USER).mobile_day_details).toBe("inline");
+    expect(toSettingsRow(settings, USER).custom_theme).toBeNull();
+  });
+
+  it("round-trips a custom appearance palette", () => {
+    const customTheme = { background: "#112233", surface: "#ffffff", accent: "#ff5500" };
+    const settings: UserSettings = {
+      preset: "custom",
+      customTheme,
+      landingView: "today",
+      density: "comfortable",
+      weekStartsOn: 0,
+      clock24h: false,
+      showLocation: true,
+      showCategoryDot: true,
+      hideCompleted: false,
+      defaultReminderPresetIds: [],
+      mobileDayDetails: "sheet",
+    };
+    expect(toSettingsRow(settings, USER).custom_theme).toEqual(customTheme);
+    expect(rowToSettings(toSettingsRow(settings, USER)).customTheme).toEqual(customTheme);
   });
 });

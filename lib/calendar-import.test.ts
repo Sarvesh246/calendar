@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildImportPlan } from "./calendar-import";
+import {
+  buildImportPlan,
+  fetchCalendarFeed,
+  isHttpFeedUrl,
+  normalizeFeedUrl,
+} from "./calendar-import";
 import { mergeImportedItem, snapshotFrom } from "./source-snapshot";
 import type { Item } from "./types";
 
@@ -223,5 +228,18 @@ describe("mergeImportedItem", () => {
     expect(next.title).toBe("My rewrite");
     expect(next.at).toBe("2026-09-03T23:59:00.000Z");
     expect(next.status).toBe("doing");
+  });
+});
+
+describe("feed URL gates", () => {
+  it("treats syllabus:// as not a calendar feed", () => {
+    expect(isHttpFeedUrl("syllabus://engl 101")).toBe(false);
+    expect(isHttpFeedUrl("https://canvas.example/feed.ics")).toBe(true);
+    expect(isHttpFeedUrl("webcal://example.com/x.ics")).toBe(false);
+    expect(isHttpFeedUrl(normalizeFeedUrl("webcal://example.com/x.ics"))).toBe(true);
+  });
+
+  it("refuses to fetch syllabus:// without hitting the network", async () => {
+    await expect(fetchCalendarFeed("syllabus://engl 101")).rejects.toThrow(/calendar feed/i);
   });
 });

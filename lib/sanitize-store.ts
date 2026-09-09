@@ -1,3 +1,4 @@
+import { sanitizeCustomTheme } from "./custom-theme";
 import { safeCategoryColor, safeCategoryName, safePresetLabel } from "./db-sync";
 import type {
   Category,
@@ -83,8 +84,19 @@ export function dedupeReminderPresets(presets: ReminderPreset[]): ReminderPreset
 export function sanitizeSettings(settings: UserSettings | undefined): UserSettings {
   const base = settings ?? ({} as UserSettings);
   const landingView = LANDING_VIEWS.has(base.landingView) ? base.landingView : "today";
-  if (landingView === base.landingView && settings) return settings;
-  return { ...base, landingView };
+  const customTheme = sanitizeCustomTheme(base.customTheme);
+  const customUnchanged =
+    (!base.customTheme && !customTheme) ||
+    (!!customTheme &&
+      !!base.customTheme &&
+      customTheme.background === base.customTheme.background &&
+      customTheme.surface === base.customTheme.surface &&
+      customTheme.accent === base.customTheme.accent);
+  if (landingView === base.landingView && customUnchanged && settings) return settings;
+  const next: UserSettings = { ...base, landingView };
+  if (customTheme) next.customTheme = customTheme;
+  else delete next.customTheme;
+  return next;
 }
 
 const ITEM_TYPES = new Set<ItemType>(["event", "assignment", "task"]);
