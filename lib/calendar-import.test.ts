@@ -91,6 +91,72 @@ describe("buildImportPlan", () => {
     expect(second.drafts[0].categoryId).toBe("c-blank");
   });
 
+  it("reuses a course whose name differs only in spacing", () => {
+    // `dedupeCategories` normalises runs of whitespace but this matcher did not,
+    // so "ENGL  101" minted a second course that the next merge collapsed again
+    // — a new duplicate, tombstone and write on every single sync.
+    const existing = [{ id: "cat-1", name: "ENGL 101", color: "#007AFF" }];
+    const plan = buildImportPlan(
+      {
+        calendarName: "Canvas",
+        events: [
+          {
+            uid: "a1",
+            summary: "Essay 1 [ENGL  101]",
+            start: "2026-09-02T23:59:00.000Z",
+            allDay: false,
+          },
+        ],
+      },
+      existing,
+      "source-1"
+    );
+    expect(plan.newCategories).toHaveLength(0);
+    expect(plan.drafts[0].categoryId).toBe("cat-1");
+  });
+
+  it("keeps a Canvas calendar entry an event even with no end time", () => {
+    // Typed as an assignment it would get a status and land on the overdue list
+    // as soon as it passed.
+    const plan = buildImportPlan(
+      {
+        calendarName: "Canvas",
+        events: [
+          {
+            uid: "event-calendar-event-99@canvas.instructure.com",
+            summary: "Office hours [ENGL 101]",
+            start: "2026-09-02T15:00:00.000Z",
+            allDay: false,
+          },
+        ],
+      },
+      [],
+      "source-1"
+    );
+    expect(plan.drafts[0].type).toBe("event");
+    expect(plan.drafts[0].status).toBeUndefined();
+  });
+
+  it("still treats an assignment with no end time as due work", () => {
+    const plan = buildImportPlan(
+      {
+        calendarName: "Canvas",
+        events: [
+          {
+            uid: "event-assignment-7@canvas.instructure.com",
+            summary: "Problem set 3 [MATH 210]",
+            start: "2026-09-02T23:59:00.000Z",
+            allDay: false,
+          },
+        ],
+      },
+      [],
+      "source-1"
+    );
+    expect(plan.drafts[0].type).toBe("assignment");
+    expect(plan.drafts[0].status).toBe("todo");
+  });
+
   it("imports VTODO feeds as tasks", () => {
     const plan = buildImportPlan(
       {

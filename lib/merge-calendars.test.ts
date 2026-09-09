@@ -76,8 +76,117 @@ describe("mergeCalendars", () => {
       })
     );
     expect(merged.items).toHaveLength(1);
-    expect(merged.items[0].id).toBe("local-1");
     expect(merged.items[0].status).toBe("done");
+  });
+
+  it("picks the surviving id the same way on both devices", () => {
+    // The id must not be "whichever copy is local": two devices collapsing the
+    // same pair at the same moment would each keep their own and tombstone the
+    // other's, and the assignment would disappear from both.
+    const a = item({ id: "aaa", sourceUid: "uid-1", createdAt: EARLY, updatedAt: EARLY });
+    const b = item({ id: "bbb", sourceUid: "uid-1", createdAt: LATE, updatedAt: LATE });
+    const fromA = mergeCalendars(snap({ items: [a] }), snap({ items: [a, b] }));
+    const fromB = mergeCalendars(snap({ items: [b] }), snap({ items: [a, b] }));
+    expect(fromA.items).toHaveLength(1);
+    expect(fromB.items).toHaveLength(1);
+    expect(fromA.items[0].id).toBe(fromB.items[0].id);
+    // The original import wins — it is the id other devices already reference.
+    expect(fromA.items[0].id).toBe("aaa");
+  });
+
+  it("collapses a pair the cloud is already holding, keeping the tick", () => {
+    // Both devices subscribed before they had ever synced, so both copies were
+    // pushed. Every later reconcile used to see two cloud rows and keep both —
+    // the assignment listed twice, with only one of them ticked off.
+    const done = item({
+      id: "id-a",
+      sourceUid: "uid-1",
+      status: "done",
+      statusAt: LATE,
+      completedAt: LATE,
+    });
+    const todo = item({ id: "id-b", sourceUid: "uid-1", status: "todo" });
+    const merged = mergeCalendars(snap({ items: [done] }), snap({ items: [done, todo] }));
+    expect(merged.items).toHaveLength(1);
+    expect(merged.items[0].status).toBe("done");
+    expect(merged.items[0].completedAt).toBe(LATE);
+  });
+
+  it("does not fuse two different feeds that publish the same UID", () => {
+    // UIDs are only unique within a calendar. Collapsing on the UID alone would
+    // silently delete one of two unrelated events.
+    const merged = mergeCalendars(
+      snap({
+        items: [
+          item({ id: "i1", title: "Canvas essay", sourceId: "src-canvas", sourceUid: "shared" }),
+          item({ id: "i2", title: "Work standup", sourceId: "src-work", sourceUid: "shared" }),
+        ],
+      }),
+      snap()
+    );
+    expect(merged.items).toHaveLength(2);
+  });
+
+  it("collapses the same assignment imported on two devices that never synced", () => {
+    // The end-to-end shape of the reported bug: both devices subscribed to the
+    // same Canvas URL offline, so each minted its own source row, its own course
+    // category and its own copy of the assignment — and only one has the tick.
+    const feedUrl = "https://canvas.example/f.ics";
+    const srcA = { id: "src-a", url: feedUrl, name: "Canvas", addedAt: EARLY, lastSyncedAt: EARLY, itemCount: 1, createdAt: EARLY, updatedAt: EARLY };
+    const srcB = { ...srcA, id: "src-b", addedAt: LATE, createdAt: LATE, updatedAt: LATE };
+    const merged = mergeCalendars(
+      snap({
+        categories: [{ id: "cat-b", name: "ENGL 101", color: "#FF9500", sourceId: "src-b", updatedAt: LATE }],
+        importSources: [srcB],
+        items: [item({ id: "i-b", categoryId: "cat-b", sourceId: "src-b", sourceUid: "uid-1", status: "todo" })],
+      }),
+      snap({
+        categories: [{ id: "cat-a", name: "ENGL 101", color: "#007AFF", sourceId: "src-a", updatedAt: EARLY }],
+        importSources: [srcA],
+        items: [
+          item({
+            id: "i-a",
+            categoryId: "cat-a",
+            sourceId: "src-a",
+            sourceUid: "uid-1",
+            status: "done",
+            statusAt: LATE,
+            completedAt: LATE,
+          }),
+        ],
+      })
+    );
+    expect(merged.importSources).toHaveLength(1);
+    expect(merged.categories).toHaveLength(1);
+    expect(merged.items).toHaveLength(1);
+    expect(merged.items[0].status).toBe("done");
+    expect(merged.items[0].categoryId).toBe(merged.categories[0].id);
+    expect(merged.items[0].sourceId).toBe(merged.importSources[0].id);
+  });
+
+  it("repoints items when two subscriptions to one feed collapse", () => {
+    const base = {
+      url: "https://canvas.example/f.ics",
+      name: "Canvas",
+      lastSyncedAt: EARLY,
+      itemCount: 1,
+    };
+    const older = { ...base, id: "src-old", addedAt: EARLY, createdAt: EARLY, updatedAt: EARLY };
+    const newer = { ...base, id: "src-new", addedAt: LATE, createdAt: LATE, updatedAt: LATE };
+    const merged = mergeCalendars(
+      snap({
+        items: [item({ id: "i1", sourceId: "src-new", sourceUid: "uid-1" })],
+        importSources: [newer],
+        categories: [{ id: "c1", name: "ENGL 101", color: "#007AFF", sourceId: "src-new" }],
+      }),
+      snap({ importSources: [older] })
+    );
+    expect(merged.importSources).toHaveLength(1);
+    const survivor = merged.importSources[0].id;
+    // Nothing may be left pointing at the row that lost, or the next re-sync
+    // can no longer tell those rows came from this feed and imports a copy.
+    expect(merged.items[0].sourceId).toBe(survivor);
+    expect(merged.categories[0].sourceId).toBe(survivor);
   });
 
   // --- last-write-wins -------------------------------------------------
