@@ -28,12 +28,16 @@ const CACHE_TTL_MS = 10 * 60_000;
 /** How long a cached copy stays good enough to serve when upstream is failing. */
 const STALE_FALLBACK_MS = 6 * 60 * 60_000;
 const MAX_CACHE_ENTRIES = 64;
+/** Feeds are capped at MAX_BYTES each, so bounding on count alone left room for
+ *  64 × 5 MB resident in a single warm instance. Total size is the real limit. */
+const MAX_CACHE_BYTES = 24 * 1024 * 1024;
 
 interface CacheEntry {
   text: string;
   at: number;
 }
 const feedCache = new Map<string, CacheEntry>();
+let cacheBytes = 0;
 
 function cacheGet(key: string, maxAge: number): string | null {
   const hit = feedCache.get(key);
@@ -42,14 +46,26 @@ function cacheGet(key: string, maxAge: number): string | null {
   return hit.text;
 }
 
-function cacheSet(key: string, text: string) {
-  // Cheap LRU-ish bound: the oldest insertion goes first.
-  if (feedCache.size >= MAX_CACHE_ENTRIES) {
-    const oldest = feedCache.keys().next().value;
-    if (oldest !== undefined) feedCache.delete(oldest);
-  }
+function evict(key: string) {
+  const hit = feedCache.get(key);
+  if (!hit) return;
+  cacheBytes -= hit.text.length;
   feedCache.delete(key);
+}
+
+function cacheSet(key: string, text: string) {
+  evict(key);
+  // Cheap LRU-ish bound: the oldest insertion goes first, on either limit.
+  while (
+    feedCache.size > 0 &&
+    (feedCache.size >= MAX_CACHE_ENTRIES || cacheBytes + text.length > MAX_CACHE_BYTES)
+  ) {
+    const oldest = feedCache.keys().next().value;
+    if (oldest === undefined) break;
+    evict(oldest);
+  }
   feedCache.set(key, { text, at: Date.now() });
+  cacheBytes += text.length;
 }
 
 export async function POST(request: Request) {

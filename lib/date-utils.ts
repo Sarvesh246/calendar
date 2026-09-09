@@ -17,8 +17,16 @@ import {
 } from "date-fns";
 import type { Item } from "./types";
 
+/** date-fns `format` throws on an invalid date, and these three are called
+ *  straight from render with whatever `item.at` holds. Store input is sanitised
+ *  on the way in (see `sanitizeItems`), but a date that slips through should
+ *  cost one label, not the whole page. */
+const NO_DATE = "—";
+
 export function formatTime(iso: string, clock24h: boolean) {
-  return format(new Date(iso), clock24h ? "HH:mm" : "h:mm a");
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return NO_DATE;
+  return format(d, clock24h ? "HH:mm" : "h:mm a");
 }
 
 /** Offset of `timeZone` at `instant`, in milliseconds east of UTC. */
@@ -162,6 +170,7 @@ export function groupItemsByDay(items: Item[]): Map<string, Item[]> {
 }
 
 export function dayLabel(date: Date) {
+  if (Number.isNaN(date.getTime())) return NO_DATE;
   if (isToday(date)) return "Today";
   if (isTomorrow(date)) return "Tomorrow";
   if (isYesterday(date)) return "Yesterday";
@@ -170,6 +179,7 @@ export function dayLabel(date: Date) {
 
 export function relativeDueLabel(iso: string, opts?: { allDay?: boolean }) {
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return NO_DATE;
   const past = date.getTime() < Date.now();
   const overdue = past && !(opts?.allDay && isToday(date));
   if (overdue) {

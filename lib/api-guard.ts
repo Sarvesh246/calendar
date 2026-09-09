@@ -1,6 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
+/** Request timestamps per client key, trimmed to the active window. */
 const hits = new Map<string, number[]>();
+/** Guards against the map growing one entry per client IP for the life of a
+ *  warm serverless instance — a key whose window has fully lapsed is dropped
+ *  rather than kept forever holding an empty array. */
+const MAX_TRACKED_CLIENTS = 5_000;
+
+function evictStale(now: number, windowMs: number) {
+  for (const [key, times] of hits) {
+    if (times.length === 0 || now - times[times.length - 1] >= windowMs) hits.delete(key);
+  }
+}
 
 export const MAX_ASSISTANT_MESSAGE = 2_000;
 export const MAX_ASSISTANT_ITEMS = 180;
@@ -45,6 +56,7 @@ function hostAllowed(hostname: string): boolean {
 /** True if the request is allowed. False = caller should 429. */
 export function rateLimit(key: string, max: number, windowMs: number): boolean {
   const now = Date.now();
+  if (hits.size >= MAX_TRACKED_CLIENTS) evictStale(now, windowMs);
   const arr = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   if (arr.length >= max) {
     hits.set(key, arr);

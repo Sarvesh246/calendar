@@ -15,6 +15,25 @@ export function spanMs(at: string, endAt?: string): number {
   return Number.isFinite(span) && span > 0 ? span : 0;
 }
 
+/**
+ * The `n`-th monthly occurrence after `start`, always anchored on the start's
+ * day of the month.
+ *
+ * Stepping a cursor with `addMonths` compounds February's clamp: a series on
+ * the 31st became Jan 31 → Feb 28 → **Mar 28** → Apr 28 and never returned to
+ * the 31st. Re-deriving each occurrence from the original anchor keeps the
+ * clamp local to the short month (Jan 31 → Feb 28 → Mar 31 → Apr 30).
+ */
+function monthlyFrom(start: Date, n: number): Date {
+  const month = start.getMonth() + n;
+  const lastDay = new Date(start.getFullYear(), month + 1, 0).getDate();
+  const out = new Date(start.getTime());
+  // Year, month and day are applied together, so an out-of-range day never
+  // rolls the month over on the way through.
+  out.setFullYear(start.getFullYear(), month, Math.min(start.getDate(), lastDay));
+  return out;
+}
+
 export function expandRepeat(
   atIso: string,
   endAtIso: string | undefined,
@@ -64,10 +83,12 @@ export function expandRepeat(
   }
 
   let cursor = new Date(start);
+  let step = 0;
   while (push(cursor)) {
+    step += 1;
     if (rule.freq === "daily") cursor = addDays(cursor, interval);
     else if (rule.freq === "weekly") cursor = addWeeks(cursor, interval);
-    else cursor = addMonths(cursor, interval);
+    else cursor = monthlyFrom(start, step * interval);
     if (cursor.getTime() > cap.getTime()) break;
   }
   return out.length ? out : [{ at: atIso, ...(endAtIso ? { endAt: endAtIso } : {}) }];

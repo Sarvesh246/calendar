@@ -308,13 +308,22 @@ function addDaysLocal(d: Date, n: number): Date {
   return next;
 }
 
-function addMonthsLocal(d: Date, n: number): Date {
-  const next = new Date(d.getTime());
-  const day = next.getDate();
-  next.setMonth(next.getMonth() + n, 1);
-  const last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-  next.setDate(Math.min(day, last));
-  return next;
+/**
+ * The `n`-th monthly occurrence after `start`, anchored on the start's day of
+ * the month.
+ *
+ * Stepping a cursor month by month compounds February's clamp — a feed's
+ * `FREQ=MONTHLY` series starting on the 31st walked to Jan 31 → Feb 28 →
+ * **Mar 28** and stayed there. Re-deriving from the original anchor keeps the
+ * clamp local to the short month.
+ */
+function monthlyFromLocal(start: Date, n: number): Date {
+  const month = start.getMonth() + n;
+  const last = new Date(start.getFullYear(), month + 1, 0).getDate();
+  const out = new Date(start.getTime());
+  // Applied together so an out-of-range day can't roll the month over first.
+  out.setFullYear(start.getFullYear(), month, Math.min(start.getDate(), last));
+  return out;
 }
 
 function weeksBetween(a: Date, b: Date): number {
@@ -376,7 +385,11 @@ export function expandRRule(
     return out.length ? out : [startIso];
   }
 
-  for (let d = new Date(start); generated < max && d.getTime() <= until.getTime(); d = addMonthsLocal(d, rule.interval)) {
+  for (
+    let step = 0, d = new Date(start);
+    generated < max && d.getTime() <= until.getTime();
+    step += 1, d = monthlyFromLocal(start, step * rule.interval)
+  ) {
     if (!take(d)) break;
   }
   return out.length ? out : [startIso];

@@ -1,3 +1,4 @@
+import { sanitizeCategories, sanitizeItems } from "./sanitize-store";
 import type { Category, ImportSource, Item, ReminderPreset, UserSettings } from "./types";
 
 export const BACKUP_VERSION = 1;
@@ -30,8 +31,14 @@ export function parseBackup(raw: string): DatebookBackup {
   return {
     version: typeof data.version === "number" ? data.version : 1,
     exportedAt: typeof data.exportedAt === "string" ? data.exportedAt : new Date().toISOString(),
-    categories: data.categories,
-    items: data.items,
+    // A backup is an arbitrary file the user picked. Anything unrenderable in it
+    // — an item with no parseable `at` above all — has to be caught here rather
+    // than written straight into the store, where it crashes every view that
+    // formats a date and survives a reload.
+    categories: sanitizeCategories(
+      data.categories.filter((c) => c && typeof c === "object" && typeof c.id === "string" && c.id)
+    ),
+    items: sanitizeItems(data.items),
     reminderPresets: Array.isArray(data.reminderPresets) ? data.reminderPresets : [],
     settings: data.settings as UserSettings,
     importSources: Array.isArray(data.importSources) ? data.importSources : [],

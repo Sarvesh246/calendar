@@ -84,3 +84,22 @@ describe("serializeIcs", () => {
     expect(text).toContain("SUMMARY:Dentist");
   });
 });
+
+describe("monthly RRULE anchoring", () => {
+  const local = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
+
+  it("does not let February's clamp carry into later months", () => {
+    const occ = expandRRule(local(2026, 1, 31), "FREQ=MONTHLY;COUNT=5", [], new Date(2027, 0, 1));
+    expect(occ.map((s) => new Date(s).getDate())).toEqual([31, 28, 31, 30, 31]);
+  });
+
+  it("anchors from the start when INTERVAL > 1", () => {
+    const occ = expandRRule(
+      local(2026, 1, 31),
+      "FREQ=MONTHLY;INTERVAL=2;COUNT=5",
+      [],
+      new Date(2027, 0, 1)
+    );
+    expect(occ.map((s) => new Date(s).getDate())).toEqual([31, 31, 31, 31, 30]);
+  });
+});

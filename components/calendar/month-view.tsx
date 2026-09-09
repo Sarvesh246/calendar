@@ -93,8 +93,12 @@ function DayCellChips({
     [items]
   );
   const visible = ranked.slice(0, fitCount);
-  const hiddenOpen = openItemsOnDay(ranked.slice(fitCount)).length;
-  const hiddenTitles = ranked.slice(fitCount).map((i) => i.title).join(", ");
+  // Every clipped item counts, done ones included. Counting only the open ones
+  // meant a day whose overflow was all completed work showed no "+n" at all —
+  // `fitCountVertical` had already reserved the line for it, so those items just
+  // vanished into a blank gap with nothing saying they were there.
+  const hidden = ranked.slice(fitCount);
+  const hiddenTitles = hidden.map((i) => i.title).join(", ");
 
   return (
     <div ref={ref} className="relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
@@ -122,12 +126,12 @@ function DayCellChips({
           </motion.span>
         );
       })}
-      {hiddenOpen > 0 && (
+      {hidden.length > 0 && (
         <span
           className="shrink-0 px-1 pt-px text-[11.5px] font-medium leading-none text-ink-soft"
           title={hiddenTitles}
         >
-          +{hiddenOpen} more
+          +{hidden.length} more
         </span>
       )}
     </div>
