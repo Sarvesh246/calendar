@@ -148,6 +148,7 @@ export function applySyllabusImportToSnapshot(
     if (decision === "skip") return;
 
     const existing = match?.existing ? byId.get(match.existing.id) : undefined;
+    // `import` on a confident match still links — never mint a twin of an existing row.
     const shouldLink =
       decision === "link" || (decision === "import" && match?.verdict === "matched" && existing);
 

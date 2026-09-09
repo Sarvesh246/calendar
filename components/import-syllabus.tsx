@@ -15,27 +15,31 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Check, FileText, Loader2 } from "lucide-react";
 import { SyllabusPreview } from "@/components/syllabus-preview";
-import { MAX_SYLLABUS_PDF_BYTES } from "@/lib/api-guard";
 import { authBearerHeaders } from "@/lib/auth-headers";
-import { wallTimeInZoneToIso } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import {
   defaultSyllabusDecision,
-  isSyllabusSource,
+  findSyllabusSource,
   matchSyllabusItems,
   resolveSyllabusCourse,
-  syllabusSourceUrl,
+  toggleSyllabusRowDecision,
   type SyllabusDraft,
   type SyllabusMatch,
   type SyllabusRowDecision,
 } from "@/lib/syllabus-match";
-import type {
-  SyllabusExtractedItem,
-  SyllabusExtractError,
-  SyllabusExtractResult,
+import {
+  extractedItemToDraft,
+  looksLikeSyllabusPdf,
+  MAX_SYLLABUS_PDF_BYTES,
+  retrySyllabusExtractOnce,
+  SyllabusExtractRequestError,
+  syllabusErrorFromResponse,
+  type SyllabusExtractedItem,
+  type SyllabusExtractResult,
 } from "@/lib/syllabus-extract";
+import { SYLLABUS_CLIENT_RETRY_MS } from "@/lib/syllabus-limits";
 import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -74,18 +78,6 @@ type SyllabusImportContextValue = {
 
 const SyllabusImportContext = createContext<SyllabusImportContextValue | null>(null);
 
-const EXTRACT_ERRORS = new Set<string>([
-  "assistant-not-configured",
-  "assistant-busy",
-  "assistant-unreachable",
-  "forbidden",
-  "rate-limited",
-  "payload-too-large",
-  "bad-request",
-  "missing-pdf",
-  "invalid-pdf",
-]);
-
 const MAX_MB = (MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1);
 
 function originKey(origin: Origin): string {
@@ -119,7 +111,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       });
       return;
     }
-    if (!looksLikePdf(file)) {
+    if (!looksLikeSyllabusPdf(file)) {
       setStatus({ kind: "error", message: "That file doesn't look like a PDF." });
       return;
     }
@@ -139,10 +131,15 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         setPreview(null);
-        setStatus({
-          kind: "error",
-          message: err instanceof Error ? err.message : "Couldn't read that syllabus.",
-        });
+        const message =
+          err instanceof SyllabusExtractRequestError
+            ? err.message
+            : err instanceof Error && err.name === "AbortError"
+              ? "Couldn't reach the syllabus reader. Try again."
+              : err instanceof Error
+                ? err.message
+                : "Couldn't read that syllabus.";
+        setStatus({ kind: "error", message });
       });
   }, []);
 
@@ -151,9 +148,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       if (!current || index < 0 || index >= current.decisions.length) return current;
       const verdict = current.matches[index]?.verdict ?? "new";
       const next = [...current.decisions];
-      const cur = next[index];
-      if (verdict === "matched") next[index] = cur === "link" ? "import" : "link";
-      else next[index] = cur === "import" ? "skip" : "import";
+      next[index] = toggleSyllabusRowDecision(next[index], verdict);
       return { ...current, decisions: next };
     });
   }, []);
@@ -307,15 +302,14 @@ export function CategorySyllabusControl({ category }: { category: Category }) {
     useSyllabusImport();
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const sources = useDatebookStore((s) => s.importSources);
+  const items = useDatebookStore((s) => s.items);
   const inputId = useId();
   const mineOrigin: Origin = { type: "category", id: category.id };
   const mine = sameOrigin(origin, mineOrigin);
   const showPreview = mine && preview;
   const showStatus = mine && (status.kind === "error" || status.kind === "success") && !showPreview;
 
-  const source = sources.find(
-    (s) => isSyllabusSource(s) && s.url === syllabusSourceUrl(category.name)
-  );
+  const source = findSyllabusSource(category, sources, items);
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];
@@ -441,7 +435,7 @@ async function runExtract(
     return { kind: "empty", message: "No dated work found in this syllabus." };
   }
 
-  const drafts = extracted.items.map((item) => extractedToDraft(item, timeZone));
+  const drafts = extracted.items.map((item) => extractedItemToDraft(item, timeZone));
   const resolved = resolveSyllabusCourse({
     categories: store.categories,
     courseName: extracted.courseName,
@@ -484,32 +478,22 @@ async function runExtract(
   };
 }
 
-function extractedToDraft(item: SyllabusExtractedItem, timeZone: string): SyllabusDraft {
-  const time = parseDueTime(item.dueTime);
-  const hour = time?.hour ?? 23;
-  const minute = time?.minute ?? 59;
-  return {
-    title: item.title,
-    at: wallTimeInZoneToIso(item.dueDate, hour, minute, timeZone),
-    type: item.type,
-    kind: item.kind,
-    ...(item.notes?.trim() ? { notes: item.notes.trim() } : {}),
-  };
-}
-
-function parseDueTime(raw?: string): { hour: number; minute: number } | undefined {
-  if (!raw) return undefined;
-  const m = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return undefined;
-  const hour = Number(m[1]);
-  const minute = Number(m[2]);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour > 23 || minute > 59) {
-    return undefined;
-  }
-  return { hour, minute };
-}
-
 async function postSyllabusPdf(
+  file: File,
+  opts: {
+    timeZone: string;
+    categoryId?: string;
+    categories: { id: string; name: string }[];
+    signal: AbortSignal;
+  }
+): Promise<SyllabusExtractResult> {
+  return retrySyllabusExtractOnce(() => postSyllabusPdfOnce(file, opts), {
+    signal: opts.signal,
+    delayMs: SYLLABUS_CLIENT_RETRY_MS,
+  });
+}
+
+async function postSyllabusPdfOnce(
   file: File,
   opts: {
     timeZone: string;
@@ -525,23 +509,37 @@ async function postSyllabusPdf(
   if (opts.categoryId) form.append("categoryId", opts.categoryId);
   form.append("categories", JSON.stringify(opts.categories));
 
-  const res = await fetch("/api/import-syllabus", {
-    method: "POST",
-    headers: await authBearerHeaders(),
-    body: form,
-    signal: opts.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/import-syllabus", {
+      method: "POST",
+      headers: await authBearerHeaders(),
+      body: form,
+      signal: opts.signal,
+    });
+  } catch (err) {
+    if (opts.signal.aborted) throw err;
+    throw new SyllabusExtractRequestError("assistant-unreachable", 0);
+  }
 
   let data: unknown;
   try {
     data = await res.json();
   } catch {
-    throw new Error(messageForExtractError(undefined, res.status));
+    const code =
+      syllabusErrorFromResponse(undefined, res.status) ??
+      (res.ok ? undefined : "assistant-unreachable");
+    if (code) throw new SyllabusExtractRequestError(code, res.status);
+    throw new SyllabusExtractRequestError("bad-request", res.status);
   }
 
-  const errorCode = extractErrorCode(data);
-  if (errorCode) throw new Error(messageForExtractError(errorCode, res.status));
-  if (!res.ok) throw new Error(messageForExtractError(undefined, res.status));
+  const rawCode =
+    data && typeof data === "object" && "error" in data
+      ? (data as { error: unknown }).error
+      : undefined;
+  const errorCode = syllabusErrorFromResponse(rawCode, res.status);
+  if (errorCode) throw new SyllabusExtractRequestError(errorCode, res.status);
+  if (!res.ok) throw new SyllabusExtractRequestError("assistant-unreachable", res.status);
 
   const courseName = typeof (data as { courseName?: unknown }).courseName === "string"
     ? (data as { courseName: string }).courseName
@@ -553,36 +551,6 @@ async function postSyllabusPdf(
     ? ((data as { items: SyllabusExtractedItem[] }).items)
     : [];
   return { courseName, courseCode, items };
-}
-
-function extractErrorCode(data: unknown): SyllabusExtractError | undefined {
-  if (!data || typeof data !== "object" || !("error" in data)) return undefined;
-  const code = (data as { error: unknown }).error;
-  if (typeof code === "string" && EXTRACT_ERRORS.has(code)) return code as SyllabusExtractError;
-  return undefined;
-}
-
-function messageForExtractError(code: string | undefined, status: number): string {
-  if (code === "assistant-not-configured") return "Syllabus reading isn't set up on this server.";
-  if (code === "assistant-busy") return "The reader is busy — try again in a moment.";
-  if (code === "assistant-unreachable") return "Couldn't reach the syllabus reader. Try again.";
-  if (code === "forbidden" || status === 403) return "This request was blocked.";
-  if (code === "rate-limited" || status === 429) return "Too many syllabus reads — try again in a bit.";
-  if (code === "payload-too-large" || status === 413) {
-    return `That PDF is too large (max ${MAX_MB} MB).`;
-  }
-  if (code === "missing-pdf") return "Choose a PDF to import.";
-  if (code === "invalid-pdf") return "That file doesn't look like a PDF.";
-  if (code === "bad-request") return "Couldn't read that syllabus.";
-  return "Couldn't read that syllabus.";
-}
-
-function looksLikePdf(file: File): boolean {
-  const type = (file.type || "").toLowerCase();
-  const named = file.name.toLowerCase().endsWith(".pdf");
-  if (type === "application/pdf") return true;
-  if (type === "application/octet-stream" || type === "") return named;
-  return false;
 }
 
 function summarizeApply(added: number, matched: number): string {

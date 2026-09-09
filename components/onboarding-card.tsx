@@ -6,8 +6,11 @@ import { Bell, Cloud, Link2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { motion as motionTokens } from "@/lib/motion";
+import { useAuth } from "@/components/auth-provider";
+import { GoogleSignInButton } from "@/components/account-section";
 
 export function OnboardingCard() {
+  const { user, configured } = useAuth();
   const items = useDatebookStore((s) => s.items);
   const sources = useDatebookStore((s) => s.importSources);
   const dismissed = useDatebookStore((s) => s.settings.onboardingDismissed);
@@ -60,13 +63,14 @@ export function OnboardingCard() {
               <Bell className="h-3.5 w-3.5" strokeWidth={2} />
               Enable reminders
             </Link>
-            <Link
-              href="/settings"
-              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink"
-            >
-              <Cloud className="h-3.5 w-3.5" strokeWidth={2} />
-              Sign in
-            </Link>
+            {configured && user === null && (
+              <GoogleSignInButton
+                idleIcon={<Cloud className="h-3.5 w-3.5" strokeWidth={2} />}
+                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+              >
+                Sign in
+              </GoogleSignInButton>
+            )}
           </div>
         </motion.div>
       )}

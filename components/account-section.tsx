@@ -7,12 +7,10 @@ import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
-  const { user, configured, signingIn, signInWithGoogle, signOut } = useAuth();
+  const { user, configured, signOut } = useAuth();
   const syncStatus = useDatebookStore((s) => s.syncStatus);
   const cloudError = useDatebookStore((s) => s.cloudError);
   const retrySync = useDatebookStore((s) => s.retrySync);
-
-  const [error, setError] = useState<string | null>(null);
 
   if (!configured) {
     return (
@@ -78,7 +76,30 @@ export function AccountSection() {
         Sign in to save your calendar to the cloud and sync it across devices. Data already on this device is imported
         on first sign-in.
       </p>
+      <GoogleSignInButton className="flex items-center justify-center gap-2.5 rounded-lg border border-line bg-surface px-4 py-2.5 text-[13.5px] font-medium text-ink transition-colors hover:border-line-strong disabled:opacity-50" />
+    </div>
+  );
+}
+
+/** Same Google OAuth start as Settings — guest Sign in CTAs should call this, not `/settings`. */
+export function GoogleSignInButton({
+  className,
+  children = "Continue with Google",
+  idleIcon,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+  idleIcon?: React.ReactNode;
+}) {
+  const { signingIn, signInWithGoogle, configured } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+
+  if (!configured) return null;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
       <button
+        type="button"
         onClick={async () => {
           setError(null);
           try {
@@ -88,14 +109,14 @@ export function AccountSection() {
           }
         }}
         disabled={signingIn}
-        className="flex items-center justify-center gap-2.5 rounded-lg border border-line bg-surface px-4 py-2.5 text-[13.5px] font-medium text-ink transition-colors hover:border-line-strong disabled:opacity-50"
+        className={className}
       >
         {signingIn ? (
-          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2} />
         ) : (
-          <GoogleGlyph />
+          idleIcon ?? <GoogleGlyph />
         )}
-        Continue with Google
+        {children}
       </button>
       {error && <p className="text-[12.5px] text-warn">{error}</p>}
     </div>

@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { wallTimeInZoneToIso } from "./date-utils";
 import {
+  extractedItemToDraft,
   inferSyllabusDueDate,
   isPdfMagic,
   isSyllabusDueDateInWindow,
+  isSyllabusExtractError,
+  isSyllabusRetryableError,
+  looksLikeSyllabusPdf,
+  MAX_SYLLABUS_PDF_BYTES,
   normalizeDueTime,
   normalizeSyllabusExtraction,
   parseCategoryHints,
+  retrySyllabusExtractOnce,
+  SyllabusExtractRequestError,
+  syllabusErrorFromResponse,
+  syllabusExtractErrorMessage,
 } from "./syllabus-extract";
 
 const TZ = "America/Chicago";
@@ -95,6 +105,29 @@ describe("normalizeSyllabusExtraction", () => {
     ]);
   });
 
+  it("keeps an explicit exam end time and drops empty extracts", () => {
+    const withEnd = normalizeSyllabusExtraction(
+      {
+        items: [
+          {
+            title: "Midterm",
+            dueDate: "2026-10-20",
+            dueTime: "10:00",
+            endTime: "11:30",
+            type: "event",
+            kind: "exam",
+          },
+        ],
+      },
+      SEP.toISOString(),
+      TZ
+    );
+    expect(withEnd.items[0].endTime).toBe("11:30");
+    const empty = normalizeSyllabusExtraction({ items: [] }, SEP.toISOString(), TZ);
+    expect(empty.items).toEqual([]);
+    expect(empty.courseName).toBe("");
+  });
+
   it("defaults type to assignment and kind to other", () => {
     const out = normalizeSyllabusExtraction(
       { items: [{ title: "Thing", dueDate: "2026-09-20" }] },
@@ -113,5 +146,107 @@ describe("parseCategoryHints", () => {
     ]);
     expect(parseCategoryHints([{ id: "c1", name: "Bio" }])).toEqual([{ id: "c1", name: "Bio" }]);
     expect(parseCategoryHints("nope")).toEqual([]);
+  });
+});
+
+describe("extractedItemToDraft", () => {
+  it("sets endAt only when the syllabus gave an end after the start", () => {
+    const timed = extractedItemToDraft(
+      {
+        title: "Midterm",
+        dueDate: "2026-10-20",
+        dueTime: "10:00",
+        endTime: "11:30",
+        type: "event",
+        kind: "exam",
+      },
+      TZ
+    );
+    expect(timed.endAt).toBe(wallTimeInZoneToIso("2026-10-20", 11, 30, TZ));
+    expect(timed.at).toBe(wallTimeInZoneToIso("2026-10-20", 10, 0, TZ));
+
+    const startOnly = extractedItemToDraft(
+      {
+        title: "Midterm",
+        dueDate: "2026-10-20",
+        dueTime: "10:00",
+        type: "event",
+        kind: "exam",
+      },
+      TZ
+    );
+    expect(startOnly.endAt).toBeUndefined();
+  });
+
+  it("does not invent an end for a date-only assignment", () => {
+    const draft = extractedItemToDraft(
+      { title: "HW 1", dueDate: "2026-09-16", type: "assignment", kind: "homework" },
+      TZ
+    );
+    expect(draft.endAt).toBeUndefined();
+    expect(draft.at).toBe(wallTimeInZoneToIso("2026-09-16", 23, 59, TZ));
+  });
+});
+
+describe("syllabus extract error paths", () => {
+  it("maps not-configured, too-large, and invalid PDF to user messages", () => {
+    expect(syllabusExtractErrorMessage("assistant-not-configured", 200)).toMatch(/isn't set up/i);
+    expect(syllabusExtractErrorMessage("payload-too-large", 413)).toMatch(
+      new RegExp(`max ${(MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1)} MB`)
+    );
+    expect(syllabusExtractErrorMessage("invalid-pdf", 400)).toMatch(/doesn't look like a PDF/i);
+    expect(syllabusExtractErrorMessage("missing-pdf", 400)).toMatch(/choose a pdf/i);
+    expect(isSyllabusExtractError("assistant-not-configured")).toBe(true);
+    expect(isSyllabusExtractError("nope")).toBe(false);
+  });
+
+  it("distinguishes busy, unreachable, and rate-limited copy", () => {
+    expect(syllabusExtractErrorMessage("assistant-busy", 200)).toMatch(/reader is busy/i);
+    expect(syllabusExtractErrorMessage("assistant-unreachable", 200)).toMatch(/couldn't reach/i);
+    expect(syllabusExtractErrorMessage("rate-limited", 429)).toMatch(/too many syllabus reads/i);
+    expect(syllabusErrorFromResponse("assistant-busy", 200)).toBe("assistant-busy");
+    expect(syllabusErrorFromResponse(undefined, 503)).toBe("assistant-busy");
+    expect(syllabusErrorFromResponse(undefined, 504)).toBe("assistant-unreachable");
+    expect(syllabusErrorFromResponse(undefined, 429)).toBe("rate-limited");
+    expect(syllabusErrorFromResponse("invalid-pdf", 400)).toBe("invalid-pdf");
+    expect(isSyllabusRetryableError("assistant-busy")).toBe(true);
+    expect(isSyllabusRetryableError("assistant-unreachable")).toBe(true);
+    expect(isSyllabusRetryableError("invalid-pdf")).toBe(false);
+    expect(isSyllabusRetryableError("rate-limited")).toBe(false);
+  });
+
+  it("retries busy/unreachable once and does not retry invalid PDFs", async () => {
+    const signal = new AbortController().signal;
+    let busyCalls = 0;
+    const ok = await retrySyllabusExtractOnce(
+      async () => {
+        busyCalls += 1;
+        if (busyCalls === 1) throw new SyllabusExtractRequestError("assistant-busy", 200);
+        return "ok";
+      },
+      { signal, delayMs: 10, wait: async () => {} }
+    );
+    expect(ok).toBe("ok");
+    expect(busyCalls).toBe(2);
+
+    let pdfCalls = 0;
+    await expect(
+      retrySyllabusExtractOnce(
+        async () => {
+          pdfCalls += 1;
+          throw new SyllabusExtractRequestError("invalid-pdf", 400);
+        },
+        { signal, delayMs: 10, wait: async () => {} }
+      )
+    ).rejects.toMatchObject({ code: "invalid-pdf" });
+    expect(pdfCalls).toBe(1);
+  });
+
+  it("accepts PDF types and names, rejects other files", () => {
+    expect(looksLikeSyllabusPdf({ type: "application/pdf", name: "x.bin" })).toBe(true);
+    expect(looksLikeSyllabusPdf({ type: "", name: "syllabus.pdf" })).toBe(true);
+    expect(looksLikeSyllabusPdf({ type: "application/octet-stream", name: "s.pdf" })).toBe(true);
+    expect(looksLikeSyllabusPdf({ type: "image/png", name: "scan.png" })).toBe(false);
+    expect(looksLikeSyllabusPdf({ type: "text/plain", name: "notes.txt" })).toBe(false);
   });
 });

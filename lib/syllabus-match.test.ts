@@ -3,15 +3,19 @@ import { wallTimeInZoneToIso } from "./date-utils";
 import { applySyllabusImportToSnapshot, type SyllabusSnapshot } from "./syllabus-import";
 import {
   collapseCrossSourceDuplicates,
+  findSyllabusSource,
   groupSyllabusMatches,
   isSyllabusSource,
   matchSyllabusItems,
   normalizeSyllabusTitle,
   resolveSyllabusCourse,
+  syllabusDecisionChecked,
+  syllabusRowAddsItem,
   syllabusSourceUid,
   syllabusSourceUrl,
   syllabusTitleScore,
   summarizeSyllabusMatches,
+  toggleSyllabusRowDecision,
   type SyllabusDraft,
 } from "./syllabus-match";
 import { tombKey } from "./tombstones";
@@ -432,6 +436,48 @@ describe("applySyllabusImportToSnapshot", () => {
     expect(second.snapshot.items.some((i) => /quiz/i.test(i.title))).toBe(true);
   });
 
+  it("re-import of the same drafts adds nothing and does not duplicate", () => {
+    const drafts = [draft({ title: "HW 3" }), draft({ title: "Quiz 1" })];
+    const first = applySyllabusImportToSnapshot(
+      snap({}),
+      { drafts, timeZone: TZ, forceCategoryId: "engl" },
+      { now, id }
+    );
+    expect(first.result.added).toBe(2);
+    const second = applySyllabusImportToSnapshot(first.snapshot, {
+      drafts,
+      timeZone: TZ,
+      forceCategoryId: "engl",
+    });
+    expect(second.result.added).toBe(0);
+    expect(second.snapshot.items).toHaveLength(2);
+    expect(second.result.matched).toBe(2);
+  });
+
+  it("does not mint a twin when a matched row is marked import", () => {
+    const canvas = item({
+      id: "canvas-hw",
+      title: "Homework 3: Linked Lists",
+      sourceId: "src-feed",
+      sourceUid: "canvas-uid-hw3",
+    });
+    const { snapshot, result } = applySyllabusImportToSnapshot(
+      snap({ items: [canvas] }),
+      {
+        drafts: [draft({ title: "HW 3" })],
+        timeZone: TZ,
+        forceCategoryId: "engl",
+        decisions: ["import"],
+      },
+      { now, id }
+    );
+    expect(result.added).toBe(0);
+    expect(result.matched).toBe(1);
+    expect(snapshot.items).toHaveLength(1);
+    expect(snapshot.items[0].id).toBe("canvas-hw");
+    expect(snapshot.items[0].sourceUid).toBe("canvas-uid-hw3");
+  });
+
   it("mints a category when the shared drop matches nothing", () => {
     const { snapshot, result } = applySyllabusImportToSnapshot(
       snap({}),
@@ -490,6 +536,47 @@ describe("store applyImport collapses calendar-after-syllabus", () => {
     expect(items[0].sourceUid).toBe("canvas-uid-hw3");
     expect(items[0].status).toBe("done");
     expect(store().deletions[tombKey("item", sylId)]).toBeTruthy();
+
+    store().applyImport("https://canvas.example/feed.ics", {
+      calendarName: "Canvas",
+      events: [
+        {
+          uid: "canvas-uid-hw3",
+          summary: "Homework 3: Linked Lists [ENGL 101]",
+          start: AT,
+          url: "https://canvas.example/assignments/3",
+          allDay: false,
+        },
+      ],
+    });
+    expect(store().items).toHaveLength(1);
+    expect(store().items[0].sourceUid).toBe("canvas-uid-hw3");
+    expect(store().items[0].status).toBe("done");
+  });
+
+  it("does not treat a syllabus:// URL as an ICS feed", () => {
+    const store = () => useDatebookStore.getState();
+    store().applySyllabusImport({
+      drafts: [draft({ title: "HW 3" })],
+      timeZone: TZ,
+      forceCategoryId: "engl",
+    });
+    const before = store().items.length;
+    const syllabusUrl = store().importSources[0].url;
+    const result = store().applyImport(syllabusUrl, {
+      calendarName: "Fake",
+      events: [
+        {
+          uid: "should-not-import",
+          summary: "Intruder [ENGL 101]",
+          start: AT,
+          allDay: false,
+        },
+      ],
+    });
+    expect(result).toEqual({ added: 0, updated: 0, removed: 0 });
+    expect(store().items).toHaveLength(before);
+    expect(store().items.every((i) => i.sourceUid !== "should-not-import")).toBe(true);
   });
 });
 
@@ -526,6 +613,30 @@ describe("updateCategory rewrites syllabus source URLs", () => {
     expect(store().items).toHaveLength(1);
     expect(store().items[0].id).toBe(itemId);
     expect(store().items[0].sourceId).toBe(sourceId);
+
+    store().applySyllabusImport({
+      drafts: [draft({ title: "Homework 3" })],
+      timeZone: TZ,
+      forceCategoryId: "engl",
+    });
+    expect(store().items).toHaveLength(1);
+    expect(store().importSources).toHaveLength(1);
+    expect(store().importSources[0].id).toBe(sourceId);
+  });
+
+  it("finds a syllabus source by items when the stored URL is stale", () => {
+    const store = () => useDatebookStore.getState();
+    store().applySyllabusImport({
+      drafts: [draft({ title: "HW 3" })],
+      timeZone: TZ,
+      forceCategoryId: "engl",
+    });
+    const stale = "syllabus://stale-key";
+    useDatebookStore.setState({
+      importSources: store().importSources.map((s) => ({ ...s, url: stale })),
+    });
+    const found = findSyllabusSource(ENGL, store().importSources, store().items);
+    expect(found?.url).toBe(stale);
   });
 
   it("does not rewrite an http feed URL on rename", () => {
@@ -544,5 +655,31 @@ describe("updateCategory rewrites syllabus source URLs", () => {
     });
     store().updateCategory("engl", { name: "English 101" });
     expect(store().importSources[0].url).toBe("https://canvas.example/feed.ics");
+  });
+});
+
+describe("preview checkbox semantics", () => {
+  it("shows matched rows as checked when linked, not when marked import", () => {
+    expect(syllabusDecisionChecked("link", "matched")).toBe(true);
+    expect(syllabusDecisionChecked("import", "matched")).toBe(false);
+    expect(syllabusDecisionChecked("skip", "matched")).toBe(false);
+    expect(syllabusDecisionChecked("import", "new")).toBe(true);
+    expect(syllabusDecisionChecked("skip", "new")).toBe(false);
+    expect(syllabusDecisionChecked("import", "uncertain")).toBe(true);
+  });
+
+  it("toggles matched rows between link and skip, never import", () => {
+    expect(toggleSyllabusRowDecision("link", "matched")).toBe("skip");
+    expect(toggleSyllabusRowDecision("skip", "matched")).toBe("link");
+    expect(toggleSyllabusRowDecision("import", "matched")).toBe("link");
+    expect(toggleSyllabusRowDecision("import", "new")).toBe("skip");
+    expect(toggleSyllabusRowDecision("skip", "uncertain")).toBe("import");
+  });
+
+  it("does not count a matched import as a new row", () => {
+    expect(syllabusRowAddsItem("import", "matched")).toBe(false);
+    expect(syllabusRowAddsItem("link", "matched")).toBe(false);
+    expect(syllabusRowAddsItem("import", "new")).toBe(true);
+    expect(syllabusRowAddsItem("import", "uncertain")).toBe(true);
   });
 });

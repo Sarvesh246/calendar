@@ -10,8 +10,15 @@ import {
   getRequestUser,
   rateLimit,
   sameOrigin,
+  syllabusLimitKey,
   tooMany,
 } from "@/lib/api-guard";
+import { fetchGeminiJson } from "@/lib/gemini-retry";
+import {
+  SYLLABUS_GEMINI_ATTEMPTS,
+  SYLLABUS_GEMINI_BUDGET_MS,
+  SYLLABUS_GEMINI_TIMEOUT_MS,
+} from "@/lib/syllabus-limits";
 import {
   isPdfMagic,
   normalizeSyllabusExtraction,
@@ -20,17 +27,13 @@ import {
 } from "@/lib/syllabus-extract";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+/** Enough wall time for several Gemini PDF attempts + backoff (Pro/Fluid: 300s). */
+export const maxDuration = 300;
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const KEY = process.env.GEMINI_API_KEY;
 const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-/** PDF parse is slow; stay under maxDuration even with one retry on a fast 503. */
-const GEMINI_TIMEOUT_MS = 45_000;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* ------------------------------------------------------------------ */
 /* Gemini response schema                                              */
@@ -49,6 +52,7 @@ const RESPONSE_SCHEMA = {
           title: { type: "STRING" },
           dueDate: { type: "STRING" },
           dueTime: { type: "STRING" },
+          endTime: { type: "STRING" },
           type: { type: "STRING", enum: ["event", "assignment", "task"] },
           kind: {
             type: "STRING",
@@ -57,7 +61,7 @@ const RESPONSE_SCHEMA = {
           notes: { type: "STRING" },
         },
         required: ["title", "dueDate", "type", "kind"],
-        propertyOrdering: ["title", "dueDate", "dueTime", "type", "kind", "notes"],
+        propertyOrdering: ["title", "dueDate", "dueTime", "endTime", "type", "kind", "notes"],
       },
     },
   },
@@ -120,7 +124,8 @@ DATES:
 
 TIMES:
 - dueTime is optional 24-hour HH:mm when the syllabus gives a clock time (exam at 10:00, due 11:59 PM → 23:59)
-- Date-only due dates: omit dueTime
+- endTime is optional 24-hour HH:mm only when the syllabus gives an end for a timed sitting (exam 10:00–11:30 → dueTime 10:00, endTime 11:30). Omit when unknown. Never invent a duration.
+- Date-only due dates: omit dueTime and endTime
 
 TYPE:
 - "event" only for timed sittings with a clock time (exams, in-class presentations)
@@ -158,7 +163,7 @@ export async function POST(request: Request) {
 
   const user = await getRequestUser(request);
   const ip = clientKey(request);
-  const limitKey = user ? `syllabus:user:${user.id}` : `syllabus:ip:${ip}`;
+  const limitKey = syllabusLimitKey(user, ip);
   const hourly = user ? SYLLABUS_HOURLY_AUTH : SYLLABUS_HOURLY_ANON;
   if (
     !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
@@ -234,41 +239,18 @@ export async function POST(request: Request) {
     },
   });
 
-  const TRANSIENT = new Set([429, 500, 503]);
-  let data: unknown;
-  let lastStatus = 0;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await sleep(400 * attempt + Math.random() * 300);
-    let r: Response;
-    try {
-      r = await fetch(`${ENDPOINT(MODEL)}?key=${KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-      });
-    } catch (err) {
-      lastStatus = 0;
-      console.error("[import-syllabus] request failed (attempt", attempt + 1 + ")", err);
-      // Timeouts already ate most of maxDuration — don't retry those.
-      if (isAbort(err)) break;
-      continue;
-    }
-    if (r.ok) {
-      data = await r.json();
-      break;
-    }
-    lastStatus = r.status;
-    const detail = await r.text().catch(() => "");
-    console.error("[import-syllabus] Gemini error", r.status, detail.slice(0, 300));
-    if (!TRANSIENT.has(r.status)) break;
+  const gemini = await fetchGeminiJson({
+    url: `${ENDPOINT(MODEL)}?key=${KEY}`,
+    body: payload,
+    timeoutMs: SYLLABUS_GEMINI_TIMEOUT_MS,
+    attempts: SYLLABUS_GEMINI_ATTEMPTS,
+    budgetMs: SYLLABUS_GEMINI_BUDGET_MS,
+    log: (msg, extra) => console.error("[import-syllabus]", msg, extra ?? ""),
+  });
+  if (!gemini.ok) {
+    return NextResponse.json({ error: gemini.error }, { status: 200 });
   }
-  if (data === undefined) {
-    return NextResponse.json(
-      { error: lastStatus === 429 || lastStatus === 503 ? "assistant-busy" : "assistant-unreachable" },
-      { status: 200 }
-    );
-  }
+  const data = gemini.data;
 
   const textOut: string =
     (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
@@ -292,8 +274,4 @@ export async function POST(request: Request) {
 function strField(form: FormData, name: string): string {
   const v = form.get(name);
   return typeof v === "string" ? v.trim() : "";
-}
-
-function isAbort(err: unknown): boolean {
-  return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
 }

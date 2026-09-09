@@ -59,10 +59,14 @@ export class FeedFetchError extends Error {
 }
 
 export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
+  const feedUrl = normalizeFeedUrl(url);
+  if (!isHttpFeedUrl(feedUrl)) {
+    throw new FeedFetchError("That doesn't look like a valid calendar feed.");
+  }
   const res = await fetch("/api/import-calendar", {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url: feedUrl }),
   });
   let data: { ok?: boolean; error?: string; text?: string };
   try {

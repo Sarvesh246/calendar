@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
+import { paintAppearance } from "@/components/theme-provider";
 import {
   buildCustomThemeVars,
   customThemeColorScheme,
-  CUSTOM_THEME_VAR_NAMES,
   DEFAULT_CUSTOM_THEME,
+  normalizeThemeHex,
   type CustomThemeColors,
 } from "@/lib/custom-theme";
 import { ToggleSwitch } from "@/components/toggle-switch";
@@ -49,33 +50,32 @@ export default function SettingsPage() {
   const [newReminderMinutes, setNewReminderMinutes] = useState("30");
 
   const applyPreset = (preset: AppearancePreset) => {
-    const root = document.documentElement;
-    root.setAttribute("data-preset", preset);
-    // Applied synchronously (ahead of the store update reaching ThemeProvider's
-    // effect) for the same zero-flicker swap a built-in preset gets from its
-    // static `:root[data-preset]` CSS — a custom theme has no such rule, so it
-    // has to get its variables written by hand here too.
+    // Same-frame paint (ahead of ThemeProvider's layout effect) so a click
+    // feels like the built-in `:root[data-preset]` swap. Selecting Custom also
+    // seeds `customTheme` so a reload has something to restore.
     if (preset === "custom") {
       const colors = settings.customTheme ?? DEFAULT_CUSTOM_THEME;
-      for (const [name, value] of Object.entries(buildCustomThemeVars(colors))) {
-        root.style.setProperty(name, value);
-      }
-      root.style.setProperty("color-scheme", customThemeColorScheme(colors));
+      paintAppearance("custom", colors);
+      updateSettings({ preset: "custom", customTheme: colors });
     } else {
-      for (const name of CUSTOM_THEME_VAR_NAMES) root.style.removeProperty(name);
-      root.style.removeProperty("color-scheme");
+      paintAppearance(preset);
+      updateSettings({ preset });
     }
-    updateSettings({ preset });
+  };
+
+  const applyCustomColors = (colors: CustomThemeColors) => {
+    // Color-picker `input` fires while dragging; write CSS this frame and
+    // persist `preset: "custom"` so a reload keeps the live picks.
+    paintAppearance("custom", colors);
+    updateSettings({ preset: "custom", customTheme: colors });
   };
 
   return (
-    // Every other page runs the full width of the pane; settings used to stop at
-    // a phone-shaped column and leave two thirds of a desktop window empty. It
-    // now spreads into two tracks once there's room, with the heading and the
-    // most-used card spanning both so the page still starts where you expect.
+    // Full-width intro, then two independent stacks at xl — expanding a card
+    // only pushes cards below it in that column, not the one beside it.
     <div className="mx-auto w-full max-w-[1120px] pb-4">
-      <div className="flex flex-col gap-5 xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-5">
-      <header className="pt-1 xl:col-span-2">
+      <div className="flex flex-col gap-5">
+      <header className="pt-1">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
@@ -83,7 +83,7 @@ export default function SettingsPage() {
       </header>
 
       {/* Most-changed preferences — always visible */}
-      <SettingsCard className="xl:col-span-2">
+      <SettingsCard>
         <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
         <div className="mt-4 flex flex-col gap-5">
           <SettingBlock label="Open Datebook to" hint="The first screen when you launch the app.">
@@ -132,14 +132,166 @@ export default function SettingsPage() {
         </div>
       </SettingsCard>
 
-      <CollapsibleCard title="Account & sync" sub="Sign in to back up and sync across devices." storageKey="account">
+      {/* Independent columns at xl. contents + order keep the mobile stack
+          as Account → Calendar → Reminders → Display → Appearance → Install. */}
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:gap-x-5">
+        <div className="contents xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:gap-5">
+          <div className="order-1">
+      <CollapsibleCard
+        title="Account & sync"
+        sub="Sign in to back up and sync across devices."
+        storageKey="account"
+        defaultOpen
+      >
         <AccountSection />
       </CollapsibleCard>
+          </div>
+          <div className="order-3">
+      <CollapsibleCard
+        title="Reminders"
+        sub="In-app alerts and default reminder timing."
+        storageKey="reminders"
+        defaultOpen
+      >
+        <NotificationToggle />
+        <div className="mt-2">
+          <Subheading title="Default reminders" />
+          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
+            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap a reminder to use
+            it by default, or swipe it — left to delete, right to rename.
+          </p>
+        </div>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {reminderPresets.map((rp) =>
+            editingReminderId === rp.id ? (
+              <EditReminderRow
+                key={rp.id}
+                preset={rp}
+                onSave={(patch) => {
+                  updateReminderPreset(rp.id, patch);
+                  setEditingReminderId(null);
+                }}
+                onCancel={() => setEditingReminderId(null)}
+              />
+            ) : (
+              <ReminderPresetRow
+                key={rp.id}
+                preset={rp}
+                active={settings.defaultReminderPresetIds.includes(rp.id)}
+                onToggle={() => {
+                  const active = settings.defaultReminderPresetIds.includes(rp.id);
+                  haptic("light");
+                  updateSettings({
+                    defaultReminderPresetIds: active
+                      ? settings.defaultReminderPresetIds.filter((id) => id !== rp.id)
+                      : [...settings.defaultReminderPresetIds, rp.id],
+                  });
+                }}
+                onEdit={() => setEditingReminderId(rp.id)}
+                onDelete={() => {
+                  haptic("light");
+                  deleteReminderPreset(rp.id);
+                }}
+              />
+            )
+          )}
+        </div>
 
+        <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
+          <input
+            type="number"
+            min={1}
+            value={newReminderMinutes}
+            onChange={(e) => setNewReminderMinutes(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              const n = parseInt(newReminderMinutes, 10);
+              if (!Number.isFinite(n) || n < 1) return;
+              addReminderPreset({ label: formatOffsetLabel(n), offsetMinutes: n });
+              setNewReminderMinutes("30");
+            }}
+            className="min-w-0 w-16 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
+            aria-label="New reminder, minutes before"
+          />
+          <span className="flex-1 text-[13px] text-ink-faint">
+            min before {"→"} {formatOffsetLabel(parseInt(newReminderMinutes, 10) || 0)}
+          </span>
+          <button
+            disabled={!(parseInt(newReminderMinutes, 10) > 0)}
+            onClick={() => {
+              const n = parseInt(newReminderMinutes, 10);
+              if (!Number.isFinite(n) || n < 1) return;
+              haptic("light");
+              addReminderPreset({ label: formatOffsetLabel(n), offsetMinutes: n });
+              setNewReminderMinutes("30");
+            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+            aria-label="Add reminder"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
+      </CollapsibleCard>
+          </div>
+          <div className="order-5">
+      <CollapsibleCard
+        title="Appearance"
+        sub="Optional color themes. Minimal is the default look."
+        storageKey="appearance"
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {presetOrder.map((preset) =>
+            preset === "custom" ? (
+              <CustomPresetCard
+                key={preset}
+                colors={settings.customTheme ?? DEFAULT_CUSTOM_THEME}
+                active={settings.preset === "custom"}
+                onSelect={() => applyPreset("custom")}
+              />
+            ) : (
+              <PresetCard
+                key={preset}
+                preset={preset}
+                active={settings.preset === preset}
+                onSelect={() => applyPreset(preset)}
+              />
+            )
+          )}
+        </div>
+
+        <AnimatePresence initial={false}>
+          {settings.preset === "custom" && (
+            <motion.div
+              key="custom-editor"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{
+                height: motionTokens.springLayout,
+                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
+              }}
+              className="overflow-hidden"
+            >
+              <div className="pt-3.5">
+                <CustomThemeEditor
+                  colors={settings.customTheme ?? DEFAULT_CUSTOM_THEME}
+                  onChange={applyCustomColors}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </CollapsibleCard>
+          </div>
+        </div>
+        <div className="contents xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:gap-5">
+          <div className="order-2">
       <CollapsibleCard
         title="Calendar & categories"
         sub="Organize items by color and pull in events from other calendars."
         storageKey="calendar"
+        defaultOpen
       >
         <SyllabusImportProvider>
         <div className="flex flex-col gap-2">
@@ -265,89 +417,14 @@ export default function SettingsPage() {
         </button>
         </SyllabusImportProvider>
       </CollapsibleCard>
-
-      <CollapsibleCard title="Reminders" sub="In-app alerts and default reminder timing." storageKey="reminders">
-        <NotificationToggle />
-        <div className="mt-2">
-          <Subheading title="Default reminders" />
-          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
-            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap a reminder to use
-            it by default, or swipe it — left to delete, right to rename.
-          </p>
-        </div>
-        <div className="mt-2 flex flex-col gap-1.5">
-          {reminderPresets.map((rp) =>
-            editingReminderId === rp.id ? (
-              <EditReminderRow
-                key={rp.id}
-                preset={rp}
-                onSave={(patch) => {
-                  updateReminderPreset(rp.id, patch);
-                  setEditingReminderId(null);
-                }}
-                onCancel={() => setEditingReminderId(null)}
-              />
-            ) : (
-              <ReminderPresetRow
-                key={rp.id}
-                preset={rp}
-                active={settings.defaultReminderPresetIds.includes(rp.id)}
-                onToggle={() => {
-                  const active = settings.defaultReminderPresetIds.includes(rp.id);
-                  haptic("light");
-                  updateSettings({
-                    defaultReminderPresetIds: active
-                      ? settings.defaultReminderPresetIds.filter((id) => id !== rp.id)
-                      : [...settings.defaultReminderPresetIds, rp.id],
-                  });
-                }}
-                onEdit={() => setEditingReminderId(rp.id)}
-                onDelete={() => {
-                  haptic("light");
-                  deleteReminderPreset(rp.id);
-                }}
-              />
-            )
-          )}
-        </div>
-
-        <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
-          <input
-            type="number"
-            min={1}
-            value={newReminderMinutes}
-            onChange={(e) => setNewReminderMinutes(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              const n = parseInt(newReminderMinutes, 10);
-              if (!Number.isFinite(n) || n < 1) return;
-              addReminderPreset({ label: formatOffsetLabel(n), offsetMinutes: n });
-              setNewReminderMinutes("30");
-            }}
-            className="min-w-0 w-16 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
-            aria-label="New reminder, minutes before"
-          />
-          <span className="flex-1 text-[13px] text-ink-faint">
-            min before {"→"} {formatOffsetLabel(parseInt(newReminderMinutes, 10) || 0)}
-          </span>
-          <button
-            disabled={!(parseInt(newReminderMinutes, 10) > 0)}
-            onClick={() => {
-              const n = parseInt(newReminderMinutes, 10);
-              if (!Number.isFinite(n) || n < 1) return;
-              haptic("light");
-              addReminderPreset({ label: formatOffsetLabel(n), offsetMinutes: n });
-              setNewReminderMinutes("30");
-            }}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
-            aria-label="Add reminder"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        </div>
-      </CollapsibleCard>
-
-      <CollapsibleCard title="Display options" sub="Clock, week layout, and what shows on cards." storageKey="display">
+          </div>
+          <div className="order-4">
+      <CollapsibleCard
+        title="Display options"
+        sub="Clock, week layout, and what shows on cards."
+        storageKey="display"
+        defaultOpen={false}
+      >
         <div className="flex flex-col gap-4">
           <SettingBlock label="Week starts on">
             <Segmented
@@ -383,63 +460,22 @@ export default function SettingsPage() {
           />
         </div>
       </CollapsibleCard>
-
+          </div>
+          <div className="order-6">
       <CollapsibleCard
-        title="Appearance"
-        sub="Optional color themes. Minimal is the default look."
-        storageKey="appearance"
+        title="Install app"
+        sub="Add Datebook to your home screen for offline use."
+        storageKey="install"
         defaultOpen={false}
       >
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          {presetOrder.map((preset) =>
-            preset === "custom" ? (
-              <CustomPresetCard
-                key={preset}
-                colors={settings.customTheme ?? DEFAULT_CUSTOM_THEME}
-                active={settings.preset === "custom"}
-                onSelect={() => applyPreset("custom")}
-              />
-            ) : (
-              <PresetCard
-                key={preset}
-                preset={preset}
-                active={settings.preset === preset}
-                onSelect={() => applyPreset(preset)}
-              />
-            )
-          )}
-        </div>
-
-        <AnimatePresence initial={false}>
-          {settings.preset === "custom" && (
-            <motion.div
-              key="custom-editor"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{
-                height: motionTokens.springLayout,
-                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-              }}
-              className="overflow-hidden"
-            >
-              <div className="pt-3.5">
-                <CustomThemeEditor
-                  colors={settings.customTheme ?? DEFAULT_CUSTOM_THEME}
-                  onChange={(colors) => updateSettings({ customTheme: colors })}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </CollapsibleCard>
-
-      <CollapsibleCard title="Install app" sub="Add Datebook to your home screen for offline use." storageKey="install">
         <PwaInstallButton />
       </CollapsibleCard>
+          </div>
+        </div>
+      </div>
 
       {/* Backup & reset — always expanded, pinned to bottom */}
-      <SettingsCard variant="danger" className="xl:col-span-2">
+      <SettingsCard variant="danger">
         <CardHeading
           title="Backup & reset"
           sub="Download a full copy of your data, restore from a file, or wipe this device clean."
@@ -601,6 +637,9 @@ function CollapsibleCard({
 
 /**
  * Remembered open/closed state for a settings section.
+ *
+ * First visit (no stored preference) uses `defaultOpen`. After the user toggles
+ * a section, that choice is kept in localStorage and reused forever.
  *
  * Reading localStorage in `useState`'s initialiser looked harmless but ran on
  * the client only — the prerendered HTML had the section in its default state,
@@ -874,12 +913,22 @@ function ColorField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
   const [draft, setDraft] = useState(value);
 
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function emit(raw: string) {
+    const next = normalizeThemeHex(raw);
+    if (!next) return;
+    setDraft(next);
+    onChange(next);
+  }
+
   function commit() {
-    const v = draft.trim();
-    if (HEX.test(v)) onChange(v.length === 4 ? `#${[...v.slice(1)].map((c) => c + c).join("")}` : v);
+    const next = normalizeThemeHex(draft);
+    if (next) onChange(next);
     else setDraft(value);
   }
 
@@ -887,11 +936,9 @@ function ColorField({
     <label className="flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
       <input
         type="color"
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setDraft(e.target.value);
-        }}
+        value={normalizeThemeHex(value) ?? value}
+        onInput={(e) => emit(e.currentTarget.value)}
+        onChange={(e) => emit(e.currentTarget.value)}
         className="h-8 w-8 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
         aria-label={`${label} color`}
       />

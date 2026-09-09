@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  eventRemainingLabel,
   formatDaySummary,
+  formatRemainingLabel,
   isOverdue,
   itemDaySpan,
   itemOccupiesDay,
@@ -106,5 +108,88 @@ describe("formatDaySummary", () => {
     expect(formatDaySummary(0, 0, 0)).toBe("Clear day");
     expect(formatDaySummary(1, 0, 0)).toBe("1 event");
     expect(formatDaySummary(2, 1, 1)).toBe("1 overdue · 2 events · 1 due");
+  });
+});
+
+describe("formatRemainingLabel", () => {
+  const minutes = (n: number) => n * 60_000;
+
+  it("uses minutes only under an hour", () => {
+    expect(formatRemainingLabel(minutes(1))).toBe("1 min left");
+    expect(formatRemainingLabel(minutes(12))).toBe("12 min left");
+    expect(formatRemainingLabel(minutes(59))).toBe("59 min left");
+  });
+
+  it("rounds sub-minute leftovers up to at least a minute", () => {
+    expect(formatRemainingLabel(1)).toBe("1 min left");
+    expect(formatRemainingLabel(30_000)).toBe("1 min left");
+  });
+
+  it("uses hours and minutes under a day", () => {
+    expect(formatRemainingLabel(minutes(60))).toBe("1 hr left");
+    expect(formatRemainingLabel(minutes(61))).toBe("1 hr 1 min left");
+    expect(formatRemainingLabel(minutes(5 * 60 + 12))).toBe("5 hr 12 min left");
+    expect(formatRemainingLabel(minutes(23 * 60 + 59))).toBe("23 hr 59 min left");
+  });
+
+  it("uses days and hours when a day or more remains", () => {
+    expect(formatRemainingLabel(minutes(24 * 60))).toBe("1 day left");
+    expect(formatRemainingLabel(minutes(24 * 60 + 60))).toBe("1 day 1 hr left");
+    // Career fair: 1672 minutes = 1 day 3 hr 52 min → drop minutes at day scale.
+    expect(formatRemainingLabel(minutes(1672))).toBe("1 day 3 hr left");
+    expect(formatRemainingLabel(minutes(2 * 24 * 60))).toBe("2 days left");
+    expect(formatRemainingLabel(minutes(2 * 24 * 60 + 5 * 60))).toBe("2 days 5 hr left");
+  });
+});
+
+describe("eventRemainingLabel", () => {
+  const now = new Date("2026-09-09T12:00:00");
+
+  it("is silent when the event is not happening", () => {
+    expect(
+      eventRemainingLabel(
+        base({
+          type: "event",
+          at: "2026-09-09T13:00:00",
+          endAt: "2026-09-09T14:00:00",
+        }),
+        now
+      )
+    ).toBeUndefined();
+    expect(
+      eventRemainingLabel(
+        base({
+          type: "event",
+          at: "2026-09-09T10:00:00",
+          endAt: "2026-09-09T11:00:00",
+        }),
+        now
+      )
+    ).toBeUndefined();
+    expect(eventRemainingLabel(base({ type: "assignment" }), now)).toBeUndefined();
+  });
+
+  it("labels an event in progress", () => {
+    expect(
+      eventRemainingLabel(
+        base({
+          type: "event",
+          at: "2026-09-09T11:48:00",
+          endAt: "2026-09-09T12:12:00",
+        }),
+        now
+      )
+    ).toBe("12 min left");
+    expect(
+      eventRemainingLabel(
+        base({
+          type: "event",
+          title: "Career fair",
+          at: "2026-09-08T09:00:00",
+          endAt: "2026-09-10T15:52:00",
+        }),
+        now
+      )
+    ).toBe("1 day 3 hr left");
   });
 });

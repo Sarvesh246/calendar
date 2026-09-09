@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { differenceInMinutes, formatDistanceToNowStrict } from "date-fns";
-import { formatTime } from "@/lib/date-utils";
+import { eventRemainingLabel, formatTime } from "@/lib/date-utils";
 import { useDatebookStore } from "@/lib/store";
 import type { Category, Item } from "@/lib/types";
 
@@ -20,6 +20,7 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const started = now >= start;
+  const remaining = eventRemainingLabel(item, now);
   const totalMin = end ? differenceInMinutes(end, start) : 0;
   const progress = totalMin > 0 ? Math.min(1, Math.max(0, differenceInMinutes(now, start) / totalMin)) : 0;
 
@@ -32,7 +33,11 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{item.title}</h3>
         <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
-          {!started && formatDistanceToNowStrict(start, { addSuffix: false })}
+          {!started
+            ? formatDistanceToNowStrict(start, { addSuffix: false })
+            : item.allDay
+              ? remaining
+              : null}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
@@ -58,9 +63,9 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
               style={{ width: `${progress * 100}%` }}
             />
           </div>
-          {started && progress < 1 && (
-            <span className="shrink-0 text-[11px] tabular-nums text-ink-faint">
-              {Math.max(1, differenceInMinutes(end, now))}m left
+          {remaining && (
+            <span className="shrink-0 text-[11px] tabular-nums text-ink-faint" suppressHydrationWarning>
+              {remaining}
             </span>
           )}
         </div>

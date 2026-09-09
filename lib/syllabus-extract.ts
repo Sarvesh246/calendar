@@ -1,4 +1,9 @@
+import { wallTimeInZoneToIso } from "./date-utils";
+import { MAX_SYLLABUS_PDF_BYTES } from "./syllabus-limits";
+import type { SyllabusDraft } from "./syllabus-match";
 import type { ItemType } from "./types";
+
+export { MAX_SYLLABUS_BODY, MAX_SYLLABUS_PDF_BYTES } from "./syllabus-limits";
 
 /** Error codes returned by POST /api/import-syllabus. HTTP status varies. */
 export type SyllabusExtractError =
@@ -31,6 +36,8 @@ export type SyllabusExtractedItem = {
   dueDate: string;
   /** 24-hour `HH:mm` when the syllabus gave a clock time. */
   dueTime?: string;
+  /** 24-hour `HH:mm` end of a timed sitting, only when the PDF gave one. */
+  endTime?: string;
   type: ItemType;
   kind: SyllabusItemKind;
   notes?: string;
@@ -43,6 +50,18 @@ export type SyllabusExtractResult = {
 };
 
 export type SyllabusCategoryHint = { id: string; name: string };
+
+const SYLLABUS_EXTRACT_ERROR_CODES = new Set<string>([
+  "assistant-not-configured",
+  "assistant-busy",
+  "assistant-unreachable",
+  "forbidden",
+  "rate-limited",
+  "payload-too-large",
+  "bad-request",
+  "missing-pdf",
+  "invalid-pdf",
+]);
 
 const MAX_ITEMS = 200;
 const MAX_CATEGORIES = 80;
@@ -84,6 +103,139 @@ const KIND_ALIASES: Record<string, SyllabusItemKind> = {
 /** `%PDF` magic bytes — browsers sometimes send an empty or octet-stream type. */
 export function isPdfMagic(bytes: Uint8Array): boolean {
   return bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
+export function isSyllabusExtractError(code: unknown): code is SyllabusExtractError {
+  return typeof code === "string" && SYLLABUS_EXTRACT_ERROR_CODES.has(code);
+}
+
+export function isSyllabusRetryableError(code: SyllabusExtractError): boolean {
+  return code === "assistant-busy" || code === "assistant-unreachable";
+}
+
+export class SyllabusExtractRequestError extends Error {
+  readonly code: SyllabusExtractError;
+  readonly status: number;
+  constructor(code: SyllabusExtractError, status: number) {
+    super(syllabusExtractErrorMessage(code, status));
+    this.name = "SyllabusExtractRequestError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/**
+ * Map an API `error` code and/or HTTP status to a typed extract error.
+ * Transient Gemini failures are already retried on the server; these codes
+ * are what remains after that. Invalid PDF / too-large / not-configured stay distinct.
+ */
+export function syllabusErrorFromResponse(
+  code: unknown,
+  status: number
+): SyllabusExtractError | undefined {
+  if (isSyllabusExtractError(code)) return code;
+  if (status === 429) return "rate-limited";
+  if (status === 403) return "forbidden";
+  if (status === 413) return "payload-too-large";
+  if (status === 503 || status === 502) return "assistant-busy";
+  if (status === 504 || status === 408 || status === 0) return "assistant-unreachable";
+  return undefined;
+}
+
+export function syllabusExtractErrorMessage(code: string | undefined, status: number): string {
+  const maxMb = (MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1);
+  if (code === "assistant-not-configured") return "Syllabus reading isn't set up on this server.";
+  if (code === "assistant-busy") return "The reader is busy — try again in a moment.";
+  if (code === "assistant-unreachable") return "Couldn't reach the syllabus reader. Try again.";
+  if (code === "forbidden" || status === 403) return "This request was blocked.";
+  if (code === "rate-limited" || status === 429) return "Too many syllabus reads — try again in a bit.";
+  if (code === "payload-too-large" || status === 413) {
+    return `That PDF is too large (max ${maxMb} MB).`;
+  }
+  if (code === "missing-pdf") return "Choose a PDF to import.";
+  if (code === "invalid-pdf") return "That file doesn't look like a PDF.";
+  if (code === "bad-request") return "Couldn't read that syllabus.";
+  if (status === 503 || status === 502) return "The reader is busy — try again in a moment.";
+  if (status === 504 || status === 408 || status === 0) {
+    return "Couldn't reach the syllabus reader. Try again.";
+  }
+  return "Couldn't read that syllabus.";
+}
+
+export function sleepWithSignal(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      reject(err);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      reject(err);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** One extra attempt after a transient busy/unreachable — not for invalid PDF / 413 / 429. */
+export async function retrySyllabusExtractOnce<T>(
+  run: () => Promise<T>,
+  opts: {
+    signal: AbortSignal;
+    delayMs: number;
+    wait?: (ms: number, signal: AbortSignal) => Promise<void>;
+  }
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (opts.signal.aborted) throw err;
+    if (err instanceof SyllabusExtractRequestError && isSyllabusRetryableError(err.code)) {
+      await (opts.wait ?? sleepWithSignal)(opts.delayMs, opts.signal);
+      return await run();
+    }
+    throw err;
+  }
+}
+
+export function looksLikeSyllabusPdf(file: { type?: string; name: string }): boolean {
+  const type = (file.type || "").toLowerCase();
+  const named = file.name.toLowerCase().endsWith(".pdf");
+  if (type === "application/pdf") return true;
+  if (type === "application/octet-stream" || type === "") return named;
+  return false;
+}
+
+/** Convert a normalized extract row to a store draft. Does not invent an end time. */
+export function extractedItemToDraft(item: SyllabusExtractedItem, timeZone: string): SyllabusDraft {
+  const start = parseHHmm(item.dueTime);
+  const end = parseHHmm(item.endTime);
+  const hour = start?.hour ?? 23;
+  const minute = start?.minute ?? 59;
+  const draft: SyllabusDraft = {
+    title: item.title,
+    at: wallTimeInZoneToIso(item.dueDate, hour, minute, timeZone),
+    type: item.type,
+    kind: item.kind,
+    ...(item.notes?.trim() ? { notes: item.notes.trim() } : {}),
+  };
+  if (start && end) {
+    const startMin = start.hour * 60 + start.minute;
+    const endMin = end.hour * 60 + end.minute;
+    if (endMin > startMin) {
+      draft.endAt = wallTimeInZoneToIso(item.dueDate, end.hour, end.minute, timeZone);
+    } else if (endMin < startMin) {
+      draft.endAt = wallTimeInZoneToIso(addDaysYmd(item.dueDate, 1), end.hour, end.minute, timeZone);
+    }
+  }
+  return draft;
 }
 
 export function parseCategoryHints(raw: unknown): SyllabusCategoryHint[] {
@@ -194,9 +346,11 @@ function normalizeItem(row: unknown, now: Date, timeZone: string): SyllabusExtra
   const type = normalizeType(rec.type);
   const kind = normalizeKind(rec.kind, title);
   const dueTime = normalizeDueTime(rec.dueTime);
+  const endTime = normalizeDueTime(rec.endTime);
   const notes = clip(str(rec.notes), MAX_NOTES) || undefined;
   const item: SyllabusExtractedItem = { title, dueDate, type, kind };
   if (dueTime) item.dueTime = dueTime;
+  if (endTime) item.endTime = endTime;
   if (notes) item.notes = notes;
   return item;
 }
@@ -279,6 +433,24 @@ function addMonthsYmd(ymd: string, months: number): string {
   const [y, m, d] = ymd.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1 + months, d));
   return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+function parseHHmm(raw?: string): { hour: number; minute: number } | undefined {
+  if (!raw) return undefined;
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return undefined;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour > 23 || minute > 59) {
+    return undefined;
+  }
+  return { hour, minute };
 }
 
 function ymdIndex(ymd: string): number {

@@ -6,7 +6,7 @@ import { createDebouncedStorage } from "./debounced-storage";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { nanoid } from "./nanoid";
 import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
-import { buildImportPlan, feedLabel, type FetchedCalendar } from "./calendar-import";
+import { buildImportPlan, feedLabel, isHttpFeedUrl, normalizeFeedUrl, type FetchedCalendar } from "./calendar-import";
 import {
   applySyllabusImportToSnapshot,
   recountSyllabusItemCounts,
@@ -401,6 +401,10 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       applyImport: (url, feed) => {
+        // Syllabus rows live on `syllabus://` sources. Never treat those as ICS feeds.
+        if (!isHttpFeedUrl(normalizeFeedUrl(url))) {
+          return { added: 0, updated: 0, removed: 0 };
+        }
         const state = get();
         // Collapse categories that already exist twice under different ids
         // before resolving anything against them. A feed resolves a course to a
@@ -1835,7 +1839,13 @@ function applyRealtime(
         // recalc) for nothing — visible as a stutter while flicking through
         // appearance presets.
         if (JSON.stringify(incoming) !== JSON.stringify(current)) {
-          useDatebookStore.setState({ settings: incoming });
+          // A project that hasn't migrated `custom_theme` yet echoes settings
+          // without it; don't let that wipe a custom palette the user just set.
+          const settings =
+            incoming.customTheme || !current.customTheme
+              ? incoming
+              : { ...incoming, customTheme: current.customTheme };
+          useDatebookStore.setState({ settings });
         }
       }
       return;

@@ -111,6 +111,49 @@ export function defaultSyllabusDecision(verdict: SyllabusVerdict): SyllabusRowDe
   return "skip";
 }
 
+/** Preview checkbox: matched rows are linked, not imported as copies. */
+export function syllabusDecisionChecked(
+  decision: SyllabusRowDecision,
+  verdict: SyllabusVerdict
+): boolean {
+  return verdict === "matched" ? decision === "link" : decision === "import";
+}
+
+/** Binary toggle for the review sheet. Matched rows never flip to `import`. */
+export function toggleSyllabusRowDecision(
+  decision: SyllabusRowDecision,
+  verdict: SyllabusVerdict
+): SyllabusRowDecision {
+  if (verdict === "matched") return decision === "link" ? "skip" : "link";
+  return decision === "import" ? "skip" : "import";
+}
+
+/** True when apply will mint a new calendar row for this review choice. */
+export function syllabusRowAddsItem(
+  decision: SyllabusRowDecision,
+  verdict: SyllabusVerdict
+): boolean {
+  return decision === "import" && verdict !== "matched";
+}
+
+/** Syllabus ImportSource for a class — by live URL, then by items already on it. */
+export function findSyllabusSource(
+  category: { id: string; name: string },
+  sources: ImportSource[],
+  items: Item[]
+): ImportSource | undefined {
+  const url = syllabusSourceUrl(category.name);
+  const byUrl = sources.find((s) => isSyllabusSource(s) && s.url === url);
+  if (byUrl) return byUrl;
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.categoryId !== category.id || !item.sourceId) continue;
+    if (isSyllabusSourceUid(item.sourceUid)) ids.add(item.sourceId);
+  }
+  if (ids.size === 0) return undefined;
+  return sources.find((s) => ids.has(s.id) && isSyllabusSource(s));
+}
+
 /**
  * Pin every row to a Settings category, or file a shared drop against an
  * existing class (full name or course code). No match → mint later.

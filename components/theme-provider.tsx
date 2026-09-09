@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 import { useDatebookStore } from "@/lib/store";
 import { presetThemeColor } from "@/lib/theme-presets";
 import {
-  buildCustomThemeVars,
-  customThemeColorScheme,
-  CUSTOM_THEME_VAR_NAMES,
+  applyCustomThemeToDocument,
+  clearCustomThemeFromDocument,
   DEFAULT_CUSTOM_THEME,
 } from "@/lib/custom-theme";
 import type { AppearancePreset } from "@/lib/types";
@@ -18,39 +17,52 @@ function applyThemeColor(preset: AppearancePreset, customBackground?: string) {
   }
 }
 
+function subscribeHydration(onStoreChange: () => void) {
+  return useDatebookStore.persist.onFinishHydration(onStoreChange);
+}
+
+function persistHydrated() {
+  return useDatebookStore.persist.hasHydrated();
+}
+
+/** Write the active palette to `document.documentElement`.
+ *  Custom themes have no static `:root[data-preset="custom"]` rule — tokens
+ *  live as inline properties. Built-ins use those static rules, so any leftover
+ *  inline custom vars have to be cleared or they outrank the stylesheet. */
+export function paintAppearance(preset: AppearancePreset, customTheme?: { background: string; surface: string; accent: string } | null) {
+  const root = document.documentElement;
+  if (preset === "custom") {
+    const colors = customTheme ?? DEFAULT_CUSTOM_THEME;
+    applyCustomThemeToDocument(colors, root);
+    applyThemeColor(preset, colors.background);
+  } else {
+    root.setAttribute("data-preset", preset);
+    clearCustomThemeFromDocument(root);
+    applyThemeColor(preset);
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const preset = useDatebookStore((s) => s.settings.preset);
   const density = useDatebookStore((s) => s.settings.density);
   const customTheme = useDatebookStore((s) => s.settings.customTheme);
+  const hydrated = useSyncExternalStore(subscribeHydration, persistHydrated, () => false);
 
-  useEffect(() => {
-    // The settings UI already flips this attribute synchronously on click for an
-    // instant repaint; this effect is the reconciler for the other paths
-    // (first load, a preset change synced from another device). Skip the DOM
-    // write when it's already correct so it can't trigger a redundant recalc.
-    const root = document.documentElement;
-    if (root.getAttribute("data-preset") !== preset) {
-      root.setAttribute("data-preset", preset);
-    }
-    if (preset === "custom") {
-      const colors = customTheme ?? DEFAULT_CUSTOM_THEME;
-      const vars = buildCustomThemeVars(colors);
-      for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
-      root.style.setProperty("color-scheme", customThemeColorScheme(colors));
-      applyThemeColor(preset, colors.background);
-    } else {
-      for (const name of CUSTOM_THEME_VAR_NAMES) root.style.removeProperty(name);
-      root.style.removeProperty("color-scheme");
-      applyThemeColor(preset);
-    }
-  }, [preset, customTheme]);
+  useLayoutEffect(() => {
+    // The blocking theme-init script already painted from localStorage.
+    // Running this with the default store (preset: minimal) before persist
+    // hydrates would strip those inline custom vars and flash the default.
+    if (!hydrated) return;
+    paintAppearance(preset, customTheme);
+  }, [hydrated, preset, customTheme]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!hydrated) return;
     const root = document.documentElement;
     if (root.getAttribute("data-density") !== density) {
       root.setAttribute("data-density", density);
     }
-  }, [density]);
+  }, [hydrated, density]);
 
   return <>{children}</>;
 }
