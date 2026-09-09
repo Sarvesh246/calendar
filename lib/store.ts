@@ -137,6 +137,8 @@ interface DatebookState {
   setItemRepeat: (id: string, rule: RepeatRule | undefined) => void;
   dismissSyncNotice: (id: string) => void;
   clearSyncNotices: () => void;
+  /** Apply a remote-edit card through the coalesce/replace path (tests + UI). */
+  pushSyncNotice: (draft: NoticeDraft) => void;
 
   /** Load the signed-in user's data, adopt/merge local data, and start realtime sync. */
   connectCloud: (userId: string) => Promise<void>;
@@ -657,6 +659,9 @@ export const useDatebookStore = create<DatebookState>()(
       dismissSyncNotice: (id) =>
         set((s) => ({ syncNotices: dropSyncNotice(s.syncNotices, id) })),
       clearSyncNotices: () => set({ syncNotices: [] }),
+      pushSyncNotice: (draft) => {
+        enqueueSyncNotice(draft);
+      },
 
       connectCloud: async (userId) => {
         if (!supabase || activeUserId === userId || connecting) return;

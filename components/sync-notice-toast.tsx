@@ -5,6 +5,7 @@ import {
   AnimatePresence,
   animate,
   motion,
+  useDragControls,
   useMotionValue,
   useTransform,
 } from "framer-motion";
@@ -16,9 +17,9 @@ import type { SyncNotice } from "@/lib/sync-notice";
 import { cn } from "@/lib/utils";
 
 const AUTO_MS: Record<SyncNotice["kind"], number> = {
-  remote: 4200,
-  conflict: 5600,
-  bulk: 4200,
+  remote: 5200,
+  conflict: 6800,
+  bulk: 5200,
 };
 
 function copyFor(n: SyncNotice): { title: string; detail: string } {
@@ -41,7 +42,7 @@ export function SyncNoticeToasts() {
   if (notices.length === 0) return null;
 
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-stretch gap-2">
+    <div className="flex w-full max-w-[420px] flex-col items-stretch gap-2 self-center">
       <AnimatePresence initial={false}>
         {notices.map((notice) => (
           <SwipeNotice
@@ -64,6 +65,7 @@ function SwipeNotice({
 }) {
   const reduced = prefersReducedMotion();
   const cardRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
   const dragging = useRef(false);
   const dismissed = useRef(false);
   const paused = useRef(false);
@@ -136,14 +138,14 @@ function SwipeNotice({
   return (
     <motion.div
       layout
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.96 }}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: -14, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={
         reduced
           ? { opacity: 0 }
           : {
               opacity: 0,
-              y: 10,
+              y: -12,
               scale: 0.97,
               transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
             }
@@ -155,8 +157,10 @@ function SwipeNotice({
         ref={cardRef}
         style={{ x, y, opacity }}
         drag={reduced ? false : true}
+        dragListener={false}
+        dragControls={dragControls}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={{ left: 0.78, right: 0.78, top: 0.3, bottom: 0.88 }}
+        dragElastic={{ left: 0.78, right: 0.78, top: 0.88, bottom: 0.28 }}
         dragMomentum={false}
         dragTransition={{ bounceStiffness: 560, bounceDamping: 38 }}
         onDragStart={() => {
@@ -164,41 +168,49 @@ function SwipeNotice({
         }}
         onDragEnd={(_, info) => {
           dragging.current = false;
-          const goX = Math.abs(info.offset.x) > 64 || Math.abs(info.velocity.x) > 580;
-          const goDown = info.offset.y > 32 || info.velocity.y > 500;
-          const goUp = info.offset.y < -52 || info.velocity.y < -680;
+          const goX = Math.abs(info.offset.x) > 56 || Math.abs(info.velocity.x) > 520;
+          const goUp = info.offset.y < -28 || info.velocity.y < -480;
+          const goDown = info.offset.y > 64 || info.velocity.y > 720;
           if (goX) {
             flyAway(Math.sign(info.offset.x || info.velocity.x || 1) * 420, info.offset.y);
+          } else if (goUp) {
+            flyAway(info.offset.x, -160);
           } else if (goDown) {
             flyAway(info.offset.x, 170);
-          } else if (goUp) {
-            flyAway(info.offset.x, -150);
           }
         }}
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className="cursor-grab touch-none will-change-transform active:cursor-grabbing"
+        className="cursor-grab touch-none select-none will-change-transform active:cursor-grabbing"
       >
         <div
           className={cn(
-            "sync-notice-card relative flex w-full items-start gap-2.5 overflow-hidden px-3 py-2.5"
+            "sync-notice-card relative flex w-full items-start gap-2 overflow-hidden pl-3 pr-1.5 py-2"
           )}
         >
-          <span
-            aria-hidden
-            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
+          <div
+            className="flex min-w-0 flex-1 items-start gap-2.5 py-0.5"
+            onPointerDown={(e) => {
+              if (reduced) return;
+              dragControls.start(e);
+            }}
           >
-            <Cloud className="h-3.5 w-3.5" strokeWidth={2} />
-          </span>
-          <p className="min-w-0 flex-1 py-0.5">
-            <span className="block truncate text-[13px] font-medium leading-tight text-ink">
-              {copy.title}
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
+            >
+              <Cloud className="h-3.5 w-3.5" strokeWidth={2} />
             </span>
-            <span className="mt-0.5 block text-[12px] leading-snug text-ink-soft">
-              {copy.detail}
-            </span>
-          </p>
+            <p className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-medium leading-tight text-ink">
+                {copy.title}
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-ink-soft">
+                {copy.detail}
+              </span>
+            </p>
+          </div>
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
@@ -208,7 +220,7 @@ function SwipeNotice({
               onDismissRef.current();
             }}
             aria-label="Dismiss"
-            className="-mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="relative z-20 mt-0.5 flex h-9 w-9 shrink-0 cursor-pointer touch-auto items-center justify-center rounded-full bg-surface-sunken text-ink-soft transition-colors hover:bg-line hover:text-ink"
           >
             <X className="h-3.5 w-3.5" strokeWidth={2.2} />
           </button>
