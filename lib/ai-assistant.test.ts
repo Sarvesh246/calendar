@@ -7,7 +7,7 @@ import {
 } from "./ai-assistant";
 import type { Item } from "./types";
 
-const cat = [{ id: "c1", name: "Bio" }];
+const cat = [{ id: "c1", name: "Bio", color: "#3DBE8B" }];
 
 function item(over: Partial<Item>): Item {
   return {

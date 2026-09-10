@@ -1,4 +1,5 @@
 import { sanitizeCustomTheme } from "./custom-theme";
+import { normalizeClassReminderMinutes } from "./class-reminder";
 import { safeCategoryColor, safeCategoryName, safePresetLabel } from "./db-sync";
 import type {
   Category,
@@ -84,6 +85,9 @@ export function dedupeReminderPresets(presets: ReminderPreset[]): ReminderPreset
 export function sanitizeSettings(settings: UserSettings | undefined): UserSettings {
   const base = settings ?? ({} as UserSettings);
   const landingView = LANDING_VIEWS.has(base.landingView) ? base.landingView : "today";
+  // NOT NULL in `user_settings`, and a NaN offset would arm a timer that never
+  // fires — so coerce whatever localStorage, a backup, or an older client sent.
+  const classReminderMinutes = normalizeClassReminderMinutes(base.classReminderMinutes);
   const customTheme = sanitizeCustomTheme(base.customTheme);
   const customUnchanged =
     (!base.customTheme && !customTheme) ||
@@ -92,8 +96,15 @@ export function sanitizeSettings(settings: UserSettings | undefined): UserSettin
       customTheme.background === base.customTheme.background &&
       customTheme.surface === base.customTheme.surface &&
       customTheme.accent === base.customTheme.accent);
-  if (landingView === base.landingView && customUnchanged && settings) return settings;
-  const next: UserSettings = { ...base, landingView };
+  if (
+    landingView === base.landingView &&
+    classReminderMinutes === base.classReminderMinutes &&
+    customUnchanged &&
+    settings
+  ) {
+    return settings;
+  }
+  const next: UserSettings = { ...base, landingView, classReminderMinutes };
   if (customTheme) next.customTheme = customTheme;
   else delete next.customTheme;
   return next;

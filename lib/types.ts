@@ -124,6 +124,9 @@ export interface UserSettings {
   showCategoryDot: boolean;
   hideCompleted: boolean;
   defaultReminderPresetIds: string[];
+  /** How many minutes before a class starts the countdown card appears and the
+   *  reminder notification fires. `0` turns both off. */
+  classReminderMinutes: number;
   /** Mobile calendar: pop-up panel vs list below the month grid. */
   mobileDayDetails: MobileDayDetails;
   /** Hide the first-run empty-state card. */

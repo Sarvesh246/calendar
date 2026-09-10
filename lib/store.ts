@@ -44,6 +44,7 @@ import {
   type TombstoneMap,
 } from "./tombstones";
 import { expandRepeat } from "./repeat";
+import { DEFAULT_CLASS_REMINDER_MINUTES } from "./class-reminder";
 import {
   collapseBySourceUid,
   dedupeCategories,
@@ -175,6 +176,7 @@ const defaultSettings: UserSettings = {
   showCategoryDot: true,
   hideCompleted: false,
   defaultReminderPresetIds: ["rp-night"],
+  classReminderMinutes: DEFAULT_CLASS_REMINDER_MINUTES,
   mobileDayDetails: "sheet",
 };
 
@@ -1163,6 +1165,14 @@ export const useDatebookStore = create<DatebookState>()(
         }
         if (state?.settings && state.settings.mobileDayDetails === undefined) {
           state.settings = { ...state.settings, mobileDayDetails: "sheet" };
+        }
+        if (state?.settings && state.settings.classReminderMinutes === undefined) {
+          // Stores written before class timing was configurable were all on the
+          // old hard-coded 10-minute countdown; keep them exactly there.
+          state.settings = {
+            ...state.settings,
+            classReminderMinutes: DEFAULT_CLASS_REMINDER_MINUTES,
+          };
         }
         if (state?.categories) {
           state.categories = sanitizeCategories(state.categories);

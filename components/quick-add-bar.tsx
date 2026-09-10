@@ -12,6 +12,7 @@ import { shouldAskAssistant } from "@/lib/ai-assistant";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
+import { reminderContext } from "@/lib/store-selectors";
 import { formatTime } from "@/lib/date-utils";
 import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
@@ -116,7 +117,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       status: parsed.type === "event" ? undefined : "todo",
       reminders,
     });
-    if (willHaveReminder) void maybePromptForReminders(() => useDatebookStore.getState().items);
+    if (willHaveReminder) void maybePromptForReminders(reminderContext);
     reset();
   }
 

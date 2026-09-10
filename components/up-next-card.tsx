@@ -12,6 +12,7 @@ import {
   isHappeningNow,
 } from "@/lib/date-utils";
 import { isClassMeeting } from "@/lib/class-schedule";
+import { classCountdownWindowMs } from "@/lib/class-reminder";
 import { useDatebookStore } from "@/lib/store";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
@@ -265,10 +266,14 @@ function UpNextFace({
 }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
+  const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const [now, setNow] = useState(() => new Date());
   const isClass = isClassMeeting(item, category?.name);
   const started = isHappeningNow(item, now) || mode === "live";
-  const soon = !started && (mode === "soon" || isClassStartingSoon(item, now));
+  const soon =
+    !started &&
+    (mode === "soon" ||
+      isClassStartingSoon(item, now, classCountdownWindowMs(classReminderMinutes)));
 
   useEffect(() => {
     const ms = soon ? 1000 : 15_000;

@@ -61,6 +61,22 @@ describe("sanitizeSettings", () => {
     expect(sanitizeSettings(undefined).landingView).toBe("today");
   });
 
+  it("keeps class heads-up timing in range", () => {
+    expect(sanitizeSettings({ landingView: "today" } as never).classReminderMinutes).toBe(10);
+    expect(
+      sanitizeSettings({ landingView: "today", classReminderMinutes: 30 } as never)
+        .classReminderMinutes
+    ).toBe(30);
+    expect(
+      sanitizeSettings({ landingView: "today", classReminderMinutes: -3 } as never)
+        .classReminderMinutes
+    ).toBe(0);
+    expect(
+      sanitizeSettings({ landingView: "today", classReminderMinutes: "soon" } as never)
+        .classReminderMinutes
+    ).toBe(10);
+  });
+
   it("keeps a valid custom theme and drops a broken one", () => {
     const customTheme = { background: "#f3f0ff", surface: "#ffffff", accent: "#7c5cf0" };
     const kept = sanitizeSettings({

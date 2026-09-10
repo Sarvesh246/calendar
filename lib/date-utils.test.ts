@@ -311,6 +311,24 @@ describe("class countdown and happening-now stack", () => {
     expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 30))).toBe(false);
   });
 
+  it("counts down over whatever window the settings ask for", () => {
+    const item = lecture();
+    const at10oh5 = new Date(2026, 8, 11, 10, 5);
+    expect(isClassStartingSoon(item, at10oh5, 30 * 60_000)).toBe(true);
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 9, 45), 30 * 60_000)).toBe(false);
+    // "Off" shows no countdown card at all.
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 19), 0)).toBe(false);
+  });
+
+  it("opens the countdown card on the same window", () => {
+    const soon = lecture({ id: "soon" });
+    const now = new Date(2026, 8, 11, 9, 55); // 25 minutes out
+    expect(happeningNowStack([soon], now, [], 30 * 60_000).startingSoon.map((i) => i.id)).toEqual([
+      "soon",
+    ]);
+    expect(happeningNowStack([soon], now, [], 10 * 60_000).startingSoon).toEqual([]);
+  });
+
   it("does not countdown a Canvas feed event", () => {
     const item = lecture({ sourceId: "feed" });
     expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 12))).toBe(false);

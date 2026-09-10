@@ -30,6 +30,11 @@ import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
 import { useUIStore } from "@/lib/ui-store";
+import {
+  CLASS_REMINDER_OPTIONS,
+  classReminderLabel,
+  classReminderOptionLabel,
+} from "@/lib/class-reminder";
 import type { AppearancePreset, Density, LandingView, MobileDayDetails, ReminderPreset } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -157,6 +162,21 @@ export default function SettingsPage() {
         defaultOpen
       >
         <NotificationToggle />
+        <div className="mt-3">
+          <Subheading title="Class heads-up" />
+          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
+            How early a class alert lands — and when Today starts counting the class down. Applies
+            to every weekly class on your schedule.
+          </p>
+        </div>
+        <ClassReminderPicker
+          minutes={settings.classReminderMinutes}
+          onChange={(minutes) => {
+            haptic("light");
+            updateSettings({ classReminderMinutes: minutes });
+          }}
+        />
+        <Divider />
         <div className="mt-2">
           <Subheading title="Default reminders" />
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
@@ -805,6 +825,83 @@ function Segmented({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The one control behind both halves of "your class is about to start": the
+ * Today countdown card and the reminder notification. A fixed four-column grid
+ * rather than a scrolling segmented row, so every option is reachable and
+ * evenly sized at phone width, and the summary line underneath spells out what
+ * the pick actually does — the countdown and the alert are the same number, and
+ * that's easy to miss from a grid of bare durations.
+ */
+function ClassReminderPicker({
+  minutes,
+  onChange,
+}: {
+  minutes: number;
+  onChange: (minutes: number) => void;
+}) {
+  const options: number[] = [...CLASS_REMINDER_OPTIONS];
+  if (!options.includes(minutes)) options.push(minutes);
+  options.sort((a, b) => a - b);
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      <div
+        role="radiogroup"
+        aria-label="Class heads-up timing"
+        className="grid grid-cols-4 gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 p-1"
+      >
+        {options.map((opt) => {
+          const active = opt === minutes;
+          return (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt)}
+              className={cn(
+                "press-none relative min-h-10 rounded-lg px-2 text-[13px] font-medium transition-colors",
+                active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+              )}
+            >
+              {active && (
+                <motion.span
+                  layoutId="settings-class-reminder"
+                  className="absolute inset-0 rounded-lg bg-accent"
+                  transition={motionTokens.spring}
+                />
+              )}
+              <span className="relative z-[1] whitespace-nowrap">
+                {classReminderOptionLabel(opt)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <AnimatePresence initial={false} mode="wait">
+        <motion.p
+          key={minutes}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          className="px-0.5 text-[12.5px] leading-relaxed text-ink-faint"
+        >
+          {minutes > 0 ? (
+            <>
+              A “class starts soon” alert {classReminderLabel(minutes).toLowerCase()}, and the
+              countdown card appears on Today at the same moment.
+            </>
+          ) : (
+            <>No class alert, and no countdown card until the class is under way.</>
+          )}
+        </motion.p>
+      </AnimatePresence>
     </div>
   );
 }

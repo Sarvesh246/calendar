@@ -8,6 +8,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
 import { maybePromptForReminders } from "@/lib/reminders";
+import { reminderContext } from "@/lib/store-selectors";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { ViewportLayer } from "@/components/viewport-layer";
@@ -209,7 +210,7 @@ export function AIDrawer() {
       }
       addItem(draft);
       if (draft.reminders?.length) {
-        void maybePromptForReminders(() => useDatebookStore.getState().items);
+        void maybePromptForReminders(reminderContext);
       }
     } else if (action.kind === "update") {
       updateItem(action.itemId, action.patch);
