@@ -173,7 +173,7 @@ export default function AgendaPage() {
           <div className="flex flex-col gap-2">
             <AnimatePresence initial={false}>
               {group.items.map((item) => (
-                <ItemRow key={item.id} item={item} />
+                <ItemRow key={item.id} item={item} day={group.date} />
               ))}
             </AnimatePresence>
           </div>
@@ -199,7 +199,7 @@ export default function AgendaPage() {
   );
 }
 
-function ItemRow({ item }: { item: Item }) {
+function ItemRow({ item, day }: { item: Item; day?: Date }) {
   const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} />;
+  return <ItemCard item={item} category={category} day={day} />;
 }

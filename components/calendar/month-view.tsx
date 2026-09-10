@@ -7,7 +7,7 @@ import { isSameDay, isToday, format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
-import { monthGrid, groupItemsByDay, dayKey, isOverdue, openItemsOnDay } from "@/lib/date-utils";
+import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -43,9 +43,10 @@ function fitCountVertical(
   return Math.max(0, Math.min(itemCount, Math.floor((forItems + gap) / slot)));
 }
 
-function rankForChip(item: Item) {
+function rankForChip(item: Item, day?: Date) {
   if (isOverdue(item)) return 0;
   if (item.type !== "event" && item.status === "done") return 2;
+  if (isEventEnded(item, new Date(), day)) return 2;
   return 1;
 }
 
@@ -60,11 +61,13 @@ function rankForChip(item: Item) {
  */
 function DayCellChips({
   items,
+  date,
   colorOf,
   areaHeight,
   onMeasure,
 }: {
   items: Item[];
+  date: Date;
   colorOf: (categoryId: string) => string;
   areaHeight: number;
   onMeasure?: (height: number) => void;
@@ -89,8 +92,8 @@ function DayCellChips({
       : 0;
 
   const ranked = useMemo(
-    () => [...items].sort((a, b) => rankForChip(a) - rankForChip(b)),
-    [items]
+    () => [...items].sort((a, b) => rankForChip(a, date) - rankForChip(b, date)),
+    [items, date]
   );
   const visible = ranked.slice(0, fitCount);
   // Every clipped item counts, done ones included. Counting only the open ones
@@ -104,7 +107,8 @@ function DayCellChips({
     <div ref={ref} className="relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
       {visible.map((item) => {
         const color = colorOf(item.categoryId);
-        const done = item.type !== "event" && item.status === "done";
+        const done =
+          (item.type !== "event" && item.status === "done") || isEventEnded(item, new Date(), date);
         const task = item.type !== "event";
         return (
           <motion.span
@@ -299,6 +303,7 @@ function MonthGridPanel({
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
             <DayCellChips
               items={dayItems}
+              date={date}
               colorOf={colorOf}
               areaHeight={chipArea}
               {...(cellIndex === 0 ? { onMeasure } : {})}

@@ -49,7 +49,7 @@ export function DayAgenda({
           <div className="flex flex-col gap-2">
             {items.map((item) => (
               <div key={item.id} className="shrink-0">
-                <DayAgendaRow item={item} />
+                <DayAgendaRow item={item} day={date} />
               </div>
             ))}
           </div>
@@ -59,7 +59,7 @@ export function DayAgenda({
   );
 }
 
-function DayAgendaRow({ item }: { item: Item }) {
+function DayAgendaRow({ item, day }: { item: Item; day: Date }) {
   const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} />;
+  return <ItemCard item={item} category={category} day={day} />;
 }

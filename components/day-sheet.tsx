@@ -152,7 +152,7 @@ export function DaySheet({
           ) : (
             <div className="flex flex-col gap-2">
               {items.map((item) => (
-                <SheetItem key={item.id} item={item} />
+                <SheetItem key={item.id} item={item} day={date} />
               ))}
             </div>
           )}
@@ -162,7 +162,7 @@ export function DaySheet({
   );
 }
 
-function SheetItem({ item }: { item: Item }) {
+function SheetItem({ item, day }: { item: Item; day: Date }) {
   const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} />;
+  return <ItemCard item={item} category={category} day={day} />;
 }

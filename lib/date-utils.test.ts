@@ -7,6 +7,7 @@ import {
   happeningNow,
   happeningNowStack,
   isClassStartingSoon,
+  isEventEnded,
   isHappeningNow,
   isOverdue,
   itemDaySpan,
@@ -236,6 +237,80 @@ describe("eventRemainingLabel", () => {
         now
       )
     ).toBe("5 hr left");
+  });
+});
+
+describe("isEventEnded", () => {
+  it("marks a 9–5 as ended after 5pm", () => {
+    const work = base({
+      type: "event",
+      title: "Shift",
+      at: "2026-09-10T09:00:00",
+      endAt: "2026-09-10T17:00:00",
+    });
+    expect(isEventEnded(work, new Date("2026-09-10T16:59:00"))).toBe(false);
+    expect(isEventEnded(work, new Date("2026-09-10T17:00:00"))).toBe(true);
+    expect(isEventEnded(work, new Date("2026-09-10T17:20:00"))).toBe(true);
+  });
+
+  it("does not mark tomorrow's 9–5 as ended tonight", () => {
+    const work = base({
+      type: "event",
+      at: "2026-09-11T09:00:00",
+      endAt: "2026-09-11T17:00:00",
+    });
+    expect(isEventEnded(work, new Date("2026-09-10T17:20:00"))).toBe(false);
+    expect(isEventEnded(work, new Date("2026-09-10T17:20:00"), new Date("2026-09-11T00:00:00"))).toBe(
+      false
+    );
+  });
+
+  it("marks yesterday's event as ended when viewing that day", () => {
+    const work = base({
+      type: "event",
+      at: "2026-09-09T09:00:00",
+      endAt: "2026-09-09T17:00:00",
+    });
+    expect(isEventEnded(work, new Date("2026-09-10T10:00:00"), new Date("2026-09-09T00:00:00"))).toBe(
+      true
+    );
+  });
+
+  it("uses today's session for a multi-day 9-to-5", () => {
+    const fair = base({
+      type: "event",
+      title: "Career fair",
+      at: "2026-09-08T09:00:00",
+      endAt: "2026-09-10T17:00:00",
+    });
+    const evening = new Date("2026-09-09T17:20:00");
+    expect(isEventEnded(fair, evening)).toBe(true);
+    expect(isEventEnded(fair, evening, new Date("2026-09-10T00:00:00"))).toBe(false);
+    expect(isEventEnded(fair, new Date("2026-09-09T12:00:00"))).toBe(false);
+  });
+
+  it("leaves all-day events open until the day ends", () => {
+    const holiday = base({
+      type: "event",
+      allDay: true,
+      at: "2026-09-10T00:00:00",
+      endAt: "2026-09-11T00:00:00",
+    });
+    expect(isEventEnded(holiday, new Date("2026-09-10T17:20:00"))).toBe(false);
+    expect(isEventEnded(holiday, new Date("2026-09-11T00:00:00"))).toBe(true);
+  });
+
+  it("treats a start-only timed event as ended once its start has passed", () => {
+    const meetup = base({
+      type: "event",
+      at: "2026-09-10T09:00:00",
+    });
+    expect(isEventEnded(meetup, new Date("2026-09-10T08:59:00"))).toBe(false);
+    expect(isEventEnded(meetup, new Date("2026-09-10T09:00:00"))).toBe(true);
+  });
+
+  it("ignores assignments", () => {
+    expect(isEventEnded(base({ type: "assignment" }), new Date("2026-09-10T17:20:00"))).toBe(false);
   });
 });
 
