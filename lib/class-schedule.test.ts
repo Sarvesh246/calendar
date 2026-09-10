@@ -3,7 +3,10 @@ import {
   extractScheduleDays,
   extractScheduleMeetings,
   firstSharedDay,
+  meetingDateTimes,
   parseClassSchedule,
+  parseClockInput,
+  soonestOnDays,
 } from "./class-schedule";
 
 const cats = [{ id: "en", name: "ENGL 101", color: "#007AFF" }];
@@ -84,5 +87,44 @@ describe("parseClassSchedule", () => {
 
   it("returns null without days or a range", () => {
     expect(parseClassSchedule("just a title", cats)).toBeNull();
+  });
+});
+
+describe("parseClockInput", () => {
+  it("reads HH:MM and HH:MM:SS", () => {
+    expect(parseClockInput("10:20")).toEqual({ hour: 10, minute: 20 });
+    expect(parseClockInput("11:10:00")).toEqual({ hour: 11, minute: 10 });
+    expect(parseClockInput("")).toBeNull();
+    expect(parseClockInput("10:20 AM")).toBeNull();
+  });
+});
+
+describe("soonestOnDays", () => {
+  it("keeps today when it is selected", () => {
+    const thu = new Date(2026, 8, 10, 21, 7); // Thursday
+    expect(soonestOnDays([2, 4], thu).getDay()).toBe(4);
+    expect(soonestOnDays([2, 4], thu).getDate()).toBe(10);
+  });
+
+  it("picks the next selected day later this week", () => {
+    const thu = new Date(2026, 8, 10, 21, 7);
+    const next = soonestOnDays([1, 3, 5], thu);
+    expect(next.getDay()).toBe(5);
+    expect(next.getDate()).toBe(11);
+  });
+});
+
+describe("meetingDateTimes", () => {
+  it("anchors a MWF series on this week's Friday when added Thursday", () => {
+    const thu = new Date(2026, 8, 10, 21, 7);
+    const range = meetingDateTimes(
+      { days: [1, 3, 5], hour: 10, minute: 20, endHour: 11, endMinute: 10 },
+      thu
+    );
+    expect(range).not.toBeNull();
+    expect(range!.at.getDay()).toBe(5);
+    expect(range!.at.getHours()).toBe(10);
+    expect(range!.at.getMinutes()).toBe(20);
+    expect(range!.endAt.getHours()).toBe(11);
   });
 });
