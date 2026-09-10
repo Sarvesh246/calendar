@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Check, RotateCw, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -225,40 +225,52 @@ export function AIDrawer() {
 
   useLockBodyScroll(present);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, setOpen]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined" || !window.matchMedia("(min-width: 768px)").matches) return;
+    const id = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(id);
+  }, [open]);
+
   if (!present) return null;
 
   return (
     <ViewportLayer className="z-50">
       <div
         onClick={() => setOpen(false)}
-        className={cn(
-          "overlay-scrim absolute inset-0",
-          open
-            ? "animate-[overlay-in_340ms_ease-out]"
-            : "animate-[overlay-out_160ms_ease-in_forwards]"
-        )}
+        className={cn("assistant-overlay overlay-scrim absolute inset-0", open ? "is-open" : "is-closed")}
       />
       <div
-        style={{
-          // Anchored to the bottom of the ViewportLayer (which tracks the
-          // visible area above the keyboard) — the sheet always sits just above
-          // the keyboard with its top clear of the notch.
-          maxHeight: "min(560px, calc(100% - env(safe-area-inset-top) - 1.25rem))",
-          height: "70dvh",
-          // Lifted clear of the home indicator (rather than flush at `bottom-3`)
-          // so the sheet's own rounded corners stay fully visible instead of
-          // reading as clipped by the screen edge.
-          bottom: "max(0.9rem, calc(env(safe-area-inset-bottom) + 0.65rem))",
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="assistant-title"
         className={cn(
-          "absolute inset-x-3 mx-auto flex w-auto max-w-[400px] flex-col overflow-hidden rounded-[22px] border border-line bg-surface shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
-          open
-            ? "animate-[sheet-in_340ms_var(--ease-standard)]"
-            : "animate-[sheet-out_160ms_ease-in_forwards]"
+          "assistant-panel absolute flex flex-col overflow-hidden border border-line bg-surface",
+          // Phone-only: compact bottom sheet. Desktop geometry lives in
+          // globals.css so max-width / inset from the sheet can't leak up.
+          "max-md:inset-x-3 max-md:bottom-[max(0.9rem,calc(env(safe-area-inset-bottom)+0.65rem))] max-md:mx-auto max-md:h-[70dvh] max-md:max-h-[min(560px,calc(100%-env(safe-area-inset-top)-1.25rem))] max-md:w-auto max-md:max-w-[400px] max-md:rounded-[22px] max-md:shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
+          open ? "is-open" : "is-closed"
         )}
       >
-          <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-            <span className="text-[13.5px] font-semibold text-ink">Assistant</span>
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3 md:gap-3 md:px-6 md:py-4">
+            <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent md:flex">
+              <Sparkles className="h-4 w-4" strokeWidth={1.9} />
+            </span>
+            <div className="min-w-0">
+              <p id="assistant-title" className="text-[13.5px] font-semibold text-ink md:text-[16px]">
+                Assistant
+              </p>
+              <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
+            </div>
             <button
               onClick={() => setOpen(false)}
               aria-label="Close assistant"
@@ -268,7 +280,7 @@ export function AIDrawer() {
             </button>
           </div>
 
-          <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3.5">
+          <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-3.5 md:space-y-4 md:px-6 md:py-6">
             {messages.map((m, mi) => (
               <motion.div
                 key={mi}
@@ -280,12 +292,12 @@ export function AIDrawer() {
                 <div
                   className={
                     m.role === "user"
-                      ? "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink"
-                      : "max-w-[92%] space-y-2"
+                      ? "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink md:max-w-[78%] md:rounded-2xl md:rounded-br-md md:px-4 md:py-2.5 md:text-[14px]"
+                      : "max-w-[92%] space-y-2 md:max-w-[88%] md:space-y-2.5"
                   }
                 >
                   {m.role === "assistant" ? (
-                    <AssistantMarkdown text={m.text} />
+                    <AssistantMarkdown text={m.text} className="md:text-[14.5px] md:leading-[1.55]" />
                   ) : (
                     m.text
                   )}
@@ -303,8 +315,8 @@ export function AIDrawer() {
                   {m.actions?.map((action, ai) => {
                     const state = resolved[`${mi}:${ai}`];
                     return (
-                      <div key={ai} className="rounded-lg border border-line bg-surface-sunken p-2.5">
-                        <p className="text-[12px] text-ink-soft">{action.summary}</p>
+                      <div key={ai} className="rounded-lg border border-line bg-surface-sunken p-2.5 md:rounded-xl md:p-3">
+                        <p className="text-[12px] text-ink-soft md:text-[13px]">{action.summary}</p>
                         {state === "applied" ? (
                           <motion.p
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -341,12 +353,12 @@ export function AIDrawer() {
                   })}
 
                   {m.suggestions && m.suggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5 md:grid md:grid-cols-2 md:gap-2">
                       {m.suggestions.map((s) => (
                         <button
                           key={s}
                           onClick={() => ask(s)}
-                          className="rounded-full border border-line px-3 py-1.5 text-[11.5px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+                          className="rounded-full border border-line px-3 py-1.5 text-left text-[11.5px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent md:rounded-xl md:px-3.5 md:py-2.5 md:text-[13px]"
                         >
                           {s}
                         </button>
@@ -382,13 +394,13 @@ export function AIDrawer() {
             </AnimatePresence>
           </div>
 
-          <div className="border-t border-line p-2.5">
+          <div className="shrink-0 border-t border-line p-2.5 md:p-5">
             {queued && (
               <p className="mb-1.5 px-1 text-[11px] text-ink-faint">
                 Queued — sending after this reply
               </p>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 md:rounded-xl md:border md:border-line md:bg-surface-sunken/70 md:px-3 md:py-2">
               <input
                 ref={inputRef}
                 value={input}
@@ -404,13 +416,13 @@ export function AIDrawer() {
                 }}
                 placeholder="Ask or tell me to change something…"
                 enterKeyHint="send"
-                className="min-h-11 min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+                className="min-h-11 min-w-0 flex-1 rounded-lg bg-surface-sunken px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none md:min-h-10 md:rounded-none md:bg-transparent md:px-1 md:text-[14px]"
               />
               <button
                 onClick={() => ask(input)}
                 disabled={!input.trim()}
                 aria-label="Send"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30 md:h-10 md:w-10"
               >
                 <motion.span
                   // The arrow lifts as soon as the field has something to send,

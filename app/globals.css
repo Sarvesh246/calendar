@@ -924,18 +924,80 @@ html[data-first-load="1"] .page-shell > * > * {
 
 /* Assistant sheet + backdrop — pure CSS enter/exit so visibility never rides on
    a JS animation library. `sheet-out` uses `forwards` so it holds the hidden
-   state until React unmounts it. */
+   state until React unmounts it. Phone is a compact bottom sheet; desktop is a
+   full-height conversation column docked to the right, not a floating popup. */
 @keyframes sheet-in {
   from { opacity: 0; translate: 0 16px; scale: 0.985; }
 }
 @keyframes sheet-out {
   to { opacity: 0; translate: 0 16px; scale: 0.985; }
 }
+@keyframes drawer-in {
+  from { opacity: 0; translate: 28px 0; }
+}
+@keyframes drawer-out {
+  to { opacity: 0; translate: 18px 0; }
+}
 @keyframes overlay-in {
   from { opacity: 0; }
 }
 @keyframes overlay-out {
   to { opacity: 0; }
+}
+
+.assistant-panel.is-open {
+  animation: sheet-in 340ms var(--ease-standard);
+}
+.assistant-panel.is-closed {
+  animation: sheet-out 160ms ease-in forwards;
+}
+.assistant-overlay.is-open {
+  animation: overlay-in 340ms ease-out;
+}
+.assistant-overlay.is-closed {
+  animation: overlay-out 160ms ease-in forwards;
+}
+
+@media (min-width: 768px) {
+  .assistant-panel {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+    width: min(36rem, calc(100% - 5.25rem));
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    border-radius: 1.125rem;
+    box-shadow:
+      0 24px 64px -24px rgb(0 0 0 / 0.42),
+      0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+  }
+  .assistant-panel.is-open {
+    animation: drawer-in 340ms var(--ease-standard);
+  }
+  .assistant-panel.is-closed {
+    animation: drawer-out 160ms ease-in forwards;
+  }
+  .assistant-overlay {
+    background: color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+}
+
+@media (min-width: 1280px) {
+  .assistant-panel {
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: min(42rem, 40vw);
+  }
+}
+
+@media (min-width: 1536px) {
+  .assistant-panel {
+    width: min(46rem, 36vw);
+  }
 }
 
 /* ---------------------------------------------------------------------- */

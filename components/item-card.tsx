@@ -373,7 +373,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "press-none press-surface cat-surface cursor-pointer overflow-hidden rounded-lg border border-line px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
+        "press-none press-surface cat-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         expanded && "border-line-strong"
       )}
@@ -441,7 +441,7 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "press-none press-surface cursor-pointer overflow-hidden rounded-lg border border-line bg-surface",
+        "press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line bg-surface",
         "px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         expanded && "border-line-strong",
