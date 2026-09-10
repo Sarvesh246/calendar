@@ -263,7 +263,7 @@ export default function CalendarPage() {
             grid — is the thing that scrolls when cards overflow. */}
         <aside className="hidden h-full max-h-full min-h-0 w-[21rem] shrink-0 flex-col self-stretch overflow-hidden rounded-xl border border-line bg-surface p-4 lg:flex xl:w-[23rem]">
           <DayAgenda
-            className="min-h-0 flex-1 overflow-hidden"
+            className="min-h-0 flex-1"
             date={selectedDate}
             items={selectedItems}
             onAdd={addToSelected}
