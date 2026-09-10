@@ -154,6 +154,7 @@ describe("savedClassMeetings", () => {
     const saved = savedClassMeetings(items, "pols");
     expect(saved).toHaveLength(1);
     expect(saved[0].count).toBe(2);
+    expect(saved[0].ids).toEqual(["a", "b"]);
     expect(saved[0].days).toEqual([1, 3, 5]);
     expect(formatMeetingSummary(saved[0])).toBe("Mon/Wed/Fri 10:20–11:10 AM");
   });

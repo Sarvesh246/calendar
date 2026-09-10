@@ -324,6 +324,7 @@ export function meetingDateTimes(
 
 export interface SavedClassMeeting {
   repeatId: string;
+  ids: string[];
   days: number[];
   hour: number;
   minute: number;
@@ -391,6 +392,7 @@ export function savedClassMeetings(items: Item[], categoryId: string): SavedClas
     );
     const meeting: SavedClassMeeting = {
       repeatId,
+      ids: occs.map((item) => item.id),
       days,
       hour: at.getHours(),
       minute: at.getMinutes(),
