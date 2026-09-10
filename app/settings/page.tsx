@@ -508,7 +508,6 @@ export default function SettingsPage() {
         <PwaInstallButton />
       </CollapsibleCard>
           </div>
-        </div>
       </div>
 
       {/* Backup & reset — always expanded, pinned to bottom */}
