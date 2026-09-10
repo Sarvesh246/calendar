@@ -1,6 +1,7 @@
 import { addDays, nextDay, setHours, setMinutes, startOfDay, type Day } from "date-fns";
 import { thisOrNextWeekday } from "./date-utils";
 import { matchDatePhrase } from "./date-phrase";
+import { extractScheduleDays, extractUntilIso } from "./class-schedule";
 import type { Category, ItemType, RepeatFreq, RepeatRule } from "./types";
 
 export interface ParsedQuickAdd {
@@ -88,6 +89,11 @@ export function parseQuickAdd(
   }
 
   let repeat: RepeatRule | undefined;
+  const compactDays = extractScheduleDays(text);
+  if (compactDays) {
+    repeat = { freq: "weekly", byDay: compactDays.days };
+    text = compactDays.rest;
+  }
   const everyMatch = text.match(
     /\bevery\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
   );
@@ -97,9 +103,16 @@ export function parseQuickAdd(
     else if (token === "week") repeat = { freq: "weekly" };
     else if (token === "month") repeat = { freq: "monthly" };
     else if (WEEKDAYS[token] !== undefined) {
-      repeat = { freq: "weekly", byDay: [WEEKDAYS[token]] };
+      const day = WEEKDAYS[token];
+      const existing = repeat?.byDay ?? [];
+      repeat = { freq: "weekly", byDay: [...new Set([...existing, day])].sort((a, b) => a - b) };
     }
     text = text.replace(everyMatch[0], "").trim();
+  }
+  const untilHit = extractUntilIso(text);
+  if (untilHit && repeat) {
+    repeat = { ...repeat, until: untilHit.until };
+    text = untilHit.rest;
   }
 
   const isAssignment = ASSIGNMENT_HINTS.some((h) => new RegExp(`\\b${h}\\b`, "i").test(text));

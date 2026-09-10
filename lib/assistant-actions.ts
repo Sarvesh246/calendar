@@ -1,4 +1,4 @@
-import type { Item, ItemStatus, ItemType } from "./types";
+import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule } from "./types";
 import { wallTimeInZoneToIso } from "./date-utils";
 import { zonedDateKey } from "./ai-assistant";
 
@@ -44,6 +44,10 @@ interface RawAction {
   clearEndAt?: boolean;
   clearLocation?: boolean;
   clearDescription?: boolean;
+  repeatFreq?: RepeatFreq;
+  /** 0 = Sunday … 6 = Saturday. Weekly class meetings. */
+  repeatDays?: number[];
+  until?: string;
 }
 
 export type AssistantAction =
@@ -69,6 +73,25 @@ function validIso(v: unknown): string | undefined {
   if (typeof v !== "string" || !v.trim()) return undefined;
   const d = new Date(v);
   return Number.isNaN(+d) ? undefined : d.toISOString();
+}
+
+function parseRepeat(a: RawAction, at: string): RepeatRule | undefined {
+  const freq = a.repeatFreq;
+  if (freq !== "daily" && freq !== "weekly" && freq !== "monthly") return undefined;
+  const days = Array.isArray(a.repeatDays)
+    ? [
+        ...new Set(
+          a.repeatDays
+            .map((d) => (typeof d === "number" ? d : Number(d)))
+            .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+        ),
+      ].sort((x, y) => x - y)
+    : [];
+  const until = validIso(a.until);
+  const rule: RepeatRule = { freq };
+  if (freq === "weekly") rule.byDay = days.length ? days : [new Date(at).getDay()];
+  if (until) rule.until = until;
+  return rule;
 }
 
 function defaultAt(type: ItemType, nowIso: string, timeZone = "UTC"): string {
@@ -116,6 +139,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       if (typeof a.description === "string" && a.description.trim())
         draft.description = a.description.trim();
       if (type !== "event") draft.status = a.status ?? "todo";
+      const repeat = parseRepeat(a, at);
+      if (repeat) draft.repeat = repeat;
       out.push({ kind: "create", summary: summary || `Add “${title}”`, draft });
       continue;
     }

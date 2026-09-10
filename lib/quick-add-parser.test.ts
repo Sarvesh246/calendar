@@ -50,4 +50,13 @@ describe("parseQuickAdd", () => {
     expect(r.repeat?.freq).toBe("weekly");
     expect(r.repeat?.byDay).toEqual([2]);
   });
+
+  it("parses MWF as a weekly class", () => {
+    const r = parseQuickAdd("lecture MWF 10-10:50am", cats);
+    expect(r.repeat?.freq).toBe("weekly");
+    expect(r.repeat?.byDay).toEqual([1, 3, 5]);
+    expect(r.at.getHours()).toBe(10);
+    expect(r.endAt?.getHours()).toBe(10);
+    expect(r.endAt?.getMinutes()).toBe(50);
+  });
 });

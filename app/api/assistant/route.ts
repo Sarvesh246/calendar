@@ -55,12 +55,15 @@ const RESPONSE_SCHEMA = {
           clearEndAt: { type: "BOOLEAN" },
           clearLocation: { type: "BOOLEAN" },
           clearDescription: { type: "BOOLEAN" },
+          repeatFreq: { type: "STRING", enum: ["daily", "weekly", "monthly"] },
+          repeatDays: { type: "ARRAY", items: { type: "NUMBER" } },
+          until: { type: "STRING" },
         },
         required: ["kind", "summary"],
         propertyOrdering: [
           "kind", "summary", "itemId", "title", "itemType", "at", "endAt",
           "allDay", "location", "description", "categoryId", "status", "clearEndAt",
-          "clearLocation", "clearDescription",
+          "clearLocation", "clearDescription", "repeatFreq", "repeatDays", "until",
         ],
       },
     },
@@ -139,7 +142,7 @@ YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHA
 A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action).
 
 ACTION RULES:
-- create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit). Choose itemType by meaning. If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date).
+- create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit). Choose itemType by meaning. If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date). Weekly class meetings ("MWF 10–10:50", "TTh 2pm", "lecture Mon/Wed/Fri") are events: set repeatFreq "weekly" and repeatDays as 0=Sunday … 6=Saturday (MWF = [1,3,5], TTh = [2,4]). Set at/endAt on the next occurrence of those days. Optional until (ISO) for the last meeting of the term.
 - update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay" as needed. Send "location"/"description" ONLY when giving a new value; to remove one entirely set "clearLocation": true / "clearDescription": true. Never send an empty string for a field you don't want changed.
 - delete: set "itemId".
 - If the user's target is ambiguous (multiple plausible items) or missing, return NO actions and ask a short clarifying question in "reply".

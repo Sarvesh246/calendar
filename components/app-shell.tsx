@@ -29,6 +29,10 @@ const MergeCloudDialog = dynamic(
   () => import("./merge-cloud-dialog").then((m) => ({ default: m.MergeCloudDialog })),
   { ssr: false }
 );
+const ClassScheduleSheet = dynamic(
+  () => import("./class-schedule-sheet").then((m) => ({ default: m.ClassScheduleSheet })),
+  { ssr: false }
+);
 const FilterSheet = dynamic(
   () => import("./filter-sheet").then((m) => ({ default: m.FilterSheet })),
   { ssr: false }
@@ -128,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </>
         )}
 
-        {children}
+        {onCalendar ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children}
       </main>
 
       {!focusMode && !onSettings && !quickAddOpen && (
@@ -183,6 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </motion.div>
         )}
       </AnimatePresence>
+      <ClassScheduleSheet />
       <FilterSheet />
       <CommandPalette />
       <AIDrawer />

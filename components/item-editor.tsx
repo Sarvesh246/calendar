@@ -17,6 +17,7 @@ import { nanoid } from "@/lib/nanoid";
 import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus, ItemType, Reminder, RepeatFreq } from "@/lib/types";
 import { repeatLabel } from "@/lib/repeat";
+import { WeekdayChips } from "@/components/weekday-chips";
 
 function linkLabel(url: string): string {
   try {
@@ -336,6 +337,21 @@ export function ItemEditor({
             <option value="weekly">Every week</option>
             <option value="monthly">Every month</option>
           </select>
+          {item.repeat?.freq === "weekly" && (
+            <div className="mt-2">
+              <WeekdayChips
+                value={
+                  item.repeat.byDay?.length
+                    ? item.repeat.byDay
+                    : [new Date(item.at).getDay()]
+                }
+                onChange={(days) => {
+                  if (days.length === 0) return;
+                  setItemRepeat(item.id, { ...item.repeat!, freq: "weekly", byDay: days });
+                }}
+              />
+            </div>
+          )}
           {item.repeat && (
             <p className="mt-1 text-[11.5px] text-ink-faint">{repeatLabel(item.repeat)}</p>
           )}

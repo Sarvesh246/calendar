@@ -207,30 +207,97 @@ export function thisOrNextWeekday(dow: Day, from = new Date()) {
 }
 
 /**
- * Focus / "what's next": an event happening now, else the next future item,
+ * Local clock window for an event on `now`'s calendar day.
+ *
+ * A 9am–5pm career fair that spans two dates is happening 9–5 each day, not
+ * for 32 straight hours. An overnight flight (10pm–6am) stays live through
+ * the night. All-day events occupy the whole local day.
+ */
+export function eventSessionBounds(
+  item: Item,
+  now = new Date()
+): { start: Date; end: Date } | null {
+  if (item.type !== "event") return null;
+  const start = new Date(item.at);
+  if (Number.isNaN(start.getTime())) return null;
+  if (!itemOccupiesDay(item, now)) return null;
+
+  if (item.allDay) {
+    const dayStart = startOfDay(now);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+    return { start: dayStart, end: dayEnd };
+  }
+
+  const end = item.endAt ? new Date(item.endAt) : null;
+  if (!end || Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) return null;
+
+  const startDay = startOfDay(start).getTime();
+  const endDay = startOfDay(end).getTime();
+  if (startDay === endDay) return { start, end };
+
+  const today = startOfDay(now).getTime();
+  const startMin = start.getHours() * 60 + start.getMinutes();
+  const endMin = end.getHours() * 60 + end.getMinutes();
+  const overnight = endMin <= startMin;
+
+  if (overnight) {
+    if (today === startDay) {
+      const sessionEnd = new Date(startOfDay(now));
+      sessionEnd.setDate(sessionEnd.getDate() + 1);
+      return { start, end: sessionEnd };
+    }
+    if (today === endDay) return { start: startOfDay(now), end };
+    return {
+      start: startOfDay(now),
+      end: addDays(startOfDay(now), 1),
+    };
+  }
+
+  const sessionStart = new Date(startOfDay(now));
+  sessionStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+  const sessionEnd = new Date(startOfDay(now));
+  sessionEnd.setHours(end.getHours(), end.getMinutes(), end.getSeconds(), 0);
+  if (sessionEnd.getTime() <= sessionStart.getTime()) return null;
+  return { start: sessionStart, end: sessionEnd };
+}
+
+/** True when `item` is an event in progress on this local day. */
+export function isHappeningNow(item: Item, now = new Date()): boolean {
+  if (item.status === "done") return false;
+  const bounds = eventSessionBounds(item, now);
+  if (!bounds) return false;
+  const t = now.getTime();
+  return t >= bounds.start.getTime() && t < bounds.end.getTime();
+}
+
+/** Every open event currently in session, earliest start first. */
+export function happeningNow(items: Item[], now = new Date()): Item[] {
+  return items
+    .filter((i) => i.status !== "done" && isHappeningNow(i, now))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+/**
+ * Focus / "what's next": events happening now, else the next future item,
  * else the oldest incomplete overdue assignment.
  */
 export function focusQueue(items: Item[], now = new Date()): { current?: Item; next?: Item } {
   const open = items.filter((i) => i.status !== "done");
-  const happening = open.find(
-    (e) =>
-      e.type === "event" &&
-      e.endAt &&
-      new Date(e.at).getTime() <= now.getTime() &&
-      now.getTime() <= new Date(e.endAt).getTime()
-  );
+  const live = happeningNow(open, now);
+  const liveIds = new Set(live.map((i) => i.id));
   const upcoming = open
-    .filter((i) => i.id !== happening?.id && new Date(i.at).getTime() >= now.getTime())
+    .filter((i) => !liveIds.has(i.id) && new Date(i.at).getTime() >= now.getTime())
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const overdue = open
     .filter(
       (i) =>
         i.type !== "event" &&
-        i.id !== happening?.id &&
+        !liveIds.has(i.id) &&
         new Date(i.at).getTime() < now.getTime()
     )
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  const ordered = happening ? [happening, ...upcoming, ...overdue] : [...upcoming, ...overdue];
+  const ordered = [...live, ...upcoming, ...overdue];
   return { current: ordered[0], next: ordered[1] };
 }
 
@@ -303,14 +370,10 @@ export function formatRemainingLabel(ms: number): string {
 
 /** Remaining label if `item` is an event happening at `now`. */
 export function eventRemainingLabel(item: Item, now = new Date()): string | undefined {
-  if (item.type !== "event" || !item.endAt) return undefined;
-  const start = new Date(item.at).getTime();
-  const end = new Date(item.endAt).getTime();
-  const t = now.getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || t < start || t >= end) {
-    return undefined;
-  }
-  return formatRemainingLabel(end - t);
+  if (!isHappeningNow(item, now)) return undefined;
+  const bounds = eventSessionBounds(item, now);
+  if (!bounds) return undefined;
+  return formatRemainingLabel(bounds.end.getTime() - now.getTime());
 }
 
 export function formatDaySummary(events: number, due: number, overdue: number) {

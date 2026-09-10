@@ -110,7 +110,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 sm:gap-4">
       <header className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="flex min-w-0 items-baseline overflow-hidden text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
           {/* The title travels with the grid rather than swapping a frame early,
@@ -199,7 +199,7 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row lg:items-stretch">
         <div
           className={cn(
             "relative min-h-0 w-full",
@@ -259,12 +259,11 @@ export default function CalendarPage() {
           </section>
         )}
 
-        {/* `flex-1 min-h-0` on the panel itself, or its list has no height to
-            scroll within: the aside clips (overflow-hidden) and anything past
-            the fold — or an expanded card — simply couldn't be reached. */}
-        <aside className="bg-surface border border-line hidden min-h-0 w-[21rem] shrink-0 flex-col overflow-hidden rounded-xl p-4 lg:flex xl:w-[23rem]">
+        {/* Bind the pane to the row height so the day list — not the month
+            grid — is the thing that scrolls when cards overflow. */}
+        <aside className="hidden h-full max-h-full min-h-0 w-[21rem] shrink-0 flex-col self-stretch overflow-hidden rounded-xl border border-line bg-surface p-4 lg:flex xl:w-[23rem]">
           <DayAgenda
-            className="min-h-0 flex-1"
+            className="min-h-0 flex-1 overflow-hidden"
             date={selectedDate}
             items={selectedItems}
             onAdd={addToSelected}

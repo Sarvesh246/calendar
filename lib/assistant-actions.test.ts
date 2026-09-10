@@ -47,6 +47,31 @@ describe("normalizeActions", () => {
     );
     expect(out[0].kind === "update" && out[0].patch.location).toBeUndefined();
   });
+
+  it("attaches a weekly class-meeting repeat on create", () => {
+    const out = normalizeActions(
+      [
+        {
+          kind: "create",
+          summary: "Add lecture",
+          title: "ENGL 101",
+          itemType: "event",
+          at: "2026-09-14T15:00:00.000Z",
+          endAt: "2026-09-14T15:50:00.000Z",
+          repeatFreq: "weekly",
+          repeatDays: [1, 3, 5],
+          until: "2026-12-12T23:59:00.000Z",
+        },
+      ],
+      body
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].kind === "create" && out[0].draft.repeat).toEqual({
+      freq: "weekly",
+      byDay: [1, 3, 5],
+      until: "2026-12-12T23:59:00.000Z",
+    });
+  });
 });
 
 describe("isPureQuestion", () => {

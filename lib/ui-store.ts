@@ -17,6 +17,8 @@ interface UIState {
   quickAddDateKey: string | null;
   quickAddTime: { hour: number; minute: number } | null;
   calendarFocusDate: string | null;
+  classScheduleOpen: boolean;
+  classScheduleCategoryId: string | null;
 
   setCommandPaletteOpen: (open: boolean) => void;
   setFilterOpen: (open: boolean) => void;
@@ -35,6 +37,8 @@ interface UIState {
   setQuickAddDateKey: (key: string | null) => void;
   setQuickAddTime: (time: { hour: number; minute: number } | null) => void;
   setCalendarFocusDate: (key: string | null) => void;
+  openClassSchedule: (categoryId?: string | null) => void;
+  closeClassSchedule: () => void;
 }
 
 const closedAdd = {
@@ -57,6 +61,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   quickAddDateKey: null,
   quickAddTime: null,
   calendarFocusDate: null,
+  classScheduleOpen: false,
+  classScheduleCategoryId: null,
 
   setCommandPaletteOpen: (open) =>
     set(open ? { commandPaletteOpen: true, ...closedAdd } : { commandPaletteOpen: false }),
@@ -87,4 +93,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setQuickAddDateKey: (key) => set({ quickAddDateKey: key }),
   setQuickAddTime: (time) => set({ quickAddTime: time }),
   setCalendarFocusDate: (key) => set({ calendarFocusDate: key }),
+  openClassSchedule: (categoryId) =>
+    set({ classScheduleOpen: true, classScheduleCategoryId: categoryId ?? null, ...closedAdd }),
+  closeClassSchedule: () => set({ classScheduleOpen: false, classScheduleCategoryId: null }),
 }));

@@ -3,6 +3,8 @@ import {
   eventRemainingLabel,
   formatDaySummary,
   formatRemainingLabel,
+  happeningNow,
+  isHappeningNow,
   isOverdue,
   itemDaySpan,
   itemOccupiesDay,
@@ -180,16 +182,69 @@ describe("eventRemainingLabel", () => {
         now
       )
     ).toBe("12 min left");
+  });
+
+  it("uses today's session end for a multi-day 9-to-5, not the final night", () => {
     expect(
       eventRemainingLabel(
         base({
           type: "event",
           title: "Career fair",
           at: "2026-09-08T09:00:00",
-          endAt: "2026-09-10T15:52:00",
+          endAt: "2026-09-10T17:00:00",
         }),
         now
       )
-    ).toBe("1 day 3 hr left");
+    ).toBe("5 hr left");
+  });
+});
+
+describe("isHappeningNow", () => {
+  const evening = new Date("2026-09-09T19:37:00");
+
+  it("does not treat tomorrow's 9–5 as happening tonight", () => {
+    const fair = base({
+      type: "event",
+      title: "Career fair",
+      at: "2026-09-10T09:00:00",
+      endAt: "2026-09-10T17:00:00",
+    });
+    expect(isHappeningNow(fair, evening)).toBe(false);
+    expect(eventRemainingLabel(fair, evening)).toBeUndefined();
+    expect(happeningNow([fair], evening)).toHaveLength(0);
+  });
+
+  it("does not stay live after 5pm on a 9–5 that was saved across midnight", () => {
+    const fair = base({
+      type: "event",
+      title: "Career fair",
+      at: "2026-09-09T09:00:00",
+      endAt: "2026-09-10T17:00:00",
+    });
+    expect(isHappeningNow(fair, evening)).toBe(false);
+    expect(eventRemainingLabel(fair, evening)).toBeUndefined();
+  });
+
+  it("is live during today's 9–5 window", () => {
+    const fair = base({
+      type: "event",
+      title: "Career fair",
+      at: "2026-09-09T09:00:00",
+      endAt: "2026-09-09T17:00:00",
+    });
+    expect(isHappeningNow(fair, new Date("2026-09-09T12:00:00"))).toBe(true);
+    expect(isHappeningNow(fair, evening)).toBe(false);
+  });
+
+  it("keeps an overnight flight live through the night", () => {
+    const flight = base({
+      type: "event",
+      title: "Red-eye",
+      at: "2026-09-09T22:00:00",
+      endAt: "2026-09-10T06:00:00",
+    });
+    expect(isHappeningNow(flight, new Date("2026-09-09T23:00:00"))).toBe(true);
+    expect(isHappeningNow(flight, new Date("2026-09-10T03:00:00"))).toBe(true);
+    expect(isHappeningNow(flight, new Date("2026-09-10T07:00:00"))).toBe(false);
   });
 });
