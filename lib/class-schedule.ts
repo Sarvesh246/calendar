@@ -27,8 +27,22 @@ export function weekdayShort(d: number): string {
   return DAY_NAMES[d] ?? "";
 }
 
+export function weekdayLong(d: number): string {
+  return (
+    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d] ?? ""
+  );
+}
+
+export function clockInput(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 /** Pull MWF / TTh / Mon, Wed, Fri out of free text. */
-export function extractScheduleDays(text: string): { days: number[]; rest: string } | null {
+export function extractScheduleDays(
+  text: string,
+  opts?: { minDays?: number }
+): { days: number[]; rest: string } | null {
+  const minDays = opts?.minDays ?? 2;
   const compact = COMPACT.find((c) => c.re.test(text));
   if (compact) {
     return { days: compact.days, rest: text.replace(compact.re, " ").replace(/\s+/g, " ").trim() };
@@ -59,7 +73,7 @@ export function extractScheduleDays(text: string): { days: number[]; rest: strin
     if (dow !== undefined && !found.includes(dow)) found.push(dow);
     rest = rest.replace(m[0], " ");
   }
-  if (found.length < 2) return null;
+  if (found.length < minDays) return null;
   return { days: found.sort((a, b) => a - b), rest: rest.replace(/\s+/g, " ").trim() };
 }
 
@@ -74,6 +88,17 @@ export function extractUntilIso(text: string, from = new Date()): { until: strin
   return { until: end.toISOString(), rest: before };
 }
 
+const TIME_RANGE_SOURCE =
+  String.raw`\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b`;
+
+export interface ClassMeeting {
+  days: number[];
+  hour: number;
+  minute: number;
+  endHour: number;
+  endMinute: number;
+}
+
 export interface ParsedClassSchedule {
   title: string;
   categoryId?: string;
@@ -84,10 +109,92 @@ export interface ParsedClassSchedule {
   endMinute: number;
   location?: string;
   until: string;
+  meetings: ClassMeeting[];
+}
+
+function parseTimeRange(range: RegExpExecArray): Omit<ClassMeeting, "days"> | null {
+  const startH = parseInt(range[1], 10);
+  const implied =
+    !range[3] && !range[6] && startH >= 1 && startH <= 6 ? "pm" : "am";
+  const endMer = (range[6] || range[3] || implied).toLowerCase();
+  const startMer = (range[3] || range[6] || implied).toLowerCase();
+  const hour = toHour(startH, startMer);
+  const minute = range[2] ? parseInt(range[2], 10) : 0;
+  const endHour = toHour(parseInt(range[4], 10), endMer);
+  const endMinute = range[5] ? parseInt(range[5], 10) : 0;
+  if (endHour * 60 + endMinute <= hour * 60 + minute) return null;
+  return { hour, minute, endHour, endMinute };
+}
+
+function stripDayTokens(text: string): string {
+  let rest = text;
+  let hit = extractScheduleDays(rest, { minDays: 1 });
+  while (hit) {
+    rest = hit.rest;
+    hit = extractScheduleDays(rest, { minDays: 1 });
+  }
+  return rest.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Pair each time range with the days next to it.
+ * "MW 4:15-5:00 TTh 5:30-6:45" and "Tuesdays and Thursdays 5:30-6:45,
+ * Mondays and Wednesdays 4:15-5:00" both become two meetings.
+ */
+export function extractScheduleMeetings(text: string): {
+  meetings: ClassMeeting[];
+  rest: string;
+} | null {
+  const ranges: { start: number; end: number; match: RegExpExecArray }[] = [];
+  const re = new RegExp(TIME_RANGE_SOURCE, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    ranges.push({ start: m.index, end: m.index + m[0].length, match: m });
+  }
+  if (ranges.length === 0) return null;
+
+  const segment = (i: number) => {
+    const start = i === 0 ? 0 : ranges[i - 1].end;
+    const end = i < ranges.length ? ranges[i].start : text.length;
+    return text.slice(start, end);
+  };
+
+  const meetings: ClassMeeting[] = [];
+  const usedAfter = new Set<number>();
+  for (let i = 0; i < ranges.length; i++) {
+    const times = parseTimeRange(ranges[i].match);
+    if (!times) continue;
+    let daysHit = usedAfter.has(i) ? null : extractScheduleDays(segment(i), { minDays: 1 });
+    if (!daysHit) {
+      daysHit = extractScheduleDays(segment(i + 1), { minDays: 1 });
+      if (daysHit) usedAfter.add(i + 1);
+    }
+    if (!daysHit) continue;
+    meetings.push({ days: daysHit.days, ...times });
+  }
+  if (meetings.length === 0) return null;
+
+  let rest = text;
+  for (let i = ranges.length - 1; i >= 0; i--) {
+    rest = `${rest.slice(0, ranges[i].start)} ${rest.slice(ranges[i].end)}`;
+  }
+  return { meetings, rest: stripDayTokens(rest) };
+}
+
+export function firstSharedDay(meetings: { days: number[] }[]): number | null {
+  const seen = new Set<number>();
+  for (const meeting of meetings) {
+    for (const day of meeting.days) {
+      if (seen.has(day)) return day;
+      seen.add(day);
+    }
+  }
+  return null;
 }
 
 /**
  * Parse a class-times line: "ENGL 101 MWF 10:00-10:50 Room 204 until Dec 12".
+ * Split times ("MW 4:15-5:00 TTh 5:30-6:45") become multiple meetings.
  * Returns null when there aren't enough days or a time range.
  */
 export function parseClassSchedule(
@@ -123,25 +230,10 @@ export function parseClassSchedule(
     text = untilHit.rest;
   }
 
-  const daysHit = extractScheduleDays(text);
-  let days: number[] = [];
-  if (daysHit) {
-    days = daysHit.days;
-    text = daysHit.rest;
-  }
-
-  const range = text.match(
-    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
-  );
-  if (!range) return days.length >= 2 ? null : null;
-  text = text.replace(range[0], " ").trim();
-
-  const endMer = (range[6] || range[3] || "am").toLowerCase();
-  const startMer = (range[3] || range[6] || "am").toLowerCase();
-  const hour = toHour(parseInt(range[1], 10), startMer);
-  const minute = range[2] ? parseInt(range[2], 10) : 0;
-  const endHour = toHour(parseInt(range[4], 10), endMer);
-  const endMinute = range[5] ? parseInt(range[5], 10) : 0;
+  const grouped = extractScheduleMeetings(text);
+  if (!grouped) return null;
+  const meetings = grouped.meetings;
+  text = grouped.rest;
 
   const loc = text.match(/\b(?:room|rm\.?|bldg\.?|building)\s+([A-Za-z0-9\- ]{1,24})/i);
   let location: string | undefined;
@@ -151,6 +243,7 @@ export function parseClassSchedule(
   }
 
   let title = text
+    .replace(/\b(?:and|&)\b/gi, " ")
     .replace(/^[·•\-–—,:\s]+|[·•\-–—,:\s]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -159,19 +252,18 @@ export function parseClassSchedule(
     title = cat?.name?.trim() || "Class";
   }
 
-  if (days.length === 0) return null;
-  if (endHour * 60 + endMinute <= hour * 60 + minute) return null;
-
+  const first = meetings[0];
   return {
     title: title.charAt(0).toUpperCase() + title.slice(1),
     categoryId,
-    days,
-    hour,
-    minute,
-    endHour,
-    endMinute,
+    days: first.days,
+    hour: first.hour,
+    minute: first.minute,
+    endHour: first.endHour,
+    endMinute: first.endMinute,
     location,
     until,
+    meetings,
   };
 }
 
