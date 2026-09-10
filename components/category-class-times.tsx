@@ -3,9 +3,48 @@
 import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { formatMeetingSummary, savedClassMeetings } from "@/lib/class-schedule";
+import { formatMeetingSummary, savedClassMeetings, type SavedClassMeeting } from "@/lib/class-schedule";
 import { haptic } from "@/lib/haptic";
 import type { Category } from "@/lib/types";
+
+function removeMeeting(meeting: SavedClassMeeting) {
+  haptic("warn");
+  useDatebookStore.getState().deleteSeries(meeting.repeatId);
+  const leftover = useDatebookStore
+    .getState()
+    .items.filter((item) => meeting.ids.includes(item.id));
+  for (const item of leftover) useDatebookStore.getState().deleteItem(item.id);
+}
+
+function SavedMeetingRow({
+  meeting,
+  clock24h,
+  color,
+}: {
+  meeting: SavedClassMeeting;
+  clock24h: boolean;
+  color?: string;
+}) {
+  const summary = formatMeetingSummary(meeting, clock24h);
+  return (
+    <div className="flex min-h-11 items-center gap-2 px-0.5">
+      <CalendarClock
+        className="h-3.5 w-3.5 shrink-0"
+        strokeWidth={1.75}
+        style={color ? { color } : undefined}
+      />
+      <p className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{summary}</p>
+      <button
+        type="button"
+        aria-label={`Remove ${summary}`}
+        onClick={() => removeMeeting(meeting)}
+        className="shrink-0 text-[12px] font-medium text-warn"
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
 
 export function CategoryClassTimesControl({ category }: { category: Category }) {
   const items = useDatebookStore((s) => s.items);
@@ -15,36 +54,27 @@ export function CategoryClassTimesControl({ category }: { category: Category }) 
   const saved = meetings.length > 0;
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        haptic("light");
-        openClassSchedule(category.id);
-      }}
-      className="flex min-h-11 items-start gap-2 rounded-lg px-0.5 py-1 text-left transition-colors hover:bg-surface-sunken/50"
-    >
-      <CalendarClock
-        className="mt-0.5 h-3.5 w-3.5 shrink-0"
-        strokeWidth={1.75}
-        style={saved ? { color: category.color } : undefined}
-      />
-      {saved ? (
-        <span className="min-w-0 flex-1">
-          {meetings.map((meeting) => (
-            <span key={meeting.repeatId} className="block truncate text-[12.5px] font-medium text-ink">
-              {formatMeetingSummary(meeting, clock24h)}
-            </span>
-          ))}
-          <span className="mt-0.5 block truncate text-[11.5px] text-ink-faint">
-            {meetings.length === 1
-              ? `${meetings[0].count} meetings on the calendar · tap to add another`
-              : "On the calendar · tap to add another"}
-          </span>
-        </span>
-      ) : (
-        <span className="text-[13px] font-medium text-ink-soft">Class times</span>
-      )}
-    </button>
+    <div className="flex flex-col">
+      {meetings.map((meeting) => (
+        <SavedMeetingRow
+          key={meeting.repeatId}
+          meeting={meeting}
+          clock24h={clock24h}
+          color={category.color}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          haptic("light");
+          openClassSchedule(category.id);
+        }}
+        className="flex min-h-11 items-center gap-2 rounded-lg px-0.5 text-left text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken/50 hover:text-ink"
+      >
+        <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+        {saved ? "Add another time" : "Class times"}
+      </button>
+    </div>
   );
 }
 
@@ -63,13 +93,16 @@ export function ClassTimesRoster() {
       {rows.map(({ cat, meetings }) => (
         <li
           key={cat.id}
-          className="rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
+          className="rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-1.5"
         >
-          <p className="text-[12.5px] font-medium text-ink">{cat.name}</p>
+          <p className="pt-1 text-[12.5px] font-medium text-ink">{cat.name}</p>
           {meetings.map((meeting) => (
-            <p key={meeting.repeatId} className="text-[12.5px] text-ink-soft">
-              {formatMeetingSummary(meeting, clock24h)}
-            </p>
+            <SavedMeetingRow
+              key={meeting.repeatId}
+              meeting={meeting}
+              clock24h={clock24h}
+              color={cat.color}
+            />
           ))}
         </li>
       ))}
