@@ -263,8 +263,25 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     updated_at: s.updatedAt ?? new Date().toISOString(),
   };
 }
-export function rowToSettings(r: Row): UserSettings {
+/**
+ * Cloud settings row → client settings.
+ *
+ * Pass `local` (the settings already on this device) whenever they exist.
+ * PostgREST omits a column the project's schema doesn't have, and an absent
+ * column means "this project can't store this preference yet" — NOT "reset it
+ * to the default". Without `local`, a preference whose column gets stripped
+ * (see `STRIPPABLE_COLS`) snapped back the instant our own write echoed
+ * through realtime: pick "30 minutes", the upsert drops `class_reminder_minutes`
+ * on PGRST204, the echo comes back without it, and the picker jumps to 10.
+ *
+ * Note the `undefined` test: a column that is present but NULL is a real value
+ * the user set (an empty custom palette, say) and still applies.
+ */
+export function rowToSettings(r: Row, local?: UserSettings): UserSettings {
   const customTheme = sanitizeCustomTheme(r.custom_theme);
+  /** Cloud value, unless this project's schema has no such column. */
+  const carried = <T>(col: string, cloud: T, mine: T | undefined): T =>
+    r[col] === undefined && mine !== undefined ? mine : cloud;
   return {
     preset: r.preset as UserSettings["preset"],
     landingView: r.landing_view as UserSettings["landingView"],
@@ -273,14 +290,23 @@ export function rowToSettings(r: Row): UserSettings {
     clock24h: Boolean(r.clock_24h),
     showLocation: Boolean(r.show_location),
     showCategoryDot: Boolean(r.show_category_dot),
-    hideCompleted: Boolean(r.hide_completed),
+    hideCompleted: carried("hide_completed", Boolean(r.hide_completed), local?.hideCompleted),
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
-    // Null on a project whose schema predates migration 0009, and on a row last
-    // written by a client that stripped the column — both mean "the old default".
-    classReminderMinutes: normalizeClassReminderMinutes(r.class_reminder_minutes),
-    mobileDayDetails:
+    classReminderMinutes: carried(
+      "class_reminder_minutes",
+      normalizeClassReminderMinutes(r.class_reminder_minutes),
+      local?.classReminderMinutes
+    ),
+    mobileDayDetails: carried(
+      "mobile_day_details",
       r.mobile_day_details === "inline" ? "inline" : "sheet",
-    ...(customTheme ? { customTheme } : {}),
+      local?.mobileDayDetails
+    ),
+    ...(customTheme
+      ? { customTheme }
+      : r.custom_theme === undefined && local?.customTheme
+        ? { customTheme: local.customTheme }
+        : {}),
     ...(r.onboarding_dismissed ? { onboardingDismissed: true } : {}),
     ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
@@ -438,7 +464,10 @@ async function selectAllRows(
 
 export async function fetchAllForUser(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  /** This device's settings, so a column the project's schema lacks keeps its
+   *  local value instead of reverting to the default. See `rowToSettings`. */
+  localSettings?: UserSettings
 ): Promise<CloudSnapshot> {
   const [c, i, rp, is, us, deletions] = await Promise.all([
     selectAllRows(supabase, "categories", userId),
@@ -469,7 +498,7 @@ export async function fetchAllForUser(
     items: safeMap(i, rowToItem, "item"),
     reminderPresets: safeMap(rp, rowToPreset, "reminder preset"),
     importSources: safeMap(is, rowToImportSource, "import source"),
-    settings: us.data ? rowToSettings(us.data as Row) : null,
+    settings: us.data ? rowToSettings(us.data as Row, localSettings) : null,
     deletions,
   };
 }
