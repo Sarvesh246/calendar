@@ -1,8 +1,13 @@
 "use client";
 
 import { format, isToday } from "date-fns";
-import type { Item } from "./types";
+import type { Item, Reminder } from "./types";
 import { subscribePush } from "./push-client";
+import {
+  DEFAULT_CLASS_REMINDER_MINUTES,
+  classReminderFor,
+  isSynthesizedClassReminder,
+} from "./class-reminder";
 
 /* ------------------------------------------------------------------ */
 /* Local reminder delivery                                             */
@@ -19,6 +24,11 @@ import { subscribePush } from "./push-client";
 const FIRED_KEY = "datebook-reminders-fired";
 const SCHEDULE_WINDOW_MS = 24 * 60 * 60 * 1000; // only arm timers this far out
 const CATCH_UP_GRACE_MS = 12 * 60 * 60 * 1000; // deliver misses newer than this
+// A class heads-up is worth almost nothing late — "starts in 30 minutes" an hour
+// after the fact is noise — so its catch-up window is minutes, not hours. It's
+// also what keeps re-timing the setting quiet: bumping 10 → 30 while class is 20
+// minutes out doesn't immediately fire the offset that already passed.
+const CLASS_CATCH_UP_MS = 3 * 60 * 1000;
 const PRUNE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 
 export function notificationsSupported(): boolean {
@@ -41,18 +51,29 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
 let promptedThisSession = false;
 
+/** What a first arm needs from the store, read after the permission prompt
+ *  resolves so it reflects whatever the user has set by then. */
+export interface ReminderContext {
+  items: Item[];
+  clock24h: boolean;
+  classReminderMinutes: number;
+}
+
 /**
  * Call from the click handler that attaches a reminder to a new item: if the
  * user hasn't decided about notifications yet, ask now (a natural moment, and a
  * real user gesture). No-op once decided or once asked this session.
  */
-export async function maybePromptForReminders(getItems: () => Item[]): Promise<void> {
+export async function maybePromptForReminders(
+  getContext: () => ReminderContext
+): Promise<void> {
   if (promptedThisSession || notificationPermission() !== "default") return;
   promptedThisSession = true;
   const result = await requestNotificationPermission();
   if (result === "granted") {
     await ensureReminderWorker();
-    armReminders(getItems());
+    const ctx = getContext();
+    armReminders(ctx.items, ctx.clock24h, ctx.classReminderMinutes);
     void subscribePush();
   }
 }
@@ -204,11 +225,27 @@ function deliver(key: string, item: Item, label: string, clock24h: boolean): voi
 }
 
 /**
+ * Every reminder that should fire for `item`: the ones the user attached, plus
+ * the class heads-up derived from `classReminderMinutes`. The derived one is
+ * never stored on the item, so re-timing it in Settings takes effect on the
+ * next pass — no item writes, no sync round-trip.
+ */
+function effectiveReminders(item: Item, classReminderMinutes: number): Reminder[] {
+  const own = item.reminders ?? [];
+  const classReminder = classReminderFor(item, classReminderMinutes);
+  return classReminder ? [...own, classReminder] : own;
+}
+
+/**
  * (Re)compute every pending reminder and arm a timer for the ones due within the
  * next 24h. Idempotent — call it on load, whenever items change, on an interval,
  * and when a tab returns to the foreground.
  */
-export function armReminders(items: Item[], clock24h = false): void {
+export function armReminders(
+  items: Item[],
+  clock24h = false,
+  classReminderMinutes = DEFAULT_CLASS_REMINDER_MINUTES
+): void {
   if (notificationPermission() !== "granted") {
     clearTimers();
     return;
@@ -218,21 +255,27 @@ export function armReminders(items: Item[], clock24h = false): void {
   const fired = readFired();
 
   for (const item of items) {
-    if (!item.reminders?.length) continue;
     if (item.status === "done") continue;
+    const reminders = effectiveReminders(item, classReminderMinutes);
+    if (!reminders.length) continue;
     const at = new Date(item.at).getTime();
     if (Number.isNaN(at)) continue;
 
-    for (const r of item.reminders) {
+    for (const r of reminders) {
       const key = reminderKey(item.id, r.id, r.offsetMinutes);
       if (fired[key]) continue;
       const fireAt = at - r.offsetMinutes * 60_000;
       const delay = fireAt - now;
+      const isClass = isSynthesizedClassReminder(r);
 
       if (delay <= 0) {
         // Came due while the app was closed. Deliver recent misses once; let old
         // ones lapse silently so reopening after a trip isn't an alert storm.
-        if (delay > -CATCH_UP_GRACE_MS && at > now - 60 * 60_000) {
+        // A class heads-up also has to still be a heads-up: once the meeting has
+        // started, the countdown card and the "In class" card say it better.
+        const grace = isClass ? CLASS_CATCH_UP_MS : CATCH_UP_GRACE_MS;
+        const stillUseful = isClass ? at > now : at > now - 60 * 60_000;
+        if (delay > -grace && stillUseful) {
           deliver(key, item, r.label, clock24h);
         } else {
           markFired(key);

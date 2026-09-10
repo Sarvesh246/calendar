@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { tombKey, type EntityKind, type TombstoneMap } from "./tombstones";
 import { sanitizeCustomTheme } from "./custom-theme";
+import { normalizeClassReminderMinutes } from "./class-reminder";
 
 /* ------------------------------------------------------------------ */
 /* Row <-> client-model mappers                                        */
@@ -51,7 +52,13 @@ export function safeCategoryColor(v: unknown): string {
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
   items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at"],
   import_sources: ["last_error"],
-  user_settings: ["hide_completed", "onboarding_dismissed", "mobile_day_details", "custom_theme"],
+  user_settings: [
+    "hide_completed",
+    "onboarding_dismissed",
+    "mobile_day_details",
+    "custom_theme",
+    "class_reminder_minutes",
+  ],
 };
 const stripped: Record<string, Set<string>> = {
   items: new Set(),
@@ -249,6 +256,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     show_category_dot: s.showCategoryDot,
     hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
+    class_reminder_minutes: normalizeClassReminderMinutes(s.classReminderMinutes),
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
     custom_theme: s.customTheme ?? null,
@@ -267,6 +275,9 @@ export function rowToSettings(r: Row): UserSettings {
     showCategoryDot: Boolean(r.show_category_dot),
     hideCompleted: Boolean(r.hide_completed),
     defaultReminderPresetIds: (r.default_reminder_preset_ids as string[]) ?? [],
+    // Null on a project whose schema predates migration 0009, and on a row last
+    // written by a client that stripped the column — both mean "the old default".
+    classReminderMinutes: normalizeClassReminderMinutes(r.class_reminder_minutes),
     mobileDayDetails:
       r.mobile_day_details === "inline" ? "inline" : "sheet",
     ...(customTheme ? { customTheme } : {}),

@@ -17,6 +17,7 @@ import {
 } from "date-fns";
 import type { Category, Item } from "./types";
 import { isClassMeeting, isClassScheduleItem } from "./class-schedule";
+import { DEFAULT_CLASS_REMINDER_MINUTES } from "./class-reminder";
 
 /** date-fns `format` throws on an invalid date, and these three are called
  *  straight from render with whatever `item.at` holds. Store input is sanitised
@@ -326,8 +327,9 @@ export function happeningNow(
     .sort((a, b) => byClassThenStart(a, b, categories));
 }
 
-/** How far out a class-schedule meeting appears as a countdown card. */
-export const CLASS_COUNTDOWN_MS = 10 * 60 * 1000;
+/** Fallback countdown window for callers with no settings in hand. Real
+ *  callers pass `classCountdownWindowMs(settings.classReminderMinutes)`. */
+export const CLASS_COUNTDOWN_MS = DEFAULT_CLASS_REMINDER_MINUTES * 60 * 1000;
 
 export function isClassStartingSoon(
   item: Item,
@@ -338,6 +340,7 @@ export function isClassStartingSoon(
   if (isHappeningNow(item, now)) return false;
   const start = new Date(item.at);
   if (Number.isNaN(start.getTime())) return false;
+  if (windowMs <= 0) return false;
   const delta = start.getTime() - now.getTime();
   return delta > 0 && delta <= windowMs;
 }
@@ -364,16 +367,20 @@ export function classCountdownLabel(start: Date, now = new Date()): string {
 
 /**
  * Cards for Today's happening-now stack: live events (including class),
- * class meetings inside the 10-minute countdown, then a non-class up-next.
+ * class meetings inside the countdown window (`settings.classReminderMinutes`,
+ * so the card and the notification always agree), then a non-class up-next.
  */
 export function happeningNowStack(
   items: Item[],
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
+  windowMs = CLASS_COUNTDOWN_MS
 ): { happening: Item[]; startingSoon: Item[]; upcoming?: Item } {
   const happening = happeningNow(items, now, categories);
   const happeningIds = new Set(happening.map((i) => i.id));
-  const startingSoon = classStartingSoon(items, now).filter((i) => !happeningIds.has(i.id));
+  const startingSoon = classStartingSoon(items, now, windowMs).filter(
+    (i) => !happeningIds.has(i.id)
+  );
   const busy = new Set([...happeningIds, ...startingSoon.map((i) => i.id)]);
   const upcoming = items
     .filter(

@@ -13,13 +13,13 @@ import { subscribePush } from "@/lib/push-client";
 
 /**
  * Headless. Keeps the local reminder timers in sync with the item list: re-arms
- * whenever items change, every 10 minutes (to pull in reminders that were beyond
- * the 24h scheduling window), and when a tab returns to the foreground (mobile
- * browsers freeze timers while backgrounded).
+ * whenever items change, when the class heads-up timing changes, every 10 minutes
+ * (to pull in reminders that were beyond the 24h scheduling window), and when a
+ * tab returns to the foreground (mobile browsers freeze timers while backgrounded).
  */
 export function ReminderScheduler() {
   const items = useReminderItems();
-  const { clock24h } = useSettings();
+  const { clock24h, classReminderMinutes } = useSettings();
 
   useEffect(() => {
     void (async () => {
@@ -44,17 +44,15 @@ export function ReminderScheduler() {
       disarmReminders();
       return;
     }
-    armReminders(items, clock24h);
+    armReminders(items, clock24h, classReminderMinutes);
 
-    const interval = setInterval(() => {
+    const rearm = () => {
       const s = useDatebookStore.getState();
-      armReminders(s.items, s.settings.clock24h);
-    }, 10 * 60_000);
+      armReminders(s.items, s.settings.clock24h, s.settings.classReminderMinutes);
+    };
+    const interval = setInterval(rearm, 10 * 60_000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        const s = useDatebookStore.getState();
-        armReminders(s.items, s.settings.clock24h);
-      }
+      if (document.visibilityState === "visible") rearm();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -63,7 +61,7 @@ export function ReminderScheduler() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [items, clock24h]);
+  }, [items, clock24h, classReminderMinutes]);
 
   return null;
 }

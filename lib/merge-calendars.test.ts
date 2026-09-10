@@ -13,6 +13,7 @@ const settings: UserSettings = {
   showCategoryDot: true,
   hideCompleted: false,
   defaultReminderPresetIds: [],
+  classReminderMinutes: 10,
   mobileDayDetails: "sheet",
 };
 

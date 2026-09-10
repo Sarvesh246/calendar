@@ -28,6 +28,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Auth is Google OAuth only via Supabase — no email/password.
 - Production deploys from `main` on Vercel.
 - Closed-app reminders use web-push and `/api/push/dispatch`; in-tab reminders still use client timers.
+- Class heads-up timing is one setting (`settings.classReminderMinutes`, default 10): it sets both the Today countdown card's window and the class reminder's offset. The reminder is synthesized from the setting in `lib/class-reminder.ts` — never stored on the item — so the client timers and the push dispatcher each rebuild it, and re-timing needs no item writes.
 - Drizzle/Neon (`lib/db`, `DATABASE_URL`) is unused leftover; do not treat it as the live database.
 - On desktop, the selected day's details open in a right sidebar; the month grid should fill the viewport.
 - Cloud writes go through `lib/db-sync.ts`. Every row mapper must emit the same key set for every row (PostgREST rejects a mixed-key bulk upsert) and must never emit null for a NOT NULL column; new columns go in a numbered `supabase/migrations/*.sql` **and** in `STRIPPABLE_COLS` so a project that hasn't run the SQL degrades instead of stalling the queue.

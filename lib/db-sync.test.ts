@@ -128,10 +128,33 @@ describe("toSettingsRow", () => {
       showCategoryDot: true,
       hideCompleted: false,
       defaultReminderPresetIds: [],
+      classReminderMinutes: 10,
       mobileDayDetails: "inline",
     };
     expect(toSettingsRow(settings, USER).mobile_day_details).toBe("inline");
     expect(toSettingsRow(settings, USER).custom_theme).toBeNull();
+  });
+
+  it("round-trips class heads-up timing, defaulting a schema without the column", () => {
+    const settings: UserSettings = {
+      preset: "minimal",
+      landingView: "today",
+      density: "comfortable",
+      weekStartsOn: 0,
+      clock24h: false,
+      showLocation: true,
+      showCategoryDot: true,
+      hideCompleted: false,
+      defaultReminderPresetIds: [],
+      classReminderMinutes: 30,
+      mobileDayDetails: "sheet",
+    };
+    const row = toSettingsRow(settings, USER);
+    expect(row.class_reminder_minutes).toBe(30);
+    expect(rowToSettings(row).classReminderMinutes).toBe(30);
+    // Column stripped (project hasn't run migration 0009) — degrade, don't NaN.
+    delete row.class_reminder_minutes;
+    expect(rowToSettings(row).classReminderMinutes).toBe(10);
   });
 
   it("round-trips a custom appearance palette", () => {
@@ -147,6 +170,7 @@ describe("toSettingsRow", () => {
       showCategoryDot: true,
       hideCompleted: false,
       defaultReminderPresetIds: [],
+      classReminderMinutes: 10,
       mobileDayDetails: "sheet",
     };
     expect(toSettingsRow(settings, USER).custom_theme).toEqual(customTheme);

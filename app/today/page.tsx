@@ -19,6 +19,7 @@ import {
   relativeDueLabel,
   timeOfDayGreeting,
 } from "@/lib/date-utils";
+import { classCountdownWindowMs } from "@/lib/class-reminder";
 import { UpNextStack } from "@/components/up-next-card";
 import { AssignmentCard, ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
@@ -40,6 +41,7 @@ function TodayDashboard() {
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
+  const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
     [allItems, categoryFilter, hideCompleted]
@@ -66,7 +68,8 @@ function TodayDashboard() {
   const { happening: liveNow, startingSoon: classSoon, upcoming: nextUpcoming } = happeningNowStack(
     items,
     now,
-    categories
+    categories,
+    classCountdownWindowMs(classReminderMinutes)
   );
   const nextAssignment = useMemo(() => nextOpenAssignment(items), [items]);
   const showDueNext =
