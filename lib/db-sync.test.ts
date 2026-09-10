@@ -157,6 +157,63 @@ describe("toSettingsRow", () => {
     expect(rowToSettings(row).classReminderMinutes).toBe(10);
   });
 
+  it("keeps preferences whose column this project's schema doesn't have", () => {
+    const local: UserSettings = {
+      preset: "minimal",
+      landingView: "today",
+      density: "comfortable",
+      weekStartsOn: 0,
+      clock24h: false,
+      showLocation: true,
+      showCategoryDot: true,
+      hideCompleted: true,
+      defaultReminderPresetIds: [],
+      classReminderMinutes: 30,
+      mobileDayDetails: "inline",
+      customTheme: { background: "#112233", surface: "#ffffff", accent: "#ff5500" },
+    };
+    // What comes back from a project that hasn't run the migrations: the
+    // stripped columns are absent from the row entirely. Echoing our own write
+    // must not reset the picks to their defaults.
+    const row = toSettingsRow(local, USER);
+    for (const col of [
+      "class_reminder_minutes",
+      "mobile_day_details",
+      "hide_completed",
+      "custom_theme",
+    ]) {
+      delete row[col];
+    }
+    const echoed = rowToSettings(row, local);
+    expect(echoed.classReminderMinutes).toBe(30);
+    expect(echoed.mobileDayDetails).toBe("inline");
+    expect(echoed.hideCompleted).toBe(true);
+    expect(echoed.customTheme).toEqual(local.customTheme);
+  });
+
+  it("still takes a real cloud value over the local one", () => {
+    const local: UserSettings = {
+      preset: "minimal",
+      landingView: "today",
+      density: "comfortable",
+      weekStartsOn: 0,
+      clock24h: false,
+      showLocation: true,
+      showCategoryDot: true,
+      hideCompleted: false,
+      defaultReminderPresetIds: [],
+      classReminderMinutes: 30,
+      mobileDayDetails: "sheet",
+    };
+    // Another device set 15 on a migrated project — that wins, including a
+    // value that happens to equal the default.
+    const row = { ...toSettingsRow(local, USER), class_reminder_minutes: 15 };
+    expect(rowToSettings(row, local).classReminderMinutes).toBe(15);
+    expect(rowToSettings({ ...row, class_reminder_minutes: 10 }, local).classReminderMinutes).toBe(
+      10
+    );
+  });
+
   it("round-trips a custom appearance palette", () => {
     const customTheme = { background: "#112233", surface: "#ffffff", accent: "#ff5500" };
     const settings: UserSettings = {

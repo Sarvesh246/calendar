@@ -760,7 +760,7 @@ export const useDatebookStore = create<DatebookState>()(
           }
 
           const cloud = await withTimeout(
-            fetchAllForUser(supabase, userId),
+            fetchAllForUser(supabase, userId, get().settings),
             "Loading your calendar"
           );
           let local = get();
@@ -1839,8 +1839,10 @@ function applyRealtime(
   try {
     if (table === "user_settings") {
       if (payload.eventType !== "DELETE" && payload.new) {
-        const incoming = rowToSettings(payload.new);
         const current = useDatebookStore.getState().settings;
+        // `current` also fills in any column this project's schema doesn't have
+        // — otherwise the echo of our own write reverts that preference here.
+        const incoming = rowToSettings(payload.new, current);
         // Don't let an older broadcast undo a preference the user just changed
         // here — settings are one row, so a stale echo would revert the panel.
         if (time(incoming.updatedAt) < time(current.updatedAt)) return;
@@ -2018,7 +2020,10 @@ async function catchUpFromCloud(userId: string) {
     return;
   }
   try {
-    const cloud = await withTimeout(fetchAllForUser(supabase, userId), "Reconciling");
+    const cloud = await withTimeout(
+      fetchAllForUser(supabase, userId, useDatebookStore.getState().settings),
+      "Reconciling"
+    );
     if (activeUserId !== userId) return;
     if (pendingWork() || flushing) {
       scheduleFlush();
