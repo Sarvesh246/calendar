@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
@@ -28,6 +28,7 @@ import { PwaInstallButton } from "@/components/pwa-install";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
+import { useUIStore } from "@/lib/ui-store";
 import type { AppearancePreset, Density, LandingView, MobileDayDetails, ReminderPreset } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -43,6 +44,7 @@ export default function SettingsPage() {
   const deleteReminderPreset = useDatebookStore((s) => s.deleteReminderPreset);
   const replaceFromBackup = useDatebookStore((s) => s.replaceFromBackup);
   const resetAllData = useDatebookStore((s) => s.resetAllData);
+  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#007AFF");
@@ -149,7 +151,7 @@ export default function SettingsPage() {
           <div className="order-3">
       <CollapsibleCard
         title="Reminders"
-        sub="In-app alerts and default reminder timing."
+        sub="Alerts while Datebook is open, closed-app push when you’re signed in, and default timing."
         storageKey="reminders"
         defaultOpen
       >
@@ -341,6 +343,14 @@ export default function SettingsPage() {
                 )}
               </div>
               <CategorySyllabusControl category={cat} />
+              <button
+                type="button"
+                onClick={() => openClassSchedule(cat.id)}
+                className="flex min-h-11 items-center gap-2 rounded-lg px-0.5 text-left text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken/50 hover:text-ink"
+              >
+                <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                Class times
+              </button>
             </div>
           ))}
         </div>
@@ -376,6 +386,21 @@ export default function SettingsPage() {
             <Plus className="h-4 w-4" strokeWidth={2.5} />
           </button>
         </div>
+
+        <Divider />
+
+        <Subheading title="Class times" />
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Weekly lectures and labs. Paste something like “ENGL 101 MWF 10:00–10:50”, or ask the assistant.
+        </p>
+        <button
+          type="button"
+          onClick={() => openClassSchedule()}
+          className="mt-2 flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
+          Add class times
+        </button>
 
         <Divider />
 

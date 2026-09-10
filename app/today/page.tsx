@@ -11,13 +11,14 @@ import {
   dayKey,
   formatDaySummary,
   formatTime,
+  happeningNow,
   isOverdue,
   itemsOnDay,
   nextOpenAssignment,
   relativeDueLabel,
   timeOfDayGreeting,
 } from "@/lib/date-utils";
-import { UpNextCard } from "@/components/up-next-card";
+import { UpNextStack } from "@/components/up-next-card";
 import { AssignmentCard, ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { FocusView } from "@/components/focus-view";
@@ -37,6 +38,7 @@ function TodayDashboard() {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const categories = useDatebookStore((s) => s.categories);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
     [allItems, categoryFilter, hideCompleted]
@@ -66,19 +68,16 @@ function TodayDashboard() {
     .filter((i) => i.type === "event" || !isOverdue(i))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
-  const nowItem = events.find(
-    (e) => e.endAt && new Date(e.at) <= now && now <= new Date(e.endAt)
-  );
+  const liveNow = happeningNow(items, now);
   const nextUpcoming = [...items]
     .filter((i) => i.status !== "done" && new Date(i.at) > now)
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
-  const nextItem = nowItem ?? nextUpcoming;
   const nextAssignment = useMemo(() => nextOpenAssignment(items), [items]);
-  const nextItemCategory = useCategory(nextItem?.categoryId);
   const showDueNext =
     nextAssignment &&
-    nextAssignment.id !== nextItem?.id &&
-    (nextAssignment.type !== "event");
+    !liveNow.some((i) => i.id === nextAssignment.id) &&
+    nextAssignment.id !== nextUpcoming?.id &&
+    nextAssignment.type !== "event";
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 sm:gap-6">
@@ -97,9 +96,13 @@ function TodayDashboard() {
         <ViewMenu showFocus />
       </header>
 
-      {nextItem && (
+      {(liveNow.length > 0 || nextUpcoming) && (
         <section>
-          <UpNextCard item={nextItem} category={nextItemCategory} />
+          <UpNextStack
+            happening={liveNow}
+            upcoming={liveNow.length === 0 ? nextUpcoming : undefined}
+            categoryOf={(item) => categories.find((c) => c.id === item.categoryId)}
+          />
           {showDueNext && nextAssignment && (
             <p className="mt-2 px-0.5 text-[13px] text-ink-soft">
               <span className="font-medium text-ink">Due next</span>
