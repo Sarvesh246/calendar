@@ -9,6 +9,7 @@ import {
   parseClockInput,
   savedClassMeetings,
   soonestOnDays,
+  isClassScheduleItem,
 } from "./class-schedule";
 import type { Item } from "./types";
 
@@ -173,5 +174,11 @@ describe("savedClassMeetings", () => {
 
   it("ignores imported feed events", () => {
     expect(savedClassMeetings([item({ sourceId: "feed" })], "pols")).toEqual([]);
+  });
+
+  it("recognizes user-created weekly lectures", () => {
+    expect(isClassScheduleItem(item({}))).toBe(true);
+    expect(isClassScheduleItem(item({ sourceId: "feed" }))).toBe(false);
+    expect(isClassScheduleItem(item({ type: "assignment", repeat: undefined }))).toBe(false);
   });
 });
