@@ -496,6 +496,41 @@ export function eventRemainingLabel(item: Item, now = new Date()): string | unde
   return formatRemainingLabel(bounds.end.getTime() - now.getTime());
 }
 
+/**
+ * True when this event's session on `day` (default: now's local day) is over.
+ *
+ * A 9–5 today is ended at 5:00. Yesterday's events are ended. Tomorrow's are
+ * not. Start-only timed events end at their start. All-day events end at the
+ * local end of `day`.
+ */
+export function isEventEnded(item: Item, now = new Date(), day = now): boolean {
+  if (item.type !== "event") return false;
+  if (item.status === "done") return true;
+
+  const bounds = eventSessionBounds(item, day);
+  if (bounds) return now.getTime() >= bounds.end.getTime();
+
+  if (!itemOccupiesDay(item, day)) {
+    const { last } = itemDaySpan(item);
+    return startOfDay(last).getTime() < startOfDay(now).getTime();
+  }
+
+  if (item.allDay) {
+    const end = new Date(startOfDay(day));
+    end.setHours(23, 59, 59, 999);
+    return now.getTime() >= end.getTime();
+  }
+
+  const start = new Date(item.at);
+  if (Number.isNaN(start.getTime())) return false;
+
+  const startDay = startOfDay(start).getTime();
+  const viewDay = startOfDay(day).getTime();
+  if (startDay === viewDay) return now.getTime() >= start.getTime();
+
+  return now.getTime() >= start.getTime() && viewDay <= startOfDay(now).getTime();
+}
+
 export function formatDaySummary(events: number, due: number, overdue: number) {
   const parts: string[] = [];
   if (overdue) parts.push(`${overdue} overdue`);

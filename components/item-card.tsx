@@ -5,7 +5,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, MapPin } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { eventRemainingLabel, formatTime, isOverdue } from "@/lib/date-utils";
+import {
+  eventRemainingLabel,
+  formatTime,
+  isEventEnded,
+  itemOccupiesDay,
+  isOverdue,
+} from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -32,9 +38,17 @@ const CARD_EXIT = {
   transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
 };
 
-export function ItemCard({ item, category }: { item: Item; category: Category | undefined }) {
+export function ItemCard({
+  item,
+  category,
+  day,
+}: {
+  item: Item;
+  category: Category | undefined;
+  day?: Date;
+}) {
   return item.type === "event" ? (
-    <EventCard item={item} category={category} />
+    <EventCard item={item} category={category} day={day} />
   ) : (
     <AssignmentCard item={item} category={category} />
   );
@@ -339,24 +353,40 @@ function CollapsedDescription({ show, text }: { show: boolean; text?: string }) 
 /* Event                                                               */
 /* ------------------------------------------------------------------ */
 
-function useEventRemaining(item: Item) {
+function useEventPhase(item: Item, day?: Date) {
   const [, setTick] = useState(0);
-  const remaining = eventRemainingLabel(item);
-  const live = Boolean(remaining);
+  const now = new Date();
+  const remaining = eventRemainingLabel(item, now);
+  const ended = isEventEnded(item, now, day);
+  const watchDay = day ?? now;
+  const sameLocalDay =
+    watchDay.getFullYear() === now.getFullYear() &&
+    watchDay.getMonth() === now.getMonth() &&
+    watchDay.getDate() === now.getDate();
+  const live = Boolean(remaining) || (!ended && sameLocalDay && itemOccupiesDay(item, watchDay));
   useEffect(() => {
     if (!live) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
   }, [live, item.id]);
-  return remaining;
+  return { remaining, ended };
 }
 
-export function EventCard({ item, category }: { item: Item; category: Category | undefined }) {
+export function EventCard({
+  item,
+  category,
+  day,
+}: {
+  item: Item;
+  category: Category | undefined;
+  day?: Date;
+}) {
   const clock24h = useClock24h();
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const color = category?.color ?? "#8a8a94";
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
-  const remaining = useEventRemaining(item);
+  const { remaining, ended } = useEventPhase(item, day);
+  const showCompleteStyle = useCompleteStyle(ended);
 
   return (
     <motion.div
@@ -366,6 +396,7 @@ export function EventCard({ item, category }: { item: Item; category: Category |
       layout="position"
       exit={CARD_EXIT}
       transition={motionTokens.springLayout}
+      animate={{ opacity: showCompleteStyle ? 0.62 : 1 }}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
       tabIndex={0}
@@ -380,7 +411,12 @@ export function EventCard({ item, category }: { item: Item; category: Category |
     >
       <div className="flex items-center gap-3">
         <div className="flex w-[74px] shrink-0 flex-col leading-tight">
-          <span className="text-[13px] font-semibold tabular-nums cat-text">
+          <span
+            className={cn(
+              "text-[13px] font-semibold tabular-nums",
+              showCompleteStyle ? "text-ink-soft" : "cat-text"
+            )}
+          >
             {item.allDay ? "All day" : formatTime(item.at, clock24h)}
           </span>
           {!item.allDay && item.endAt && (
@@ -390,10 +426,31 @@ export function EventCard({ item, category }: { item: Item; category: Category |
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 break-words text-[14px] font-medium text-ink">{item.title}</p>
-          {remaining && (
+          <p
+            className={cn(
+              "relative line-clamp-2 w-fit max-w-full break-words text-[14px] font-medium",
+              "transition-colors duration-[var(--motion-standard)]",
+              showCompleteStyle ? "text-ink-soft" : "text-ink"
+            )}
+          >
+            {item.title}
+            <motion.span
+              aria-hidden
+              initial={false}
+              animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
+              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+              style={{ transformOrigin: "left center" }}
+              className="pointer-events-none absolute inset-x-0 top-1/2 h-[1.5px] rounded-full bg-current"
+            />
+          </p>
+          {remaining && !ended && (
             <p className="mt-0.5 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
               {remaining}
+            </p>
+          )}
+          {ended && (
+            <p className="mt-0.5 text-[12px] text-ink-soft" suppressHydrationWarning>
+              ended
             </p>
           )}
           {showLocation && item.location && (
@@ -404,6 +461,14 @@ export function EventCard({ item, category }: { item: Item; category: Category |
           )}
           <CollapsedDescription show={!expanded} text={item.description} />
         </div>
+        {ended && (
+          <span
+            aria-hidden
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-good"
+          >
+            <Check className="h-3 w-3 text-[var(--accent-ink)]" strokeWidth={3.25} />
+          </span>
+        )}
         <ExpandChevron expanded={expanded} />
       </div>
 

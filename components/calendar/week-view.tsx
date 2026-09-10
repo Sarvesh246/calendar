@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, isToday, isSameDay, differenceInMinutes, startOfDay } from "date-fns";
 import { useDatebookStore, useCategory } from "@/lib/store";
-import { groupItemsByDay, dayKey, dayLabel } from "@/lib/date-utils";
+import { groupItemsByDay, dayKey, dayLabel, isEventEnded } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
@@ -118,7 +118,7 @@ export function WeekView({
                       className={cn(
                         "cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium",
                         item.type !== "event" && "cal-chip-task",
-                        item.status === "done" && "opacity-45",
+                        (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-45",
                         item.type !== "event" && item.status !== "done" && "cal-chip-task"
                       )}
                       style={{ "--cat": color } as React.CSSProperties}
@@ -225,6 +225,7 @@ export function WeekView({
  */
 function TimedBlock({
   item,
+  day,
   top,
   height,
   color,
@@ -330,7 +331,10 @@ function TimedBlock({
         zIndex: dragging ? 3 : 1,
         touchAction: "none",
       }}
-      className="press-none absolute cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight active:cursor-grabbing"
+      className={cn(
+        "press-none absolute cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight active:cursor-grabbing",
+        isEventEnded(item, new Date(), day) && "opacity-45"
+      )}
     >
       <p className="truncate font-medium" style={{ color }}>
         {item.title}
@@ -389,7 +393,7 @@ function MobileWeekPager({
               ) : (
                 <div className="flex flex-col gap-2">
                   {dayItems.map((item) => (
-                    <WeekDayItem key={item.id} item={item} />
+                    <WeekDayItem key={item.id} item={item} day={day} />
                   ))}
                 </div>
               )}
@@ -418,7 +422,7 @@ function MobileWeekPager({
   );
 }
 
-function WeekDayItem({ item }: { item: Item }) {
+function WeekDayItem({ item, day }: { item: Item; day: Date }) {
   const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} />;
+  return <ItemCard item={item} category={category} day={day} />;
 }
