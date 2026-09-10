@@ -391,7 +391,7 @@ export default function SettingsPage() {
 
         <Subheading title="Class times" />
         <p className="text-[13px] leading-relaxed text-ink-soft">
-          Weekly lectures and labs. Paste something like “ENGL 101 MWF 10:00–10:50”, or ask the assistant.
+          Weekly lectures and labs. Paste something like “ENGL 101 MWF 10:00–10:50”, or two times: “MATH MW 4:15–5:00 TTh 5:30–6:45”.
         </p>
         <button
           type="button"
