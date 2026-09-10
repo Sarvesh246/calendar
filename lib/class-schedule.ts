@@ -369,6 +369,12 @@ export function formatMeetingSummary(meeting: SavedClassMeeting, clock24h = fals
   return days ? `${days} ${range}` : range;
 }
 
+/** User-created weekly lecture/lab from the class-times sheet — not a feed event. */
+export function isClassScheduleItem(item: Item): boolean {
+  if (item.type !== "event" || item.allDay || item.sourceId) return false;
+  return item.repeat?.freq === "weekly" && Boolean(item.repeat.byDay?.length);
+}
+
 /** User-created weekly class meetings for a category, grouped by series. */
 export function savedClassMeetings(items: Item[], categoryId: string): SavedClassMeeting[] {
   const series = new Map<string, Item[]>();

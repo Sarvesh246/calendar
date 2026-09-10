@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatDistanceToNowStrict } from "date-fns";
-import { eventRemainingLabel, eventSessionBounds, formatTime, isHappeningNow } from "@/lib/date-utils";
+import {
+  classCountdownLabel,
+  eventRemainingLabel,
+  eventSessionBounds,
+  formatTime,
+  isClassStartingSoon,
+  isHappeningNow,
+} from "@/lib/date-utils";
+import { isClassScheduleItem } from "@/lib/class-schedule";
 import { useDatebookStore } from "@/lib/store";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
+
+export type UpNextMode = "live" | "soon" | "next";
 
 export function UpNextCard({ item, category }: { item: Item; category: Category | undefined }) {
   return <UpNextFace item={item} category={category} />;
@@ -16,31 +26,54 @@ export function UpNextCard({ item, category }: { item: Item; category: Category 
 
 export function UpNextStack({
   happening,
+  startingSoon = [],
   upcoming,
   categoryOf,
 }: {
   happening: Item[];
+  startingSoon?: Item[];
   upcoming?: Item;
   categoryOf: (item: Item) => Category | undefined;
 }) {
-  const items = happening.length > 0 ? happening : upcoming ? [upcoming] : [];
-  const live = happening.length > 0;
+  const happeningIds = useMemo(() => new Set(happening.map((i) => i.id)), [happening]);
+  const soonItems = startingSoon.filter((i) => !happeningIds.has(i.id));
+  const soonIds = new Set(soonItems.map((i) => i.id));
+  const items =
+    happening.length > 0 || soonItems.length > 0
+      ? [...happening, ...soonItems]
+      : upcoming
+        ? [upcoming]
+        : [];
   const [index, setIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const dragged = useRef(false);
-
-  useEffect(() => {
-    setIndex((i) => Math.min(i, Math.max(0, items.length - 1)));
-  }, [items.length]);
 
   if (items.length === 0) return null;
   const safeIndex = Math.min(index, items.length - 1);
   const current = items[safeIndex];
 
+  function modeOf(item: Item): UpNextMode {
+    if (happeningIds.has(item.id)) return "live";
+    if (soonIds.has(item.id)) return "soon";
+    return "next";
+  }
+
+  const liveCount = happening.length;
+  const soonCount = soonItems.length;
+  const stackLabel =
+    liveCount > 0 && soonCount === 0
+      ? "Happening now"
+      : soonCount > 0 && liveCount === 0
+        ? "Starting soon"
+        : "Now";
+
   function go(dir: -1 | 1) {
     if (items.length < 2) return;
     haptic("light");
-    setIndex((i) => (i + dir + items.length) % items.length);
+    setIndex((i) => {
+      const cur = Math.min(i, items.length - 1);
+      return (cur + dir + items.length) % items.length;
+    });
   }
 
   return (
@@ -57,7 +90,7 @@ export function UpNextStack({
           >
             <div className="flex items-center justify-between px-0.5">
               <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                Happening now · {items.length}
+                {stackLabel} · {items.length}
               </p>
               <button
                 type="button"
@@ -68,7 +101,12 @@ export function UpNextStack({
               </button>
             </div>
             {items.map((item) => (
-              <UpNextFace key={item.id} item={item} category={categoryOf(item)} />
+              <UpNextFace
+                key={item.id}
+                item={item}
+                category={categoryOf(item)}
+                mode={modeOf(item)}
+              />
             ))}
           </motion.div>
         ) : (
@@ -118,7 +156,7 @@ export function UpNextStack({
                     item={current}
                     category={categoryOf(current)}
                     interactive={false}
-                    forceLive={live}
+                    mode={modeOf(current)}
                   />
                 </motion.div>
               </AnimatePresence>
@@ -150,26 +188,29 @@ function UpNextFace({
   item,
   category,
   interactive = true,
-  forceLive,
+  mode,
 }: {
   item: Item;
   category: Category | undefined;
   interactive?: boolean;
-  forceLive?: boolean;
+  mode?: UpNextMode;
 }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const [now, setNow] = useState(() => new Date());
+  const isClass = isClassScheduleItem(item);
+  const started = isHappeningNow(item, now) || mode === "live";
+  const soon = !started && (mode === "soon" || isClassStartingSoon(item, now));
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
+    const ms = soon ? 1000 : 15_000;
+    const id = setInterval(() => setNow(new Date()), ms);
     return () => clearInterval(id);
-  }, []);
+  }, [soon]);
 
   const color = category?.color ?? "#8a8a93";
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
-  const started = forceLive ?? isHappeningNow(item, now);
   const remaining = eventRemainingLabel(item, now);
   const session = started ? eventSessionBounds(item, now) : null;
   const progress =
@@ -184,6 +225,21 @@ function UpNextFace({
         )
       : 0;
 
+  const eyebrow = started
+    ? isClass
+      ? "In class"
+      : "Happening now"
+    : soon
+      ? "Class starts soon"
+      : "Up next";
+  const aside = started
+    ? item.allDay
+      ? remaining
+      : null
+    : soon
+      ? classCountdownLabel(start, now)
+      : formatDistanceToNowStrict(start, { addSuffix: false });
+
   return (
     <div
       className={cn(
@@ -193,16 +249,12 @@ function UpNextFace({
     >
       <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
         {started && <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-accent" />}
-        {started ? "Happening now" : "Up next"}
+        {eyebrow}
       </p>
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{item.title}</h3>
         <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
-          {!started
-            ? formatDistanceToNowStrict(start, { addSuffix: false })
-            : item.allDay
-              ? remaining
-              : null}
+          {aside}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">

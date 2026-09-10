@@ -11,7 +11,7 @@ import {
   dayKey,
   formatDaySummary,
   formatTime,
-  happeningNow,
+  happeningNowStack,
   isOverdue,
   itemsOnDay,
   nextOpenAssignment,
@@ -46,7 +46,7 @@ function TodayDashboard() {
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
+    const id = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(id);
   }, []);
 
@@ -68,14 +68,15 @@ function TodayDashboard() {
     .filter((i) => i.type === "event" || !isOverdue(i))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
-  const liveNow = happeningNow(items, now);
-  const nextUpcoming = [...items]
-    .filter((i) => i.status !== "done" && new Date(i.at) > now)
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
+  const { happening: liveNow, startingSoon: classSoon, upcoming: nextUpcoming } = happeningNowStack(
+    items,
+    now
+  );
   const nextAssignment = useMemo(() => nextOpenAssignment(items), [items]);
   const showDueNext =
     nextAssignment &&
     !liveNow.some((i) => i.id === nextAssignment.id) &&
+    !classSoon.some((i) => i.id === nextAssignment.id) &&
     nextAssignment.id !== nextUpcoming?.id &&
     nextAssignment.type !== "event";
 
@@ -96,11 +97,12 @@ function TodayDashboard() {
         <ViewMenu showFocus />
       </header>
 
-      {(liveNow.length > 0 || nextUpcoming) && (
+      {(liveNow.length > 0 || classSoon.length > 0 || nextUpcoming) && (
         <section>
           <UpNextStack
             happening={liveNow}
-            upcoming={liveNow.length === 0 ? nextUpcoming : undefined}
+            startingSoon={classSoon}
+            upcoming={liveNow.length === 0 && classSoon.length === 0 ? nextUpcoming : undefined}
             categoryOf={(item) => categories.find((c) => c.id === item.categoryId)}
           />
           {showDueNext && nextAssignment && (

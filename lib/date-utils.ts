@@ -16,6 +16,7 @@ import {
   type Day,
 } from "date-fns";
 import type { Item } from "./types";
+import { isClassScheduleItem } from "./class-schedule";
 
 /** date-fns `format` throws on an invalid date, and these three are called
  *  straight from render with whatever `item.at` holds. Store input is sanitised
@@ -276,6 +277,66 @@ export function happeningNow(items: Item[], now = new Date()): Item[] {
   return items
     .filter((i) => i.status !== "done" && isHappeningNow(i, now))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+/** How far out a class-schedule meeting appears as a countdown card. */
+export const CLASS_COUNTDOWN_MS = 10 * 60 * 1000;
+
+export function isClassStartingSoon(
+  item: Item,
+  now = new Date(),
+  windowMs = CLASS_COUNTDOWN_MS
+): boolean {
+  if (!isClassScheduleItem(item) || item.status === "done") return false;
+  if (isHappeningNow(item, now)) return false;
+  const start = new Date(item.at);
+  if (Number.isNaN(start.getTime())) return false;
+  const delta = start.getTime() - now.getTime();
+  return delta > 0 && delta <= windowMs;
+}
+
+export function classStartingSoon(
+  items: Item[],
+  now = new Date(),
+  windowMs = CLASS_COUNTDOWN_MS
+): Item[] {
+  return items
+    .filter((i) => isClassStartingSoon(i, now, windowMs))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+/** Tight countdown copy: "8 min", "45 sec", "Starting now". */
+export function classCountdownLabel(start: Date, now = new Date()): string {
+  const ms = start.getTime() - now.getTime();
+  if (ms <= 0) return "Starting now";
+  const totalSec = Math.max(1, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec} sec`;
+  const min = Math.max(1, Math.round(ms / 60_000));
+  return `${min} min`;
+}
+
+/**
+ * Cards for Today's happening-now stack: live events (including class),
+ * class meetings inside the 10-minute countdown, then a non-class up-next.
+ */
+export function happeningNowStack(
+  items: Item[],
+  now = new Date()
+): { happening: Item[]; startingSoon: Item[]; upcoming?: Item } {
+  const happening = happeningNow(items, now);
+  const happeningIds = new Set(happening.map((i) => i.id));
+  const startingSoon = classStartingSoon(items, now).filter((i) => !happeningIds.has(i.id));
+  const busy = new Set([...happeningIds, ...startingSoon.map((i) => i.id)]);
+  const upcoming = items
+    .filter(
+      (i) =>
+        i.status !== "done" &&
+        !busy.has(i.id) &&
+        !isClassScheduleItem(i) &&
+        new Date(i.at).getTime() > now.getTime()
+    )
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
+  return { happening, startingSoon, upcoming };
 }
 
 /**

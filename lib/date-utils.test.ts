@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  classCountdownLabel,
   eventRemainingLabel,
   formatDaySummary,
   formatRemainingLabel,
   happeningNow,
+  happeningNowStack,
+  isClassStartingSoon,
   isHappeningNow,
   isOverdue,
   itemDaySpan,
@@ -246,5 +249,66 @@ describe("isHappeningNow", () => {
     expect(isHappeningNow(flight, new Date("2026-09-09T23:00:00"))).toBe(true);
     expect(isHappeningNow(flight, new Date("2026-09-10T03:00:00"))).toBe(true);
     expect(isHappeningNow(flight, new Date("2026-09-10T07:00:00"))).toBe(false);
+  });
+});
+
+describe("class countdown and happening-now stack", () => {
+  const lecture = (over: Partial<Item> = {}): Item => ({
+    id: "class-1",
+    categoryId: "pols",
+    type: "event",
+    title: "POLS 207",
+    at: new Date(2026, 8, 11, 10, 20).toISOString(),
+    endAt: new Date(2026, 8, 11, 11, 10).toISOString(),
+    createdAt: new Date(2026, 8, 11).toISOString(),
+    repeat: { freq: "weekly", byDay: [1, 3, 5] },
+    repeatId: "s1",
+    ...over,
+  });
+
+  it("counts down only inside the last 10 minutes", () => {
+    const item = lecture();
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 5))).toBe(false);
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 12))).toBe(true);
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 20))).toBe(false);
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 30))).toBe(false);
+  });
+
+  it("does not countdown a Canvas feed event", () => {
+    const item = lecture({ sourceId: "feed" });
+    expect(isClassStartingSoon(item, new Date(2026, 8, 11, 10, 12))).toBe(false);
+  });
+
+  it("puts an in-session class on the live stack and a soon class on countdown", () => {
+    const live = lecture({
+      id: "live",
+      at: new Date(2026, 8, 11, 9, 10).toISOString(),
+      endAt: new Date(2026, 8, 11, 10, 20).toISOString(),
+    });
+    const soon = lecture({ id: "soon" });
+    const later = lecture({
+      id: "later",
+      at: new Date(2026, 8, 11, 14, 0).toISOString(),
+      endAt: new Date(2026, 8, 11, 14, 50).toISOString(),
+    });
+    const office = base({
+      id: "office",
+      type: "event",
+      title: "Office hours",
+      at: new Date(2026, 8, 11, 16, 0).toISOString(),
+      endAt: new Date(2026, 8, 11, 17, 0).toISOString(),
+    });
+    const now = new Date(2026, 8, 11, 10, 12);
+    const stack = happeningNowStack([live, soon, later, office], now);
+    expect(stack.happening.map((i) => i.id)).toEqual(["live"]);
+    expect(stack.startingSoon.map((i) => i.id)).toEqual(["soon"]);
+    expect(stack.upcoming?.id).toBe("office");
+  });
+
+  it("labels a countdown in minutes or seconds", () => {
+    const start = new Date(2026, 8, 11, 10, 20);
+    expect(classCountdownLabel(start, new Date(2026, 8, 11, 10, 12))).toBe("8 min");
+    expect(classCountdownLabel(start, new Date(2026, 8, 11, 10, 19, 20))).toBe("40 sec");
+    expect(classCountdownLabel(start, new Date(2026, 8, 11, 10, 20))).toBe("Starting now");
   });
 });
