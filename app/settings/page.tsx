@@ -79,8 +79,8 @@ export default function SettingsPage() {
   };
 
   return (
-    // Full-width intro, then two independent stacks at xl — expanding a card
-    // only pushes cards below it in that column, not the one beside it.
+    // Full-width intro, then a two-column grid on desktop so collapsed
+    // section tiles share a row baseline instead of drifting out of line.
     <div className="mx-auto w-full max-w-[1120px] pb-4">
       <div className="flex flex-col gap-5">
       <header className="pt-1">
@@ -140,11 +140,10 @@ export default function SettingsPage() {
         </div>
       </SettingsCard>
 
-      {/* Independent columns at xl. contents + order keep the mobile stack
-          as Account → Calendar → Reminders → Display → Appearance → Install. */}
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:gap-x-5">
-        <div className="contents xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:gap-5">
-          <div className="order-1">
+      {/* One grid so desktop rows line up. `order` keeps the phone stack
+          Account → Calendar → Reminders → Display → Appearance → Install. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <div className="order-1 min-w-0">
       <CollapsibleCard
         title="Account & sync"
         sub="Sign in to back up and sync across devices."
@@ -154,7 +153,7 @@ export default function SettingsPage() {
         <AccountSection />
       </CollapsibleCard>
           </div>
-          <div className="order-3">
+          <div className="order-3 min-w-0">
       <CollapsibleCard
         title="Reminders"
         sub="Alerts while Datebook is open, closed-app push when you’re signed in, and default timing."
@@ -256,7 +255,7 @@ export default function SettingsPage() {
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-5">
+          <div className="order-5 min-w-0">
       <CollapsibleCard
         title="Appearance"
         sub="Optional color themes. Minimal is the default look."
@@ -307,9 +306,7 @@ export default function SettingsPage() {
         </AnimatePresence>
       </CollapsibleCard>
           </div>
-        </div>
-        <div className="contents xl:flex xl:min-w-0 xl:flex-1 xl:flex-col xl:gap-5">
-          <div className="order-2">
+          <div className="order-2 min-w-0">
       <CollapsibleCard
         title="Calendar & categories"
         sub="Organize items by color and pull in events from other calendars."
@@ -458,7 +455,7 @@ export default function SettingsPage() {
         </SyllabusImportProvider>
       </CollapsibleCard>
           </div>
-          <div className="order-4">
+          <div className="order-4 min-w-0">
       <CollapsibleCard
         title="Display options"
         sub="Clock, week layout, and what shows on cards."
@@ -501,7 +498,7 @@ export default function SettingsPage() {
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-6">
+          <div className="order-6 min-w-0">
       <CollapsibleCard
         title="Install app"
         sub="Add Datebook to your home screen for offline use."
@@ -641,7 +638,7 @@ function CollapsibleCard({
         aria-expanded={open}
         className="group flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
       >
-        <CardHeading title={title} sub={sub} />
+        <CardHeading title={title} sub={sub} subMinLines={2} />
         <motion.span
           aria-hidden
           animate={{ rotate: open ? 0 : -90 }}
@@ -734,11 +731,29 @@ function useSectionOpen(storageKey: string, defaultOpen: boolean): [boolean, () 
   return [open, toggle];
 }
 
-function CardHeading({ title, sub }: { title: string; sub?: string }) {
+function CardHeading({
+  title,
+  sub,
+  subMinLines,
+}: {
+  title: string;
+  sub?: string;
+  /** Reserve this many subtitle lines so desktop tiles in a row match height. */
+  subMinLines?: number;
+}) {
   return (
     <div className="min-w-0">
       <h2 className="text-[16px] font-semibold tracking-tight text-ink">{title}</h2>
-      {sub && <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">{sub}</p>}
+      {sub && (
+        <p
+          className={cn(
+            "mt-1 text-[13px] leading-relaxed text-ink-soft",
+            subMinLines === 2 && "lg:min-h-[calc(2*1.625em)]"
+          )}
+        >
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
