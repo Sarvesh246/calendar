@@ -15,6 +15,11 @@ export interface SlimItem {
   location?: string;
   description?: string;
   url?: string;
+  sourceId?: string;
+  sourceUid?: string;
+  completedAt?: string;
+  repeat?: RepeatRule;
+  repeatId?: string;
 }
 
 export interface AssistantReqBody {

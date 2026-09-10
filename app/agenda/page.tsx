@@ -14,6 +14,7 @@ import {
   groupItemsByDay,
   isOverdue,
   itemOccupiesDay,
+  openWorkDueOnDay,
   weekWorkload,
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
@@ -51,7 +52,8 @@ export default function AgendaPage() {
 
   const todayCount = useMemo(() => {
     const today = startOfDay(new Date());
-    return items.filter((it) => itemOccupiesDay(it, today) && !isOverdue(it)).length;
+    const events = items.filter((it) => it.type === "event" && itemOccupiesDay(it, today)).length;
+    return events + openWorkDueOnDay(items, today).length;
   }, [items]);
 
   const { groups, later } = useMemo(() => {

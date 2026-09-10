@@ -11,8 +11,10 @@ import {
   isOverdue,
   itemDaySpan,
   itemOccupiesDay,
+  leftoverOverdue,
   nextOpenAssignment,
   openItemsOnDay,
+  openWorkDueOnDay,
   wallTimeInZoneToIso,
   weekWorkload,
 } from "./date-utils";
@@ -64,6 +66,18 @@ describe("itemOccupiesDay", () => {
     expect(itemOccupiesDay(item, new Date("2026-09-01T08:00:00"))).toBe(true);
     expect(itemOccupiesDay(item, new Date("2026-09-02T08:00:00"))).toBe(false);
   });
+
+  it("keeps assignments on their due day even when endAt spans later days", () => {
+    const hw = base({
+      id: "hw",
+      type: "assignment",
+      at: new Date("2026-09-10T23:59:00").toISOString(),
+      endAt: new Date("2026-09-14T23:59:00").toISOString(),
+    });
+    expect(itemOccupiesDay(hw, new Date("2026-09-10T12:00:00"))).toBe(true);
+    expect(itemOccupiesDay(hw, new Date("2026-09-11T12:00:00"))).toBe(false);
+    expect(itemOccupiesDay(hw, new Date("2026-09-14T12:00:00"))).toBe(false);
+  });
 });
 
 describe("wallTimeInZoneToIso", () => {
@@ -105,6 +119,29 @@ describe("openItemsOnDay", () => {
     const done = base({ id: "d", status: "done" });
     const open = base({ id: "o", status: "todo" });
     expect(openItemsOnDay([event, done, open]).map((i) => i.id)).toEqual(["e", "o"]);
+  });
+});
+
+describe("openWorkDueOnDay and leftoverOverdue", () => {
+  it("keeps today's past-due assignment on today, leftover on previous days", () => {
+    const today = new Date(2026, 8, 10, 16, 0, 0);
+    const dueToday = base({
+      id: "today",
+      at: new Date(2026, 8, 10, 9, 0, 0).toISOString(),
+      status: "todo",
+    });
+    const yesterday = base({
+      id: "yest",
+      at: new Date(2026, 8, 9, 9, 0, 0).toISOString(),
+      status: "todo",
+    });
+    const done = base({
+      id: "done",
+      at: new Date(2026, 8, 10, 8, 0, 0).toISOString(),
+      status: "done",
+    });
+    expect(openWorkDueOnDay([dueToday, yesterday, done], today).map((i) => i.id)).toEqual(["today"]);
+    expect(leftoverOverdue([dueToday, yesterday, done], today).map((i) => i.id)).toEqual(["yest"]);
   });
 });
 
@@ -303,6 +340,34 @@ describe("class countdown and happening-now stack", () => {
     expect(stack.happening.map((i) => i.id)).toEqual(["live"]);
     expect(stack.startingSoon.map((i) => i.id)).toEqual(["soon"]);
     expect(stack.upcoming?.id).toBe("office");
+  });
+
+  it("ranks a live class meeting above a live career fair", () => {
+    const lecture = {
+      id: "class-live",
+      categoryId: "pols",
+      type: "event" as const,
+      title: "POLS 207",
+      at: new Date(2026, 8, 10, 12, 0).toISOString(),
+      endAt: new Date(2026, 8, 10, 14, 0).toISOString(),
+      createdAt: new Date(2026, 8, 10).toISOString(),
+      repeat: { freq: "weekly" as const, byDay: [1, 3, 4] },
+      repeatId: "s1",
+    };
+    const fair = base({
+      id: "fair",
+      type: "event",
+      title: "Career fair",
+      categoryId: "personal",
+      at: new Date(2026, 8, 10, 9, 0).toISOString(),
+      endAt: new Date(2026, 8, 10, 17, 0).toISOString(),
+    });
+    const now = new Date(2026, 8, 10, 12, 30);
+    const cats = [
+      { id: "pols", name: "POLS 207" },
+      { id: "personal", name: "Personal" },
+    ];
+    expect(happeningNow([fair, lecture], now, cats).map((i) => i.id)).toEqual(["class-live", "fair"]);
   });
 
   it("labels a countdown in minutes or seconds", () => {

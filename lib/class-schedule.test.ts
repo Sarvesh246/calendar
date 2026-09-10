@@ -10,6 +10,7 @@ import {
   savedClassMeetings,
   soonestOnDays,
   isClassScheduleItem,
+  isClassMeeting,
 } from "./class-schedule";
 import type { Item } from "./types";
 
@@ -180,5 +181,45 @@ describe("savedClassMeetings", () => {
     expect(isClassScheduleItem(item({}))).toBe(true);
     expect(isClassScheduleItem(item({ sourceId: "feed" }))).toBe(false);
     expect(isClassScheduleItem(item({ type: "assignment", repeat: undefined }))).toBe(false);
+  });
+
+  it("ranks course lectures as class meetings, not Personal or long fairs", () => {
+    expect(isClassMeeting(item({}))).toBe(true);
+    expect(isClassMeeting(item({}), "POLS 207")).toBe(true);
+    expect(
+      isClassMeeting(
+        item({
+          sourceId: "feed",
+          repeat: undefined,
+          repeatId: undefined,
+          at: new Date(2026, 8, 11, 10, 20).toISOString(),
+          endAt: new Date(2026, 8, 11, 11, 10).toISOString(),
+        }),
+        "ENGL 101"
+      )
+    ).toBe(true);
+    expect(
+      isClassMeeting(
+        item({
+          categoryId: "p",
+          sourceId: "gcal",
+          repeat: { freq: "weekly", byDay: [1] },
+          at: new Date(2026, 8, 11, 18, 0).toISOString(),
+          endAt: new Date(2026, 8, 11, 19, 0).toISOString(),
+        }),
+        "Personal"
+      )
+    ).toBe(false);
+    expect(
+      isClassMeeting(
+        item({
+          title: "Career fair",
+          repeat: undefined,
+          at: new Date(2026, 8, 11, 9, 0).toISOString(),
+          endAt: new Date(2026, 8, 11, 17, 0).toISOString(),
+        }),
+        "POLS 207"
+      )
+    ).toBe(false);
   });
 });

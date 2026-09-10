@@ -12,9 +12,10 @@ import {
   formatDaySummary,
   formatTime,
   happeningNowStack,
-  isOverdue,
+  leftoverOverdue,
   itemsOnDay,
   nextOpenAssignment,
+  openWorkDueOnDay,
   relativeDueLabel,
   timeOfDayGreeting,
 } from "@/lib/date-utils";
@@ -55,22 +56,17 @@ function TodayDashboard() {
   const tomorrow = useMemo(() => itemsOnDay(items, addDays(now, 1)), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const greeting = timeOfDayGreeting(now);
 
-  const overdue = useMemo(
-    () =>
-      items
-        .filter(isOverdue)
-        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [items]
-  );
+  const overdue = useMemo(() => leftoverOverdue(items, now), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const events = today.filter((i) => i.type === "event");
-  const dueToday = today.filter((i) => i.type !== "event" && i.status !== "done" && !isOverdue(i));
-  const todayList = today
-    .filter((i) => i.type === "event" || !isOverdue(i))
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const dueToday = openWorkDueOnDay(items, now);
+  const todayList = [...events, ...dueToday].sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  );
 
   const { happening: liveNow, startingSoon: classSoon, upcoming: nextUpcoming } = happeningNowStack(
     items,
-    now
+    now,
+    categories
   );
   const nextAssignment = useMemo(() => nextOpenAssignment(items), [items]);
   const showDueNext =

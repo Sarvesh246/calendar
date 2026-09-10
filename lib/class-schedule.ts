@@ -375,6 +375,44 @@ export function isClassScheduleItem(item: Item): boolean {
   return item.repeat?.freq === "weekly" && Boolean(item.repeat.byDay?.length);
 }
 
+const GENERIC_CATEGORY =
+  /^(personal|work|home|family|life|imported|uncategorized|general|misc|miscellaneous)$/i;
+const COURSE_CODE = /^[A-Za-z]{2,5}[\s-]?\d{2,4}\b/;
+const CLASS_TITLE = /\b(lecture|seminar|recitation|lab|discussion|class)\b/i;
+const MIN_CLASS_MS = 15 * 60_000;
+const MAX_CLASS_MS = 3 * 60 * 60_000;
+
+export function isGenericCategoryName(name?: string): boolean {
+  const n = name?.trim() ?? "";
+  return !n || GENERIC_CATEGORY.test(n);
+}
+
+function sessionMs(item: Item): number {
+  if (!item.endAt) return 0;
+  const start = new Date(item.at).getTime();
+  const end = new Date(item.endAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return end - start;
+}
+
+/**
+ * Live class/lecture vs a one-off (career fair, appointment).
+ * User-created weekly meetings, weekly events on a course category, or a
+ * course-coded / lecture-titled session of class length.
+ */
+export function isClassMeeting(item: Item, categoryName?: string): boolean {
+  if (item.type !== "event" || item.allDay) return false;
+  if (isClassScheduleItem(item)) return true;
+  if (isGenericCategoryName(categoryName)) return false;
+  if (item.repeat?.freq === "weekly") return true;
+  const dur = sessionMs(item);
+  const classLen = dur >= MIN_CLASS_MS && dur <= MAX_CLASS_MS;
+  if (!classLen) return false;
+  const cat = categoryName?.trim() ?? "";
+  if (COURSE_CODE.test(cat)) return true;
+  return CLASS_TITLE.test(item.title);
+}
+
 /** User-created weekly class meetings for a category, grouped by series. */
 export function savedClassMeetings(items: Item[], categoryId: string): SavedClassMeeting[] {
   const series = new Map<string, Item[]>();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildAssistantDigest } from "@/lib/ai-assistant";
+import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
   MAX_ASSISTANT_BODY,
   MAX_ASSISTANT_ITEMS,
@@ -100,19 +100,21 @@ function systemPrompt(body: ReqBody): string {
     body.weekStartsOn === 1 ? 1 : 0
   );
 
-  // Keep the payload bounded (latency): nearest ~180 items to "now", trimmed
-  // descriptions.
-  const items = [...body.items]
+  // Keep the prompt bounded: every open assignment/task stays; events fill the rest.
+  const work = body.items.filter((i) => i.type !== "event");
+  const eventBudget = Math.max(0, 180 - work.length);
+  const events = [...body.items]
+    .filter((i) => i.type === "event")
     .sort(
       (a, b) =>
         Math.abs(+new Date(a.at) - +now) - Math.abs(+new Date(b.at) - +now)
     )
-    .slice(0, 180)
-    .map((i) => ({
-      ...i,
-      categoryName: i.categoryId ? catById.get(i.categoryId) : undefined,
-      description: i.description ? i.description.slice(0, 180) : undefined,
-    }));
+    .slice(0, eventBudget);
+  const items = [...work, ...events].map((i) => ({
+    ...i,
+    categoryName: i.categoryId ? catById.get(i.categoryId) : undefined,
+    description: i.description ? i.description.slice(0, 180) : undefined,
+  }));
 
   return `You are the assistant built into "Datebook", a personal calendar and task app. You help the signed-in user with ANYTHING about their own schedule: their events, assignments/coursework, tasks, deadlines, workload, free time, and what's coming up.
 
@@ -125,15 +127,15 @@ ITEMS: ${JSON.stringify(items)}
 PRE-COMPUTED DIGEST (authoritative — prefer this over re-deriving counts from ITEMS when they disagree):
 ${JSON.stringify(digest)}
 
-Item shape: type is "event" (something happening at a time — class, meeting, appointment), "assignment" (due-dated coursework: ${ASSIGNMENT_WORDS}), or "task" (a to-do). "at" is the start time for events and the due time for assignments/tasks. "status" (todo/doing/done) applies to assignments and tasks only. "categoryId" / "categoryName" map to the class/course. "url" (when present) is a link to the source page (e.g. the Canvas assignment); "description" and "location" carry any extra detail the feed provided.
+Item shape: type is "event" (something happening at a time — class, meeting, appointment), "assignment" (due-dated coursework: ${ASSIGNMENT_WORDS}), or "task" (a to-do). "at" is the start time for events and the due time for assignments/tasks. "status" (todo/doing/done) applies to assignments and tasks only. "categoryId" / "categoryName" map to the class/course. "url" (when present) is a link to the source page (e.g. the Canvas assignment); "description" and "location" carry any extra detail the feed provided. "sourceUid" starting with "syl:" is from a syllabus import; other sourceId/sourceUid values are calendar-feed imports (Canvas/Google/Outlook ICS). Repeating class meetings may include "repeat" / "repeatId".
 
 STATUS & DUE SEMANTICS — follow strictly:
 - "done" means finished. A done item is NEVER overdue, NEVER "still due", and NEVER counted in "how many do I have left", "how many due", "due by Sunday", or similar open-work questions unless the user explicitly asks about completed/finished work.
 - "doing" means in progress — it still counts as open work.
 - "todo" (or unset status) with a due datetime in the past = overdue (unless done).
-- "Due by Sunday" = open assignments and tasks whose due date is on or before the coming calendar Sunday (today if today is Sunday). "Due this week" = open work from today through the end of the user's calendar week (week starts ${body.weekStartsOn === 1 ? "Monday" : "Sunday"}). Neither includes events.
+- "Due by Sunday" = open assignments and tasks whose due date is on or before the coming calendar Sunday (today if today is Sunday). That includes overdue leftover and syllabus/imported work. "Due this week" = open work from today through the end of the user's calendar week (week starts ${body.weekStartsOn === 1 ? "Monday" : "Sunday"}). Neither includes events.
 - Events are not assignments — never mix events into due-counts or overdue lists unless the user asks about events specifically.
-- When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST.
+- When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST. DIGEST.dueByNextSunday is the complete list of open work due by Sunday — if it is non-empty, do not say the user is caught up.
 - Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off. Prefer items with a completed-at timestamp; otherwise the due date is used.
 
 YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when the user clearly asks you to.
@@ -203,7 +205,14 @@ export async function POST(request: Request) {
   if (body.message.length > MAX_ASSISTANT_MESSAGE) {
     return NextResponse.json({ error: "message-too-long" }, { status: 400 });
   }
-  body.items = Array.isArray(body.items) ? body.items.slice(0, MAX_ASSISTANT_ITEMS) : [];
+  body.items = Array.isArray(body.items)
+    ? selectAssistantItems(
+        body.items,
+        body.now || new Date().toISOString(),
+        body.timeZone || "UTC",
+        MAX_ASSISTANT_ITEMS
+      )
+    : [];
   body.categories = Array.isArray(body.categories) ? body.categories.slice(0, 80) : [];
 
   // Gemini requires `contents` to start with a `user` turn and to alternate

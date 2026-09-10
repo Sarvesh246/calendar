@@ -11,10 +11,10 @@ import {
   isClassStartingSoon,
   isHappeningNow,
 } from "@/lib/date-utils";
-import { isClassScheduleItem } from "@/lib/class-schedule";
+import { isClassMeeting } from "@/lib/class-schedule";
 import { useDatebookStore } from "@/lib/store";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
 
@@ -47,9 +47,33 @@ export function UpNextStack({
   const [index, setIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const dragged = useRef(false);
+  const wheelLock = useRef(0);
+  const stackRef = useRef<HTMLDivElement>(null);
 
-  if (items.length === 0) return null;
-  const safeIndex = Math.min(index, items.length - 1);
+  const count = items.length;
+  const safeIndex = count === 0 ? 0 : Math.min(index, count - 1);
+
+  useEffect(() => {
+    const el = stackRef.current;
+    if (!el || count < 2) return;
+    const onWheel = (e: WheelEvent) => {
+      if (expanded) return;
+      if (Math.abs(e.deltaX) < 28 || Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      const now = Date.now();
+      if (now - wheelLock.current < 380) return;
+      wheelLock.current = now;
+      haptic("light");
+      setIndex((i) => {
+        const cur = Math.min(i, count - 1);
+        return (cur + (e.deltaX > 0 ? 1 : -1) + count) % count;
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [count, expanded]);
+
+  if (count === 0) return null;
   const current = items[safeIndex];
 
   function modeOf(item: Item): UpNextMode {
@@ -68,18 +92,20 @@ export function UpNextStack({
         : "Now";
 
   function go(dir: -1 | 1) {
-    if (items.length < 2) return;
+    if (count < 2) return;
     haptic("light");
     setIndex((i) => {
-      const cur = Math.min(i, items.length - 1);
-      return (cur + dir + items.length) % items.length;
+      const cur = Math.min(i, count - 1);
+      return (cur + dir + count) % count;
     });
   }
+
+  const reduce = prefersReducedMotion();
 
   return (
     <div>
       <AnimatePresence initial={false} mode="wait">
-        {expanded && items.length > 1 ? (
+        {expanded && count > 1 ? (
           <motion.div
             key="list"
             initial={{ opacity: 0, y: 6 }}
@@ -90,7 +116,7 @@ export function UpNextStack({
           >
             <div className="flex items-center justify-between px-0.5">
               <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                {stackLabel} · {items.length}
+                {stackLabel} · {count}
               </p>
               <button
                 type="button"
@@ -118,63 +144,105 @@ export function UpNextStack({
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
           >
             <div
+              ref={stackRef}
               className="relative"
-              onPointerUp={() => {
-                if (dragged.current) {
-                  dragged.current = false;
-                  return;
-                }
-                if (items.length > 1) {
-                  haptic("light");
-                  setExpanded(true);
+              style={{ paddingBottom: count > 1 ? (count > 2 ? 20 : 14) : 0 }}
+              onKeyDown={(e) => {
+                if (count < 2) return;
+                if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  go(1);
+                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  go(-1);
                 }
               }}
             >
-              <AnimatePresence initial={false} mode="wait" custom={safeIndex}>
-                <motion.div
-                  key={current.id}
-                  custom={safeIndex}
-                  drag={items.length > 1 ? "x" : false}
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={0.16}
-                  onDragStart={() => {
-                    dragged.current = true;
-                  }}
-                  onDragEnd={(_, info) => {
-                    if (info.offset.x < -48 || info.velocity.x < -400) go(1);
-                    else if (info.offset.x > 48 || info.velocity.x > 400) go(-1);
-                    window.setTimeout(() => {
-                      dragged.current = false;
-                    }, 40);
-                  }}
-                  initial={{ opacity: 0, x: 18 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -18 }}
-                  transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-                >
-                  <UpNextFace
-                    item={current}
-                    category={categoryOf(current)}
-                    interactive={false}
-                    mode={modeOf(current)}
-                  />
-                </motion.div>
-              </AnimatePresence>
+              {count > 2 && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-4 bottom-0 top-4 rounded-lg border border-line bg-surface-sunken"
+                />
+              )}
+              {count > 1 && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-2 bottom-0 top-2 rounded-lg border border-line bg-surface-sunken"
+                />
+              )}
+              <motion.div
+                key={current.id}
+                className="relative z-10 cursor-grab active:cursor-grabbing shadow-[0_16px_32px_-24px_rgba(0,0,0,0.45)]"
+                style={{ touchAction: "pan-y" }}
+                tabIndex={count > 1 ? 0 : undefined}
+                role={count > 1 ? "group" : undefined}
+                aria-label={
+                  count > 1
+                    ? `${stackLabel}, ${safeIndex + 1} of ${count}. Swipe or drag to switch.`
+                    : undefined
+                }
+                drag={count > 1 && !reduce ? "x" : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.18}
+                dragMomentum={false}
+                onDragStart={() => {
+                  dragged.current = true;
+                }}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -48 || info.velocity.x < -380) go(1);
+                  else if (info.offset.x > 48 || info.velocity.x > 380) go(-1);
+                  window.setTimeout(() => {
+                    dragged.current = false;
+                  }, 40);
+                }}
+                onPointerUp={() => {
+                  if (dragged.current) {
+                    dragged.current = false;
+                    return;
+                  }
+                }}
+                initial={reduce ? false : { opacity: 0, x: 22 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={motionTokens.springSnappy}
+              >
+                <UpNextFace
+                  item={current}
+                  category={categoryOf(current)}
+                  interactive={false}
+                  mode={modeOf(current)}
+                />
+              </motion.div>
             </div>
-            {items.length > 1 && (
-              <div className="mt-2 flex items-center justify-center gap-1.5">
-                {items.map((item, i) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-label={`Show ${item.title}`}
-                    onClick={() => setIndex(i)}
-                    className={cn(
-                      "h-1.5 rounded-full transition-[width,background] duration-200",
-                      i === safeIndex ? "w-4 bg-accent" : "w-1.5 bg-line-strong"
-                    )}
-                  />
-                ))}
+            {count > 1 && (
+              <div className="mt-2.5 flex items-center justify-center gap-3">
+                <p className="text-[11px] tabular-nums text-ink-faint">
+                  {safeIndex + 1} of {count}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {items.map((item, i) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-label={`Show ${item.title}`}
+                      aria-current={i === safeIndex ? "true" : undefined}
+                      onClick={() => setIndex(i)}
+                      className={cn(
+                        "h-1.5 rounded-full transition-[width,background] duration-200",
+                        i === safeIndex ? "w-4 bg-accent" : "w-1.5 bg-line-strong"
+                      )}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setExpanded(true);
+                  }}
+                  className="text-[12px] font-medium text-ink-soft hover:text-ink"
+                >
+                  Show all
+                </button>
               </div>
             )}
           </motion.div>
@@ -198,7 +266,7 @@ function UpNextFace({
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const [now, setNow] = useState(() => new Date());
-  const isClass = isClassScheduleItem(item);
+  const isClass = isClassMeeting(item, category?.name);
   const started = isHappeningNow(item, now) || mode === "live";
   const soon = !started && (mode === "soon" || isClassStartingSoon(item, now));
 

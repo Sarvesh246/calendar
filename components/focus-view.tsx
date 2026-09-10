@@ -19,6 +19,7 @@ export function FocusView() {
   });
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const categories = useDatebookStore((s) => s.categories);
   const [celebrating, setCelebrating] = useState(false);
   const [, setTick] = useState(0);
 
@@ -30,7 +31,7 @@ export function FocusView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleFocusMode]);
 
-  const { current, next } = focusQueue(items);
+  const { current, next } = focusQueue(items, new Date(), categories);
   const currentCategory = useCategory(current?.categoryId);
   const remaining = current ? eventRemainingLabel(current) : undefined;
 
