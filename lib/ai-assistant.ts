@@ -15,7 +15,7 @@ import {
 } from "date-fns";
 import { thisOrNextWeekday } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
-import type { Category, Item, ItemStatus } from "./types";
+import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
 /* ------------------------------------------------------------------ */
 /* Public types (shared with app/api/assistant/route.ts's output)      */
@@ -119,8 +119,102 @@ function categoryNameFor(id: string | undefined, categories: Pick<Category, "id"
   return categories.find((c) => c.id === id)?.name;
 }
 
-function isOpenWork(item: Item): boolean {
+function isOpenWork(item: Pick<Item, "type" | "status">): boolean {
   return item.type !== "event" && item.status !== "done";
+}
+
+export interface AssistantSlimItem {
+  id: string;
+  title: string;
+  type: Item["type"];
+  at: string;
+  endAt?: string;
+  allDay?: boolean;
+  status?: ItemStatus;
+  categoryId?: string;
+  location?: string;
+  description?: string;
+  url?: string;
+  sourceId?: string;
+  sourceUid?: string;
+  completedAt?: string;
+  repeat?: RepeatRule;
+  repeatId?: string;
+}
+
+/** Fields the model needs — including syllabus/import identity and completion. */
+export function toAssistantSlimItem(i: Item): AssistantSlimItem {
+  return {
+    id: i.id,
+    title: i.title,
+    type: i.type,
+    at: i.at,
+    ...(i.endAt ? { endAt: i.endAt } : {}),
+    ...(i.allDay ? { allDay: true } : {}),
+    ...(i.status ? { status: i.status } : {}),
+    ...(i.categoryId ? { categoryId: i.categoryId } : {}),
+    ...(i.location ? { location: i.location } : {}),
+    ...(i.description ? { description: i.description } : {}),
+    ...(i.url ? { url: i.url } : {}),
+    ...(i.sourceId ? { sourceId: i.sourceId } : {}),
+    ...(i.sourceUid ? { sourceUid: i.sourceUid } : {}),
+    ...(i.completedAt ? { completedAt: i.completedAt } : {}),
+    ...(i.repeat ? { repeat: i.repeat } : {}),
+    ...(i.repeatId ? { repeatId: i.repeatId } : {}),
+  };
+}
+
+type RankedItem = Pick<Item, "id" | "type" | "status" | "at" | "completedAt">;
+
+/**
+ * Never drop open assignments/tasks (especially due-by-Sunday / overdue) when
+ * capping the payload. Class-meeting instances would otherwise crowd them out.
+ */
+export function selectAssistantItems<T extends RankedItem>(
+  items: T[],
+  nowIso: string,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+  cap = 600
+): T[] {
+  const now = new Date(nowIso);
+  const nowMs = now.getTime();
+  const todayKey = zonedDateKey(now, timeZone);
+  const sundayKey = nextSundayDateKey(now, timeZone);
+  const completedSinceKey = addDaysToDateKey(todayKey, -6);
+
+  const openWork = items.filter(isOpenWork).sort((a, b) => +new Date(a.at) - +new Date(b.at));
+  const dueBySunday = openWork.filter((i) => zonedDateKey(i.at, timeZone) <= sundayKey);
+  const laterOpen = openWork.filter((i) => zonedDateKey(i.at, timeZone) > sundayKey);
+
+  const completed = items
+    .filter((i) => {
+      if (i.type === "event" || i.status !== "done") return false;
+      const when = i.completedAt ?? i.at;
+      const k = zonedDateKey(when, timeZone);
+      return k >= completedSinceKey && k <= todayKey;
+    })
+    .sort((a, b) => +new Date(b.completedAt ?? b.at) - +new Date(a.completedAt ?? a.at));
+
+  const taken = new Set<string>();
+  const out: T[] = [];
+  const push = (list: T[]) => {
+    for (const row of list) {
+      if (out.length >= cap) return;
+      if (taken.has(row.id)) continue;
+      taken.add(row.id);
+      out.push(row);
+    }
+  };
+
+  push(dueBySunday);
+  push(laterOpen);
+  push(completed.slice(0, 24));
+
+  const rest = items
+    .filter((i) => !taken.has(i.id))
+    .sort((a, b) => Math.abs(+new Date(a.at) - nowMs) - Math.abs(+new Date(b.at) - nowMs));
+  push(rest);
+  return out;
 }
 
 function isOverdueOpen(item: Item, now: Date, timeZone: string): boolean {
@@ -252,19 +346,7 @@ export async function askAssistant(
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         clock24h: ctx.clock24h,
         weekStartsOn: ctx.weekStartsOn ?? 0,
-        items: ctx.items.map((i) => ({
-          id: i.id,
-          title: i.title,
-          type: i.type,
-          at: i.at,
-          endAt: i.endAt,
-          allDay: i.allDay,
-          status: i.status,
-          categoryId: i.categoryId,
-          location: i.location,
-          description: i.description,
-          url: i.url,
-        })),
+        items: selectAssistantItems(ctx.items, new Date().toISOString()).map(toAssistantSlimItem),
         categories: ctx.categories.map((c) => ({ id: c.id, name: c.name })),
       }),
     });
@@ -330,12 +412,11 @@ function sanitizeActions(actions: AssistantResponse["actions"], ctx: Ctx): Assis
 /* Local heuristic engine (no network) — covers the common asks       */
 /* ------------------------------------------------------------------ */
 
-export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
+export function localAnswer(query: string, ctx: Ctx, now = new Date()): AssistantResponse {
   const raw = query.trim();
   const q = raw.toLowerCase();
   const fmtTime = (iso: string) => format(new Date(iso), ctx.clock24h ? "HH:mm" : "h:mm a");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const now = new Date();
   const digest = buildAssistantDigest(ctx.items, ctx.categories, now.toISOString(), tz, ctx.weekStartsOn ?? 0);
   const open = ctx.items.filter(isOpenWork);
   const wantsCompleted = asksAboutCompletedWork(q);
@@ -472,6 +553,20 @@ export function localAnswer(query: string, ctx: Ctx): AssistantResponse {
 
   if (/(free|open|available).*(time|slot|day|today|tomorrow|week)|am i free|do i have time/.test(q)) {
     return freeTime(q, ctx, fmtTime);
+  }
+
+  // "due by Sunday" is a range through the coming Sunday — not "what's on Sunday".
+  if (/\b(by|before|through|until|til|till)\s+sunday\b/.test(q)) {
+    const due = digest.dueByNextSunday;
+    return {
+      text:
+        due.length === 0
+          ? "Nothing due by Sunday — you're clear."
+          : due.length <= 8
+            ? `Due by Sunday: ${digestList(due)}.`
+            : `**${due.length}** due by Sunday: ${digestList(due)}.`,
+      suggestions: ["What's on today?", "What's due this week?"],
+    };
   }
 
   // "when is X" / "when's my X"

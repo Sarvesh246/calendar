@@ -15,8 +15,8 @@ import {
   startOfWeek,
   type Day,
 } from "date-fns";
-import type { Item } from "./types";
-import { isClassScheduleItem } from "./class-schedule";
+import type { Category, Item } from "./types";
+import { isClassMeeting, isClassScheduleItem } from "./class-schedule";
 
 /** date-fns `format` throws on an invalid date, and these three are called
  *  straight from render with whatever `item.at` holds. Store input is sanitised
@@ -113,6 +113,9 @@ export function weekDays(anchor: Date, weekStartsOn: 0 | 1) {
  */
 export function itemDaySpan(item: Item): { start: Date; last: Date } {
   const start = startOfDay(new Date(item.at));
+  // Assignments/tasks are due on one calendar day. A feed DTEND (often the next
+  // midnight) must not park them on extra days — or hide them from Today.
+  if (item.type !== "event") return { start, last: start };
   if (!item.endAt) return { start, last: start };
   const end = new Date(item.endAt);
   if (Number.isNaN(end.getTime())) return { start, last: start };
@@ -128,6 +131,28 @@ export function itemDaySpan(item: Item): { start: Date; last: Date } {
   const max = addDays(start, 365);
   if (last > max) last = max;
   return { start, last };
+}
+
+/** True when unfinished work is due on `day`'s local calendar date. */
+export function isDueOnDay(item: Item, day: Date): boolean {
+  if (item.type === "event") return false;
+  const at = new Date(item.at);
+  if (Number.isNaN(at.getTime())) return false;
+  return startOfDay(at).getTime() === startOfDay(day).getTime();
+}
+
+/** Open assignments/tasks due on `day` (including past the clock time). */
+export function openWorkDueOnDay(items: Item[], day: Date): Item[] {
+  return items
+    .filter((i) => i.status !== "done" && isDueOnDay(i, day))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+/** Overdue work whose due day is before `day` — leftover, not "due today". */
+export function leftoverOverdue(items: Item[], day = new Date()): Item[] {
+  return items
+    .filter((i) => isOverdue(i) && !isDueOnDay(i, day))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
 export function itemOccupiesDay(item: Item, day: Date) {
@@ -272,11 +297,33 @@ export function isHappeningNow(item: Item, now = new Date()): boolean {
   return t >= bounds.start.getTime() && t < bounds.end.getTime();
 }
 
-/** Every open event currently in session, earliest start first. */
-export function happeningNow(items: Item[], now = new Date()): Item[] {
+function categoryNameOf(
+  item: Item,
+  categories: Pick<Category, "id" | "name">[]
+): string | undefined {
+  return categories.find((c) => c.id === item.categoryId)?.name;
+}
+
+function byClassThenStart(
+  a: Item,
+  b: Item,
+  categories: Pick<Category, "id" | "name">[]
+): number {
+  const ac = isClassMeeting(a, categoryNameOf(a, categories)) ? 0 : 1;
+  const bc = isClassMeeting(b, categoryNameOf(b, categories)) ? 0 : 1;
+  if (ac !== bc) return ac - bc;
+  return new Date(a.at).getTime() - new Date(b.at).getTime();
+}
+
+/** Every open event currently in session. Class meetings rank above one-offs. */
+export function happeningNow(
+  items: Item[],
+  now = new Date(),
+  categories: Pick<Category, "id" | "name">[] = []
+): Item[] {
   return items
     .filter((i) => i.status !== "done" && isHappeningNow(i, now))
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    .sort((a, b) => byClassThenStart(a, b, categories));
 }
 
 /** How far out a class-schedule meeting appears as a countdown card. */
@@ -321,9 +368,10 @@ export function classCountdownLabel(start: Date, now = new Date()): string {
  */
 export function happeningNowStack(
   items: Item[],
-  now = new Date()
+  now = new Date(),
+  categories: Pick<Category, "id" | "name">[] = []
 ): { happening: Item[]; startingSoon: Item[]; upcoming?: Item } {
-  const happening = happeningNow(items, now);
+  const happening = happeningNow(items, now, categories);
   const happeningIds = new Set(happening.map((i) => i.id));
   const startingSoon = classStartingSoon(items, now).filter((i) => !happeningIds.has(i.id));
   const busy = new Set([...happeningIds, ...startingSoon.map((i) => i.id)]);
@@ -343,9 +391,13 @@ export function happeningNowStack(
  * Focus / "what's next": events happening now, else the next future item,
  * else the oldest incomplete overdue assignment.
  */
-export function focusQueue(items: Item[], now = new Date()): { current?: Item; next?: Item } {
+export function focusQueue(
+  items: Item[],
+  now = new Date(),
+  categories: Pick<Category, "id" | "name">[] = []
+): { current?: Item; next?: Item } {
   const open = items.filter((i) => i.status !== "done");
-  const live = happeningNow(open, now);
+  const live = happeningNow(open, now, categories);
   const liveIds = new Set(live.map((i) => i.id));
   const upcoming = open
     .filter((i) => !liveIds.has(i.id) && new Date(i.at).getTime() >= now.getTime())

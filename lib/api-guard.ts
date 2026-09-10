@@ -16,7 +16,8 @@ function evictStale(now: number, windowMs: number) {
 export { MAX_SYLLABUS_BODY, MAX_SYLLABUS_PDF_BYTES } from "./syllabus-limits";
 
 export const MAX_ASSISTANT_MESSAGE = 2_000;
-export const MAX_ASSISTANT_ITEMS = 180;
+/** Hard ceiling after open-work is always kept; events fill the remainder. */
+export const MAX_ASSISTANT_ITEMS = 600;
 export const MAX_ASSISTANT_BODY = 400_000;
 /** Per signed-in user, not global — a class can import the same week in parallel. */
 export const SYLLABUS_HOURLY_AUTH = 30;
