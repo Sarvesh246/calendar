@@ -22,6 +22,7 @@ import {
 } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
+import { CategoryClassTimesControl, ClassTimesRoster } from "@/components/category-class-times";
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
@@ -343,14 +344,7 @@ export default function SettingsPage() {
                 )}
               </div>
               <CategorySyllabusControl category={cat} />
-              <button
-                type="button"
-                onClick={() => openClassSchedule(cat.id)}
-                className="flex min-h-11 items-center gap-2 rounded-lg px-0.5 text-left text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken/50 hover:text-ink"
-              >
-                <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                Class times
-              </button>
+              <CategoryClassTimesControl category={cat} />
             </div>
           ))}
         </div>
@@ -401,6 +395,7 @@ export default function SettingsPage() {
           <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
           Add class times
         </button>
+        <ClassTimesRoster />
 
         <Divider />
 

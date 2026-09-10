@@ -3,11 +3,14 @@ import {
   extractScheduleDays,
   extractScheduleMeetings,
   firstSharedDay,
+  formatMeetingSummary,
   meetingDateTimes,
   parseClassSchedule,
   parseClockInput,
+  savedClassMeetings,
   soonestOnDays,
 } from "./class-schedule";
+import type { Item } from "./types";
 
 const cats = [{ id: "en", name: "ENGL 101", color: "#007AFF" }];
 
@@ -126,5 +129,48 @@ describe("meetingDateTimes", () => {
     expect(range!.at.getHours()).toBe(10);
     expect(range!.at.getMinutes()).toBe(20);
     expect(range!.endAt.getHours()).toBe(11);
+  });
+});
+
+describe("savedClassMeetings", () => {
+  const item = (over: Partial<Item>): Item => ({
+    id: "1",
+    categoryId: "pols",
+    type: "event",
+    title: "POLS 207",
+    at: new Date(2026, 8, 11, 10, 20).toISOString(),
+    endAt: new Date(2026, 8, 11, 11, 10).toISOString(),
+    createdAt: new Date(2026, 8, 11).toISOString(),
+    repeat: { freq: "weekly", byDay: [1, 3, 5] },
+    repeatId: "s1",
+    ...over,
+  });
+
+  it("groups a weekly series and labels the meeting", () => {
+    const items = [
+      item({ id: "a" }),
+      item({ id: "b", at: new Date(2026, 8, 14, 10, 20).toISOString(), endAt: new Date(2026, 8, 14, 11, 10).toISOString() }),
+    ];
+    const saved = savedClassMeetings(items, "pols");
+    expect(saved).toHaveLength(1);
+    expect(saved[0].count).toBe(2);
+    expect(saved[0].days).toEqual([1, 3, 5]);
+    expect(formatMeetingSummary(saved[0])).toBe("Mon/Wed/Fri 10:20–11:10 AM");
+  });
+
+  it("keeps split weekly times as two rows", () => {
+    const items = [
+      item({ id: "mw", repeatId: "a", repeat: { freq: "weekly", byDay: [1, 3] }, at: new Date(2026, 8, 14, 16, 15).toISOString(), endAt: new Date(2026, 8, 14, 17, 0).toISOString() }),
+      item({ id: "tth", repeatId: "b", repeat: { freq: "weekly", byDay: [2, 4] }, at: new Date(2026, 8, 15, 17, 30).toISOString(), endAt: new Date(2026, 8, 15, 18, 45).toISOString() }),
+    ];
+    const saved = savedClassMeetings(items, "pols");
+    expect(saved.map((m) => formatMeetingSummary(m))).toEqual([
+      "Mon/Wed 4:15–5:00 PM",
+      "Tue/Thu 5:30–6:45 PM",
+    ]);
+  });
+
+  it("ignores imported feed events", () => {
+    expect(savedClassMeetings([item({ sourceId: "feed" })], "pols")).toEqual([]);
   });
 });

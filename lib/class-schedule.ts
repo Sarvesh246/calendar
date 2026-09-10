@@ -1,7 +1,7 @@
 import { addDays, getDay, setHours, setMinutes, startOfDay } from "date-fns";
 import { matchDatePhrase } from "./date-phrase";
 import { defaultUntilIso } from "./repeat";
-import type { Category, RepeatRule } from "./types";
+import type { Category, Item, RepeatRule } from "./types";
 
 const WEEKDAY_NAME: Record<string, number> = {
   sunday: 0,
@@ -320,6 +320,93 @@ export function meetingDateTimes(
   const endAt = setMinutes(setHours(new Date(first), meeting.endHour), meeting.endMinute);
   if (Number.isNaN(+at) || Number.isNaN(+endAt) || +endAt <= +at) return null;
   return { at, endAt };
+}
+
+export interface SavedClassMeeting {
+  repeatId: string;
+  days: number[];
+  hour: number;
+  minute: number;
+  endHour?: number;
+  endMinute?: number;
+  title: string;
+  count: number;
+}
+
+export function formatClock(hour: number, minute: number, clock24h = false): string {
+  if (clock24h) return clockInput(hour, minute);
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const mer = hour >= 12 ? "PM" : "AM";
+  return `${h12}:${String(minute).padStart(2, "0")} ${mer}`;
+}
+
+export function formatTimeRange(
+  startHour: number,
+  startMinute: number,
+  endHour: number | undefined,
+  endMinute: number | undefined,
+  clock24h = false
+): string {
+  const start = formatClock(startHour, startMinute, clock24h);
+  if (endHour == null || endMinute == null) return start;
+  const end = formatClock(endHour, endMinute, clock24h);
+  if (clock24h || startHour >= 12 === endHour >= 12) {
+    return `${start.replace(/\s?(AM|PM)$/i, "")}–${end}`;
+  }
+  return `${start}–${end}`;
+}
+
+export function formatMeetingSummary(meeting: SavedClassMeeting, clock24h = false): string {
+  const days = meeting.days.map((d) => weekdayShort(d)).filter(Boolean).join("/");
+  const range = formatTimeRange(
+    meeting.hour,
+    meeting.minute,
+    meeting.endHour,
+    meeting.endMinute,
+    clock24h
+  );
+  return days ? `${days} ${range}` : range;
+}
+
+/** User-created weekly class meetings for a category, grouped by series. */
+export function savedClassMeetings(items: Item[], categoryId: string): SavedClassMeeting[] {
+  const series = new Map<string, Item[]>();
+  for (const item of items) {
+    if (item.categoryId !== categoryId || item.type !== "event" || item.sourceId) continue;
+    if (item.repeat?.freq !== "weekly" || !item.repeat.byDay?.length) continue;
+    const key = item.repeatId ?? item.id;
+    const list = series.get(key);
+    if (list) list.push(item);
+    else series.set(key, [item]);
+  }
+
+  const meetings: SavedClassMeeting[] = [];
+  for (const [repeatId, occs] of series) {
+    const first = occs.slice().sort((a, b) => +new Date(a.at) - +new Date(b.at))[0];
+    const at = new Date(first.at);
+    if (Number.isNaN(+at)) continue;
+    const end = first.endAt ? new Date(first.endAt) : null;
+    const days = [...new Set(first.repeat!.byDay!.filter((d) => d >= 0 && d <= 6))].sort(
+      (a, b) => a - b
+    );
+    const meeting: SavedClassMeeting = {
+      repeatId,
+      days,
+      hour: at.getHours(),
+      minute: at.getMinutes(),
+      title: first.title,
+      count: occs.length,
+    };
+    if (end && !Number.isNaN(+end) && +end > +at) {
+      meeting.endHour = end.getHours();
+      meeting.endMinute = end.getMinutes();
+    }
+    meetings.push(meeting);
+  }
+
+  return meetings.sort(
+    (a, b) => (a.days[0] ?? 0) - (b.days[0] ?? 0) || a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
+  );
 }
 
 function toHour(h: number, meridiem: string): number {
