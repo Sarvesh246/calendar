@@ -3,15 +3,16 @@
 import { useEffect, useId, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Plus, X } from "lucide-react";
-import { setHours, setMinutes } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { thisOrNextWeekday } from "@/lib/date-utils";
 import {
   clockInput,
   firstSharedDay,
+  meetingDateTimes,
   parseClassSchedule,
+  parseClockInput,
   scheduleRepeat,
+  untilDayToIso,
   weekdayLong,
   type ClassMeeting,
 } from "@/lib/class-schedule";
@@ -22,12 +23,23 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WeekdayChips } from "@/components/weekday-chips";
-import type { Day } from "date-fns";
 
 export { WeekdayChips };
 
 const FIELD =
-  "w-full min-w-0 rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
+  "w-full min-w-0 max-w-full rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
+
+const SELECT =
+  "min-h-11 min-w-0 w-full rounded-lg border border-line bg-surface-sunken/50 px-1 text-center text-[16px] text-ink focus:border-line-strong focus:outline-none";
+
+const DATE_FIELD = cn(
+  FIELD,
+  "[appearance:none] [-webkit-appearance:none]",
+  "[&::-webkit-date-and-time-value]:min-w-0 [&::-webkit-date-and-time-value]:text-left",
+  "[&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:p-0"
+);
+
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
 type MeetingDraft = {
   key: string;
@@ -55,6 +67,70 @@ function leftoverDays(meetings: MeetingDraft[]): number[] {
   const mw = [1, 3].filter((d) => !used.has(d));
   if (mw.length === 2) return mw;
   return [1, 2, 3, 4, 5].filter((d) => !used.has(d));
+}
+
+function TimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const parsed = parseClockInput(value) ?? { hour: 10, minute: 0 };
+  const hour12 = parsed.hour % 12 === 0 ? 12 : parsed.hour % 12;
+  const pm = parsed.hour >= 12;
+  const minuteOpts = MINUTES.includes(parsed.minute)
+    ? MINUTES
+    : [...MINUTES, parsed.minute].sort((a, b) => a - b);
+
+  function emit(nextHour12: number, nextMinute: number, nextPm: boolean) {
+    const hour = (nextHour12 % 12) + (nextPm ? 12 : 0);
+    onChange(clockInput(hour, nextMinute));
+  }
+
+  return (
+    <div className="min-w-0">
+      <span className="text-[12px] font-medium text-ink-faint">{label}</span>
+      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1.05fr)] items-center gap-1">
+        <select
+          aria-label={`${label} hour`}
+          value={hour12}
+          onChange={(e) => emit(Number(e.target.value), parsed.minute, pm)}
+          className={SELECT}
+        >
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+        <span className="text-[13px] font-medium text-ink-faint">:</span>
+        <select
+          aria-label={`${label} minute`}
+          value={parsed.minute}
+          onChange={(e) => emit(hour12, Number(e.target.value), pm)}
+          className={SELECT}
+        >
+          {minuteOpts.map((m) => (
+            <option key={m} value={m}>
+              {String(m).padStart(2, "0")}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={`${label} AM or PM`}
+          value={pm ? "pm" : "am"}
+          onChange={(e) => emit(hour12, parsed.minute, e.target.value === "pm")}
+          className={SELECT}
+        >
+          <option value="am">AM</option>
+          <option value="pm">PM</option>
+        </select>
+      </div>
+    </div>
+  );
 }
 
 export function ClassScheduleSheet() {
@@ -127,17 +203,28 @@ export function ClassScheduleSheet() {
       setError("Pick at least one day for each time.");
       return;
     }
-    const parsedTimes: { days: number[]; sh: number; sm: number; eh: number; em: number }[] = [];
+    const parsedMeetings: ClassMeeting[] = [];
     for (const meeting of meetings) {
-      const [sh, sm] = meeting.start.split(":").map(Number);
-      const [eh, em] = meeting.end.split(":").map(Number);
-      if (!Number.isFinite(sh) || !Number.isFinite(eh) || eh * 60 + em <= sh * 60 + sm) {
+      const start = parseClockInput(meeting.start);
+      const end = parseClockInput(meeting.end);
+      if (!start || !end) {
+        setError("Pick a start and end time.");
+        return;
+      }
+      const next: ClassMeeting = {
+        days: meeting.days,
+        hour: start.hour,
+        minute: start.minute,
+        endHour: end.hour,
+        endMinute: end.minute,
+      };
+      if (!meetingDateTimes(next)) {
         setError("End time needs to be after the start.");
         return;
       }
-      parsedTimes.push({ days: meeting.days, sh, sm, eh, em });
+      parsedMeetings.push(next);
     }
-    const shared = firstSharedDay(meetings);
+    const shared = firstSharedDay(parsedMeetings);
     if (shared !== null) {
       setError(`${weekdayLong(shared)} is on two times. Give that day one time.`);
       return;
@@ -147,22 +234,31 @@ export function ClassScheduleSheet() {
       setError("Add a class first.");
       return;
     }
-    const untilIso = until ? new Date(`${until}T23:59:59`).toISOString() : defaultUntilIso();
+    const untilIso = untilDayToIso(until);
     const name = title.trim() || categories.find((c) => c.id === cat)?.name || "Class";
-    for (const meeting of parsedTimes) {
-      const day = meeting.days[0] as Day;
-      const first = thisOrNextWeekday(day);
-      const at = setMinutes(setHours(first, meeting.sh), meeting.sm);
-      const endAt = setMinutes(setHours(first, meeting.eh), meeting.em);
-      addItem({
-        title: name,
-        type: "event",
-        categoryId: cat,
-        at: at.toISOString(),
-        endAt: endAt.toISOString(),
-        ...(location.trim() ? { location: location.trim() } : {}),
-        repeat: scheduleRepeat(meeting.days, untilIso),
-      });
+    const before = useDatebookStore.getState().items.length;
+    try {
+      for (const meeting of parsedMeetings) {
+        const range = meetingDateTimes(meeting);
+        if (!range) continue;
+        addItem({
+          title: name,
+          type: "event",
+          categoryId: cat,
+          at: range.at.toISOString(),
+          endAt: range.endAt.toISOString(),
+          ...(location.trim() ? { location: location.trim() } : {}),
+          repeat: scheduleRepeat(meeting.days, untilIso),
+        });
+      }
+    } catch (err) {
+      console.warn("[datebook] couldn't add class times", err);
+      setError("Couldn't add those times. Try again.");
+      return;
+    }
+    if (useDatebookStore.getState().items.length <= before) {
+      setError("Couldn't add those times. Try again.");
+      return;
     }
     haptic("success");
     close();
@@ -171,7 +267,7 @@ export function ClassScheduleSheet() {
   return (
     <AnimatePresence>
       {open && (
-        <div className="viewport-pinned-overlay fixed inset-0 z-[60]">
+        <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
           <motion.button
             type="button"
             aria-label="Dismiss"
@@ -189,17 +285,13 @@ export function ClassScheduleSheet() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={motionTokens.springGentle}
-            className={cn(
-              "absolute flex w-full max-w-full flex-col overflow-hidden border border-line bg-surface",
-              "inset-x-0 bottom-0 max-h-[min(92dvh,760px)] rounded-t-2xl",
-              "md:inset-x-auto md:bottom-auto md:left-1/2 md:top-[12vh] md:max-h-[min(80dvh,640px)] md:w-[calc(100%-2rem)] md:max-w-[400px] md:-translate-x-1/2 md:rounded-2xl"
-            )}
+            style={{
+              maxHeight:
+                "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.25rem)",
+            }}
+            className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface"
           >
-            <span
-              aria-hidden
-              className="mx-auto mt-2 block h-1 w-10 shrink-0 rounded-full bg-line-strong opacity-75 md:hidden"
-            />
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-4 py-3">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-3 py-3">
               <div className="min-w-0">
                 <p id={headingId} className="text-[16px] font-semibold text-ink">
                   Add class times
@@ -218,7 +310,13 @@ export function ClassScheduleSheet() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3">
+            <div
+              className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3"
+              style={{
+                maxHeight:
+                  "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 11.5rem)",
+              }}
+            >
               <label className="block text-[12px] font-medium text-ink-faint">Paste or type</label>
               <div className="mt-1.5 flex min-w-0 gap-2">
                 <input
@@ -291,25 +389,17 @@ export function ClassScheduleSheet() {
                       value={meeting.days}
                       onChange={(days) => patchMeeting(meeting.key, { days })}
                     />
-                    <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
-                      <label className="block min-w-0">
-                        <span className="text-[12px] font-medium text-ink-faint">Starts</span>
-                        <input
-                          type="time"
-                          value={meeting.start}
-                          onChange={(e) => patchMeeting(meeting.key, { start: e.target.value })}
-                          className={cn(FIELD, "mt-1.5")}
-                        />
-                      </label>
-                      <label className="block min-w-0">
-                        <span className="text-[12px] font-medium text-ink-faint">Ends</span>
-                        <input
-                          type="time"
-                          value={meeting.end}
-                          onChange={(e) => patchMeeting(meeting.key, { end: e.target.value })}
-                          className={cn(FIELD, "mt-1.5")}
-                        />
-                      </label>
+                    <div className="mt-3 flex min-w-0 flex-col gap-2">
+                      <TimeField
+                        label="Starts"
+                        value={meeting.start}
+                        onChange={(start) => patchMeeting(meeting.key, { start })}
+                      />
+                      <TimeField
+                        label="Ends"
+                        value={meeting.end}
+                        onChange={(end) => patchMeeting(meeting.key, { end })}
+                      />
                     </div>
                   </div>
                 ))}
@@ -339,33 +429,34 @@ export function ClassScheduleSheet() {
                 className={cn(FIELD, "mt-1.5")}
               />
 
-              <label className="mt-4 block text-[12px] font-medium text-ink-faint">Until</label>
+              <label className="mt-4 block min-w-0 text-[12px] font-medium text-ink-faint">Until</label>
               <input
                 type="date"
                 value={until}
                 onChange={(e) => setUntil(e.target.value)}
-                className={cn(FIELD, "mt-1.5")}
+                className={cn(DATE_FIELD, "mt-1.5")}
               />
-
-              {error && <p className="mt-3 text-[12.5px] text-warn">{error}</p>}
             </div>
 
-            <div className="flex shrink-0 gap-2 border-t border-line/70 px-4 pt-3 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
-              <button
-                type="button"
-                onClick={close}
-                className="min-h-11 min-w-0 flex-1 rounded-xl border border-line text-[13.5px] font-medium text-ink-soft hover:text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submit}
-                className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
-              >
-                <CalendarClock className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                <span className="truncate">Add to Datebook</span>
-              </button>
+            <div className="shrink-0 border-t border-line/70 px-3 pt-3 pb-3">
+              {error && <p className="mb-2 text-[12.5px] text-warn">{error}</p>}
+              <div className="flex min-w-0 gap-2">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="min-h-11 min-w-0 flex-1 rounded-xl border border-line text-[13.5px] font-medium text-ink-soft hover:text-ink"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submit}
+                  className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
+                >
+                  <CalendarClock className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+                  <span className="truncate">Add to Datebook</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

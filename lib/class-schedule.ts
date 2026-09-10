@@ -1,4 +1,4 @@
-import { startOfDay } from "date-fns";
+import { addDays, getDay, setHours, setMinutes, startOfDay } from "date-fns";
 import { matchDatePhrase } from "./date-phrase";
 import { defaultUntilIso } from "./repeat";
 import type { Category, RepeatRule } from "./types";
@@ -281,6 +281,45 @@ export function scheduleRepeat(days: number[], until?: string): RepeatRule {
     byDay: unique.length ? unique : [new Date().getDay()],
     until: until ?? defaultUntilIso(),
   };
+}
+
+/** `HH:MM` or `HH:MM:SS` from a time input. */
+export function parseClockInput(value: string): { hour: number; minute: number } | null {
+  const m = value.trim().match(/^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  if (hour > 23) return null;
+  return { hour, minute: Number(m[2]) };
+}
+
+/** First selected weekday on or after `from` (today counts). */
+export function soonestOnDays(days: number[], from = new Date()): Date {
+  const want = new Set(days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6));
+  const start = startOfDay(from);
+  if (want.size === 0) return start;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(start, i);
+    if (want.has(getDay(d))) return d;
+  }
+  return start;
+}
+
+export function untilDayToIso(day: string, fallback = defaultUntilIso()): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return fallback;
+  const d = new Date(`${day}T23:59:59`);
+  return Number.isNaN(+d) ? fallback : d.toISOString();
+}
+
+export function meetingDateTimes(
+  meeting: ClassMeeting,
+  from = new Date()
+): { at: Date; endAt: Date } | null {
+  if (meeting.days.length === 0) return null;
+  const first = soonestOnDays(meeting.days, from);
+  const at = setMinutes(setHours(new Date(first), meeting.hour), meeting.minute);
+  const endAt = setMinutes(setHours(new Date(first), meeting.endHour), meeting.endMinute);
+  if (Number.isNaN(+at) || Number.isNaN(+endAt) || +endAt <= +at) return null;
+  return { at, endAt };
 }
 
 function toHour(h: number, meridiem: string): number {
