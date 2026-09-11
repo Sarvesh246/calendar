@@ -37,8 +37,12 @@ export function createDebouncedStorage(delayMs = 250) {
 
   return {
     getItem: (name: string) => {
-      if (typeof localStorage === "undefined") return null;
-      return localStorage.getItem(name);
+      if (pending?.name === name) return pending.value;
+      try {
+        return typeof localStorage === "undefined" ? null : localStorage.getItem(name);
+      } catch {
+        return null;
+      }
     },
     setItem: (name: string, value: string) => {
       pending = { name, value };
@@ -49,7 +53,11 @@ export function createDebouncedStorage(delayMs = 250) {
       if (timer) clearTimeout(timer);
       timer = null;
       pending = null;
-      if (typeof localStorage !== "undefined") localStorage.removeItem(name);
+      try {
+        if (typeof localStorage !== "undefined") localStorage.removeItem(name);
+      } catch {
+        // Storage may be unavailable in restricted browsing contexts.
+      }
     },
   };
 }

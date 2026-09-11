@@ -1164,6 +1164,33 @@ html[data-first-load="1"] .page-shell > * > * {
   contain-intrinsic-size: auto 8rem;
 }
 
+/* Cell density follows available height, including landscape and split view.
+   A compact cell exposes a count instead of clipping part of an event chip. */
+.month-day-cell {
+  container-type: size;
+}
+
+@container (max-height: 64px) {
+  .month-day-chips { display: none; }
+  .month-day-preview {
+    display: flex;
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+  }
+  .month-day-preview > div { display: none; }
+  .month-day-date-wrap, .month-day-date {
+    height: 22px;
+    width: 22px;
+    min-width: 22px;
+    font-size: 12px;
+  }
+}
+
+@container (max-height: 36px) {
+  .month-day-preview { bottom: auto; top: 7px; }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Reduced motion                                                         */
 /* ---------------------------------------------------------------------- */

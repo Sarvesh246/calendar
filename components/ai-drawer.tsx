@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Check, RotateCw, Sparkles, Trash2, X } from "lucide-react";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { askAssistant, type AssistantAction, type AssistantTurn } from "@/lib/ai-assistant";
@@ -13,6 +13,7 @@ import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { cn } from "@/lib/utils";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 interface Message {
   role: "user" | "assistant";
@@ -73,6 +74,8 @@ export function AIDrawer() {
   // AnimatePresence has been unreliable here and an invisible-but-mounted drawer
   // is worse than a plain one.
   const [present, setPresent] = useState(open);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(panelRef, open && present);
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -90,8 +93,9 @@ export function AIDrawer() {
   }, [open]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, thinking]);
+    if (!open || !present) return;
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: prefersReducedMotion() ? "instant" : "smooth" });
+  }, [messages, thinking, open, present]);
 
   useEffect(() => {
     if (typeof sessionStorage === "undefined" || messages.length <= 1) return;
@@ -122,8 +126,8 @@ export function AIDrawer() {
     inFlight.current = true;
     setThinking(true);
     const history: AssistantTurn[] = messages
-      .slice(1, -1) // drop the static welcome and the pending user turn
-      .filter((m) => m.text)
+      .slice(0, -1)
+      .filter((m) => m.text && m.text !== WELCOME.text)
       .map((m) => ({ role: m.role, text: m.text }));
     const { items, categories, settings } = useDatebookStore.getState();
     askAssistant(last.text, history, {
@@ -158,7 +162,6 @@ export function AIDrawer() {
         inFlight.current = false;
         setThinking(false);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
   // Flush a queued follow-up once the current reply lands.
@@ -255,6 +258,8 @@ export function AIDrawer() {
       />
       <div
         role="dialog"
+        ref={panelRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="assistant-title"
         className={cn(

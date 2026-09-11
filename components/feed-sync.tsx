@@ -39,7 +39,10 @@ export function FeedSync() {
           if (!isStale(source.lastSyncedAt)) continue;
           if (!mayAttempt(source.url)) continue;
           try {
+            const userId = useDatebookStore.getState().userId;
             const feed = await fetchCalendarFeed(source.url);
+            const current = useDatebookStore.getState();
+            if (current.userId !== userId || !current.importSources.some((s) => s.id === source.id)) continue;
             applyImport(source.url, feed);
             noteFeedSuccess(source.url);
           } catch (err) {

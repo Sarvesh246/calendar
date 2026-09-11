@@ -10,6 +10,7 @@ import { useDatebookStore } from "@/lib/store";
 import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay, rankItemsByDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
+import { useNow } from "@/lib/use-now";
 
 const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -85,7 +86,7 @@ function DayCellChips({
   const hiddenTitles = hidden.map((i) => i.title).join(", ");
 
   return (
-    <div ref={ref} className="relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
+    <div ref={ref} className="month-day-chips relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
       {visible.map((item) => {
         const color = colorOf(item.categoryId);
         const done =
@@ -132,9 +133,9 @@ function DayCellMobilePreview({
   const categories = [...new Set(open.map((i) => i.categoryId))].slice(0, 3);
 
   return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
+    <div className="month-day-preview flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
       <span className={cn("text-[11px] font-medium tabular-nums leading-none", overdue ? "text-warn" : "text-ink-faint")}>
-        {open.length}
+        +{open.length}
       </span>
       {categories.length > 0 && (
         <div className="flex items-center gap-0.5">
@@ -208,8 +209,8 @@ function MonthGridPanel({
 
   return (
     <div
-      className="grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
-      style={{ gridTemplateRows: `repeat(${weeks}, minmax(3.25rem, 1fr))` }}
+      className="month-grid-panel grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
+      style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
     >
       {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
@@ -231,7 +232,7 @@ function MonthGridPanel({
             }
             style={undefined}
             className={cn(
-              "press-none group relative flex min-h-[3.25rem] flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1.5 text-center sm:min-h-0 sm:items-stretch sm:justify-start sm:gap-1 sm:p-1.5 sm:text-left",
+              "month-day-cell press-none group relative flex min-h-0 flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1 text-center sm:items-stretch sm:justify-start sm:gap-1 sm:p-1.5 sm:text-left",
               "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
               "active:bg-surface-sunken",
               // Today reads as a tinted cell plus a filled date badge; the ring
@@ -251,7 +252,7 @@ function MonthGridPanel({
                 className="hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
               />
             )}
-            <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
+            <span className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
               {selected && showSelectionRing && (
                 <SelectionRing
                   layoutId="month-selected-day"
@@ -261,7 +262,7 @@ function MonthGridPanel({
               )}
               <span
                 className={cn(
-                  "relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
+                  "month-day-date relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
                   "transition-colors duration-[var(--motion-standard)]",
                   // Bigger than the old 12px, and today keeps its filled badge
                   // on desktop too, so "where am I" is answered at a glance.
@@ -333,7 +334,8 @@ export function MonthView({
   // Turned on one frame after the carousel has a width, so arriving on the
   // calendar shows the ring already in place instead of animating it there.
   const [ringAnimated, setRingAnimated] = useState(false);
-  const [paintNeighbors, setPaintNeighbors] = useState(false);
+  const [panAnchor, setPanAnchor] = useState<Date | null>(null);
+  const paintNeighbors = panAnchor === anchor;
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -352,7 +354,7 @@ export function MonthView({
 
   useEffect(() => {
     dragX.set(0);
-    setPaintNeighbors(false);
+    return () => dragX.stop();
   }, [anchor, dragX]);
 
   // Driven by framer's own pan-gesture recognizer (a native PanSession, not
@@ -371,7 +373,7 @@ export function MonthView({
     if (Math.abs(dx) > Math.abs(dy)) {
       if (Math.abs(dx) > 4) {
         didPan.current = true;
-        if (!paintNeighbors) setPaintNeighbors(true);
+        if (!paintNeighbors) setPanAnchor(anchor);
       }
       const max = width * 0.92;
       dragX.set(Math.max(-max, Math.min(max, dx)));
@@ -422,7 +424,7 @@ export function MonthView({
   );
 
   const byDay = useMemo(() => rankItemsByDay(groupItemsByDay(items)), [items]);
-  const now = useMemo(() => new Date(), [items]);
+  const now = useNow();
 
   const panelProps = {
     byDay,
@@ -458,7 +460,7 @@ export function MonthView({
           className="flex h-full"
           style={{ x: trackX, width: width ? width * 3 : "300%", willChange: "transform" }}
         >
-          <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
+          <div aria-hidden inert className="h-full shrink-0" style={{ width: width || "33.333%" }}>
             <MonthGridPanel
               anchor={prevAnchor}
               {...panelProps}
@@ -469,7 +471,7 @@ export function MonthView({
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
             <MonthGridPanel anchor={anchor} {...panelProps} showSelectionRing showChips />
           </div>
-          <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
+          <div aria-hidden inert className="h-full shrink-0" style={{ width: width || "33.333%" }}>
             <MonthGridPanel
               anchor={nextAnchor}
               {...panelProps}

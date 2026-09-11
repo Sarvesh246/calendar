@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { format, isToday, isSameDay, differenceInMinutes, startOfDay } from "date-fns";
+import { format, isToday } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { groupItemsByDay, dayKey, dayLabel, isEventEnded } from "@/lib/date-utils";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
@@ -13,6 +13,7 @@ import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { assignOverlapColumns } from "@/lib/event-layout";
 import type { Item } from "@/lib/types";
+import { weekEventWindow } from "@/lib/week-layout";
 
 const DEFAULT_START_HOUR = 7;
 const DEFAULT_END_HOUR = 22;
@@ -30,15 +31,9 @@ function hourWindow(days: Date[], byDay: Map<string, Item[]>) {
   for (const day of days) {
     for (const it of byDay.get(dayKey(day)) ?? NO_ITEMS) {
       if (it.type !== "event" || it.allDay) continue;
-      const s = new Date(it.at);
-      start = Math.min(start, s.getHours());
-      const e = it.endAt ? new Date(it.endAt) : null;
-      const endHour = e && isSameDay(e, s)
-        ? e.getHours() + (e.getMinutes() > 0 ? 1 : 0)
-        : e && e > s
-        ? 24
-        : s.getHours() + 1;
-      end = Math.max(end, endHour);
+      const session = weekEventWindow(it, day);
+      start = Math.min(start, Math.floor(session.startMin / 60));
+      end = Math.max(end, Math.ceil(session.endMin / 60));
     }
   }
   return { startHour: clampHour(start), endHour: clampHour(Math.max(end, start + 1)) };
@@ -64,7 +59,7 @@ export function WeekView({
 
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
   const { startHour, endHour } = useMemo(() => hourWindow(days, byDay), [days, byDay]);
-  const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   const colorOf = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.color] as const));
     return (categoryId: string) => m.get(categoryId) ?? "#8a8a94";
@@ -168,10 +163,9 @@ export function WeekView({
                 ))}
                 {assignOverlapColumns(
                   dayEvents.map((item) => {
-                    const start = new Date(item.at);
-                    const dayStart = startOfDay(start);
-                    const startMin = differenceInMinutes(start, dayStart) - startHour * 60;
-                    const durationMin = item.endAt ? differenceInMinutes(new Date(item.endAt), start) : 45;
+                    const session = weekEventWindow(item, day);
+                    const startMin = session.startMin - startHour * 60;
+                    const durationMin = session.endMin - session.startMin;
                     return {
                       item,
                       startMin,
@@ -357,28 +351,37 @@ function MobileWeekPager({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(() => Math.max(0, days.findIndex((d) => isToday(d))));
+  const pageIndex = useRef(page);
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
 
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const idx = days.findIndex((d) => isToday(d));
-    if (idx < 0) return;
-    el.scrollTo({ left: el.clientWidth * idx, behavior: "instant" });
-    queueMicrotask(() => setPage(idx));
+    const idx = Math.max(0, days.findIndex((d) => isToday(d)));
+    pageIndex.current = idx;
+    const sync = () => {
+      if (!el.clientWidth) return;
+      el.scrollTo({ left: el.clientWidth * pageIndex.current, behavior: "instant" });
+      setPage(pageIndex.current);
+    };
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [days]);
 
   return (
-    <div className="md:hidden">
+    <div className="flex min-h-0 flex-1 flex-col md:hidden">
       <div
         ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget;
           const next = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+          if (!el.clientWidth) return;
+          pageIndex.current = next;
           setPage((p) => (p === next ? p : next));
         }}
-        className="-mx-2 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:-mx-4 [&::-webkit-scrollbar]:hidden"
+        className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {days.map((day, i) => {
           const dayItems = byDay.get(dayKey(day)) ?? NO_ITEMS;
@@ -387,7 +390,7 @@ function MobileWeekPager({
           return (
             <section
               key={day.toISOString()}
-              className="w-full shrink-0 snap-start px-2 md:px-4"
+              className="h-full w-full shrink-0 snap-start overflow-y-auto overscroll-y-contain px-2"
             >
               <div className="mb-3 flex items-baseline justify-between">
                 <p className="text-[15px] font-semibold text-ink">{label}</p>

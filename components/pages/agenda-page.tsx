@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
@@ -15,6 +15,7 @@ import {
   dayLabel,
   groupItemsByDay,
   isOverdue,
+  isOverdueAt,
   itemOccupiesDay,
   openWorkDueOnDay,
   weekWorkloadFromByDay,
@@ -27,6 +28,7 @@ import { ViewMenu } from "@/components/view-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
+import { useNow } from "@/lib/use-now";
 
 const HORIZON_DAYS = 120;
 const FIRST_PAINT_DAYS = 14;
@@ -35,6 +37,7 @@ const AGENDA_STICKY =
   "sticky z-10 top-[var(--mobile-header-height)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
 
 export default function AgendaPage() {
+  const now = useNow();
   const router = useRouter();
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   const allItems = useDatebookStore((s) => s.items);
@@ -51,19 +54,19 @@ export default function AgendaPage() {
   const overdue = useMemo(
     () =>
       items
-        .filter(isOverdue)
+        .filter((item) => isOverdueAt(item, now))
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [items]
+    [items, now]
   );
 
   const todayCount = useMemo(() => {
-    const today = startOfDay(new Date());
+    const today = startOfDay(now);
     const events = items.filter((it) => it.type === "event" && itemOccupiesDay(it, today)).length;
     return events + openWorkDueOnDay(items, today).length;
-  }, [items]);
+  }, [items, now]);
 
   const { groups, later, byDay } = useMemo(() => {
-    const today = startOfDay(new Date());
+    const today = startOfDay(now);
     const cutoff = addDays(today, HORIZON_DAYS);
     const result: { date: Date; items: Item[]; key: string }[] = [];
     const byDay = groupItemsByDay(items);
@@ -78,11 +81,11 @@ export default function AgendaPage() {
       .filter((it) => !isOverdue(it) && new Date(it.at) >= cutoff)
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
     return { groups: result, later: laterItems, byDay };
-  }, [items]);
+  }, [items, now]);
 
   const heat = useMemo(
-    () => weekWorkloadFromByDay(byDay, new Date(), weekStartsOn),
-    [byDay, weekStartsOn]
+    () => weekWorkloadFromByDay(byDay, now, weekStartsOn),
+    [byDay, now, weekStartsOn]
   );
 
   const [showHorizon, setShowHorizon] = useState(false);
@@ -128,12 +131,9 @@ export default function AgendaPage() {
   }, [overdue.length, visibleGroups, visibleLater.length]);
 
   const [stickyId, setStickyId] = useState<string | null>(null);
-  const stickyIdRef = useRef(stickyId);
-  stickyIdRef.current = stickyId;
 
   useEffect(() => {
     if (sections.length === 0) {
-      setStickyId(null);
       return;
     }
     const nodes = sections
@@ -154,11 +154,10 @@ export default function AgendaPage() {
           break;
         }
       }
-      if (stickyIdRef.current !== current) setStickyId(current);
+      setStickyId((previous) => previous === current ? previous : current);
     };
 
-    update();
-    let raf = 0;
+    let raf = requestAnimationFrame(update);
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(() => {
         raf = 0;

@@ -20,6 +20,7 @@ import { isTabRoute } from "@/lib/tab-routes";
 import { useResolvedPathname } from "@/lib/tab-nav";
 import { TabPageHost } from "@/components/tab-page-host";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 const CommandPalette = dynamic(
   () => import("./command-palette").then((m) => ({ default: m.CommandPalette })),
@@ -57,6 +58,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onSettings = pathname === "/settings";
   const onToday = pathname === "/today";
   const onTab = isTabRoute(pathname);
+  const desktop = useMediaQuery("(min-width: 768px)");
+  const floatingAdd = quickAddOpen && !(onToday && desktop);
 
   useKeyboardInset();
 
@@ -74,10 +77,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       className={cn(
         "mx-auto flex w-full max-w-[1800px] gap-5",
         onCalendar ? "px-2 md:px-6" : "px-4 md:px-6",
-        // Only the desktop calendar locks to the viewport so the month grid
-        // fills the pane. Mobile calendar scrolls the document so the selected
-        // day's list can sit under the grid (Google Calendar pattern).
-        onCalendar ? "min-h-dvh md:h-dvh md:overflow-hidden" : "min-h-dvh",
+        // Keep the calendar in the viewport; only its day lists scroll.
+        onCalendar ? "h-dvh overflow-hidden" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(var(--safe-bottom)+1.25rem)]"
           : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
@@ -89,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "flex min-w-0 flex-1 flex-col",
           !focusMode && "pt-[var(--mobile-header-height)] md:pt-0",
-          onCalendar && "md:min-h-0 md:overflow-hidden"
+          onCalendar && "min-h-0 overflow-hidden"
         )}
       >
         {!focusMode && (
@@ -102,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 "md:static md:mx-0 md:mb-4 md:px-0"
               )}
             >
-              {onToday && (
+              {onToday && desktop && (
                 <div className="min-w-0 flex-1">
                   <QuickAddBar embedded />
                 </div>
@@ -143,7 +144,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           hidden={!onTab}
           className={cn(
             onTab && "flex min-h-0 flex-1 flex-col",
-            onCalendar && "md:overflow-hidden"
+            onCalendar && "overflow-hidden"
           )}
         >
           <TabPageHost pathname={pathname} />
@@ -165,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <AnimatePresence>
-        {quickAddOpen && (
+        {floatingAdd && (
           <motion.button
             key="quick-add-scrim"
             type="button"
@@ -181,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {quickAddOpen && (
+        {floatingAdd && (
           <motion.div
             key="quick-add-panel"
             initial={{ opacity: 0, y: -10, scale: 0.97 }}
@@ -195,8 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             transition={motionTokens.spring}
             style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
             className={cn(
-              "viewport-pinned-top fixed inset-x-3 z-[46] md:left-[calc(220px+2.5rem)] md:right-6 md:w-auto",
-              onToday && "md:hidden"
+              "viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6"
             )}
           >
             <QuickAddBar />

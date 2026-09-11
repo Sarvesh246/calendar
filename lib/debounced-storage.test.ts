@@ -46,4 +46,23 @@ describe("createDebouncedStorage", () => {
     vi.advanceTimersByTime(300);
     expect(localStorage.getItem("test")).toBeNull();
   });
+
+  it("rehydrates the latest pending edit instead of older disk data", () => {
+    localStorage.setItem("test", "old");
+    const storage = createDebouncedStorage(200);
+    storage.setItem("test", "edited");
+    expect(storage.getItem("test")).toBe("edited");
+    vi.advanceTimersByTime(200);
+    expect(storage.getItem("test")).toBe("edited");
+  });
+
+  it("keeps restricted storage from crashing hydration or reset", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => { throw new Error("denied"); },
+      removeItem: () => { throw new Error("denied"); },
+    });
+    const storage = createDebouncedStorage();
+    expect(storage.getItem("test")).toBeNull();
+    expect(() => storage.removeItem("test")).not.toThrow();
+  });
 });

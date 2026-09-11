@@ -20,13 +20,14 @@ import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { dayKey, isOverdue } from "@/lib/date-utils";
 import { isToday, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
+import { searchItems } from "@/lib/search";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
   const time = (i: Item) => new Date(i.at).getTime();
   const upcoming = items.filter((i) => time(i) >= cutoff).sort((a, b) => time(a) - time(b));
   const past = items.filter((i) => !(time(i) >= cutoff)).sort((a, b) => time(b) - time(a));
-  return [...upcoming, ...past].slice(0, 250);
+  return [...upcoming, ...past];
 }
 
 export function CommandPalette() {
@@ -63,7 +64,9 @@ function CommandPaletteDialog() {
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   useLockBodyScroll(true);
-  const visibleItems = query.trim() ? sortedItems : sortedItems.slice(0, 50);
+  const visibleItems = query.trim()
+    ? searchItems(sortedItems, categories, query).slice(0, 100)
+    : sortedItems.slice(0, 50);
 
   /** Clearing the query on close keeps a stale one from being re-asked the
    *  next time the palette opens. */
@@ -145,10 +148,10 @@ function CommandPaletteDialog() {
       // from off-screen left before snapping to its real centered position the
       // instant the animation ended. One property, one source of truth.
       contentClassName="palette-panel fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] z-50 w-[calc(100%-1.5rem)] max-w-[560px]"
-      className="block w-full overflow-hidden rounded-lg border border-line bg-surface"
-      style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem - var(--keyboard-inset, 0px))" }}
+      className="flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface"
+      style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem)" }}
     >
-      <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3">
         <Command.Input
           autoFocus
           value={query}
@@ -161,7 +164,7 @@ function CommandPaletteDialog() {
       <Command.List
         // Shrink to fit above the on-screen keyboard so results aren't hidden.
         style={{ maxHeight: "max(140px, calc(var(--visible-height, 100dvh) - 14rem))" }}
-        className="overflow-y-auto p-2"
+        className="min-h-0 overflow-y-auto overscroll-contain p-2"
       >
         <Command.Empty className="px-2 py-4">
           <p className="px-1 pb-2 text-center text-[13px] text-ink-faint">

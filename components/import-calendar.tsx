@@ -27,11 +27,14 @@ export function ImportCalendar() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   async function runImport(feedUrl: string) {
+    if (status.kind === "loading" || syncingId) return;
     const normalized = normalizeFeedUrl(feedUrl);
     if (!normalized) return;
     setStatus({ kind: "loading" });
+    const userId = useDatebookStore.getState().userId;
     try {
       const feed = await fetchCalendarFeed(normalized);
+      if (useDatebookStore.getState().userId !== userId) return;
       const { added, updated, removed } = applyImport(normalized, feed);
       setStatus({ kind: "success", message: summarize(added, updated, removed) });
       setUrl("");
@@ -41,10 +44,14 @@ export function ImportCalendar() {
   }
 
   async function resync(id: string, feedUrl: string) {
+    if (status.kind === "loading" || syncingId) return;
     setSyncingId(id);
     setStatus({ kind: "idle" });
+    const userId = useDatebookStore.getState().userId;
     try {
       const feed = await fetchCalendarFeed(feedUrl);
+      const current = useDatebookStore.getState();
+      if (current.userId !== userId || !current.importSources.some((source) => source.id === id)) return;
       const { added, updated, removed } = applyImport(feedUrl, feed);
       setStatus({ kind: "success", message: summarize(added, updated, removed) });
     } catch (err) {
@@ -56,7 +63,7 @@ export function ImportCalendar() {
     }
   }
 
-  const busy = status.kind === "loading";
+  const busy = status.kind === "loading" || syncingId !== null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -68,6 +75,7 @@ export function ImportCalendar() {
           onKeyDown={(e) => e.key === "Enter" && url.trim() && !busy && runImport(url)}
           placeholder="Paste a calendar feed link (Canvas, Google, Outlook…)"
           spellCheck={false}
+          aria-label="Calendar feed URL"
           autoCapitalize="off"
           className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
@@ -125,7 +133,7 @@ export function ImportCalendar() {
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     onClick={() => resync(source.id, source.url)}
-                    disabled={syncingId !== null}
+                    disabled={busy}
                     aria-label="Re-sync"
                     className="flex h-11 w-11 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink disabled:opacity-40"
                   >

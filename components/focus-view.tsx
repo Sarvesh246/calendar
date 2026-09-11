@@ -34,12 +34,13 @@ export function FocusView() {
   const { current, next } = focusQueue(items, new Date(), categories);
   const currentCategory = useCategory(current?.categoryId);
   const remaining = current ? eventRemainingLabel(current) : undefined;
+  const hasCountdown = Boolean(remaining);
 
   useEffect(() => {
-    if (!remaining) return;
+    if (!hasCountdown) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
-  }, [Boolean(remaining), current?.id]);
+  }, [hasCountdown, current?.id]);
 
   function completeCurrent() {
     if (!current || current.type === "event" || celebrating) return;

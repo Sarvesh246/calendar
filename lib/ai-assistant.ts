@@ -13,7 +13,7 @@ import {
   setMinutes,
   startOfDay,
 } from "date-fns";
-import { thisOrNextWeekday } from "./date-utils";
+import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
@@ -746,9 +746,9 @@ function miss(q: string): AssistantResponse {
 function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string, wantsCompleted = false): AssistantResponse {
   const on = ctx.items
     .filter((i) => {
+      if (wantsCompleted) return i.status === "done" && isSameDay(new Date(i.completedAt ?? i.at), day);
+      if (i.type === "event") return i.status !== "done" && itemOccupiesDay(i, day);
       if (!isSameDay(new Date(i.at), day)) return false;
-      if (i.type === "event") return true;
-      if (wantsCompleted) return i.status === "done";
       return i.status !== "done";
     })
     .sort((a, b) => +new Date(a.at) - +new Date(b.at));
@@ -773,8 +773,8 @@ function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string, wantsC
 function rangeAnswer(label: string, start: Date, end: Date, ctx: Ctx): AssistantResponse {
   const inRange = ctx.items.filter((i) => isWithinInterval(new Date(i.at), { start, end }));
   const due = inRange.filter((i) => i.type !== "event" && i.status !== "done");
-  const events = inRange.filter((i) => i.type === "event");
-  if (inRange.length === 0) return { text: `Nothing ${label}. Enjoy the breathing room.`, suggestions: ["What's on today?"] };
+  const events = inRange.filter((i) => i.type === "event" && i.status !== "done");
+  if (due.length === 0 && events.length === 0) return { text: `Nothing outstanding ${label}.`, suggestions: ["What's on today?"] };
   const parts: string[] = [];
   if (due.length) parts.push(`${due.length} due (${list(due)})`);
   if (events.length) parts.push(`${events.length} event${events.length === 1 ? "" : "s"} (${list(events)})`);

@@ -8,8 +8,8 @@ export function searchItems(
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const tokens = q.split(/\s+/).filter(Boolean);
-  const catName = (id: string) =>
-    categories.find((c) => c.id === id)?.name.toLowerCase() ?? "";
+  const categoryNames = new Map(categories.map((c) => [c.id, c.name.toLowerCase()]));
+  const catName = (id: string) => categoryNames.get(id) ?? "";
 
   const scored = items
     .map((item) => {
