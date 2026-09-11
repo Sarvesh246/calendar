@@ -857,11 +857,6 @@ a.press-none:active,
   animation: route-enter var(--motion-standard) var(--ease-standard) both;
 }
 
-/* Main tab routes swap instantly — pill motion carries the transition. */
-.route-enter-instant {
-  animation: route-enter-instant 80ms var(--ease-standard) both;
-}
-
 @keyframes route-enter-instant {
   from {
     opacity: 0.92;
@@ -1120,6 +1115,47 @@ html[data-first-load="1"] .page-shell > * > * {
   animation: live-pulse 2s var(--ease-in-out) infinite;
 }
 
+/* List cards: contain paint so a complete/expand doesn't dirty the page.
+   Presence/expand height uses CSS grid 0fr/1fr instead of measuring `auto`. */
+.item-card-presence {
+  display: grid;
+  grid-template-rows: 1fr;
+  contain: layout paint;
+}
+
+.item-card-presence-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.item-card {
+  contain: layout paint;
+}
+
+.item-card-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--motion-standard) var(--ease-standard),
+    opacity var(--motion-micro) var(--ease-in-out);
+}
+
+.item-card-expand.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.item-card-expand-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agenda-day {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 8rem;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Reduced motion                                                         */
 /* ---------------------------------------------------------------------- */
@@ -1152,5 +1188,9 @@ html[data-first-load="1"] .page-shell > * > * {
   [role="button"]:not([aria-disabled="true"]):active,
   summary:active {
     transform: none;
+  }
+
+  .item-card-expand {
+    transition: none;
   }
 }

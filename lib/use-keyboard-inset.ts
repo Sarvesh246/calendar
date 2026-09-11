@@ -338,6 +338,12 @@ export function useKeyboardInset() {
   }, []);
 
   useEffect(() => {
-    onRouteRef.current();
+    const run = () => onRouteRef.current();
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 180 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 0);
+    return () => window.clearTimeout(id);
   }, [pathname]);
 }

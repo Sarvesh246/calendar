@@ -11,7 +11,6 @@ import { maybePromptForReminders } from "@/lib/reminders";
 import { reminderContext } from "@/lib/store-selectors";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { AssistantMarkdown } from "@/lib/markdown";
-import { ViewportLayer } from "@/components/viewport-layer";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { cn } from "@/lib/utils";
 
@@ -56,12 +55,6 @@ export function AIDrawer() {
   const setOpen = useUIStore((s) => s.setAIDrawerOpen);
   const pendingMessage = useUIStore((s) => s.aiDrawerPendingMessage);
   const consumePendingMessage = useUIStore((s) => s.consumeAIDrawerPendingMessage);
-  const items = useDatebookStore((s) => s.items);
-  const categories = useDatebookStore((s) => s.categories);
-  const clock24h = useDatebookStore((s) => s.settings.clock24h);
-  const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
-  const reminderPresets = useDatebookStore((s) => s.reminderPresets);
-  const defaultReminderPresetIds = useDatebookStore((s) => s.settings.defaultReminderPresetIds);
   const addItem = useDatebookStore((s) => s.addItem);
   const updateItem = useDatebookStore((s) => s.updateItem);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
@@ -132,7 +125,13 @@ export function AIDrawer() {
       .slice(1, -1) // drop the static welcome and the pending user turn
       .filter((m) => m.text)
       .map((m) => ({ role: m.role, text: m.text }));
-    askAssistant(last.text, history, { items, categories, clock24h, weekStartsOn })
+    const { items, categories, settings } = useDatebookStore.getState();
+    askAssistant(last.text, history, {
+      items,
+      categories,
+      clock24h: settings.clock24h,
+      weekStartsOn: settings.weekStartsOn,
+    })
       .then((res) =>
         setMessages((m) => [
           ...m,
@@ -204,7 +203,8 @@ export function AIDrawer() {
     if (action.kind === "create") {
       let draft = action.draft;
       if (!draft.reminders?.length) {
-        const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
+        const { reminderPresets, settings } = useDatebookStore.getState();
+        const defaults = remindersFromPresetIds(settings.defaultReminderPresetIds, reminderPresets);
         if (defaults.length) {
           draft = { ...draft, reminders: defaults };
         }
@@ -248,7 +248,7 @@ export function AIDrawer() {
   if (!present) return null;
 
   return (
-    <ViewportLayer className="z-50">
+    <div className="viewport-pinned-overlay fixed inset-0 z-50">
       <div
         onClick={() => setOpen(false)}
         className={cn("assistant-overlay overlay-scrim absolute inset-0", open ? "is-open" : "is-closed")}
@@ -259,9 +259,7 @@ export function AIDrawer() {
         aria-labelledby="assistant-title"
         className={cn(
           "assistant-panel absolute flex flex-col overflow-hidden border border-line bg-surface",
-          // Phone-only: compact bottom sheet. Desktop geometry lives in
-          // globals.css so max-width / inset from the sheet can't leak up.
-          "max-md:inset-x-3 max-md:bottom-[max(0.9rem,calc(env(safe-area-inset-bottom)+0.65rem))] max-md:mx-auto max-md:h-[70dvh] max-md:max-h-[min(560px,calc(100%-env(safe-area-inset-top)-1.25rem))] max-md:w-auto max-md:max-w-[400px] max-md:rounded-[22px] max-md:shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
+          "max-md:inset-x-3 max-md:bottom-[max(0.9rem,calc(var(--keyboard-inset,0px)+env(safe-area-inset-bottom)+0.65rem))] max-md:mx-auto max-md:h-[70dvh] max-md:max-h-[min(560px,calc(100%-env(safe-area-inset-top)-1.25rem-var(--keyboard-inset,0px)))] max-md:w-auto max-md:max-w-[400px] max-md:rounded-[22px] max-md:shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
           open ? "is-open" : "is-closed"
         )}
       >
@@ -285,14 +283,9 @@ export function AIDrawer() {
           </div>
 
           <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-3.5 md:space-y-4 md:px-6 md:py-6">
-            {messages.map((m, mi) => (
-              <motion.div
-                key={mi}
-                initial={{ opacity: 0, y: 8, x: m.role === "user" ? 8 : -8 }}
-                animate={{ opacity: 1, y: 0, x: 0 }}
-                transition={motionTokens.spring}
-                className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
-              >
+            {messages.map((m, mi) => {
+              const newest = mi === messages.length - 1;
+              const inner = (
                 <div
                   className={
                     m.role === "user"
@@ -370,8 +363,27 @@ export function AIDrawer() {
                     </div>
                   )}
                 </div>
-              </motion.div>
-            ))}
+              );
+              const rowClass = m.role === "user" ? "flex justify-end" : "flex justify-start";
+              if (!newest) {
+                return (
+                  <div key={mi} className={rowClass}>
+                    {inner}
+                  </div>
+                );
+              }
+              return (
+                <motion.div
+                  key={mi}
+                  initial={{ opacity: 0, y: 8, x: m.role === "user" ? 8 : -8 }}
+                  animate={{ opacity: 1, y: 0, x: 0 }}
+                  transition={motionTokens.spring}
+                  className={rowClass}
+                >
+                  {inner}
+                </motion.div>
+              );
+            })}
 
             <AnimatePresence initial={false}>
               {thinking && (
@@ -441,7 +453,7 @@ export function AIDrawer() {
             </div>
           </div>
       </div>
-    </ViewportLayer>
+    </div>
   );
 }
 

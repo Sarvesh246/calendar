@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
@@ -20,41 +20,49 @@ import { dayKey, isOverdue } from "@/lib/date-utils";
 import { isToday, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
 
+function sortPaletteItems(items: Item[]) {
+  const cutoff = startOfDay(new Date()).getTime();
+  const time = (i: Item) => new Date(i.at).getTime();
+  const upcoming = items.filter((i) => time(i) >= cutoff).sort((a, b) => time(a) - time(b));
+  const past = items.filter((i) => !(time(i) >= cutoff)).sort((a, b) => time(b) - time(a));
+  return [...upcoming, ...past].slice(0, 250);
+}
+
 export function CommandPalette() {
-  const router = useRouter();
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
-  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
-  const askAI = useUIStore((s) => s.askAI);
-  const [query, setQuery] = useState("");
-  const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
-  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
-  const items = useDatebookStore((s) => s.items);
-  const categories = useDatebookStore((s) => s.categories);
-  // Upcoming first (soonest on top), then the past newest-first, so the cap
-  // trims old semesters rather than this week's work.
-  const sortedItems = useMemo(() => {
-    const cutoff = startOfDay(new Date()).getTime();
-    const time = (i: Item) => new Date(i.at).getTime();
-    const upcoming = items.filter((i) => time(i) >= cutoff).sort((a, b) => time(a) - time(b));
-    const past = items.filter((i) => !(time(i) >= cutoff)).sort((a, b) => time(b) - time(a));
-    return [...upcoming, ...past].slice(0, 250);
-  }, [items]);
-  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
-  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
-  useLockBodyScroll(open);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (open) setQuery("");
         setOpen(!open);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
+
+  if (!open) return null;
+  return <CommandPaletteDialog />;
+}
+
+function CommandPaletteDialog() {
+  const router = useRouter();
+  const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
+  const askAI = useUIStore((s) => s.askAI);
+  const [query, setQuery] = useState("");
+  const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
+  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
+  const [{ sortedItems, categories }] = useState(() => {
+    const { items, categories } = useDatebookStore.getState();
+    return { sortedItems: sortPaletteItems(items), categories };
+  });
+  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
+  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
+  useLockBodyScroll(true);
+  const visibleItems = query.trim() ? sortedItems : sortedItems.slice(0, 50);
 
   /** Clearing the query on close keeps a stale one from being re-asked the
    *  next time the palette opens. */
@@ -115,7 +123,7 @@ export function CommandPalette() {
 
   return (
     <Command.Dialog
-      open={open}
+      open
       onOpenChange={setPaletteOpen}
       label="Command palette"
       // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see
@@ -214,9 +222,9 @@ export function CommandPalette() {
           </Command.Item>
         </Command.Group>
 
-        {items.length > 0 && (
+        {sortedItems.length > 0 && (
           <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-            {sortedItems.map((item) => {
+            {visibleItems.map((item) => {
               const category = categories.find((c) => c.id === item.categoryId);
               return (
                 <Command.Item

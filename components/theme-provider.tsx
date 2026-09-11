@@ -8,6 +8,7 @@ import {
   clearCustomThemeFromDocument,
   DEFAULT_CUSTOM_THEME,
 } from "@/lib/custom-theme";
+import { writeAppearanceSnapshot } from "@/lib/appearance-storage";
 import type { AppearancePreset } from "@/lib/types";
 
 function applyThemeColor(preset: AppearancePreset, customBackground?: string) {
@@ -49,12 +50,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useSyncExternalStore(subscribeHydration, persistHydrated, () => false);
 
   useLayoutEffect(() => {
-    // The blocking theme-init script already painted from localStorage.
-    // Running this with the default store (preset: minimal) before persist
-    // hydrates would strip those inline custom vars and flash the default.
     if (!hydrated) return;
     paintAppearance(preset, customTheme);
-  }, [hydrated, preset, customTheme]);
+    writeAppearanceSnapshot({ preset, density, customTheme });
+  }, [hydrated, preset, customTheme, density]);
 
   useLayoutEffect(() => {
     if (!hydrated) return;
@@ -74,10 +73,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export const themeInitScript = `
 (function () {
   try {
-    var raw = localStorage.getItem("datebook-store");
-    if (!raw) return;
-    var parsed = JSON.parse(raw);
-    var settings = parsed && parsed.state && parsed.state.settings;
+    var raw = localStorage.getItem("datebook-appearance");
+    var settings;
+    if (raw) {
+      settings = JSON.parse(raw);
+    } else {
+      var store = localStorage.getItem("datebook-store");
+      if (!store) return;
+      var parsed = JSON.parse(store);
+      settings = parsed && parsed.state && parsed.state.settings;
+    }
+    if (!settings) return;
     var preset = settings && settings.preset;
     var density = settings && settings.density;
     var root = document.documentElement;

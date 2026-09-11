@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, MapPin } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { registerItemExpander } from "@/lib/item-focus";
 import {
   eventRemainingLabel,
   formatTime,
@@ -15,44 +16,56 @@ import {
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import type { ItemCardChrome } from "@/lib/card-chrome";
 import type { Category, Item, ItemStatus } from "@/lib/types";
-import { ItemEditor } from "@/components/item-editor";
 
-function useClock24h() {
-  return useDatebookStore((s) => s.settings.clock24h);
-}
+const ItemEditor = dynamic(
+  () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
+  { ssr: false }
+);
+
+export type { ItemCardChrome };
 
 /**
  * Leaving a list — deleted, filtered out, or hidden by "hide completed".
- *
- * The card shrinks its own height as it fades, so the rows below close the gap
- * on the same beat instead of jumping up the moment it unmounts. Only takes
- * effect inside an `<AnimatePresence>`; elsewhere it is inert.
+ * Height collapse is CSS grid `0fr`/`1fr` (see `.item-card-presence`); Framer
+ * only fades so it never measures `height: auto` across the list.
  */
 const CARD_EXIT = {
   opacity: 0,
-  scale: 0.97,
-  height: 0,
-  marginTop: 0,
-  marginBottom: 0,
+  gridTemplateRows: "0fr",
   transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
 };
 
-export function ItemCard({
+export const ItemCard = memo(function ItemCard({
   item,
   category,
   day,
+  clock24h,
+  showLocation,
+  showCategoryDot,
 }: {
   item: Item;
   category: Category | undefined;
   day?: Date;
-}) {
+} & ItemCardChrome) {
   return item.type === "event" ? (
-    <EventCard item={item} category={category} day={day} />
+    <EventCard
+      item={item}
+      category={category}
+      day={day}
+      clock24h={clock24h}
+      showLocation={showLocation}
+    />
   ) : (
-    <AssignmentCard item={item} category={category} />
+    <AssignmentCard
+      item={item}
+      category={category}
+      clock24h={clock24h}
+      showCategoryDot={showCategoryDot}
+    />
   );
-}
+});
 
 /* ------------------------------------------------------------------ */
 /* Status controls                                                     */
@@ -69,7 +82,6 @@ function CompleteButton({
 }) {
   const done = status === "done";
   const prevDone = useRef(done);
-  // Bumped on each arrival at "done" so the ring replays its entrance.
   const [burst, setBurst] = useState(0);
 
   useEffect(() => {
@@ -91,8 +103,6 @@ function CompleteButton({
       className="press-none group/status flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
     >
       <span className="relative flex h-5 w-5 items-center justify-center">
-        {/* One quiet ring travelling outward on completion — the only celebratory
-            beat in the app, and it is over in half a second. */}
         {burst > 0 && (
           <span
             key={burst}
@@ -101,10 +111,6 @@ function CompleteButton({
           />
         )}
         <motion.span
-          // A dip on press, so the tap registers even when the colour change is
-          // subtle. The disc still renders all three states: "in progress" is
-          // set from the editor's segmented control, and has to stay legible
-          // here even though this button only toggles done.
           whileTap={{ scale: 0.82 }}
           transition={motionTokens.springSnappy}
           className={cn(
@@ -127,9 +133,6 @@ function CompleteButton({
                 transition={motionTokens.springSnappy}
                 className="flex items-center justify-center"
               >
-                {/* `--accent-ink` tracks the theme: white on the light presets,
-                    near-black on the dark ones, where `--good` is a pale mint and
-                    a hardcoded white tick was all but invisible. */}
                 <Check className="h-3 w-3 text-[var(--accent-ink)]" strokeWidth={3.25} />
               </motion.span>
             )}
@@ -193,43 +196,9 @@ function StatusSegmented({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Shared expand/collapse detail panel                                 */
-/* ------------------------------------------------------------------ */
-
-function ItemDetails({
-  item,
-  category,
-  clock24h,
-  onCollapse,
-}: {
-  item: Item;
-  category: Category | undefined;
-  clock24h: boolean;
-  onCollapse: () => void;
-}) {
-  return (
-    <ItemEditor
-      item={item}
-      category={category}
-      clock24h={clock24h}
-      StatusSegmented={StatusSegmented}
-      onCollapse={onCollapse}
-    />
-  );
-}
-
 function useExpandable(itemId: string) {
-  const focusedItemId = useUIStore((s) => s.focusedItemId);
-  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const [expanded, setExpanded] = useState(false);
-  // Opened from elsewhere (search, the week grid). The card's own state is
-  // adjusted during render; the request is handed back once it has landed.
-  const requested = focusedItemId === itemId;
-  if (requested && !expanded) setExpanded(true);
-  useEffect(() => {
-    if (requested) setFocusedItemId(null);
-  }, [requested, setFocusedItemId]);
+  useEffect(() => registerItemExpander(itemId, () => setExpanded(true)), [itemId]);
 
   const toggle = () => {
     haptic("light");
@@ -242,7 +211,6 @@ function useExpandable(itemId: string) {
       toggle();
       return;
     }
-    // Esc closes the card you are in before it reaches any surrounding sheet.
     if (e.key === "Escape" && expanded) {
       e.preventDefault();
       e.stopPropagation();
@@ -252,51 +220,53 @@ function useExpandable(itemId: string) {
   return { expanded, toggle, collapse, keyToggle };
 }
 
-/**
- * Animates its own height rather than leaning on the card's `layout` prop.
- *
- * The previous version paired a 120ms `layout` transition on the card with a
- * 200ms opacity/y fade on the content: the card finished shrinking while the
- * editor was still fully visible, so on collapse the form spilled over the row
- * below for the remaining ~80ms. Owning the height here puts the container and
- * its contents on one animation, and `overflow-hidden` guarantees nothing
- * escapes the card while it closes.
- */
-function ExpandPanel({ open, children }: { open: boolean; children: React.ReactNode }) {
+function ExpandPanel({
+  open,
+  item,
+  category,
+  clock24h,
+  onCollapse,
+}: {
+  open: boolean;
+  item: Item;
+  category: Category | undefined;
+  clock24h: boolean;
+  onCollapse: () => void;
+}) {
+  const [loaded, setLoaded] = useState(open);
+  if (open && !loaded) setLoaded(true);
+
+  useEffect(() => {
+    if (open || !loaded) return;
+    const delayMs = Math.round(motionTokens.standard * 1000);
+    const t = window.setTimeout(() => setLoaded(false), delayMs);
+    return () => window.clearTimeout(t);
+  }, [open, loaded]);
+
   return (
-    <AnimatePresence initial={false}>
-      {open && (
-        <motion.div
-          key="panel"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{
-            height: motionTokens.springLayout,
-            // Content fades in behind the opening edge and out ahead of the
-            // closing one, so a half-height form is never at full opacity.
-            opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-          }}
-          className="overflow-hidden"
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className={cn("item-card-expand", open && "is-open")}>
+      <div className="item-card-expand-inner">
+        {loaded && (
+          <ItemEditor
+            item={item}
+            category={category}
+            clock24h={clock24h}
+            StatusSegmented={StatusSegmented}
+            onCollapse={onCollapse}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
 function useCompleteStyle(done: boolean) {
   const [styled, setStyled] = useState(done);
-  // Un-completing, and completing with reduced motion, restyle at once —
-  // adjusted during render rather than bounced through an effect.
   if (!done && styled) setStyled(false);
   if (done && !styled && prefersReducedMotion()) setStyled(true);
 
   useEffect(() => {
     if (!done || prefersReducedMotion()) return;
-    // Let the tick land before the row dims and strikes through, so the two read
-    // as cause and effect rather than one muddled change.
     const delayMs = Math.round(motionTokens.standard * 1000);
     const t = window.setTimeout(() => setStyled(true), delayMs);
     return () => window.clearTimeout(t);
@@ -305,7 +275,6 @@ function useCompleteStyle(done: boolean) {
   return styled;
 }
 
-/** The chevron is the only persistent "this opens" cue, so it gets a spring. */
 function ExpandChevron({ expanded }: { expanded: boolean }) {
   return (
     <motion.span
@@ -319,28 +288,48 @@ function ExpandChevron({ expanded }: { expanded: boolean }) {
   );
 }
 
-/**
- * The two-line preview has to go the instant the panel opens — otherwise it and
- * the editor's own Details field show the same text twice. Collapsing its height
- * rather than dropping it keeps the header from jumping.
- */
 function CollapsedDescription({ show, text }: { show: boolean; text?: string }) {
   if (!text) return null;
   return (
-    <AnimatePresence initial={false}>
-      {show && (
-        <motion.p
-          key="desc"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: motionTokens.micro, ease: motionTokens.easeInOut }}
-          className="mt-1 overflow-hidden whitespace-pre-line text-[11.5px] leading-snug text-ink-faint line-clamp-2"
-        >
+    <div className={cn("item-card-expand", show && "is-open")}>
+      <div className="item-card-expand-inner">
+        <p className="mt-1 overflow-hidden whitespace-pre-line text-[11.5px] leading-snug text-ink-faint line-clamp-2">
           {text}
-        </motion.p>
-      )}
-    </AnimatePresence>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CardFrame({
+  dimmed,
+  children,
+  ...rest
+}: {
+  dimmed: boolean;
+  children: React.ReactNode;
+} & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <motion.div
+      className="item-card-presence"
+      initial={false}
+      style={{ gridTemplateRows: "1fr" }}
+      exit={CARD_EXIT}
+    >
+      <div className="item-card-presence-inner">
+        <div
+          {...rest}
+          className={cn(
+            "item-card press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
+            "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
+            dimmed && "opacity-[0.62]",
+            rest.className
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -367,31 +356,27 @@ function useEventPhase(item: Item, day?: Date) {
   return { remaining, ended };
 }
 
-export function EventCard({
+function EventCard({
   item,
   category,
   day,
+  clock24h,
+  showLocation,
 }: {
   item: Item;
   category: Category | undefined;
   day?: Date;
+  clock24h: boolean;
+  showLocation: boolean;
 }) {
-  const clock24h = useClock24h();
-  const showLocation = useDatebookStore((s) => s.settings.showLocation);
   const color = category?.color ?? "#8a8a94";
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
   const { remaining, ended } = useEventPhase(item, day);
   const showCompleteStyle = useCompleteStyle(ended);
 
   return (
-    <motion.div
-      // `layout="position"` (not full `layout`) so siblings glide to their new
-      // offsets without framer also trying to scale this card's own box — which
-      // fought the height animation inside it and produced a visible squash.
-      layout="position"
-      exit={CARD_EXIT}
-      transition={motionTokens.springLayout}
-      animate={{ opacity: showCompleteStyle ? 0.62 : 1 }}
+    <CardFrame
+      dimmed={showCompleteStyle}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
       tabIndex={0}
@@ -399,7 +384,7 @@ export function EventCard({
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "press-none press-surface cat-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
+        "cat-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         expanded && "border-line-strong"
       )}
@@ -467,10 +452,14 @@ export function EventCard({
         <ExpandChevron expanded={expanded} />
       </div>
 
-      <ExpandPanel open={expanded}>
-        <ItemDetails item={item} category={category} clock24h={clock24h} onCollapse={collapse} />
-      </ExpandPanel>
-    </motion.div>
+      <ExpandPanel
+        open={expanded}
+        item={item}
+        category={category}
+        clock24h={clock24h}
+        onCollapse={collapse}
+      />
+    </CardFrame>
   );
 }
 
@@ -478,10 +467,18 @@ export function EventCard({
 /* Assignment / task                                                   */
 /* ------------------------------------------------------------------ */
 
-export function AssignmentCard({ item, category }: { item: Item; category: Category | undefined }) {
-  const clock24h = useClock24h();
+function AssignmentCard({
+  item,
+  category,
+  clock24h,
+  showCategoryDot,
+}: {
+  item: Item;
+  category: Category | undefined;
+  clock24h: boolean;
+  showCategoryDot: boolean;
+}) {
   const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
-  const showCategoryDot = useDatebookStore((s) => s.settings.showCategoryDot);
   const color = category?.color ?? "#8a8a94";
   const status = item.status ?? "todo";
   const done = status === "done";
@@ -490,33 +487,23 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
 
   return (
-    <motion.div
-      layout="position"
-      exit={CARD_EXIT}
-      transition={motionTokens.springLayout}
-      animate={{ opacity: showCompleteStyle ? 0.62 : 1 }}
+    <CardFrame
+      dimmed={showCompleteStyle}
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
       onClick={toggle}
       onKeyDown={keyToggle}
       className={cn(
-        "press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line bg-surface",
-        "px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
+        "bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         expanded && "border-line-strong",
-        // An overdue row earns a warning edge. Previously the only signal was one
-        // word in 12px text, which scrolled past unnoticed in a long list.
         overdue && !done && "bg-warn-soft/35",
         status === "doing" && !done && "bg-accent-soft/30"
       )}
     >
       <div className="flex items-center gap-1">
-        <CompleteButton
-          status={status}
-          color={color}
-          onToggle={() => toggleItemDone(item.id)}
-        />
+        <CompleteButton status={status} color={color} onToggle={() => toggleItemDone(item.id)} />
 
         <div className="min-w-0 flex-1">
           <p
@@ -527,8 +514,6 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
             )}
           >
             {item.title}
-            {/* A strike-through that draws itself left to right, instead of the
-                whole line appearing in one frame. */}
             <motion.span
               aria-hidden
               initial={false}
@@ -553,20 +538,25 @@ export function AssignmentCard({ item, category }: { item: Item; category: Categ
         </div>
 
         {showCategoryDot && (
-          <motion.span
-            initial={false}
-            animate={{ opacity: expanded ? 0 : 1, scale: expanded ? 0.5 : 1 }}
-            transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          <span
+            aria-hidden
             style={{ "--cat": color } as React.CSSProperties}
-            className="cat-dot h-1.5 w-1.5 shrink-0 rounded-full"
+            className={cn(
+              "cat-dot h-1.5 w-1.5 shrink-0 rounded-full transition-[opacity,transform] duration-[var(--motion-micro)]",
+              expanded && "scale-50 opacity-0"
+            )}
           />
         )}
         <ExpandChevron expanded={expanded} />
       </div>
 
-      <ExpandPanel open={expanded}>
-        <ItemDetails item={item} category={category} clock24h={clock24h} onCollapse={collapse} />
-      </ExpandPanel>
-    </motion.div>
+      <ExpandPanel
+        open={expanded}
+        item={item}
+        category={category}
+        clock24h={clock24h}
+        onCollapse={collapse}
+      />
+    </CardFrame>
   );
 }

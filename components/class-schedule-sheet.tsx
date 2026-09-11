@@ -135,6 +135,14 @@ function TimeField({
 
 export function ClassScheduleSheet() {
   const open = useUIStore((s) => s.classScheduleOpen);
+  return (
+    <AnimatePresence>
+      {open && <ClassScheduleSheetBody />}
+    </AnimatePresence>
+  );
+}
+
+function ClassScheduleSheetBody() {
   const presetCategoryId = useUIStore((s) => s.classScheduleCategoryId);
   const close = useUIStore((s) => s.closeClassSchedule);
   const allCategories = useDatebookStore((s) => s.categories);
@@ -150,10 +158,9 @@ export function ClassScheduleSheet() {
   const [paste, setPaste] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  useLockBodyScroll(open);
+  useLockBodyScroll(true);
 
   useEffect(() => {
-    if (!open) return;
     const first = presetCategoryId && categories.some((c) => c.id === presetCategoryId)
       ? presetCategoryId
       : categories[0]?.id ?? "";
@@ -168,16 +175,15 @@ export function ClassScheduleSheet() {
       setPaste("");
       setError(null);
     });
-  }, [open, presetCategoryId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [presetCategoryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") close();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }, [close]);
 
   function patchMeeting(key: string, patch: Partial<MeetingDraft>) {
     setMeetings((prev) => prev.map((m) => (m.key === key ? { ...m, ...patch } : m)));
@@ -267,8 +273,6 @@ export function ClassScheduleSheet() {
   }
 
   return (
-    <AnimatePresence>
-      {open && (
         <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
           <motion.button
             type="button"
@@ -462,7 +466,5 @@ export function ClassScheduleSheet() {
             </div>
           </motion.div>
         </div>
-      )}
-    </AnimatePresence>
   );
 }

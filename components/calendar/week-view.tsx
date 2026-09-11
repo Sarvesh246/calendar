@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, isToday, isSameDay, differenceInMinutes, startOfDay } from "date-fns";
-import { useDatebookStore, useCategory } from "@/lib/store";
+import { useDatebookStore } from "@/lib/store";
 import { groupItemsByDay, dayKey, dayLabel, isEventEnded } from "@/lib/date-utils";
+import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
@@ -356,6 +357,8 @@ function MobileWeekPager({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(() => Math.max(0, days.findIndex((d) => isToday(d))));
+  const chrome = useItemCardChrome();
+  const categories = useCategoriesById();
 
   useEffect(() => {
     const el = scroller.current;
@@ -377,9 +380,10 @@ function MobileWeekPager({
         }}
         className="-mx-2 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:-mx-4 [&::-webkit-scrollbar]:hidden"
       >
-        {days.map((day) => {
+        {days.map((day, i) => {
           const dayItems = byDay.get(dayKey(day)) ?? NO_ITEMS;
           const label = dayLabel(day);
+          const near = Math.abs(i - page) <= 1;
           return (
             <section
               key={day.toISOString()}
@@ -391,12 +395,22 @@ function MobileWeekPager({
               </div>
               {dayItems.length === 0 ? (
                 <EmptyState title="Nothing scheduled." sub="A free day." />
-              ) : (
+              ) : near ? (
                 <div className="flex flex-col gap-2">
                   {dayItems.map((item) => (
-                    <WeekDayItem key={item.id} item={item} day={day} />
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      category={item.categoryId ? categories.get(item.categoryId) : undefined}
+                      day={day}
+                      {...chrome}
+                    />
                   ))}
                 </div>
+              ) : (
+                <p className="text-[13px] text-ink-faint">
+                  {dayItems.length} item{dayItems.length === 1 ? "" : "s"}
+                </p>
               )}
             </section>
           );
@@ -421,9 +435,4 @@ function MobileWeekPager({
       </div>
     </div>
   );
-}
-
-function WeekDayItem({ item, day }: { item: Item; day: Date }) {
-  const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} day={day} />;
 }

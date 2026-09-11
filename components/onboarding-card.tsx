@@ -11,8 +11,8 @@ import { GoogleSignInButton } from "@/components/account-section";
 
 export function OnboardingCard() {
   const { user, configured } = useAuth();
-  const items = useDatebookStore((s) => s.items);
-  const sources = useDatebookStore((s) => s.importSources);
+  const itemCount = useDatebookStore((s) => s.items.length);
+  const sourceCount = useDatebookStore((s) => s.importSources.length);
   const dismissed = useDatebookStore((s) => s.settings.onboardingDismissed);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   // The server (and the first client render) sees the store's defaults — no
@@ -20,7 +20,7 @@ export function OnboardingCard() {
   // calendar flashed "Datebook starts empty" until the persisted state landed.
   const mounted = useHasMounted();
 
-  const show = mounted && !dismissed && items.length === 0 && sources.length === 0;
+  const show = mounted && !dismissed && itemCount === 0 && sourceCount === 0;
 
   return (
     // Dismissing used to unmount the card outright, so the page below jumped up

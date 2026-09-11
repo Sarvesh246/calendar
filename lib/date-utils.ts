@@ -438,14 +438,47 @@ export function workloadIntensity(count: number) {
   return 4;
 }
 
+function workloadDay(date: Date, byDay: Map<string, Item[]>) {
+  const count = (byDay.get(dayKey(date)) ?? []).filter((it) => it.status !== "done").length;
+  return { date, count, intensity: workloadIntensity(count), isToday: isToday(date) };
+}
+
+/** Same as `weekWorkload`, from an existing `groupItemsByDay` map (one pass, not 7). */
+export function weekWorkloadFromByDay(
+  byDay: Map<string, Item[]>,
+  from = new Date(),
+  weekStartsOn: 0 | 1 = 0
+) {
+  const start = startOfWeek(startOfDay(from), { weekStartsOn });
+  return Array.from({ length: 7 }, (_, i) => workloadDay(addDays(start, i), byDay));
+}
+
 /** Per-day open-item counts for the next 7 local days starting at `from`. */
 export function weekWorkload(items: Item[], from = new Date(), weekStartsOn: 0 | 1 = 0) {
-  const start = startOfWeek(startOfDay(from), { weekStartsOn });
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(start, i);
-    const count = itemsOnDay(items, date).filter((it) => it.status !== "done").length;
-    return { date, count, intensity: workloadIntensity(count), isToday: isToday(date) };
-  });
+  return weekWorkloadFromByDay(groupItemsByDay(items), from, weekStartsOn);
+}
+
+/** Sort key for month-grid chips. Pass a shared `now` — never `new Date()` in a comparator. */
+export function chipRank(item: Item, day: Date, now: Date) {
+  if (isOverdue(item)) return 0;
+  if (item.type !== "event" && item.status === "done") return 2;
+  if (isEventEnded(item, now, day)) return 2;
+  return 1;
+}
+
+export function rankDayItems(items: Item[], day: Date, now: Date) {
+  if (items.length < 2) return items;
+  return [...items].sort((a, b) => chipRank(a, day, now) - chipRank(b, day, now));
+}
+
+/** Rank every bucket once when the month grid is built, not once per cell. */
+export function rankItemsByDay(byDay: Map<string, Item[]>, now = new Date()) {
+  const ranked = new Map<string, Item[]>();
+  for (const [key, bucket] of byDay) {
+    const [y, m, d] = key.split("-").map(Number);
+    ranked.set(key, rankDayItems(bucket, new Date(y, m - 1, d), now));
+  }
+  return ranked;
 }
 
 /** Soonest open assignment or task — overdue first, then upcoming due dates. */

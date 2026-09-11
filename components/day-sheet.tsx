@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
 import { Plus, X } from "lucide-react";
 import { format } from "date-fns";
-import { useCategory } from "@/lib/store";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
+import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
@@ -44,6 +44,8 @@ export function DaySheet({
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
   const [dragging, setDragging] = useState(false);
+  const chrome = useItemCardChrome();
+  const categories = useCategoriesById();
 
   useEffect(() => {
     closeGuard.current = false;
@@ -152,7 +154,13 @@ export function DaySheet({
           ) : (
             <div className="flex flex-col gap-2">
               {items.map((item) => (
-                <SheetItem key={item.id} item={item} day={date} />
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  category={item.categoryId ? categories.get(item.categoryId) : undefined}
+                  day={date}
+                  {...chrome}
+                />
               ))}
             </div>
           )}
@@ -160,9 +168,4 @@ export function DaySheet({
       </motion.div>
     </div>
   );
-}
-
-function SheetItem({ item, day }: { item: Item; day: Date }) {
-  const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} day={day} />;
 }

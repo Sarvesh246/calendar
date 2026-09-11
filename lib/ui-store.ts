@@ -1,5 +1,6 @@
 "use client";
 
+import { startTransition } from "react";
 import { create } from "zustand";
 
 interface UIState {
@@ -83,12 +84,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeQuickAdd: () => set(closedAdd),
   setQuickAddPrefill: (text) => set({ quickAddPrefill: text }),
   toggleCategoryFilter: (id) =>
-    set((s) => {
-      const current = s.categoryFilter ?? [];
-      const next = current.includes(id) ? current.filter((c) => c !== id) : [...current, id];
-      return { categoryFilter: next.length === 0 ? null : next };
-    }),
-  clearCategoryFilter: () => set({ categoryFilter: null }),
+    startTransition(() =>
+      set((s) => {
+        const current = s.categoryFilter ?? [];
+        const next = current.includes(id) ? current.filter((c) => c !== id) : [...current, id];
+        return { categoryFilter: next.length === 0 ? null : next };
+      })
+    ),
+  clearCategoryFilter: () => startTransition(() => set({ categoryFilter: null })),
   setFocusedItemId: (id) => set({ focusedItemId: id }),
   setQuickAddDateKey: (key) => set({ quickAddDateKey: key }),
   setQuickAddTime: (time) => set({ quickAddTime: time }),

@@ -2,8 +2,8 @@
 
 import { Plus } from "lucide-react";
 import { format } from "date-fns";
-import { useCategory } from "@/lib/store";
 import { dayLabel } from "@/lib/date-utils";
+import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ export function DayAgenda({
 }) {
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
+  const chrome = useItemCardChrome();
+  const categories = useCategoriesById();
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
@@ -49,7 +51,12 @@ export function DayAgenda({
           <div className="flex flex-col gap-2">
             {items.map((item) => (
               <div key={item.id} className="shrink-0">
-                <DayAgendaRow item={item} day={date} />
+                <ItemCard
+                  item={item}
+                  category={item.categoryId ? categories.get(item.categoryId) : undefined}
+                  day={date}
+                  {...chrome}
+                />
               </div>
             ))}
           </div>
@@ -57,9 +64,4 @@ export function DayAgenda({
       )}
     </div>
   );
-}
-
-function DayAgendaRow({ item, day }: { item: Item; day: Date }) {
-  const category = useCategory(item.categoryId);
-  return <ItemCard item={item} category={category} day={day} />;
 }
