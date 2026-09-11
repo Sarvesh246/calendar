@@ -7,7 +7,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import {
   clockInput,
-  firstSharedDay,
+  firstOverlappingDay,
   meetingDateTimes,
   parseClassSchedule,
   parseClockInput,
@@ -224,9 +224,11 @@ export function ClassScheduleSheet() {
       }
       parsedMeetings.push(next);
     }
-    const shared = firstSharedDay(parsedMeetings);
-    if (shared !== null) {
-      setError(`${weekdayLong(shared)} is on two times. Give that day one time.`);
+    // A lecture and a lab on the same day are two times, not a conflict; only
+    // times that actually overlap are.
+    const clash = firstOverlappingDay(parsedMeetings);
+    if (clash !== null) {
+      setError(`Two of these times overlap on ${weekdayLong(clash)}.`);
       return;
     }
     const cat = categoryId || categories[0]?.id;

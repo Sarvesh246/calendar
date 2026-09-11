@@ -130,7 +130,8 @@ interface DatebookState {
 
   updateSettings: (patch: Partial<UserSettings>) => void;
 
-  lastDeleted: Item | null;
+  /** What the undo toast would put back — one item, or a whole repeat series. */
+  lastDeleted: DeletedBatch | null;
   restoreLastDeleted: () => void;
 
   /** Merge a fetched calendar feed into the store, keyed by `url` (re-syncs in
@@ -159,6 +160,13 @@ interface DatebookState {
    *  reconcile, and flush the write queue. */
   retrySync: () => Promise<void>;
   resolveCloudMerge: (choice: CloudMergeChoice) => Promise<void>;
+}
+
+export interface DeletedBatch {
+  /** Stable per delete, so a second delete replays the toast's entrance. */
+  key: string;
+  label: string;
+  items: Item[];
 }
 
 // IDs of the old seeded demo content, stripped from any store that persisted it
@@ -253,24 +261,27 @@ export const useDatebookStore = create<DatebookState>()(
         const item = get().items.find((i) => i.id === id) ?? null;
         set({
           items: get().items.filter((i) => i.id !== id),
-          lastDeleted: item,
+          lastDeleted: item ? { key: id, label: item.title, items: [item] } : null,
           deletions: addTombstones(get().deletions, "item", [id]),
         });
       },
 
       restoreLastDeleted: () => {
-        const item = get().lastDeleted;
-        if (!item) return;
-        if (get().items.some((i) => i.id === item.id)) {
-          set({ lastDeleted: null });
-          return;
-        }
+        const batch = get().lastDeleted;
+        if (!batch) return;
+        const present = new Set(get().items.map((i) => i.id));
+        const back = batch.items.filter((i) => !present.has(i.id));
         // Undo has to out-rank its own tombstone, or the next reconcile would
-        // take the item straight back off the screen.
+        // take the items straight back off the screen.
+        const stamp = nowIso();
         set({
-          items: [...get().items, { ...item, updatedAt: nowIso() }],
+          items: [...get().items, ...back.map((i) => ({ ...i, updatedAt: stamp }))],
           lastDeleted: null,
-          deletions: dropTombstones(get().deletions, "item", [item.id]),
+          deletions: dropTombstones(
+            get().deletions,
+            "item",
+            back.map((i) => i.id)
+          ),
         });
       },
 
@@ -356,7 +367,10 @@ export const useDatebookStore = create<DatebookState>()(
       deleteCategory: (id) => {
         const cats = get().categories;
         if (cats.length <= 1) return;
-        const fallback = cats.find((c) => c.id !== id);
+        // Re-home into a class you can still see; an archived one hides the
+        // items from the filters and the editor's class list.
+        const fallback =
+          cats.find((c) => c.id !== id && !c.archived) ?? cats.find((c) => c.id !== id);
         if (!fallback) return;
         set({
           categories: cats.filter((c) => c.id !== id),
@@ -596,10 +610,16 @@ export const useDatebookStore = create<DatebookState>()(
       },
 
       deleteSeries: (repeatId) => {
-        const gone = get().items.filter((i) => i.repeatId === repeatId).map((i) => i.id);
+        const gone = get().items.filter((i) => i.repeatId === repeatId);
+        if (gone.length === 0) return;
         set({
           items: get().items.filter((i) => i.repeatId !== repeatId),
-          deletions: addTombstones(get().deletions, "item", gone),
+          lastDeleted: { key: `series:${repeatId}`, label: gone[0].title, items: gone },
+          deletions: addTombstones(
+            get().deletions,
+            "item",
+            gone.map((i) => i.id)
+          ),
         });
       },
 
@@ -860,7 +880,18 @@ export const useDatebookStore = create<DatebookState>()(
             return;
           } else if (cloudEmpty && localHasContent) {
             // First sign-in with data on this device: keep it, push it up.
+            // A reconnect lands here too when the account was emptied on
+            // another device — so only what the tombstones haven't deleted
+            // goes up, or a reset elsewhere is undone by the next device to open.
+            const liveCategories = local.categories.filter(
+              (c) => !isDeleted(tombstones, "category", c)
+            );
             set({
+              items: local.items.filter((i) => !isDeleted(tombstones, "item", i)),
+              categories: liveCategories.length ? liveCategories : local.categories,
+              importSources: local.importSources.filter(
+                (s) => !isDeleted(tombstones, "import_source", s)
+              ),
               settings: cloud.settings ?? local.settings,
               reminderPresets: cloud.reminderPresets.length
                 ? cloud.reminderPresets
@@ -1871,8 +1902,19 @@ function applyRealtime(
     const current = useDatebookStore.getState()[key] as { id: string }[];
     let nextArr: { id: string }[];
     if (payload.eventType === "DELETE") {
-      const id = (payload.old as { id?: string })?.id;
+      const old = payload.old as { id?: string; updated_at?: string } | undefined;
+      const id = old?.id;
       if (!id) return;
+      // A copy here that is newer than the version that was deleted — an Undo,
+      // or an edit made after the delete — outranks it; its pending upsert
+      // recreates the row. Dropping and tombstoning it here is how the echo of
+      // our own delete used to reverse an Undo tapped within a second.
+      const mine = current.find((x) => x.id === id) as
+        | { updatedAt?: string; createdAt?: string }
+        | undefined;
+      if (mine && old?.updated_at && time(mine.updatedAt ?? mine.createdAt) > time(old.updated_at)) {
+        return;
+      }
       nextArr = current.filter((x) => x.id !== id);
       // Remember the delete even if we didn't have the row: a later reconcile
       // must not read "cloud is missing it" as "we haven't uploaded it yet".

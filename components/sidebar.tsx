@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Settings,
+  SlidersHorizontal,
   Sun,
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -62,6 +63,8 @@ export function Sidebar() {
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const toggleCategoryFilter = useUIStore((s) => s.toggleCategoryFilter);
+  const clearCategoryFilter = useUIStore((s) => s.clearCategoryFilter);
+  const filterCount = categoryFilter?.length ?? 0;
 
   return (
     <>
@@ -125,9 +128,20 @@ export function Sidebar() {
               transition={{ duration: motionTokens.micro }}
               className="mt-6 flex flex-col gap-0.5"
             >
-              <p className="px-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                Categories
-              </p>
+              <div className="flex items-center justify-between px-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                  Categories
+                </p>
+                {filterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearCategoryFilter}
+                    className="text-[11.5px] font-medium text-accent hover:underline"
+                  >
+                    Show all
+                  </button>
+                )}
+              </div>
               {categories
                 .filter((c) => !c.archived)
                 .map((cat) => {
@@ -161,6 +175,23 @@ export function Sidebar() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* The list folds away with the rail, but the filter doesn't — so the
+            rail keeps saying "you're seeing a subset" and opens back up to it. */}
+        {collapsed && filterCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            title={`Showing ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}
+            aria-label={`Filtered to ${filterCount} categor${filterCount === 1 ? "y" : "ies"}. Expand sidebar to change.`}
+            className="mt-6 flex items-center rounded-lg px-2.5 py-2 text-accent transition-colors hover:bg-surface-sunken"
+          >
+            <span className="relative">
+              <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
+              <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-surface" />
+            </span>
+          </button>
+        )}
 
         <div className="mt-auto flex flex-col gap-0.5">
           <SyncChip collapsed={collapsed} />

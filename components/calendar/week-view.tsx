@@ -118,8 +118,7 @@ export function WeekView({
                       className={cn(
                         "cal-chip truncate px-1.5 py-0.5 text-left text-[10px] font-medium",
                         item.type !== "event" && "cal-chip-task",
-                        (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-45",
-                        item.type !== "event" && item.status !== "done" && "cal-chip-task"
+                        (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-45"
                       )}
                       style={{ "--cat": color } as React.CSSProperties}
                     >
@@ -314,7 +313,9 @@ function TimedBlock({
       onPointerUp={onPointerUp}
       onPointerCancel={reset}
       onClick={(e) => {
-        if (drag.current?.moved) e.preventDefault();
+        // Pointer taps open from `onPointerUp`; Enter/Space arrive as a click
+        // with no pointer behind it (`detail === 0`).
+        if (e.detail === 0) onSelect();
       }}
       style={{
         top,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, ExternalLink, MapPin, Repeat, Shapes, Tag, Trash2, Type } from "lucide-react";
+import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, ExternalLink, MapPin, Repeat, Shapes, Tag, Trash2, Type, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
@@ -17,6 +17,7 @@ import { nanoid } from "@/lib/nanoid";
 import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus, ItemType, Reminder, RepeatFreq } from "@/lib/types";
 import { repeatLabel } from "@/lib/repeat";
+import { formatOffsetLabel } from "@/lib/reminder-defaults";
 import { WeekdayChips } from "@/components/weekday-chips";
 
 function linkLabel(url: string): string {
@@ -88,13 +89,23 @@ export function ItemEditor({
   const [description, setDescription] = useState(item.description ?? "");
   const [customOffset, setCustomOffset] = useState("30");
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      setTitle(item.title);
-      setLocation(item.location ?? "");
-      setDescription(item.description ?? "");
-    });
-  }, [item.id, item.title, item.location, item.description]);
+  // Re-seed a draft only when its own field changes underneath it (a sync, an
+  // undo), so a remote edit to the notes can't wipe a title you're mid-typing.
+  const [seen, setSeen] = useState({
+    title: item.title,
+    location: item.location,
+    description: item.description,
+  });
+  if (
+    seen.title !== item.title ||
+    seen.location !== item.location ||
+    seen.description !== item.description
+  ) {
+    if (seen.title !== item.title) setTitle(item.title);
+    if (seen.location !== item.location) setLocation(item.location ?? "");
+    if (seen.description !== item.description) setDescription(item.description ?? "");
+    setSeen({ title: item.title, location: item.location, description: item.description });
+  }
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const isEvent = item.type === "event";
@@ -105,6 +116,22 @@ export function ItemEditor({
       : `Due ${formatTime(item.at, clock24h)}`;
 
   const patch = (p: Partial<Item>) => updateItem(item.id, p);
+
+  // Moving the start carries the end with it, so a rescheduled event keeps its
+  // length instead of ending before it begins.
+  const moveStart = (iso: string) => {
+    const shift = new Date(iso).getTime() - new Date(item.at).getTime();
+    if (!item.endAt || !Number.isFinite(shift)) {
+      patch({ at: iso });
+      return;
+    }
+    patch({ at: iso, endAt: new Date(new Date(item.endAt).getTime() + shift).toISOString() });
+  };
+
+  const presetOffsets = new Set(reminderPresets.map((p) => p.offsetMinutes));
+  // Reminders no preset row stands for (a custom offset, a snooze) still need a
+  // row of their own, or they fire with no way to see or remove them.
+  const customReminders = (item.reminders ?? []).filter((r) => !presetOffsets.has(r.offsetMinutes));
 
   const toggleReminder = (preset: { id: string; label: string; offsetMinutes: number }) => {
     const current = item.reminders ?? [];
@@ -177,35 +204,47 @@ export function ItemEditor({
             value={toDateInputValue(item.at)}
             onChange={(e) => {
               if (!e.target.value) return;
-              patch({ at: new Date(`${e.target.value}T12:00:00`).toISOString() });
+              moveStart(new Date(`${e.target.value}T12:00:00`).toISOString());
             }}
+            aria-label={isEvent ? "Date" : "Due date"}
             className={FIELD}
           />
         ) : (
           <div className="flex flex-col gap-1.5">
-            <input
-              type="datetime-local"
-              value={toDatetimeLocalValue(item.at)}
-              onChange={(e) => {
-                const iso = datetimeLocalToIso(e.target.value);
-                if (iso) patch({ at: iso });
-              }}
-              className={FIELD}
-            />
-            {isEvent && (
+            <label className="flex items-center gap-2">
+              {isEvent && <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Starts</span>}
               <input
                 type="datetime-local"
-                value={item.endAt ? toDatetimeLocalValue(item.endAt) : ""}
+                value={toDatetimeLocalValue(item.at)}
                 onChange={(e) => {
-                  if (!e.target.value) {
-                    patch({ endAt: undefined });
-                    return;
-                  }
                   const iso = datetimeLocalToIso(e.target.value);
-                  if (iso) patch({ endAt: iso });
+                  if (iso) moveStart(iso);
                 }}
-                className={FIELD}
+                aria-label={isEvent ? "Starts" : "Due"}
+                className={cn(FIELD, "mt-0")}
               />
+            </label>
+            {isEvent && (
+              <label className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Ends</span>
+                <input
+                  type="datetime-local"
+                  value={item.endAt ? toDatetimeLocalValue(item.endAt) : ""}
+                  min={toDatetimeLocalValue(item.at)}
+                  onChange={(e) => {
+                    if (!e.target.value) {
+                      patch({ endAt: undefined });
+                      return;
+                    }
+                    const iso = datetimeLocalToIso(e.target.value);
+                    // An end before the start isn't a time, it's a typo — keep
+                    // the last good value rather than store a negative length.
+                    if (iso && new Date(iso) > start) patch({ endAt: iso });
+                  }}
+                  aria-label="Ends"
+                  className={cn(FIELD, "mt-0")}
+                />
+              </label>
             )}
           </div>
         )}
@@ -284,6 +323,22 @@ export function ItemEditor({
               </button>
             );
           })}
+          {customReminders.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                haptic("light");
+                const next = (item.reminders ?? []).filter((x) => x.id !== r.id);
+                patch({ reminders: next.length ? next : undefined });
+              }}
+              aria-label={`Remove ${r.label}`}
+              className="flex min-h-9 items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent-soft px-2.5 py-1.5 text-left text-[12.5px] text-ink transition-[border-color] duration-[var(--motion-standard)] hover:border-accent"
+            >
+              {r.label}
+              <X className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
+            </button>
+          ))}
           <div className="mt-1 flex items-center gap-1.5">
             <input
               type="number"
@@ -304,9 +359,10 @@ export function ItemEditor({
                 patch({
                   reminders: [
                     ...current,
-                    { id: nanoid(), itemId: item.id, offsetMinutes: n, label: `${n} min before` },
+                    { id: nanoid(), itemId: item.id, offsetMinutes: n, label: formatOffsetLabel(n) },
                   ],
                 });
+                haptic("light");
               }}
               className="rounded-md border border-line px-2 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink"
             >
@@ -434,21 +490,23 @@ function AllDayToggle({
 function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void }) {
   const deleteItem = useDatebookStore((s) => s.deleteItem);
   const deleteSeries = useDatebookStore((s) => s.deleteSeries);
-  const [confirm, setConfirm] = useState(false);
+  // Every delete lands in the undo toast, so a single item goes in one tap. A
+  // repeating one asks which — that's a real choice, not a confirmation.
+  const [choosing, setChoosing] = useState(false);
 
-  // Leaving the confirm row armed after the editor closes means the next open
-  // starts on "Delete this?", one stray tap from losing the item.
+  // Leaving the choice armed after the editor closes means the next open starts
+  // on it, one stray tap from wiping the series.
   useEffect(() => {
-    if (!confirm) return;
-    const t = window.setTimeout(() => setConfirm(false), 6000);
+    if (!choosing) return;
+    const t = window.setTimeout(() => setChoosing(false), 6000);
     return () => window.clearTimeout(t);
-  }, [confirm]);
+  }, [choosing]);
 
   return (
     <motion.div layout="position" transition={motionTokens.springLayout} className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-      {confirm ? (
+      {choosing && item.repeatId ? (
         <>
-          <span className="text-[12.5px] font-medium text-warn">Delete this?</span>
+          <span className="text-[12.5px] font-medium text-warn">Delete…</span>
           <button
             type="button"
             onClick={() => {
@@ -457,33 +515,38 @@ function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void
             }}
             className="min-h-11 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
           >
-            Delete
+            This one
           </button>
-          {item.repeatId && (
-            <button
-              type="button"
-              onClick={() => {
-                haptic("warn");
-                deleteSeries(item.repeatId!);
-              }}
-              className="min-h-11 rounded-lg border border-warn px-3 text-[12.5px] font-medium text-warn"
-            >
-              Delete series
-            </button>
-          )}
           <button
             type="button"
-            onClick={() => setConfirm(false)}
+            onClick={() => {
+              haptic("warn");
+              deleteSeries(item.repeatId!);
+            }}
+            className="min-h-11 rounded-lg border border-warn px-3 text-[12.5px] font-medium text-warn"
+          >
+            Whole series
+          </button>
+          <button
+            type="button"
+            onClick={() => setChoosing(false)}
             className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft"
           >
-            Keep
+            Cancel
           </button>
         </>
       ) : (
         <>
           <button
             type="button"
-            onClick={() => setConfirm(true)}
+            onClick={() => {
+              if (item.repeatId) {
+                setChoosing(true);
+                return;
+              }
+              haptic("warn");
+              deleteItem(item.id);
+            }}
             className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-warn transition-colors hover:bg-warn/10"
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />

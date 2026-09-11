@@ -27,7 +27,7 @@ export function UndoToast() {
         <motion.div
           // Keyed on the item so deleting a second thing replays the entrance
           // rather than silently swapping the title inside a static pill.
-          key={lastDeleted.id}
+          key={lastDeleted.key}
           initial={{ opacity: 0, y: 16, scale: 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.96 }}
@@ -36,7 +36,8 @@ export function UndoToast() {
         >
           <Trash2 className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.9} />
           <span className="min-w-0 flex-1 truncate">
-            Deleted <span className="font-medium">{lastDeleted.title}</span>
+            {lastDeleted.items.length > 1 ? `Deleted all ${lastDeleted.items.length} of ` : "Deleted "}
+            <span className="font-medium">{lastDeleted.label}</span>
           </span>
           <button
             type="button"

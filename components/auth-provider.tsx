@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useDatebookStore } from "@/lib/store";
-import { subscribePush } from "@/lib/push-client";
+import { subscribePush, unsubscribePush } from "@/lib/push-client";
 import { notificationPermission } from "@/lib/reminders";
 
 interface AuthContextValue {
@@ -133,6 +133,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       if (!supabase) return;
+      // First, while the token still authenticates the request.
+      await unsubscribePush();
       await supabase.auth.signOut();
     },
   };

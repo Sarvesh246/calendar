@@ -73,6 +73,17 @@ export function extractScheduleDays(
     if (dow !== undefined && !found.includes(dow)) found.push(dow);
     rest = rest.replace(m[0], " ");
   }
+  // Registrar shorthand for a single day — the "W" in "MWF 9–9:50 W 2–4:50".
+  // Uppercase and standalone only, so ordinary words are never read as days.
+  if (found.length === 0) {
+    const single: Record<string, number> = { M: 1, T: 2, W: 3, R: 4, F: 5 };
+    const letter = /(?:^|\s)([MTWRF])(?=\s|$)/g;
+    while ((m = letter.exec(text))) {
+      const dow = single[m[1]];
+      if (!found.includes(dow)) found.push(dow);
+      rest = rest.replace(new RegExp(`(^|\\s)${m[1]}(?=\\s|$)`), " ");
+    }
+  }
   if (found.length < minDays) return null;
   return { days: found.sort((a, b) => a - b), rest: rest.replace(/\s+/g, " ").trim() };
 }
@@ -112,18 +123,44 @@ export interface ParsedClassSchedule {
   meetings: ClassMeeting[];
 }
 
+/**
+ * A side keeps the am/pm it states. An unstated one takes whichever reading
+ * gives the shortest positive span, so "11–12:15" crosses noon and
+ * "12:30–1:45" is an afternoon class. A range with no am/pm at all starts on
+ * class hours (1–6 and 12 are afternoon, 7–11 morning). Copying one side's
+ * meridiem onto the other used to read "11–12:15" as ending at 12:15 AM.
+ */
 function parseTimeRange(range: RegExpExecArray): Omit<ClassMeeting, "days"> | null {
   const startH = parseInt(range[1], 10);
-  const implied =
-    !range[3] && !range[6] && startH >= 1 && startH <= 6 ? "pm" : "am";
-  const endMer = (range[6] || range[3] || implied).toLowerCase();
-  const startMer = (range[3] || range[6] || implied).toLowerCase();
-  const hour = toHour(startH, startMer);
   const minute = range[2] ? parseInt(range[2], 10) : 0;
-  const endHour = toHour(parseInt(range[4], 10), endMer);
+  const endH = parseInt(range[4], 10);
   const endMinute = range[5] ? parseInt(range[5], 10) : 0;
-  if (endHour * 60 + endMinute <= hour * 60 + minute) return null;
-  return { hour, minute, endHour, endMinute };
+  const startMer = range[3]?.toLowerCase();
+  const endMer = range[6]?.toLowerCase();
+
+  const readings = (h: number, mer?: string) =>
+    mer ? [toHour(h, mer)] : h > 12 ? [h] : [toHour(h, "am"), toHour(h, "pm")];
+  const starts = startMer
+    ? [toHour(startH, startMer)]
+    : endMer
+      ? readings(startH)
+      : [classHour(startH)];
+
+  let best: { hour: number; endHour: number; span: number } | null = null;
+  for (const hour of starts) {
+    for (const endHour of readings(endH, endMer)) {
+      const span = endHour * 60 + endMinute - (hour * 60 + minute);
+      if (span > 0 && (!best || span < best.span)) best = { hour, endHour, span };
+    }
+  }
+  if (!best) return null;
+  return { hour: best.hour, minute, endHour: best.endHour, endMinute };
+}
+
+/** A bare start hour on a class schedule: 1–6 and noon are afternoon. */
+function classHour(h: number): number {
+  if (h >= 12) return h;
+  return h >= 1 && h <= 6 ? h + 12 : h;
 }
 
 function stripDayTokens(text: string): string {
@@ -187,6 +224,26 @@ export function firstSharedDay(meetings: { days: number[] }[]): number | null {
     for (const day of meeting.days) {
       if (seen.has(day)) return day;
       seen.add(day);
+    }
+  }
+  return null;
+}
+
+/**
+ * First weekday on which two meetings' times overlap, or null. Two separate
+ * times on one day — a morning lecture and an afternoon lab — are fine.
+ */
+export function firstOverlappingDay(meetings: ClassMeeting[]): number | null {
+  for (let i = 0; i < meetings.length; i++) {
+    for (let j = i + 1; j < meetings.length; j++) {
+      const a = meetings[i];
+      const b = meetings[j];
+      const overlap =
+        a.hour * 60 + a.minute < b.endHour * 60 + b.endMinute &&
+        b.hour * 60 + b.minute < a.endHour * 60 + a.endMinute;
+      if (!overlap) continue;
+      const day = a.days.find((d) => b.days.includes(d));
+      if (day !== undefined) return day;
     }
   }
   return null;

@@ -223,15 +223,13 @@ function useExpandable(itemId: string) {
   const focusedItemId = useUIStore((s) => s.focusedItemId);
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const [expanded, setExpanded] = useState(false);
-
+  // Opened from elsewhere (search, the week grid). The card's own state is
+  // adjusted during render; the request is handed back once it has landed.
+  const requested = focusedItemId === itemId;
+  if (requested && !expanded) setExpanded(true);
   useEffect(() => {
-    if (focusedItemId === itemId) {
-      queueMicrotask(() => {
-        setExpanded(true);
-        setFocusedItemId(null);
-      });
-    }
-  }, [focusedItemId, itemId, setFocusedItemId]);
+    if (requested) setFocusedItemId(null);
+  }, [requested, setFocusedItemId]);
 
   const toggle = () => {
     haptic("light");
@@ -290,16 +288,13 @@ function ExpandPanel({ open, children }: { open: boolean; children: React.ReactN
 
 function useCompleteStyle(done: boolean) {
   const [styled, setStyled] = useState(done);
+  // Un-completing, and completing with reduced motion, restyle at once —
+  // adjusted during render rather than bounced through an effect.
+  if (!done && styled) setStyled(false);
+  if (done && !styled && prefersReducedMotion()) setStyled(true);
 
   useEffect(() => {
-    if (!done) {
-      queueMicrotask(() => setStyled(false));
-      return;
-    }
-    if (prefersReducedMotion()) {
-      queueMicrotask(() => setStyled(true));
-      return;
-    }
+    if (!done || prefersReducedMotion()) return;
     // Let the tick land before the row dims and strikes through, so the two read
     // as cause and effect rather than one muddled change.
     const delayMs = Math.round(motionTokens.standard * 1000);

@@ -19,10 +19,11 @@ const CHIP_HEIGHT = 23;
 const CHIP_GAP = 4;
 const MORE_LINE_HEIGHT = 16;
 
-function chipLabel(item: Item) {
+function chipLabel(item: Item, clock24h: boolean) {
   if (item.allDay) return item.title;
   const d = new Date(item.at);
   if (Number.isNaN(d.getTime())) return item.title;
+  if (clock24h) return `${format(d, "H:mm")} ${item.title}`;
   const h = d.getHours();
   const hour12 = h % 12 || 12;
   return `${hour12}${h >= 12 ? "p" : "a"} ${item.title}`;
@@ -64,12 +65,14 @@ function DayCellChips({
   date,
   colorOf,
   areaHeight,
+  clock24h,
   onMeasure,
 }: {
   items: Item[];
   date: Date;
   colorOf: (categoryId: string) => string;
   areaHeight: number;
+  clock24h: boolean;
   onMeasure?: (height: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -126,7 +129,7 @@ function DayCellChips({
             )}
             style={{ "--cat": color } as React.CSSProperties}
           >
-            {chipLabel(item)}
+            {chipLabel(item, clock24h)}
           </motion.span>
         );
       })}
@@ -203,9 +206,11 @@ function MonthGridPanel({
   onSelectDate,
   weekStartsOn,
   colorOf,
+  clock24h,
   showSelectionRing,
   animateSelection,
 }: {
+  clock24h: boolean;
   anchor: Date;
   /** Items bucketed by day key — built once for all three carousel panels. */
   byDay: Map<string, Item[]>;
@@ -306,6 +311,7 @@ function MonthGridPanel({
               date={date}
               colorOf={colorOf}
               areaHeight={chipArea}
+              clock24h={clock24h}
               {...(cellIndex === 0 ? { onMeasure } : {})}
             />
           </button>
@@ -329,6 +335,7 @@ export function MonthView({
   onSwipeMonth?: (dir: 1 | -1) => void;
 }) {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
+  const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
   const colorOf = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.color] as const));
@@ -443,6 +450,7 @@ export function MonthView({
     onSelectDate: guardedSelectDate,
     weekStartsOn,
     colorOf,
+    clock24h,
     animateSelection: ringAnimated,
   };
 

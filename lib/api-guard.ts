@@ -53,9 +53,14 @@ export function sameOrigin(request: Request): boolean {
 function hostAllowed(hostname: string): boolean {
   const h = hostname.toLowerCase();
   if (h === "localhost" || h === "127.0.0.1") return true;
-  if (h.endsWith(".vercel.app")) return true;
-  const vercel = process.env.VERCEL_URL?.replace(/^https?:\/\//, "").split(":")[0]?.toLowerCase();
-  if (vercel && h === vercel) return true;
+  // This deployment's own hosts only. Any `*.vercel.app` used to pass, which let
+  // every other site on Vercel drive the Gemini-backed routes from its visitors.
+  const own = [
+    process.env.VERCEL_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  ].map((v) => v?.replace(/^https?:\/\//, "").split(/[:/]/)[0]?.toLowerCase());
+  if (own.includes(h)) return true;
   const site = process.env.NEXT_PUBLIC_SITE_URL;
   if (site) {
     try {

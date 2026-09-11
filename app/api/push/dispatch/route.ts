@@ -17,6 +17,16 @@ const LOOKBACK_MS = 12 * 60 * 60 * 1000; // Catch reminders missed during cron g
 // chosen offset (a "10 minutes before" push landing 30 minutes early reads as a
 // bug), and never once the meeting has already started.
 const CLASS_EARLY_MS = 5 * 60 * 1000;
+/** PostgREST's default response cap. */
+const PAGE_SIZE = 1000;
+/** Ids per `in (...)` filter — keeps the request URL well under the limit. */
+const IN_BATCH = 100;
+
+function chunk<T>(rows: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+}
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -51,31 +61,41 @@ export async function GET(request: Request) {
   const atMin = new Date(lookback - maxOffsetMs).toISOString();
   const atMax = new Date(horizon + maxOffsetMs).toISOString();
 
-  const { data: items, error: itemsErr } = await supabase
-    .from("items")
-    .select(
-      "id, user_id, title, type, at, end_at, all_day, status, reminders, repeat, source_id"
-    )
-    // Events carry a NULL status, and `status <> 'done'` is NULL — not true —
-    // for those rows, so a bare `.neq` silently dropped every event (classes
-    // included) from closed-app push.
-    .or("status.is.null,status.neq.done")
-    .gte("at", atMin)
-    .lte("at", atMax);
-  if (itemsErr) {
-    console.error("[push] items", itemsErr.message);
-    return NextResponse.json({ ok: false, error: itemsErr.message }, { status: 500 });
+  // Paged: this window spans every user, and PostgREST silently caps a single
+  // response at 1000 rows — past that, whole users' reminders just vanished.
+  const items: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error: itemsErr } = await supabase
+      .from("items")
+      .select(
+        "id, user_id, title, type, at, end_at, all_day, status, reminders, repeat, source_id"
+      )
+      // Events carry a NULL status, and `status <> 'done'` is NULL — not true —
+      // for those rows, so a bare `.neq` silently dropped every event (classes
+      // included) from closed-app push.
+      .or("status.is.null,status.neq.done")
+      .gte("at", atMin)
+      .lte("at", atMax)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (itemsErr) {
+      console.error("[push] items", itemsErr.message);
+      return NextResponse.json({ ok: false, error: itemsErr.message }, { status: 500 });
+    }
+    const page = (data ?? []) as Record<string, unknown>[];
+    items.push(...page);
+    if (page.length < PAGE_SIZE) break;
   }
 
   // Class meetings get their heads-up from settings rather than a stored
   // reminder, so the dispatcher has to read each user's chosen offset.
   const classMinutesByUser = await readClassReminderMinutes(
     supabase,
-    [...new Set((items ?? []).map((row) => row.user_id as string))]
+    [...new Set(items.map((row) => row.user_id as string))]
   );
 
   const due: { userId: string; item: Item; reminder: Reminder; key: string }[] = [];
-  for (const row of items ?? []) {
+  for (const row of items) {
     const userId = row.user_id as string;
     const stored = (row.reminders as Reminder[] | null) ?? [];
     const classReminder = classReminderFor(
@@ -94,11 +114,14 @@ export async function GET(request: Request) {
     if (!reminders.length) continue;
     const at = new Date(row.at as string).getTime();
     if (Number.isNaN(at)) continue;
+    // Already started or already due: any "before" alert is moot now. The
+    // lookback exists to catch up on reminders a late cron run missed, not to
+    // announce "15 minutes before" hours after the lecture ended.
+    if (at <= now) continue;
     for (const r of reminders) {
       const fireAt = at - r.offsetMinutes * 60_000;
       if (r === classReminder) {
         if (fireAt > now + CLASS_EARLY_MS) continue; // a later run lands closer
-        if (at <= now) continue; // class already under way — the alert is moot
       } else if (fireAt < lookback || fireAt > horizon) {
         continue;
       }
@@ -124,20 +147,37 @@ export async function GET(request: Request) {
 
   if (due.length === 0) return NextResponse.json({ ok: true, sent: 0 });
 
-  const keys = due.map((d) => d.key);
-  const { data: already } = await supabase.from("reminder_sends").select("key").in("key", keys);
-  const sentKeys = new Set((already ?? []).map((r) => r.key as string));
+  // Batched so the `in (...)` list stays inside PostgREST's URL limit, and a
+  // failed lookup aborts the run: treating "couldn't check" as "nothing sent
+  // yet" re-pushed every reminder of the last 12 hours on each cron tick.
+  const sentKeys = new Set<string>();
+  for (const batch of chunk(due.map((d) => d.key), IN_BATCH)) {
+    const { data, error } = await supabase.from("reminder_sends").select("key").in("key", batch);
+    if (error) {
+      console.error("[push] reminder_sends", error.message);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    for (const r of data ?? []) sentKeys.add(r.key as string);
+  }
 
   const userIds = [...new Set(due.filter((d) => !sentKeys.has(d.key)).map((d) => d.userId))];
   if (userIds.length === 0) return NextResponse.json({ ok: true, sent: 0 });
 
-  const { data: subs } = await supabase
-    .from("push_subscriptions")
-    .select("user_id, endpoint, p256dh, auth")
-    .in("user_id", userIds);
+  const subs: Record<string, unknown>[] = [];
+  for (const batch of chunk(userIds, IN_BATCH)) {
+    const { data, error } = await supabase
+      .from("push_subscriptions")
+      .select("user_id, endpoint, p256dh, auth")
+      .in("user_id", batch);
+    if (error) {
+      console.error("[push] subscriptions", error.message);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    subs.push(...((data ?? []) as Record<string, unknown>[]));
+  }
 
   const byUser = new Map<string, { endpoint: string; keys: { p256dh: string; auth: string } }[]>();
-  for (const s of subs ?? []) {
+  for (const s of subs) {
     const list = byUser.get(s.user_id as string) ?? [];
     list.push({
       endpoint: s.endpoint as string,
@@ -200,19 +240,21 @@ async function readClassReminderMinutes(
 ): Promise<Map<string, number>> {
   const byUser = new Map<string, number>();
   if (userIds.length === 0) return byUser;
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("user_id, class_reminder_minutes")
-    .in("user_id", userIds);
-  if (error) {
-    console.warn("[push] class reminder settings", error.message);
-    return byUser;
-  }
-  for (const row of data ?? []) {
-    byUser.set(
-      row.user_id as string,
-      normalizeClassReminderMinutes(row.class_reminder_minutes)
-    );
+  for (const batch of chunk(userIds, IN_BATCH)) {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("user_id, class_reminder_minutes")
+      .in("user_id", batch);
+    if (error) {
+      console.warn("[push] class reminder settings", error.message);
+      return byUser;
+    }
+    for (const row of data ?? []) {
+      byUser.set(
+        row.user_id as string,
+        normalizeClassReminderMinutes(row.class_reminder_minutes)
+      );
+    }
   }
   return byUser;
 }

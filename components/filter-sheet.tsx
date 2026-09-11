@@ -80,7 +80,7 @@ export function FilterSheet() {
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
-            className="bg-surface border border-line absolute inset-x-0 bottom-0 rounded-t-2xl px-4 pb-[max(var(--safe-bottom),1rem)] pt-3"
+            className="absolute inset-x-0 bottom-0 rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-3"
           >
             <span
               aria-hidden
@@ -134,7 +134,7 @@ export function FilterSheet() {
 
 /**
  * A row in the filter sheet. Selection used to be carried by a background tint
- * alone, which is easy to miss on a bg-surface border border-line sheet — every row now ends in a tick
+ * alone, which is easy to miss on a plain sheet — every row now ends in a tick
  * that springs in, so you can see what's on without comparing shades.
  */
 function FilterRow({
