@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
+import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
@@ -23,6 +24,7 @@ import { EmptyState } from "@/components/empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { ViewMenu } from "@/components/view-menu";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -179,7 +181,20 @@ export default function AgendaPage() {
           <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agenda</h1>
           <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>
         </div>
-        <ViewMenu />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Agenda answers "what's next"; the timetable answers "what does a
+              week look like". They belong within reach of each other. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => router.push("/schedule")}
+            aria-label="Open the full weekly schedule"
+          >
+            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+            Schedule
+          </Button>
+          <ViewMenu />
+        </div>
       </header>
 
       <div className="flex gap-1">

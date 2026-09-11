@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Search, Sparkles } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
@@ -18,6 +17,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { FocusedItemRelay } from "@/lib/item-focus";
 import { isTabRoute } from "@/lib/tab-routes";
+import { useResolvedPathname } from "@/lib/tab-nav";
 import { TabPageHost } from "@/components/tab-page-host";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
   const quickAddOpen = useUIStore((s) => s.quickAddOpen);
   const focusMode = useUIStore((s) => s.focusMode);
-  const pathname = usePathname();
+  // The tapped tab, not the one the router has got around to committing —
+  // see lib/tab-nav.ts. Everything below draws from this, so a switch paints
+  // on the same frame as the tap.
+  const pathname = useResolvedPathname();
   const onCalendar = pathname === "/calendar";
   const onSettings = pathname === "/settings";
   const onToday = pathname === "/today";
@@ -80,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
       )}
     >
-      {!focusMode && <Sidebar />}
+      {!focusMode && <Sidebar pathname={pathname} />}
 
       <main
         className={cn(
@@ -91,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {!focusMode && (
           <>
-            <MobileHeaderActions />
+            <MobileHeaderActions pathname={pathname} />
             <div
               className={cn(
                 "mb-3 hidden shrink-0 items-center gap-2 md:flex",

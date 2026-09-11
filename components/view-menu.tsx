@@ -1,8 +1,9 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Minimize2, MoreHorizontal } from "lucide-react";
+import { CalendarClock, Check, Minimize2, MoreHorizontal } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { motion as motionTokens } from "@/lib/motion";
@@ -12,6 +13,7 @@ import { cn } from "@/lib/utils";
 export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
@@ -61,6 +63,20 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
             style={{ transformOrigin: "top right" }}
             className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1"
           >
+            {/* The whole week, on the page you were already on — the timetable
+                is rarely the thing you open the app for, but it should never be
+                something you have to go hunting for either. */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                router.push("/schedule");
+              }}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken"
+            >
+              <CalendarClock className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
+              Full schedule
+            </button>
             <button
               type="button"
               onClick={() => {

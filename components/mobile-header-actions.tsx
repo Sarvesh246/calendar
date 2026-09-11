@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { Search, Settings, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterButton } from "@/components/filter-sheet";
@@ -10,8 +9,7 @@ import { cn } from "@/lib/utils";
 
 /** Floating top-right glass controls. The page stays continuous; content
  *  scrolls under this cluster. No full-width header strip. */
-export function MobileHeaderActions() {
-  const pathname = usePathname();
+export function MobileHeaderActions({ pathname }: { pathname: string }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const onSettings = pathname === "/settings";

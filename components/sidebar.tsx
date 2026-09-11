@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 import {
+  CalendarClock,
   CalendarDays,
   Sparkles,
   Cloud,
@@ -24,6 +25,7 @@ import { useAuth } from "./auth-provider";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
+import { navigateTab } from "@/lib/tab-nav";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -56,8 +58,7 @@ function RailLabel({ collapsed, children }: { collapsed: boolean; children: Reac
   );
 }
 
-export function Sidebar() {
-  const pathname = usePathname();
+export function Sidebar({ pathname }: { pathname: string }) {
   const categories = useDatebookStore((s) => s.categories);
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
@@ -110,6 +111,15 @@ export function Sidebar() {
               collapsed={collapsed}
             />
           ))}
+          {/* Not a tab — the full timetable isn't a daily stop — but it is a
+              place you go, so it lives with the views rather than in a menu. */}
+          <RailLink
+            href="/schedule"
+            label="Schedule"
+            Icon={CalendarClock}
+            active={pathname === "/schedule"}
+            collapsed={collapsed}
+          />
           {/* Sits with the views rather than buried in a menu — it's a place you
               go, not a setting you find. */}
           <RailButton
@@ -218,7 +228,11 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const navRef = useRef<HTMLDivElement>(null);
   const [navWidth, setNavWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const activeIndex = Math.max(0, NAV.findIndex((i) => i.href === pathname));
+  // -1 on a route the bar has no tab for (Schedule, Settings). The pill still
+  // has to park somewhere, but "tap Today" from one of those pages is a real
+  // navigation, not a tap on the tab you are already on.
+  const currentIndex = NAV.findIndex((i) => i.href === pathname);
+  const activeIndex = Math.max(0, currentIndex);
   const dragX = useMotionValue(0);
   const baseX = useMotionValue(0);
   const dragging = useRef(false);
@@ -226,6 +240,24 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const startX = useRef(0);
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
+  // True while the click that follows a pointerup is one this bar already
+  // acted on. It expires on its own so a gesture that dies without a pointerup
+  // — or a keyboard activation — still reaches the link's own handler.
+  const pointerHandled = useRef(false);
+  const handledTimer = useRef(0);
+
+  function forgetPointerGesture() {
+    pointerHandled.current = false;
+    window.clearTimeout(handledTimer.current);
+  }
+
+  function markPointerHandled() {
+    pointerHandled.current = true;
+    window.clearTimeout(handledTimer.current);
+    handledTimer.current = window.setTimeout(forgetPointerGesture, 400);
+  }
+
+  useEffect(() => () => window.clearTimeout(handledTimer.current), []);
 
   const pillInset = 4;
   const trackWidth = Math.max(0, navWidth - pillInset * 2);
@@ -254,12 +286,10 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   }
 
   function navigateTo(index: number) {
-    if (index === activeIndex) return;
+    if (index === currentIndex) return;
     haptic("light");
     settlePillTo(index);
-    startTransition(() => {
-      router.push(NAV[index].href);
-    });
+    navigateTab(router, NAV[index].href);
   }
 
   useEffect(() => {
@@ -299,14 +329,26 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, tabWidth, baseX, dragX]);
 
+  /** Which tab sits under a point on the bar. */
+  function indexAtX(clientX: number, el: Element) {
+    const rect = el.getBoundingClientRect();
+    const width = (rect.width - pillInset * 2) / NAV.length;
+    if (width <= 0) return activeIndex;
+    return Math.floor((clientX - rect.left - pillInset) / width);
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
+    forgetPointerGesture();
     dragging.current = true;
     setIsDragging(true);
     didDrag.current = false;
     pointerId.current = e.pointerId;
     startX.current = e.clientX;
     indexAtStart.current = activeIndex;
+    // Capture from the first frame: without it Chromium hands a horizontal
+    // drag over to its own gesture handling and fires `pointercancel` two
+    // moves in, which is the swipe dying halfway across the bar.
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -324,26 +366,36 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     dragging.current = false;
     setIsDragging(false);
     pointerId.current = null;
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
 
     if (!tabWidth) {
       dragX.set(0);
       return;
     }
 
-    const dx = dragX.get();
-    const moved = dx / tabWidth;
-    const target = Math.round(indexAtStart.current + moved);
+    markPointerHandled();
+
+    // Holding the pointer means the click that follows is retargeted to this
+    // container, so the tab's own link never hears it — which is why a mouse
+    // or trackpad click on the bar used to do nothing at all. The bar owns the
+    // gesture, so it owns both readings of it: a press that travelled is a
+    // throw toward a neighbour, a press that didn't is a tap on whatever tab
+    // it landed on.
+    const target = didDrag.current
+      ? Math.round(indexAtStart.current + dragX.get() / tabWidth)
+      : indexAtX(e.clientX, e.currentTarget);
     const clamped = Math.max(0, Math.min(NAV.length - 1, target));
 
     // Either way the pill settles on a spring from where it was released; a
     // navigation just changes which tab it settles on.
     settlePillTo(clamped);
-    if (clamped !== activeIndex) {
+    if (clamped !== currentIndex) {
       haptic("light");
-      startTransition(() => {
-        router.push(NAV[clamped].href);
-      });
+      navigateTab(router, NAV[clamped].href);
+    } else if (!didDrag.current) {
+      haptic("light");
     }
   }
 
@@ -351,6 +403,9 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     dragging.current = false;
     setIsDragging(false);
     pointerId.current = null;
+    // The gesture never reached pointerup, so nothing was decided here — leave
+    // the click for the link below rather than swallowing it.
+    forgetPointerGesture();
     settlePillTo(activeIndex);
   }
 
@@ -388,16 +443,18 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
               prefetch
               aria-current={active ? "page" : undefined}
               onClick={(e) => {
-                if (didDrag.current) {
+                // On touch this click follows a pointerup the bar already
+                // acted on; acting again would push the same route twice. On a
+                // mouse it never arrives at all, because the bar is holding
+                // pointer capture. What is left — keyboard activation, or a
+                // gesture the browser cancelled — is a genuine request.
+                if (pointerHandled.current) {
                   e.preventDefault();
-                  didDrag.current = false;
                   return;
                 }
-                if (index !== activeIndex) {
+                if (index !== currentIndex) {
                   e.preventDefault();
                   navigateTo(index);
-                } else {
-                  haptic("light");
                 }
               }}
               className="press-none relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10.5px] font-medium tracking-[0.01em]"
@@ -485,9 +542,7 @@ function RailLink({
       onClick={(e) => {
         if (!isTabRoute(href) || active) return;
         e.preventDefault();
-        startTransition(() => {
-          router.push(href);
-        });
+        navigateTab(router, href);
       }}
       className={cn(
         "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-[13.5px] font-medium",
