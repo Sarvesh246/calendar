@@ -285,7 +285,7 @@ export function isSyllabusDueDateInWindow(dueDate: string, now: Date, timeZone: 
 export function inferSyllabusDueDate(raw: string, now: Date, timeZone: string): string | undefined {
   const parsed = parseDateParts(raw.trim());
   if (!parsed) return undefined;
-  const { y, m, d } = zonedYmdParts(now, timeZone);
+  const { y, m } = zonedYmdParts(now, timeZone);
   const year = parsed.year ?? inferAcademicYear(parsed.month, y, m);
   const due = validYmd(year, parsed.month, parsed.day);
   if (due && isSyllabusDueDateInWindow(due, now, timeZone)) return due;

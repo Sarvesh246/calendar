@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import {
+  Activity,
   memo,
   startTransition,
   useEffect,
@@ -19,14 +20,17 @@ const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
   "/agenda": () => import("@/components/pages/agenda-page"),
 };
 
-// `memo` on a component that takes no props means it renders once and then
-// never again for anything but its own store subscriptions. Without it, every
-// tab switch re-rendered all three pages — hundreds of cards reconciled to
-// change which `<div hidden>` they sat in — and that reconciliation is what
-// stuttered under the pill as it travelled.
-const TodayPage = memo(dynamic(loaders["/today"]));
-const CalendarPage = memo(dynamic(loaders["/calendar"]));
-const AgendaPage = memo(dynamic(loaders["/agenda"]));
+function TabLoading() {
+  return <div role="status" className="flex min-h-0 flex-1 flex-col gap-4 py-2">
+    <span className="sr-only">Loading your view…</span>
+    <div aria-hidden className="h-7 w-48 animate-pulse rounded-lg bg-line/60" />
+    <div aria-hidden className="min-h-24 flex-1 animate-pulse rounded-xl border border-line bg-surface" />
+  </div>;
+}
+
+const TodayPage = memo(dynamic(loaders["/today"], { loading: TabLoading }));
+const CalendarPage = memo(dynamic(loaders["/calendar"], { loading: TabLoading }));
+const AgendaPage = memo(dynamic(loaders["/agenda"], { loading: TabLoading }));
 
 const pages: Record<TabRoute, ComponentType> = {
   "/today": TodayPage,
@@ -71,7 +75,7 @@ export function TabPageHost({ pathname }: { pathname: string }) {
       void Promise.all(TAB_ROUTES.map((href) => loaders[href]())).then(() => {
         if (cancelled) return;
         startTransition(() => setMounted(ALL_MOUNTED));
-      });
+      }).catch(() => undefined);
     });
     return () => {
       cancelled = true;
@@ -91,17 +95,15 @@ export function TabPageHost({ pathname }: { pathname: string }) {
         const Page = pages[href];
         const isActive = active === href;
         return (
+          <Activity key={href} mode={isActive ? "visible" : "hidden"}>
           <div
-            key={href}
-            hidden={!isActive}
-            {...(!isActive ? { inert: true } : {})}
-            aria-hidden={!isActive}
             className={cn(
-              href === "/calendar" && "flex min-h-0 flex-1 flex-col md:overflow-hidden"
+              href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden"
             )}
           >
             <Page />
           </div>
+          </Activity>
         );
       })}
     </>

@@ -29,6 +29,7 @@ import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { ViewMenu } from "@/components/view-menu";
 import type { Category, Item } from "@/lib/types";
+import { useNow } from "@/lib/use-now";
 
 export default function TodayPage() {
   const focusMode = useUIStore((s) => s.focusMode);
@@ -50,17 +51,14 @@ function TodayDashboard() {
     [allItems, categoryFilter, hideCompleted]
   );
 
-  const [day, setDay] = useState(() => startOfDay(new Date()));
-  useEffect(() => {
-    const nextMidnight = startOfDay(addDays(new Date(), 1)).getTime() - Date.now() + 50;
-    const t = window.setTimeout(() => setDay(startOfDay(new Date())), Math.max(1000, nextMidnight));
-    return () => window.clearTimeout(t);
-  }, [day]);
+  const now = useNow();
+  const todayKey = dayKey(now);
+  const day = useMemo(() => startOfDay(new Date(`${todayKey}T12:00:00`)), [todayKey]);
 
   const dk = dayKey(day);
   const today = useMemo(() => itemsOnDay(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const tomorrow = useMemo(() => itemsOnDay(items, addDays(day, 1)), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
-  const greeting = timeOfDayGreeting(day);
+  const greeting = timeOfDayGreeting(now);
 
   const overdue = useMemo(() => leftoverOverdue(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const todayList = useMemo(() => {

@@ -21,7 +21,12 @@ import type { Category, Item, ItemStatus } from "@/lib/types";
 
 const ItemEditor = dynamic(
   () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
-  { ssr: false }
+  { ssr: false, loading: () => (
+    <div role="status" className="mt-3 space-y-3 border-t border-line pt-3">
+      <span className="sr-only">Loading item details…</span>
+      {[0, 1, 2].map((i) => <div key={i} aria-hidden className="h-9 animate-pulse rounded-md bg-surface-sunken" />)}
+    </div>
+  ) }
 );
 
 export type { ItemCardChrome };

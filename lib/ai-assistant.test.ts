@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildAssistantDigest,
   localAnswer,
@@ -8,6 +8,20 @@ import {
 import type { Item } from "./types";
 
 const cat = [{ id: "c1", name: "Bio", color: "#3DBE8B" }];
+
+describe("offline calendar answers", () => {
+  it("includes ongoing multi-day events in today's answer", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 8, 11, 12));
+      const reply = localAnswer("What's on today?", {
+        items: [item({ type: "event", title: "Conference", at: new Date(2026, 8, 10, 9).toISOString(), endAt: new Date(2026, 8, 12, 17).toISOString() })],
+        categories: cat, clock24h: false,
+      });
+      expect(reply.text).toContain("Conference");
+    } finally { vi.useRealTimers(); }
+  });
+});
 
 function item(over: Partial<Item>): Item {
   return {

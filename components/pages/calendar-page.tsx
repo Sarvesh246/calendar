@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 type ViewMode = "month" | "week";
 
@@ -45,6 +46,8 @@ export default function CalendarPage() {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const mobileDayDetails = useDatebookStore((s) => s.settings.mobileDayDetails);
+  const shortScreen = useMediaQuery("(max-height: 540px)");
+  const useSheet = mobileDayDetails === "sheet" || shortScreen;
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
@@ -78,10 +81,10 @@ export default function CalendarPage() {
       setSelectedDate(d);
       // Arriving on a day (from search or the agenda) should show it, not just
       // select it behind a closed sheet.
-      if (mobileDayDetails === "sheet" && belowLg()) setSheetOpen(true);
+      if (useSheet && belowLg()) setSheetOpen(true);
     });
     setCalendarFocusDate(null);
-  }, [calendarFocusDate, setCalendarFocusDate, mobileDayDetails]);
+  }, [calendarFocusDate, setCalendarFocusDate, useSheet]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const selectedItems = useMemo(
@@ -100,7 +103,7 @@ export default function CalendarPage() {
 
   function selectDate(d: Date) {
     startTransition(() => setSelectedDate(d));
-    if (mobileDayDetails === "sheet" && belowLg()) setSheetOpen(true);
+    if ((useSheet || mode === "week") && belowLg()) setSheetOpen(true);
   }
 
   // Keyed by the period on screen, so stepping months swaps one grid for
@@ -112,6 +115,7 @@ export default function CalendarPage() {
       : `w-${format(startOfWeek(anchor, { weekStartsOn }), "yyyy-MM-dd")}`;
 
   function addToSelected() {
+    setSheetOpen(false);
     setQuickAddDateKey(dayKey(selectedDate));
     setQuickAddPrefill("");
     setQuickAddOpen(true);
@@ -210,10 +214,7 @@ export default function CalendarPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row lg:items-stretch">
         <div
           className={cn(
-            "relative min-h-0 w-full",
-            mode === "month"
-              ? "h-[clamp(24rem,72dvh,100%)] lg:h-full lg:min-h-[28rem] lg:flex-1"
-              : "lg:h-full lg:flex-1"
+            "relative min-h-0 w-full flex-1"
           )}
         >
           {mode === "month" ? (
@@ -261,9 +262,9 @@ export default function CalendarPage() {
           )}
         </div>
 
-        {mobileDayDetails === "inline" && (
-          <section className="min-h-0 shrink-0 rounded-xl border border-line bg-surface p-4 lg:hidden">
-            <DayAgenda date={selectedDate} items={selectedItems} onAdd={addToSelected} />
+        {!useSheet && mode === "month" && (
+          <section className="flex h-[32%] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-surface p-3 lg:hidden">
+            <DayAgenda className="flex-1" date={selectedDate} items={selectedItems} onAdd={addToSelected} />
           </section>
         )}
 
@@ -282,7 +283,7 @@ export default function CalendarPage() {
       <AnimatePresence>
         {/* Week mode needs it too: between `md` and `lg` the week grid is
             showing but the side pane isn't. */}
-        {sheetOpen && mobileDayDetails === "sheet" && (
+        {sheetOpen && (useSheet || mode === "week") && (
           <DaySheet
             key={dayKey(selectedDate)}
             date={selectedDate}

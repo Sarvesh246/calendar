@@ -1169,10 +1169,11 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
     setDraft(value);
-  }, [value]);
+  }
 
   function emit(raw: string) {
     const next = normalizeThemeHex(raw);

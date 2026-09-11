@@ -3,10 +3,18 @@ export function assignOverlapColumns<T extends { startMin: number; endMin: numbe
   items: T[]
 ): (T & { col: number; colCount: number })[] {
   const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  const colEnd: number[] = [];
-  const placed: (T & { col: number })[] = [];
+  let colEnd: number[] = [];
+  let group: (T & { col: number })[] = [];
+  const placed: (T & { col: number; colCount: number })[] = [];
+  let groupEnd = -Infinity;
+  const flush = () => {
+    for (const item of group) placed.push({ ...item, colCount: colEnd.length });
+    group = [];
+    colEnd = [];
+  };
 
   for (const item of sorted) {
+    if (item.startMin >= groupEnd) flush();
     let col = colEnd.findIndex((end) => end <= item.startMin);
     if (col === -1) {
       col = colEnd.length;
@@ -14,18 +22,10 @@ export function assignOverlapColumns<T extends { startMin: number; endMin: numbe
     } else {
       colEnd[col] = item.endMin;
     }
-    placed.push({ ...item, col });
+    group.push({ ...item, col });
+    groupEnd = Math.max(groupEnd, item.endMin);
   }
 
-  return placed.map((item, i) => {
-    let colCount = item.col + 1;
-    for (let j = 0; j < placed.length; j++) {
-      if (j === i) continue;
-      const other = placed[j];
-      if (item.startMin < other.endMin && other.startMin < item.endMin) {
-        colCount = Math.max(colCount, other.col + 1);
-      }
-    }
-    return { ...item, colCount: Math.max(colCount, 1) };
-  });
+  flush();
+  return placed;
 }

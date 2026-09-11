@@ -192,6 +192,8 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             onChange={(e) => {
               rawRef.current = "";
               setText(e.target.value);
+              setParsed(null);
+              setPhase("idle");
             }}
             onPaste={(e) => {
               const pasted = e.clipboardData.getData("text");
@@ -206,6 +208,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               // Enter twice is type → check → add, without reaching for the mouse.
               if (e.key === "Enter") {
                 if (phase === "preview") confirm();
@@ -214,6 +217,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
               if (e.key === "Escape") reset();
             }}
             enterKeyHint="go"
+            aria-label="New item"
             autoComplete="off"
             autoCorrect="off"
             placeholder={

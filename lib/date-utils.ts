@@ -1,4 +1,5 @@
 import {
+  isSameDay,
   addDays,
   eachDayOfInterval,
   endOfMonth,
@@ -220,10 +221,14 @@ export function relativeDueLabel(iso: string, opts?: { allDay?: boolean }) {
 }
 
 export function isOverdue(item: Item) {
+  return isOverdueAt(item, new Date());
+}
+
+export function isOverdueAt(item: Item, now: Date) {
   if (item.type === "event" || item.status === "done") return false;
   const at = new Date(item.at);
-  if (item.allDay) return !isToday(at) && at.getTime() < Date.now();
-  return at.getTime() < Date.now();
+  if (item.allDay) return !isSameDay(at, now) && at.getTime() < now.getTime();
+  return at.getTime() < now.getTime();
 }
 
 /** "Monday" means today when today is Monday; otherwise the next that weekday. */

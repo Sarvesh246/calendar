@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, SlidersHorizontal, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -9,6 +10,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export function FilterButton({ className }: { className?: string }) {
   const filter = useUIStore((s) => s.categoryFilter);
@@ -58,6 +60,8 @@ export function FilterSheet() {
 }
 
 function FilterSheetBody({ onClose }: { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(panelRef, true);
   const categories = useDatebookStore((s) => s.categories);
   const filter = useUIStore((s) => s.categoryFilter);
   const toggle = useUIStore((s) => s.toggleCategoryFilter);
@@ -65,7 +69,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const visible = categories.filter((c) => !c.archived);
 
   return (
-        <div className="viewport-pinned-overlay fixed inset-0 z-50 md:hidden">
+        <div className="viewport-pinned-overlay fixed inset-0 z-50">
           <motion.button
             type="button"
             aria-label="Close filter"
@@ -78,13 +82,18 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
           />
           <motion.div
             role="dialog"
+            ref={panelRef}
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { event.stopPropagation(); onClose(); }
+            }}
             aria-modal="true"
             aria-label="Filter by class"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
-            className="absolute inset-x-0 bottom-0 rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-3"
+            className="absolute inset-x-0 bottom-0 mx-auto max-h-[calc(var(--visible-height,100dvh)-1rem)] overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-3 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
           >
             <span
               aria-hidden

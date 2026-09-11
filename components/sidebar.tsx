@@ -76,7 +76,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
         className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 self-start overflow-hidden rounded-xl border border-line bg-surface md:block"
         style={{ width: collapsed ? 68 : 220 }}
       >
-        <aside className="flex h-full w-[220px] flex-col gap-1 overflow-y-auto overflow-x-hidden p-3">
+        <aside className="flex h-full w-full flex-col gap-1 overflow-y-auto overflow-x-hidden p-3">
         <div className="flex items-center justify-between px-1 py-1.5">
           <AnimatePresence initial={false}>
             {!collapsed && (

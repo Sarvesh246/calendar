@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import type { Item } from "@/lib/types";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 function useBelowLg() {
   const [below, setBelow] = useState(false);
@@ -37,6 +38,8 @@ export function DaySheet({
   onAdd?: () => void;
 }) {
   const visible = useBelowLg();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(panelRef, visible);
   useLockBodyScroll(visible);
   const dragControls = useDragControls();
   const closeGuard = useRef(false);
@@ -80,6 +83,8 @@ export function DaySheet({
       />
       <motion.div
         role="dialog"
+        ref={panelRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={headingId}
         initial={{ y: "100%" }}
