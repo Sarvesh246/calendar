@@ -206,13 +206,21 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
+              // Enter twice is type → check → add, without reaching for the mouse.
+              if (e.key === "Enter") {
+                if (phase === "preview") confirm();
+                else submit();
+              }
               if (e.key === "Escape") reset();
             }}
             enterKeyHint="go"
             autoComplete="off"
             autoCorrect="off"
-            placeholder={dateKey ? `Add something on ${dateKey}…` : "Assignment, class, or task…"}
+            placeholder={
+              dateKey
+                ? `Add to ${format(new Date(`${dateKey}T12:00:00`), "EEE, MMM d")}…`
+                : "Assignment, class, or task…"
+            }
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
         </div>
@@ -329,7 +337,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
               <Button variant="tertiary" size="sm" onClick={reset}>
                 Cancel
               </Button>
-              <Button variant="primary" size="sm" onClick={confirm} className={cn()}>
+              <Button variant="primary" size="sm" onClick={confirm}>
                 Add
               </Button>
             </div>

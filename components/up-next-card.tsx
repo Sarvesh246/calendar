@@ -47,7 +47,6 @@ export function UpNextStack({
         : [];
   const [index, setIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const dragged = useRef(false);
   const wheelLock = useRef(0);
   const stackRef = useRef<HTMLDivElement>(null);
 
@@ -186,21 +185,9 @@ export function UpNextStack({
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.18}
                 dragMomentum={false}
-                onDragStart={() => {
-                  dragged.current = true;
-                }}
                 onDragEnd={(_, info) => {
                   if (info.offset.x < -48 || info.velocity.x < -380) go(1);
                   else if (info.offset.x > 48 || info.velocity.x > 380) go(-1);
-                  window.setTimeout(() => {
-                    dragged.current = false;
-                  }, 40);
-                }}
-                onPointerUp={() => {
-                  if (dragged.current) {
-                    dragged.current = false;
-                    return;
-                  }
                 }}
                 initial={reduce ? false : { opacity: 0, x: 22 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -209,7 +196,6 @@ export function UpNextStack({
                 <UpNextFace
                   item={current}
                   category={categoryOf(current)}
-                  interactive={false}
                   mode={modeOf(current)}
                 />
               </motion.div>
@@ -256,12 +242,10 @@ export function UpNextStack({
 function UpNextFace({
   item,
   category,
-  interactive = true,
   mode,
 }: {
   item: Item;
   category: Category | undefined;
-  interactive?: boolean;
   mode?: UpNextMode;
 }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -314,12 +298,7 @@ function UpNextFace({
       : formatDistanceToNowStrict(start, { addSuffix: false });
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-line bg-surface p-5",
-        interactive && "cursor-default"
-      )}
-    >
+    <div className="rounded-lg border border-line bg-surface p-5">
       <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
         {started && <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-accent" />}
         {eyebrow}

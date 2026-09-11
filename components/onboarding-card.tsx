@@ -50,14 +50,14 @@ export function OnboardingCard() {
           </div>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <Link
-              href="/settings"
+              href="/settings#import"
               className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink"
             >
               <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
               Import a calendar
             </Link>
             <Link
-              href="/settings"
+              href="/settings#reminders"
               className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink"
             >
               <Bell className="h-3.5 w-3.5" strokeWidth={2} />

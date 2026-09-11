@@ -35,7 +35,33 @@ import {
   classReminderLabel,
   classReminderOptionLabel,
 } from "@/lib/class-reminder";
-import type { AppearancePreset, Density, LandingView, MobileDayDetails, ReminderPreset } from "@/lib/types";
+import { formatOffsetLabel } from "@/lib/reminder-defaults";
+import type {
+  AppearancePreset,
+  Category,
+  Density,
+  LandingView,
+  MobileDayDetails,
+  ReminderPreset,
+} from "@/lib/types";
+
+/** `/settings#…` targets: which collapsible section to open, and what to scroll to. */
+const DEEP_LINKS: Record<string, { section: string; anchor: string }> = {
+  import: { section: "calendar", anchor: "import" },
+  reminders: { section: "reminders", anchor: "reminders" },
+};
+
+const ANCHOR_OFFSET = "scroll-mt-[calc(var(--mobile-header-height)+1rem)] md:scroll-mt-6";
+
+function downloadFile(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  // Revoking in the same tick can cancel the download in Safari.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export default function SettingsPage() {
   const settings = useDatebookStore((s) => s.settings);
@@ -56,6 +82,28 @@ export default function SettingsPage() {
   const [newCategoryColor, setNewCategoryColor] = useState("#007AFF");
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [newReminderMinutes, setNewReminderMinutes] = useState("30");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Deep links from onboarding and the palette open the section they point into
+  // and bring it on screen, instead of dropping you at the top of a long page.
+  useEffect(() => {
+    function reveal() {
+      const target = DEEP_LINKS[window.location.hash.slice(1)];
+      if (!target) return;
+      const wasOpen = openSection(target.section);
+      window.setTimeout(
+        () => document.getElementById(target.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        wasOpen ? 0 : 360
+      );
+    }
+    // A tick late: the router commits the URL (and its hash) after this mounts.
+    const t = window.setTimeout(reveal, 0);
+    window.addEventListener("hashchange", reveal);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("hashchange", reveal);
+    };
+  }, []);
 
   const applyPreset = (preset: AppearancePreset) => {
     // Same-frame paint (ahead of ThemeProvider's layout effect) so a click
@@ -155,6 +203,7 @@ export default function SettingsPage() {
           </div>
           <div className="order-3 min-w-0">
       <CollapsibleCard
+        id="reminders"
         title="Reminders"
         sub="Alerts while Datebook is open, closed-app push when you’re signed in, and default timing."
         storageKey="reminders"
@@ -353,13 +402,26 @@ export default function SettingsPage() {
                 {categories.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => deleteCategory(cat.id)}
+                    onClick={() => setConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
+                    aria-expanded={confirmDeleteId === cat.id}
                     className="text-[12px] font-medium text-warn"
                   >
                     Delete
                   </button>
                 )}
               </div>
+              {confirmDeleteId === cat.id && (
+                <CategoryDeleteConfirm
+                  category={cat}
+                  categories={categories}
+                  onConfirm={() => {
+                    haptic("warn");
+                    deleteCategory(cat.id);
+                    setConfirmDeleteId(null);
+                  }}
+                  onCancel={() => setConfirmDeleteId(null)}
+                />
+              )}
               <CategorySyllabusControl category={cat} />
               <CategoryClassTimesControl category={cat} />
             </div>
@@ -416,7 +478,9 @@ export default function SettingsPage() {
 
         <Divider />
 
-        <Subheading title="Import a calendar link" />
+        <div id="import" className={ANCHOR_OFFSET}>
+          <Subheading title="Import a calendar link" />
+        </div>
         <p className="text-[13px] leading-relaxed text-ink-soft">
           Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions. Re-sync any time for updates.
         </p>
@@ -429,29 +493,6 @@ export default function SettingsPage() {
           Attach a syllabus. Datebook reads due dates and skips anything already on that class&apos;s calendar.
         </p>
         <ImportSyllabus />
-
-        <Divider />
-
-        <Subheading title="Export" />
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Download an .ics file for Google Calendar, Outlook, or Apple Calendar.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            const items = useDatebookStore.getState().items;
-            const blob = new Blob([serializeIcs(items)], { type: "text/calendar;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "datebook.ics";
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="self-start rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
-        >
-          Download .ics
-        </button>
         </SyllabusImportProvider>
       </CollapsibleCard>
           </div>
@@ -510,39 +551,52 @@ export default function SettingsPage() {
           </div>
       </div>
 
-      {/* Backup & reset — always expanded, pinned to bottom */}
+      {/* Everything that takes your data off (or wipes it from) this device —
+          always expanded, pinned to bottom */}
       <SettingsCard variant="danger">
         <CardHeading
-          title="Backup & reset"
-          sub="Download a full copy of your data, restore from a file, or wipe this device clean."
+          title="Backup & export"
+          sub="Download a full copy of your data or an .ics for other calendar apps, restore from a file, or wipe this device clean."
         />
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
               const s = useDatebookStore.getState();
-              const blob = new Blob(
-                [
-                  serializeBackup({
-                    categories: s.categories,
-                    items: s.items,
-                    reminderPresets: s.reminderPresets,
-                    settings: s.settings,
-                    importSources: s.importSources,
-                  }),
-                ],
-                { type: "application/json" }
+              downloadFile(
+                "datebook-backup.json",
+                new Blob(
+                  [
+                    serializeBackup({
+                      categories: s.categories,
+                      items: s.items,
+                      reminderPresets: s.reminderPresets,
+                      settings: s.settings,
+                      importSources: s.importSources,
+                    }),
+                  ],
+                  { type: "application/json" }
+                )
               );
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "datebook-backup.json";
-              a.click();
-              URL.revokeObjectURL(url);
             }}
             className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
           >
             Download backup
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              downloadFile(
+                "datebook.ics",
+                new Blob([serializeIcs(useDatebookStore.getState().items)], {
+                  type: "text/calendar;charset=utf-8",
+                })
+              )
+            }
+            title="For Google Calendar, Outlook, or Apple Calendar"
+            className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
+          >
+            Export .ics
           </button>
           <label className="cursor-pointer rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink">
             Restore backup
@@ -614,13 +668,59 @@ function SettingsCard({
   );
 }
 
+function CategoryDeleteConfirm({
+  category,
+  categories,
+  onConfirm,
+  onCancel,
+}: {
+  category: Category;
+  categories: Category[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const count = useDatebookStore(
+    (s) => s.items.filter((i) => i.categoryId === category.id).length
+  );
+  // Mirrors `deleteCategory`'s choice of new home, so the prompt can name it.
+  const home =
+    categories.find((c) => c.id !== category.id && !c.archived) ??
+    categories.find((c) => c.id !== category.id);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-line/60 pt-2">
+      <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink-soft">
+        {count > 0 && home
+          ? `Move ${count} item${count === 1 ? "" : "s"} to ${home.name} and delete ${category.name}?`
+          : `Delete ${category.name}?`}
+      </span>
+      <button
+        type="button"
+        onClick={onConfirm}
+        className="min-h-9 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
+      >
+        Delete
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="min-h-9 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
+      >
+        Keep
+      </button>
+    </div>
+  );
+}
+
 function CollapsibleCard({
+  id,
   title,
   sub,
   children,
   storageKey,
   defaultOpen = false,
 }: {
+  id?: string;
   title: string;
   sub?: string;
   children: React.ReactNode;
@@ -630,7 +730,7 @@ function CollapsibleCard({
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-line/80 bg-surface">
+    <section id={id} className={cn("overflow-hidden rounded-lg border border-line/80 bg-surface", ANCHOR_OFFSET)}>
       <button
         type="button"
         onClick={toggle}
@@ -728,6 +828,20 @@ function useSectionOpen(storageKey: string, defaultOpen: boolean): [boolean, () 
   };
 
   return [open, toggle];
+}
+
+/** Opens a section (for deep links). Returns whether it was already open. */
+function openSection(storageKey: string): boolean {
+  const key = sectionKey(storageKey);
+  if (sectionOpen.get(key)) return true;
+  sectionOpen.set(key, true);
+  try {
+    localStorage.setItem(key, "1");
+  } catch {
+    /* storage disabled */
+  }
+  for (const listener of sectionListeners) listener();
+  return false;
 }
 
 function CardHeading({
@@ -1173,28 +1287,6 @@ function CustomThemeEditor({
       </div>
     </div>
   );
-}
-
-/** Turns a raw minute offset into the same style of label the built-in
- *  presets use ("2 hours before", "1 day before") instead of leaving new
- *  reminders stuck with a generic "Reminder" name. */
-function formatOffsetLabel(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "before";
-  const WEEK = 7 * 24 * 60;
-  const DAY = 24 * 60;
-  if (minutes % WEEK === 0) {
-    const n = minutes / WEEK;
-    return `${n} week${n === 1 ? "" : "s"} before`;
-  }
-  if (minutes % DAY === 0) {
-    const n = minutes / DAY;
-    return `${n} day${n === 1 ? "" : "s"} before`;
-  }
-  if (minutes % 60 === 0) {
-    const n = minutes / 60;
-    return `${n} hour${n === 1 ? "" : "s"} before`;
-  }
-  return `${minutes} minute${minutes === 1 ? "" : "s"} before`;
 }
 
 const REMINDER_REVEAL = 76;

@@ -17,7 +17,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { dayKey, isOverdue } from "@/lib/date-utils";
-import { isToday } from "date-fns";
+import { isToday, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
 
 export function CommandPalette() {
@@ -31,13 +31,15 @@ export function CommandPalette() {
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
-  const sortedItems = useMemo(
-    () =>
-      [...items]
-        .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
-        .slice(0, 250),
-    [items]
-  );
+  // Upcoming first (soonest on top), then the past newest-first, so the cap
+  // trims old semesters rather than this week's work.
+  const sortedItems = useMemo(() => {
+    const cutoff = startOfDay(new Date()).getTime();
+    const time = (i: Item) => new Date(i.at).getTime();
+    const upcoming = items.filter((i) => time(i) >= cutoff).sort((a, b) => time(a) - time(b));
+    const past = items.filter((i) => !(time(i) >= cutoff)).sort((a, b) => time(b) - time(a));
+    return [...upcoming, ...past].slice(0, 250);
+  }, [items]);
   const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   useLockBodyScroll(open);
@@ -79,14 +81,31 @@ export function CommandPalette() {
   }
 
   function openItem(item: Item) {
-    setFocusedItemId(item.id);
+    const ui = useUIStore.getState();
+    // You asked for this item by name, so a class filter that hides it is lifted.
+    if (ui.categoryFilter?.length && item.categoryId && !ui.categoryFilter.includes(item.categoryId)) {
+      ui.clearCategoryFilter();
+    }
+    const hidden =
+      useDatebookStore.getState().settings.hideCompleted &&
+      item.type !== "event" &&
+      item.status === "done";
+    if (!hidden) {
+      setFocusedItemId(item.id);
+      // A card that never mounts would otherwise hold the request and spring
+      // open on some unrelated visit later.
+      window.setTimeout(() => {
+        if (useUIStore.getState().focusedItemId === item.id) setFocusedItemId(null);
+      }, 2500);
+    }
     setPaletteOpen(false);
     const at = new Date(item.at);
     if (isOverdue(item)) {
       router.push("/agenda");
       return;
     }
-    if (isToday(at)) {
+    // Today lists events and open work; finished work is found on the calendar.
+    if (isToday(at) && (item.type === "event" || item.status !== "done")) {
       router.push("/today");
       return;
     }
@@ -187,7 +206,7 @@ export function CommandPalette() {
           <Command.Item onSelect={() => ask()} className="cmdk-row min-h-11">
             <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask assistant
           </Command.Item>
-          <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
+          <Command.Item onSelect={() => go("/settings#import")} className="cmdk-row min-h-11">
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
           </Command.Item>
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">

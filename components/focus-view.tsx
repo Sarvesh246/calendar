@@ -110,7 +110,7 @@ export function FocusView() {
             <button
               onClick={completeCurrent}
               disabled={celebrating}
-              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 hover: disabled:opacity-60"
+              className="flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 py-3 text-[14px] font-medium text-accent-ink transition-[opacity,box-shadow] duration-[var(--motion-standard)] hover:opacity-90 disabled:opacity-60"
             >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Mark complete

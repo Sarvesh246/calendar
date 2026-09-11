@@ -21,6 +21,9 @@ interface Message {
   suggestions?: string[];
   actions?: AssistantAction[];
   degraded?: boolean;
+  /** Outcome per action index. Lives on the message so it's saved with the
+   *  session and travels with it when a retry trims the list. */
+  resolved?: Record<number, "applied" | "dismissed">;
 }
 
 const WELCOME: Message = {
@@ -68,8 +71,6 @@ export function AIDrawer() {
   const [thinking, setThinking] = useState(false);
   const [slow, setSlow] = useState(false);
   const [queued, setQueued] = useState<string | null>(null);
-  // `${messageIndex}:${actionIndex}` → outcome
-  const [resolved, setResolved] = useState<Record<string, "applied" | "dismissed">>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
@@ -199,7 +200,7 @@ export function AIDrawer() {
 
   function applyAction(mi: number, ai: number) {
     const action = messages[mi]?.actions?.[ai];
-    if (!action || resolved[`${mi}:${ai}`]) return;
+    if (!action || messages[mi]?.resolved?.[ai]) return;
     if (action.kind === "create") {
       let draft = action.draft;
       if (!draft.reminders?.length) {
@@ -217,11 +218,13 @@ export function AIDrawer() {
     } else if (action.kind === "delete") {
       deleteItem(action.itemId);
     }
-    setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "applied" }));
+    resolveAction(mi, ai, "applied");
   }
 
-  function dismissAction(mi: number, ai: number) {
-    setResolved((r) => ({ ...r, [`${mi}:${ai}`]: "dismissed" }));
+  function resolveAction(mi: number, ai: number, outcome: "applied" | "dismissed") {
+    setMessages((m) =>
+      m.map((msg, i) => (i === mi ? { ...msg, resolved: { ...msg.resolved, [ai]: outcome } } : msg))
+    );
   }
 
   useLockBodyScroll(present);
@@ -314,7 +317,7 @@ export function AIDrawer() {
                   )}
 
                   {m.actions?.map((action, ai) => {
-                    const state = resolved[`${mi}:${ai}`];
+                    const state = m.resolved?.[ai];
                     return (
                       <div key={ai} className="rounded-lg border border-line bg-surface-sunken p-2.5 md:rounded-xl md:p-3">
                         <p className="text-[12px] text-ink-soft md:text-[13px]">{action.summary}</p>
@@ -332,7 +335,7 @@ export function AIDrawer() {
                         ) : (
                           <div className="mt-2 flex gap-2">
                             <button
-                              onClick={() => dismissAction(mi, ai)}
+                              onClick={() => resolveAction(mi, ai, "dismissed")}
                               className="rounded-md px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-surface"
                             >
                               Cancel

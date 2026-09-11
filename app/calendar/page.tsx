@@ -19,6 +19,11 @@ import { cn } from "@/lib/utils";
 
 type ViewMode = "month" | "week";
 
+/** From `lg` up the day's details sit in the side pane; below it they need the sheet. */
+function belowLg() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
+}
+
 /** Direction-aware travel for the header title (vertical) and grid (lateral). */
 const titleVariants = {
   enter: (d: number) => ({ opacity: 0, y: d > 0 ? 10 : -10 }),
@@ -71,9 +76,12 @@ export default function CalendarPage() {
     startTransition(() => {
       setAnchor(d);
       setSelectedDate(d);
+      // Arriving on a day (from search or the agenda) should show it, not just
+      // select it behind a closed sheet.
+      if (mobileDayDetails === "sheet" && belowLg()) setSheetOpen(true);
     });
     setCalendarFocusDate(null);
-  }, [calendarFocusDate, setCalendarFocusDate]);
+  }, [calendarFocusDate, setCalendarFocusDate, mobileDayDetails]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const selectedItems = useMemo(
@@ -92,7 +100,7 @@ export default function CalendarPage() {
 
   function selectDate(d: Date) {
     startTransition(() => setSelectedDate(d));
-    if (mobileDayDetails === "sheet") setSheetOpen(true);
+    if (mobileDayDetails === "sheet" && belowLg()) setSheetOpen(true);
   }
 
   // Keyed by the period on screen, so stepping months swaps one grid for
@@ -272,7 +280,9 @@ export default function CalendarPage() {
       </div>
 
       <AnimatePresence>
-        {sheetOpen && mode === "month" && mobileDayDetails === "sheet" && (
+        {/* Week mode needs it too: between `md` and `lg` the week grid is
+            showing but the side pane isn't. */}
+        {sheetOpen && mobileDayDetails === "sheet" && (
           <DaySheet
             key={dayKey(selectedDate)}
             date={selectedDate}

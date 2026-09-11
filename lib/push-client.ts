@@ -13,6 +13,31 @@ function urlBase64ToUint8Array(base64: string): BufferSource {
   return out;
 }
 
+/**
+ * Before sign-out: drop this browser's server row for the account (while the
+ * session can still authenticate the request) and the browser subscription
+ * itself, so the next person to use this browser doesn't get these reminders.
+ */
+export async function unsubscribePush(): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    // `getRegistration`, not `ready` — `ready` never settles without a worker.
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch("/api/push/subscribe", {
+      method: "DELETE",
+      headers: await authHeaders(),
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    }).catch(() => undefined);
+    // Even if that request failed, a dead endpoint gets a 410 on the next
+    // dispatch and the server row is pruned then.
+    await sub.unsubscribe();
+  } catch {
+    /* sign-out must not fail on push cleanup */
+  }
+}
+
 export type PushSubscribeResult = { ok: true } | { ok: false; error: string };
 
 export async function subscribePush(): Promise<PushSubscribeResult> {
