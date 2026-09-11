@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minimize2, MoreHorizontal } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -64,8 +64,10 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
             <button
               type="button"
               onClick={() => {
-                updateSettings({ hideCompleted: !hideCompleted });
                 setOpen(false);
+                startTransition(() => {
+                  updateSettings({ hideCompleted: !hideCompleted });
+                });
               }}
               className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken"
             >

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { paintAppearance } from "@/components/theme-provider";
+import { writeAppearanceSnapshot } from "@/lib/appearance-storage";
 import {
   buildCustomThemeVars,
   customThemeColorScheme,
@@ -83,6 +84,9 @@ export default function SettingsPage() {
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [newReminderMinutes, setNewReminderMinutes] = useState("30");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const colorPersist = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(colorPersist.current), []);
 
   // Deep links from onboarding and the palette open the section they point into
   // and bring it on screen, instead of dropping you at the top of a long page.
@@ -120,10 +124,16 @@ export default function SettingsPage() {
   };
 
   const applyCustomColors = (colors: CustomThemeColors) => {
-    // Color-picker `input` fires while dragging; write CSS this frame and
-    // persist `preset: "custom"` so a reload keeps the live picks.
     paintAppearance("custom", colors);
-    updateSettings({ preset: "custom", customTheme: colors });
+    writeAppearanceSnapshot({
+      preset: "custom",
+      density: settings.density,
+      customTheme: colors,
+    });
+    window.clearTimeout(colorPersist.current);
+    colorPersist.current = window.setTimeout(() => {
+      updateSettings({ preset: "custom", customTheme: colors });
+    }, 140);
   };
 
   return (

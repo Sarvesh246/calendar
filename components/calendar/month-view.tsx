@@ -7,7 +7,7 @@ import { isSameDay, isToday, format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
-import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay } from "@/lib/date-utils";
+import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay, rankItemsByDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -44,25 +44,10 @@ function fitCountVertical(
   return Math.max(0, Math.min(itemCount, Math.floor((forItems + gap) / slot)));
 }
 
-function rankForChip(item: Item, day?: Date) {
-  if (isOverdue(item)) return 0;
-  if (item.type !== "event" && item.status === "done") return 2;
-  if (isEventEnded(item, new Date(), day)) return 2;
-  return 1;
-}
-
-/**
- * Chips for one day cell.
- *
- * Every cell used to run its own ResizeObserver to find out how many chips fit
- * — 42 per month panel, 126 across the swipe carousel, all re-measuring on
- * every resize for an answer that is identical in all of them (the grid rows
- * are `1fr`). Now one cell per panel reports its height (`onMeasure`) and the
- * rest are handed that number.
- */
 function DayCellChips({
   items,
   date,
+  now,
   colorOf,
   areaHeight,
   clock24h,
@@ -70,6 +55,7 @@ function DayCellChips({
 }: {
   items: Item[];
   date: Date;
+  now: Date;
   colorOf: (categoryId: string) => string;
   areaHeight: number;
   clock24h: boolean;
@@ -94,16 +80,8 @@ function DayCellChips({
       ? fitCountVertical(areaHeight, items.length, CHIP_HEIGHT, CHIP_GAP, MORE_LINE_HEIGHT)
       : 0;
 
-  const ranked = useMemo(
-    () => [...items].sort((a, b) => rankForChip(a, date) - rankForChip(b, date)),
-    [items, date]
-  );
-  const visible = ranked.slice(0, fitCount);
-  // Every clipped item counts, done ones included. Counting only the open ones
-  // meant a day whose overflow was all completed work showed no "+n" at all —
-  // `fitCountVertical` had already reserved the line for it, so those items just
-  // vanished into a blank gap with nothing saying they were there.
-  const hidden = ranked.slice(fitCount);
+  const visible = items.slice(0, fitCount);
+  const hidden = items.slice(fitCount);
   const hiddenTitles = hidden.map((i) => i.title).join(", ");
 
   return (
@@ -111,15 +89,11 @@ function DayCellChips({
       {visible.map((item) => {
         const color = colorOf(item.categoryId);
         const done =
-          (item.type !== "event" && item.status === "done") || isEventEnded(item, new Date(), date);
+          (item.type !== "event" && item.status === "done") || isEventEnded(item, now, date);
         const task = item.type !== "event";
         return (
-          <motion.span
+          <span
             key={item.id}
-            layout="position"
-            initial={{ opacity: 0, y: -2 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
             title={item.title}
             className={cn(
               "cal-chip shrink-0 truncate rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px]",
@@ -130,7 +104,7 @@ function DayCellChips({
             style={{ "--cat": color } as React.CSSProperties}
           >
             {chipLabel(item, clock24h)}
-          </motion.span>
+          </span>
         );
       })}
       {hidden.length > 0 && (
@@ -202,6 +176,7 @@ function SelectionRing({
 function MonthGridPanel({
   anchor,
   byDay,
+  now,
   selectedDate,
   onSelectDate,
   weekStartsOn,
@@ -209,23 +184,19 @@ function MonthGridPanel({
   clock24h,
   showSelectionRing,
   animateSelection,
+  showChips,
 }: {
   clock24h: boolean;
   anchor: Date;
-  /** Items bucketed by day key — built once for all three carousel panels. */
   byDay: Map<string, Item[]>;
+  now: Date;
   selectedDate: Date | null;
   onSelectDate: (date: Date) => void;
   weekStartsOn: 0 | 1;
   colorOf: (categoryId: string) => string;
-  /** Only the on-screen month panel — avoids layoutId flying in from adjacent carousel panels. */
   showSelectionRing: boolean;
-  /** False until the grid has been measured and painted once. The ring is a
-   *  shared-layout element, so on arrival it would otherwise fly in from
-   *  wherever framer last measured it (or from x=0, before the carousel knows
-   *  its width) — it should simply already be around today's date, and only
-   *  travel when you pick another day. */
   animateSelection: boolean;
+  showChips: boolean;
 }) {
   const grid = useMemo(() => monthGrid(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const weeks = grid.length / 7;
@@ -306,14 +277,17 @@ function MonthGridPanel({
               </span>
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
-            <DayCellChips
-              items={dayItems}
-              date={date}
-              colorOf={colorOf}
-              areaHeight={chipArea}
-              clock24h={clock24h}
-              {...(cellIndex === 0 ? { onMeasure } : {})}
-            />
+            {showChips && (
+              <DayCellChips
+                items={dayItems}
+                date={date}
+                now={now}
+                colorOf={colorOf}
+                areaHeight={chipArea}
+                clock24h={clock24h}
+                {...(cellIndex === 0 ? { onMeasure } : {})}
+              />
+            )}
           </button>
         );
       })}
@@ -359,6 +333,7 @@ export function MonthView({
   // Turned on one frame after the carousel has a width, so arriving on the
   // calendar shows the ring already in place instead of animating it there.
   const [ringAnimated, setRingAnimated] = useState(false);
+  const [paintNeighbors, setPaintNeighbors] = useState(false);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -377,6 +352,7 @@ export function MonthView({
 
   useEffect(() => {
     dragX.set(0);
+    setPaintNeighbors(false);
   }, [anchor, dragX]);
 
   // Driven by framer's own pan-gesture recognizer (a native PanSession, not
@@ -393,7 +369,10 @@ export function MonthView({
     if (!width) return;
     const { x: dx, y: dy } = info.offset;
     if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 4) didPan.current = true;
+      if (Math.abs(dx) > 4) {
+        didPan.current = true;
+        if (!paintNeighbors) setPaintNeighbors(true);
+      }
       const max = width * 0.92;
       dragX.set(Math.max(-max, Math.min(max, dx)));
     }
@@ -442,10 +421,12 @@ export function MonthView({
     [onSelectDate]
   );
 
-  const byDay = useMemo(() => groupItemsByDay(items), [items]);
+  const byDay = useMemo(() => rankItemsByDay(groupItemsByDay(items)), [items]);
+  const now = useMemo(() => new Date(), [items]);
 
   const panelProps = {
     byDay,
+    now,
     selectedDate,
     onSelectDate: guardedSelectDate,
     weekStartsOn,
@@ -478,13 +459,23 @@ export function MonthView({
           style={{ x: trackX, width: width ? width * 3 : "300%", willChange: "transform" }}
         >
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={prevAnchor} {...panelProps} showSelectionRing={false} />
+            <MonthGridPanel
+              anchor={prevAnchor}
+              {...panelProps}
+              showSelectionRing={false}
+              showChips={paintNeighbors}
+            />
           </div>
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={anchor} {...panelProps} showSelectionRing />
+            <MonthGridPanel anchor={anchor} {...panelProps} showSelectionRing showChips />
           </div>
           <div className="h-full shrink-0" style={{ width: width || "33.333%" }}>
-            <MonthGridPanel anchor={nextAnchor} {...panelProps} showSelectionRing={false} />
+            <MonthGridPanel
+              anchor={nextAnchor}
+              {...panelProps}
+              showSelectionRing={false}
+              showChips={paintNeighbors}
+            />
           </div>
         </motion.div>
       </div>

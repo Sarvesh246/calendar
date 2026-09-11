@@ -48,19 +48,23 @@ export function FilterButton({ className }: { className?: string }) {
 export function FilterSheet() {
   const open = useUIStore((s) => s.filterOpen);
   const setOpen = useUIStore((s) => s.setFilterOpen);
+  useLockBodyScroll(open);
+
+  return (
+    <AnimatePresence>
+      {open && <FilterSheetBody onClose={() => setOpen(false)} />}
+    </AnimatePresence>
+  );
+}
+
+function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const categories = useDatebookStore((s) => s.categories);
   const filter = useUIStore((s) => s.categoryFilter);
   const toggle = useUIStore((s) => s.toggleCategoryFilter);
   const clear = useUIStore((s) => s.clearCategoryFilter);
   const visible = categories.filter((c) => !c.archived);
-  useLockBodyScroll(open);
 
   return (
-    // This is a bottom sheet, so it moves like the day sheet does: thrown up
-    // from the bottom edge on a spring, and quicker on the way out. Before, it
-    // was an unconditional early return — it simply blinked into existence.
-    <AnimatePresence>
-      {open && (
         <div className="viewport-pinned-overlay fixed inset-0 z-50 md:hidden">
           <motion.button
             type="button"
@@ -70,7 +74,7 @@ export function FilterSheet() {
             exit={{ opacity: 0 }}
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
             className="overlay-scrim absolute inset-0"
-            onClick={() => setOpen(false)}
+            onClick={onClose}
           />
           <motion.div
             role="dialog"
@@ -91,7 +95,7 @@ export function FilterSheet() {
               <Button
                 variant="tertiary"
                 size="iconSm"
-                onClick={() => setOpen(false)}
+                onClick={onClose}
                 aria-label="Close"
               >
                 <X className="h-4 w-4" strokeWidth={2} />
@@ -103,7 +107,7 @@ export function FilterSheet() {
                 onSelect={() => {
                   haptic("light");
                   clear();
-                  setOpen(false);
+                  onClose();
                 }}
               >
                 All classes
@@ -127,8 +131,6 @@ export function FilterSheet() {
             </div>
           </motion.div>
         </div>
-      )}
-    </AnimatePresence>
   );
 }
 

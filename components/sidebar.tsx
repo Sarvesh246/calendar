@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 import {
   CalendarDays,
@@ -23,6 +23,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import { isTabRoute } from "@/lib/tab-routes";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -68,13 +69,13 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop floating sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{ width: collapsed ? 68 : 220 }}
-        transition={motionTokens.springLayout}
-        className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 flex-col gap-1 self-start overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-surface p-3 md:flex"
+      {/* Desktop floating sidebar. Width jumps once (clip), so the main column
+          does not reflow on every spring frame. */}
+      <div
+        className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 self-start overflow-hidden rounded-xl border border-line bg-surface md:block"
+        style={{ width: collapsed ? 68 : 220 }}
       >
+        <aside className="flex h-full w-[220px] flex-col gap-1 overflow-y-auto overflow-x-hidden p-3">
         <div className="flex items-center justify-between px-1 py-1.5">
           <AnimatePresence initial={false}>
             {!collapsed && (
@@ -203,7 +204,8 @@ export function Sidebar() {
             collapsed={collapsed}
           />
         </div>
-      </motion.aside>
+      </aside>
+      </div>
 
       <MobileBottomNav pathname={pathname} />
     </>
@@ -255,7 +257,9 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     if (index === activeIndex) return;
     haptic("light");
     settlePillTo(index);
-    router.push(NAV[index].href);
+    startTransition(() => {
+      router.push(NAV[index].href);
+    });
   }
 
   useEffect(() => {
@@ -337,7 +341,9 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     settlePillTo(clamped);
     if (clamped !== activeIndex) {
       haptic("light");
-      router.push(NAV[clamped].href);
+      startTransition(() => {
+        router.push(NAV[clamped].href);
+      });
     }
   }
 
@@ -470,11 +476,19 @@ function RailLink({
   active: boolean;
   collapsed: boolean;
 }) {
+  const router = useRouter();
   return (
     <Link
       href={href}
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
+      onClick={(e) => {
+        if (!isTabRoute(href) || active) return;
+        e.preventDefault();
+        startTransition(() => {
+          router.push(href);
+        });
+      }}
       className={cn(
         "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-[13.5px] font-medium",
         "transition-colors duration-[var(--motion-standard)]",

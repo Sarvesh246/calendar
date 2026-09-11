@@ -12,12 +12,14 @@ import {
   isOverdue,
   itemDaySpan,
   itemOccupiesDay,
+  groupItemsByDay,
   leftoverOverdue,
   nextOpenAssignment,
   openItemsOnDay,
   openWorkDueOnDay,
   wallTimeInZoneToIso,
   weekWorkload,
+  weekWorkloadFromByDay,
 } from "./date-utils";
 import type { Item } from "./types";
 
@@ -101,6 +103,21 @@ describe("weekWorkload", () => {
   it("returns 7 days", () => {
     const days = weekWorkload([], new Date("2026-08-28T12:00:00"), 0);
     expect(days).toHaveLength(7);
+  });
+
+  it("matches weekWorkloadFromByDay for the same list", () => {
+    const items: Item[] = [
+      base({
+        id: "a",
+        type: "assignment",
+        status: "todo",
+        at: new Date("2026-08-28T12:00:00").toISOString(),
+      }),
+    ];
+    const from = new Date("2026-08-23T12:00:00");
+    const viaItems = weekWorkload(items, from, 0);
+    const viaMap = weekWorkloadFromByDay(groupItemsByDay(items), from, 0);
+    expect(viaMap.map((d) => d.count)).toEqual(viaItems.map((d) => d.count));
   });
 });
 

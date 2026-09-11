@@ -16,6 +16,9 @@ import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { FocusedItemRelay } from "@/lib/item-focus";
+import { isTabRoute } from "@/lib/tab-routes";
+import { TabPageHost } from "@/components/tab-page-host";
 import { cn } from "@/lib/utils";
 
 const CommandPalette = dynamic(
@@ -50,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onCalendar = pathname === "/calendar";
   const onSettings = pathname === "/settings";
   const onToday = pathname === "/today";
+  const onTab = isTabRoute(pathname);
 
   useKeyboardInset();
 
@@ -132,7 +136,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </>
         )}
 
-        {onCalendar ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children}
+        <div
+          hidden={!onTab}
+          className={cn(
+            onTab && "flex min-h-0 flex-1 flex-col",
+            onCalendar && "md:overflow-hidden"
+          )}
+        >
+          <TabPageHost pathname={pathname} />
+        </div>
+        {!onTab && children}
       </main>
 
       {!focusMode && !onSettings && !quickAddOpen && (
@@ -187,6 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </motion.div>
         )}
       </AnimatePresence>
+      <FocusedItemRelay />
       <ClassScheduleSheet />
       <FilterSheet />
       <CommandPalette />
