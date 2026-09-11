@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   ListChecks,
@@ -207,6 +208,13 @@ function CommandPaletteDialog() {
           </Command.Item>
           <Command.Item onSelect={() => go("/agenda")} className="cmdk-row min-h-11">
             <ListChecks className="h-4 w-4" strokeWidth={1.75} /> Agenda
+          </Command.Item>
+          <Command.Item
+            onSelect={() => go("/schedule")}
+            value="schedule weekly timetable classes"
+            className="cmdk-row min-h-11"
+          >
+            <CalendarClock className="h-4 w-4" strokeWidth={1.75} /> Schedule
           </Command.Item>
         </Command.Group>
 
