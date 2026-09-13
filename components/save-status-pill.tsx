@@ -70,24 +70,46 @@ export function SaveStatusPill() {
     // The right gutter keeps it clear of the add button: an undo snackbar covers
     // that for a few seconds and nobody minds, but "Waiting to sync" stays until
     // the network comes back, and it must not sit on top of Add for that long.
-    <div className="save-status-pill flex w-full justify-center pr-[4.5rem] md:hidden">
-      <AnimatePresence>
+    <div
+      className={cn(
+        "save-status-pill flex w-full justify-center md:hidden",
+        // Only a status that sticks around needs to dodge the add button. A
+        // "Saved" that fades in two seconds can sit dead centre, which is
+        // where the eye expects it — the permanent right gutter was making
+        // every pill look accidentally off to one side.
+        current && !current.transient && "pr-[4.5rem]"
+      )}
+    >
+      <AnimatePresence mode="popLayout">
         {visible && current && (
           <motion.div
             key="save-status"
             role="status"
             aria-live="polite"
-            initial={{ opacity: 0, y: 8, scale: 0.96 }}
+            layout
+            initial={{ opacity: 0, y: 10, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{
               opacity: 0,
-              y: 4,
-              scale: 0.97,
-              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+              y: 6,
+              scale: 0.96,
+              filter: "blur(2px)",
+              transition: { duration: motionTokens.standard, ease: motionTokens.easeIn },
             }}
-            transition={motionTokens.springSnappy}
+            transition={motionTokens.springGentle}
+            // Flick it away, the way you would a notification. Snapping back
+            // on a short drag means a half-hearted swipe never leaves the pill
+            // stranded off-centre.
+            drag="y"
+            dragDirectionLock
+            dragSnapToOrigin
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0.06, bottom: 0.7 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 28 || info.velocity.y > 420) setVisible(false);
+            }}
             className={cn(
-              "sync-notice-card pointer-events-auto flex max-w-full items-center gap-2 px-3 py-2",
+              "sync-notice-card pointer-events-auto flex max-w-full touch-none items-center gap-2 px-3 py-2",
               current.tone === "error" && "border-warn/50"
             )}
           >
@@ -111,12 +133,15 @@ export function SaveStatusPill() {
                 Retry
               </button>
             )}
-            {!current.transient && !current.retry && (
+            {/* Dismissible whether or not it would have faded on its own: the
+                one thing you can't do with a pill sitting over your list is
+                nothing. */}
+            {!current.retry && (
               <button
                 type="button"
                 onClick={() => setVisible(false)}
                 aria-label="Dismiss"
-                className="press-none ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-faint"
+                className="press-none ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-faint active:bg-surface-sunken"
               >
                 <span aria-hidden className="text-[15px] leading-none">
                   ×
