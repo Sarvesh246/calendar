@@ -77,6 +77,7 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
             : { y: "100%", transition: { duration: 0.26, ease: motionTokens.easeIn } }
         }
         transition={motionTokens.springGentle}
+        style={{ willChange: "transform" }}
         drag="y"
         dragListener={false}
         dragControls={dragControls}

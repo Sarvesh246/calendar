@@ -110,6 +110,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
+            style={{ willChange: "transform" }}
             drag="y"
             dragListener={false}
             dragControls={dragControls}

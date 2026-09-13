@@ -87,6 +87,23 @@ const closedAdd = {
 } as const;
 
 /**
+ * Full-screen and modal surfaces are peers: only one may own the viewport at a
+ * time. Keeping this in the store makes opening the next surface atomic. If
+ * two independent setters leave both flags true, the older surface can finish
+ * an exit above the newer one and make its trigger appear to have frozen.
+ */
+const closedPrimarySurfaces = {
+  commandPaletteOpen: false,
+  filterOpen: false,
+  aiDrawerOpen: false,
+  aiDrawerPendingMessage: null,
+  classScheduleOpen: false,
+  classScheduleCategoryId: null,
+  shortcutsOpen: false,
+  contextMenu: null,
+} as const;
+
+/**
  * The category filter for views that re-filter and re-render every item.
  * Zustand updates reach React through `useSyncExternalStore`, which always
  * renders synchronously — `startTransition` around `set` does not defer it —
@@ -124,13 +141,13 @@ export const useUIStore = create<UIState>((set, get) => ({
   calendarCommand: null,
 
   setCommandPaletteOpen: (open) =>
-    set(open ? { commandPaletteOpen: true, contextMenu: null, ...closedAdd } : { commandPaletteOpen: false }),
+    set(open ? { ...closedPrimarySurfaces, commandPaletteOpen: true, ...closedAdd } : { commandPaletteOpen: false }),
   setFilterOpen: (open) =>
-    set(open ? { filterOpen: true, ...closedAdd } : { filterOpen: false }),
+    set(open ? { ...closedPrimarySurfaces, filterOpen: true, ...closedAdd } : { filterOpen: false }),
   setAIDrawerOpen: (open) =>
-    set(open ? { aiDrawerOpen: true, contextMenu: null, ...closedAdd } : { aiDrawerOpen: false }),
+    set(open ? { ...closedPrimarySurfaces, aiDrawerOpen: true, ...closedAdd } : { aiDrawerOpen: false }),
   askAI: (message) =>
-    set({ aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null, contextMenu: null, ...closedAdd }),
+    set({ ...closedPrimarySurfaces, aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null, ...closedAdd }),
   consumeAIDrawerPendingMessage: () => {
     const msg = get().aiDrawerPendingMessage;
     if (msg !== null) set({ aiDrawerPendingMessage: null });
@@ -138,7 +155,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-  setQuickAddOpen: (open) => set(open ? { quickAddOpen: true, contextMenu: null } : closedAdd),
+  setQuickAddOpen: (open) =>
+    set(open ? { ...closedPrimarySurfaces, quickAddOpen: true } : closedAdd),
   closeQuickAdd: () => set(closedAdd),
   setQuickAddPrefill: (text) => set({ quickAddPrefill: text }),
   toggleCategoryFilter: (id) =>
@@ -156,7 +174,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setQuickAddDurationMin: (minutes) => set({ quickAddDurationMin: minutes }),
   setCalendarFocusDate: (key) => set({ calendarFocusDate: key }),
   openClassSchedule: (categoryId) =>
-    set({ classScheduleOpen: true, classScheduleCategoryId: categoryId ?? null, ...closedAdd }),
+    set({ ...closedPrimarySurfaces, classScheduleOpen: true, classScheduleCategoryId: categoryId ?? null, ...closedAdd }),
   closeClassSchedule: () => set({ classScheduleOpen: false, classScheduleCategoryId: null }),
   applyView: (view) =>
     startTransition(() =>
@@ -180,6 +198,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeInspector: () => set({ inspectorItemId: null }),
   openContextMenu: (request) => set({ contextMenu: request }),
   closeContextMenu: () => set({ contextMenu: null }),
-  setShortcutsOpen: (open) => set({ shortcutsOpen: open, ...(open ? { contextMenu: null } : {}) }),
+  setShortcutsOpen: (open) =>
+    set(open ? { ...closedPrimarySurfaces, shortcutsOpen: true, ...closedAdd } : { shortcutsOpen: false }),
   sendCalendarCommand: (command) => set({ calendarCommand: { ...command, nonce: ++commandNonce } }),
 }));

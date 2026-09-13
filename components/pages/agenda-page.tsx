@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -36,7 +36,12 @@ import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
 const HORIZON_DAYS = 120;
-const FIRST_PAINT_DAYS = 14;
+const FIRST_PAINT_OVERDUE = 12;
+const OVERDUE_PAGE_SIZE = 24;
+const FIRST_PAINT_GROUPS = 8;
+const GROUP_PAGE_SIZE = 8;
+const FIRST_PAINT_LATER = 24;
+const LATER_PAGE_SIZE = 24;
 const NO_ITEMS: Item[] = [];
 
 const AGENDA_STICKY =
@@ -99,24 +104,27 @@ export default function AgendaPage() {
     [byDay, now, weekStartsOn]
   );
 
-  const [showHorizon, setShowHorizon] = useState(false);
-  useEffect(() => {
-    const expand = () => startTransition(() => setShowHorizon(true));
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(expand, { timeout: 120 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(expand, 32);
-    return () => window.clearTimeout(id);
+  const [overdueLimit, setOverdueLimit] = useState(FIRST_PAINT_OVERDUE);
+  const [groupLimit, setGroupLimit] = useState(FIRST_PAINT_GROUPS);
+  const [laterLimit, setLaterLimit] = useState(FIRST_PAINT_LATER);
+
+  // Busy semesters can contain hundreds of cards. Agenda renders the first
+  // useful screen immediately, then a sentinel fills the next page just before
+  // it scrolls into view. This preserves the complete list and its natural
+  // scroll position without one giant post-navigation render.
+  const visibleOverdue = overdue.slice(0, overdueLimit);
+  const visibleGroups = groups.slice(0, groupLimit);
+  const allGroupsVisible = visibleGroups.length >= groups.length;
+  const visibleLater = allGroupsVisible ? later.slice(0, laterLimit) : NO_ITEMS;
+  const revealMoreGroups = useCallback(() => {
+    startTransition(() => setGroupLimit((limit) => limit + GROUP_PAGE_SIZE));
   }, []);
-
-  const visibleGroups = useMemo(() => {
-    if (showHorizon) return groups;
-    const limit = addDays(startOfDay(new Date()), FIRST_PAINT_DAYS);
-    return groups.filter((g) => g.date < limit);
-  }, [groups, showHorizon]);
-
-  const visibleLater = showHorizon ? later : NO_ITEMS;
+  const revealMoreLater = useCallback(() => {
+    startTransition(() => setLaterLimit((limit) => limit + LATER_PAGE_SIZE));
+  }, []);
+  const revealMoreOverdue = useCallback(() => {
+    startTransition(() => setOverdueLimit((limit) => limit + OVERDUE_PAGE_SIZE));
+  }, []);
 
   const isEmpty =
     overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
@@ -155,7 +163,7 @@ export default function AgendaPage() {
   const rowSections = useMemo<AgendaRowSection[]>(() => {
     if (!rows) return [];
     const out: AgendaRowSection[] = [];
-    if (overdue.length) out.push({ id: "overdue", label: `Overdue · ${overdue.length}`, tone: "warn", items: overdue });
+    if (visibleOverdue.length) out.push({ id: "overdue", label: `Overdue · ${overdue.length}`, tone: "warn", items: visibleOverdue });
     for (const g of visibleGroups) {
       const label = dayLabel(g.date);
       out.push({
@@ -168,7 +176,7 @@ export default function AgendaPage() {
     }
     if (visibleLater.length) out.push({ id: "later", label: "Later", tone: "faint", items: visibleLater });
     return out;
-  }, [rows, overdue, visibleGroups, visibleLater]);
+  }, [rows, overdue.length, visibleOverdue, visibleGroups, visibleLater]);
 
   const [stickyId, setStickyId] = useState<string | null>(null);
   const stickyRef = useRef<HTMLParagraphElement>(null);
@@ -358,15 +366,35 @@ export default function AgendaPage() {
         <>
           {todayLink}
           {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
+          {overdue.length > visibleOverdue.length && (
+            <RevealOverdueButton
+              remaining={overdue.length - visibleOverdue.length}
+              onReveal={revealMoreOverdue}
+            />
+          )}
+          {visibleGroups.length < groups.length && (
+            <AgendaContinuation
+              key={`groups-${visibleGroups.length}`}
+              label="Load more days"
+              onReveal={revealMoreGroups}
+            />
+          )}
+          {allGroupsVisible && visibleLater.length < later.length && (
+            <AgendaContinuation
+              key={`later-${visibleLater.length}`}
+              label="Load more later items"
+              onReveal={revealMoreLater}
+            />
+          )}
         </>
       ) : (
         <>
-          {overdue.length > 0 && (
+          {visibleOverdue.length > 0 && (
             <section id="agenda-overdue" className="agenda-day">
               <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
               <div className="flex flex-col gap-2">
                 <AnimatePresence initial={false}>
-                  {overdue.map((item) => (
+                  {visibleOverdue.map((item) => (
                     <ItemCard
                       key={item.id}
                       item={item}
@@ -376,6 +404,12 @@ export default function AgendaPage() {
                   ))}
                 </AnimatePresence>
               </div>
+              {overdue.length > visibleOverdue.length && (
+                <RevealOverdueButton
+                  remaining={overdue.length - visibleOverdue.length}
+                  onReveal={revealMoreOverdue}
+                />
+              )}
             </section>
           )}
 
@@ -409,6 +443,14 @@ export default function AgendaPage() {
             );
           })}
 
+          {visibleGroups.length < groups.length && (
+            <AgendaContinuation
+              key={`groups-${visibleGroups.length}`}
+              label="Load more days"
+              onReveal={revealMoreGroups}
+            />
+          )}
+
           {visibleLater.length > 0 && (
             <section id="agenda-later" className="agenda-day">
               <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
@@ -426,8 +468,55 @@ export default function AgendaPage() {
               </div>
             </section>
           )}
+          {allGroupsVisible && visibleLater.length < later.length && (
+            <AgendaContinuation
+              key={`later-${visibleLater.length}`}
+              label="Load more later items"
+              onReveal={revealMoreLater}
+            />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function RevealOverdueButton({ remaining, onReveal }: { remaining: number; onReveal: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReveal}
+      className="press-none mt-2 flex min-h-11 w-full items-center justify-center rounded-lg border border-line bg-surface text-[13px] font-medium text-ink-soft transition-colors duration-[var(--motion-standard)] hover:border-line-strong hover:text-ink"
+    >
+      Show {Math.min(remaining, OVERDUE_PAGE_SIZE)} more overdue
+    </button>
+  );
+}
+
+function AgendaContinuation({ label, onReveal }: { label: string; onReveal: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) onReveal();
+      },
+      { rootMargin: "360px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onReveal]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onReveal}
+      className="press-none flex min-h-11 w-full items-center justify-center rounded-lg text-[12.5px] font-medium text-ink-faint transition-colors duration-[var(--motion-standard)] hover:bg-surface-sunken/60 hover:text-ink-soft"
+    >
+      {label}
+    </button>
   );
 }

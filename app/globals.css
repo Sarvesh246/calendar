@@ -1478,13 +1478,12 @@ html.calendar-dragging * {
   }
 }
 
-/* Mobile creation remains inside the visible viewport as the keyboard pans. */
+/* Mobile creation begins beneath the header instead of dropping to the bottom
+   of an empty screen. Its max-height still follows the visual viewport, so the
+   keyboard turns the card into a local scroller instead of covering controls. */
 @media (max-width: 767px) {
   .mobile-composer {
-    translate: none;
-    top: auto !important;
-    bottom: max(0.75rem, calc(100% - var(--visible-height, 100dvh) - var(--viewport-pan, 0px) + 0.75rem));
-    max-height: calc(var(--visible-height, 100dvh) - 1.5rem);
+    max-height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top) - 5rem);
   }
   .mobile-quick-add > div > input { font-size: 16px; }
   .mobile-quick-add > div:not(:first-child) { position: static; margin-top: 8px; max-height: none; }
