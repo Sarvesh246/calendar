@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Search, X } from "lucide-react";
 import { format } from "date-fns";
@@ -26,10 +26,26 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => { try { const value: unknown = JSON.parse(localStorage.getItem(recentKey) ?? "[]"); return Array.isArray(value) ? value.filter((s): s is string => typeof s === "string").slice(0, 5) : []; } catch { return []; } });
-  const matches = (query.trim() ? searchItems(items, categories, query) : [...items].sort((a, b) => a.at.localeCompare(b.at))).filter(i =>
-    (!category || i.categoryId === category) && (!status || (i.type !== "event" && (i.status ?? "todo") === status)) && (!date || itemOccupiesDay(i, new Date(`${date}T12:00:00`)))
-  );
-  const current = items.find(i => i.id === selected);
+  // Search can touch every item and notes field. Deferring the inputs lets the
+  // key/select paint first, then updates one memoized result set instead of
+  // sorting the whole calendar again on unrelated focus/animation renders.
+  const deferredQuery = useDeferredValue(query);
+  const deferredCategory = useDeferredValue(category);
+  const deferredStatus = useDeferredValue(status);
+  const deferredDate = useDeferredValue(date);
+  const matches = useMemo(() => {
+    const candidates = deferredQuery.trim()
+      ? searchItems(items, categories, deferredQuery)
+      : [...items].sort((a, b) => a.at.localeCompare(b.at));
+    const pickedDate = deferredDate ? new Date(`${deferredDate}T12:00:00`) : null;
+    return candidates.filter(i =>
+      (!deferredCategory || i.categoryId === deferredCategory) &&
+      (!deferredStatus || (i.type !== "event" && (i.status ?? "todo") === deferredStatus)) &&
+      (!pickedDate || itemOccupiesDay(i, pickedDate))
+    );
+  }, [categories, deferredCategory, deferredDate, deferredQuery, deferredStatus, items]);
+  const categoriesById = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+  const current = useMemo(() => items.find(i => i.id === selected), [items, selected]);
   function remember(value: string) { const trimmed = value.trim(); if (!trimmed) return; const next = [trimmed, ...recent.filter(s => s !== trimmed)].slice(0, 5); setRecent(next); try { localStorage.setItem(recentKey, JSON.stringify(next)); } catch { /* Search still works without storage. */ } }
   return <MobileItemSheet title="Search items" onClose={onClose}>
     {/* The accent ring is the wrapper's own border, not an outline on the
@@ -49,8 +65,8 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
     </div>
     <Reveal open={!query && recent.length > 0}><div className="mb-3"><div className="flex items-center justify-between text-[12px] text-ink-soft">Recent searches<button className="min-h-11 px-2" onClick={() => { setRecent([]); try { localStorage.removeItem(recentKey); } catch {} }}>Clear recent</button></div><div className="flex flex-wrap gap-2">{recent.map(s => <button key={s} className={field} onClick={() => setQuery(s)}>{s}</button>)}</div></div></Reveal>
     <p role="status" className="mb-2 text-[12px] text-ink-soft">{matches.length} matching item{matches.length === 1 ? "" : "s"}{matches.length > 100 ? " · showing first 100, refine your search" : ""}</p>
-    <motion.div key={`${query}|${category}|${status}|${date}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: motionTokens.standard, ease: motionTokens.ease }} className="divide-y divide-line">{matches.slice(0, 100).map(i => <button key={i.id} className="flex min-h-16 w-full flex-col justify-center gap-1 py-3 text-left" onClick={() => { remember(query); setSelected(i.id); }}><span className="text-[14px] font-medium">{i.title}</span><span className="text-[12px] text-ink-soft">{format(new Date(i.at), "EEE, MMM d, yyyy")}{!i.allDay && ` · ${format(new Date(i.at), "p")}`} · {categories.find(c => c.id === i.categoryId)?.name ?? "No class"} · {i.type === "event" ? "Scheduled" : i.status === "done" ? "Done" : i.status === "doing" ? "In progress" : "To do"}</span></button>)}</motion.div>
+    <motion.div key={`${deferredQuery}|${deferredCategory}|${deferredStatus}|${deferredDate}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: motionTokens.standard, ease: motionTokens.ease }} className="divide-y divide-line">{matches.slice(0, 100).map(i => <button key={i.id} className="flex min-h-16 w-full flex-col justify-center gap-1 py-3 text-left" onClick={() => { remember(query); setSelected(i.id); }}><span className="text-[14px] font-medium">{i.title}</span><span className="text-[12px] text-ink-soft">{format(new Date(i.at), "EEE, MMM d, yyyy")}{!i.allDay && ` · ${format(new Date(i.at), "p")}`} · {categoriesById.get(i.categoryId ?? "")?.name ?? "No class"} · {i.type === "event" ? "Scheduled" : i.status === "done" ? "Done" : i.status === "doing" ? "In progress" : "To do"}</span></button>)}</motion.div>
     <AnimatePresence initial={false}>{matches.length === 0 && <motion.p key="empty" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: motionTokens.exit } }} transition={{ duration: motionTokens.standard, ease: motionTokens.ease }} className="py-6 text-center text-[13px] text-ink-soft">No matching items. Try another word or clear a filter.</motion.p>}</AnimatePresence>
-    {current && <MobileItemSheet title={current.title} onClose={() => setSelected(null)}><p className="mb-3 text-[13px] text-ink-soft">{dayKey(new Date(current.at))} · {categories.find(c => c.id === current.categoryId)?.name ?? "No class"}</p><ItemCard item={current} category={categories.find(c => c.id === current.categoryId)} {...chrome} /></MobileItemSheet>}
+    {current && <MobileItemSheet title={current.title} onClose={() => setSelected(null)}><p className="mb-3 text-[13px] text-ink-soft">{dayKey(new Date(current.at))} · {categoriesById.get(current.categoryId ?? "")?.name ?? "No class"}</p><ItemCard item={current} category={categoriesById.get(current.categoryId ?? "")} {...chrome} /></MobileItemSheet>}
   </MobileItemSheet>;
 }

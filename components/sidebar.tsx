@@ -269,7 +269,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const pillInset = 4;
   const trackWidth = Math.max(0, navWidth - pillInset * 2);
   const tabWidth = trackWidth / NAV.length;
-  const pillX = useTransform([baseX, dragX], ([b, d]) => pillInset + (b as number) + (d as number));
+  const pillX = useTransform([baseX, dragX], ([b, d]) => (b as number) + (d as number));
 
   // Mass and damping tuned so a released pill settles once, without the second
   // bounce that read as a stutter at the end of every swipe.
@@ -439,15 +439,22 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
           onPointerCancel={onPointerCancel}
           className="mobile-tab-bar relative flex min-w-0 flex-1 touch-pan-y items-stretch rounded-full p-1"
         >
-          {navWidth > 0 && (
-            <motion.span
-              aria-hidden
-              className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
-              style={{ width: tabWidth, x: pillX, willChange: "transform" }}
-              animate={{ scale: isDragging ? 1.015 : 1 }}
-              transition={pillSpring}
-            />
-          )}
+          {/* The spring and slight drag-scale are intentionally unchanged, but
+              the indicator now moves inside a clipped inner track. At either
+              end its rounded corners can never bleed beyond the bar. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-1 overflow-hidden rounded-full"
+          >
+            {navWidth > 0 && (
+              <motion.span
+                className="mobile-tab-pill absolute inset-y-0 left-0"
+                style={{ width: tabWidth, x: pillX, willChange: "transform" }}
+                animate={{ scale: isDragging ? 1.015 : 1 }}
+                transition={pillSpring}
+              />
+            )}
+          </span>
           {NAV.map((item, index) => {
             const active = pathname === item.href;
             const Icon = item.icon;

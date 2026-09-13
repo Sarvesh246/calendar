@@ -70,15 +70,16 @@ export function TabPageHost({ pathname }: { pathname: string }) {
     });
   }, [pathname]);
 
-  // Preloading the modules only removed the network from the first switch; the
-  // render itself still happened on the tap. Mounting all three while the main
-  // thread is idle moves that cost off the interaction entirely, so every later
-  // switch is a `hidden` attribute flipping and nothing else.
+  // Start fetching every tab chunk immediately after the first paint. Waiting
+  // for an idle callback *before* starting the imports left Agenda as the only
+  // tab that could still show a loader on an early tap. Rendering the inactive
+  // pages remains idle work; only the network/parse warm-up starts now.
   useEffect(() => {
     let cancelled = false;
+    const modulesReady = Promise.all(TAB_ROUTES.map((href) => loaders[href]()));
     const cancel = scheduleIdle(() => {
       if (cancelled) return;
-      void Promise.all(TAB_ROUTES.map((href) => loaders[href]())).then(() => {
+      void modulesReady.then(() => {
         if (cancelled) return;
         startTransition(() => setMounted(ALL_MOUNTED));
       }).catch(() => undefined);

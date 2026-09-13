@@ -212,7 +212,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key="quick-add-scrim"
             label="Dismiss add"
             tone="light"
-            onClick={closeQuickAdd}
             onPointerDown={closeQuickAdd}
             className="viewport-pinned-top viewport-pinned-overlay fixed inset-0 z-[45]"
           />
@@ -236,7 +235,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
             }}
             transition={motionTokens.spring}
-            style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
+            style={{
+              top: "calc(env(safe-area-inset-top) + 4.25rem)",
+              transformOrigin: "top center",
+              willChange: "transform, opacity",
+            }}
             className={cn(
               "mobile-composer viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6"
             )}
