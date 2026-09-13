@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, MapPin } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
 import { applyCategoryFilter } from "@/lib/filters";
 import { useCategoriesById } from "@/lib/card-chrome";
 import { formatClock, formatTimeRange, weekdayLong, weekdayShort } from "@/lib/class-schedule";
@@ -25,7 +25,7 @@ export default function SchedulePage() {
   const allItems = useDatebookStore((s) => s.items);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
-  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  const categoryFilter = useDeferredCategoryFilter();
   const openClassSchedule = useUIStore((s) => s.openClassSchedule);
   const categoriesById = useCategoriesById();
 

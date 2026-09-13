@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
@@ -244,8 +244,12 @@ function ExpandPanel({
 }) {
   const mobile = useMediaQuery("(max-width: 767px)");
   const [editing, setEditing] = useState(false);
+  // Mounting the editor is the expensive part of a tap. Opening off a deferred
+  // value lets the click paint (chevron, border) first and the editor render
+  // in an interruptible pass; closing stays immediate.
+  const deferredOpen = useDeferredValue(open);
   const [loaded, setLoaded] = useState(open);
-  if (open && !loaded) setLoaded(true);
+  if (open && deferredOpen && !loaded) setLoaded(true);
 
   useEffect(() => {
     if (open || !loaded) return;
@@ -255,7 +259,7 @@ function ExpandPanel({
   }, [open, loaded]);
 
   return (
-    <div className={cn("item-card-expand", open && "is-open")}>
+    <div className={cn("item-card-expand", open && deferredOpen && "is-open")}>
       <div className="item-card-expand-inner">
         {loaded && mobile && <div className="mt-3 space-y-3 border-t border-line pt-3 text-[13px]" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
           {item.description && <p className="whitespace-pre-wrap break-words text-ink-soft">{item.description}</p>}

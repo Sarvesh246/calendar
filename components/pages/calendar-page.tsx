@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { addDays, addMonths, addWeeks, format, parseISO, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
 import { dayKey, itemsOnDay, weekDays } from "@/lib/date-utils";
 import { MonthView } from "@/components/calendar/month-view";
@@ -48,7 +48,7 @@ export default function CalendarPage() {
   const mobileDayDetails = useDatebookStore((s) => s.settings.mobileDayDetails);
   const shortScreen = useMediaQuery("(max-height: 540px)");
   const useSheet = mobileDayDetails === "sheet" || shortScreen;
-  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  const categoryFilter = useDeferredCategoryFilter();
   const items = useMemo(
     () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
     [allItems, categoryFilter, hideCompleted]
