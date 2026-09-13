@@ -1229,3 +1229,29 @@ html[data-first-load="1"] .page-shell > * > * {
     transition: none;
   }
 }
+
+/* Mobile creation remains inside the visible viewport as the keyboard pans. */
+@media (max-width: 767px) {
+  .mobile-composer {
+    translate: none;
+    top: auto !important;
+    bottom: max(0.75rem, calc(100% - var(--visible-height, 100dvh) - var(--viewport-pan, 0px) + 0.75rem));
+    max-height: calc(var(--visible-height, 100dvh) - 1.5rem);
+  }
+  .mobile-quick-add > div > input { font-size: 16px; }
+  .mobile-quick-add > div:not(:first-child) { position: static; margin-top: 8px; max-height: none; }
+  .mobile-quick-add button { min-height: 44px; }
+}
+
+@media (max-width: 767px) {
+  .mobile-action-sheet {
+    bottom: max(0px, calc(100% - var(--visible-height, 100dvh) - var(--viewport-pan, 0px)));
+    max-height: calc(var(--visible-height, 100dvh) - 1rem);
+  }
+  .mobile-action-sheet input, .mobile-action-sheet textarea, .mobile-action-sheet select { font-size: 16px; }
+}
+
+@keyframes mobile-sheet-enter { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+  .mobile-action-sheet { animation: mobile-sheet-enter 220ms var(--ease-standard) both; }
+}

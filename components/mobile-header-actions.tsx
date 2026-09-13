@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { Search, Settings, Sparkles } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterButton } from "@/components/filter-sheet";
 import { useUIStore } from "@/lib/ui-store";
-import { cn } from "@/lib/utils";
+
 
 /** Floating top-right glass controls. The page stays continuous; content
  *  scrolls under this cluster. No full-width header strip. */
@@ -26,7 +25,7 @@ export function MobileHeaderActions({ pathname }: { pathname: string }) {
               size="icon"
               onClick={() => setAIDrawerOpen(true)}
               aria-label="Ask the assistant"
-              className="h-9 w-9 rounded-full bg-transparent text-accent hover:bg-surface-sunken"
+              className="h-11 w-11 rounded-full bg-transparent text-accent hover:bg-surface-sunken"
             >
               <Sparkles className="h-4 w-4" strokeWidth={1.9} />
             </Button>
@@ -35,23 +34,14 @@ export function MobileHeaderActions({ pathname }: { pathname: string }) {
               size="icon"
               onClick={() => setCommandPaletteOpen(true)}
               aria-label="Search"
-              className="h-9 w-9 rounded-full bg-transparent hover:bg-surface-sunken"
+              className="h-11 w-11 rounded-full bg-transparent hover:bg-surface-sunken"
             >
               <Search className="h-4 w-4" strokeWidth={1.9} />
             </Button>
             {!onSettings && (
-              <FilterButton className="h-9 w-9 rounded-full border-0 bg-transparent shadow-none hover:bg-surface-sunken" />
+              <FilterButton className="h-11 w-11 rounded-full border-0 bg-transparent shadow-none hover:bg-surface-sunken" />
             )}
-            <Link
-              href="/settings"
-              aria-label="Settings"
-              className={cn(
-                "inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink",
-                onSettings && "bg-surface-sunken text-accent"
-              )}
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.9} />
-            </Link>
+
           </div>
         </div>
       </div>

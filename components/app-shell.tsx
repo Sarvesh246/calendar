@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
+import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Search, Sparkles } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
@@ -61,6 +63,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const desktop = useMediaQuery("(min-width: 768px)");
   const floatingAdd = quickAddOpen && !(onToday && desktop);
 
+  const composerRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(composerRef, floatingAdd && !desktop);
+  useLockBodyScroll(floatingAdd && !desktop);
   useKeyboardInset();
 
   useEffect(() => {
@@ -185,6 +190,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {floatingAdd && (
           <motion.div
             key="quick-add-panel"
+            ref={composerRef}
+            role={!desktop ? "dialog" : undefined}
+            aria-modal={!desktop ? true : undefined}
+            aria-label={!desktop ? "Add item" : undefined}
+            tabIndex={-1}
             initial={{ opacity: 0, y: -10, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{
@@ -196,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             transition={motionTokens.spring}
             style={{ top: "calc(env(safe-area-inset-top) + 4.25rem)", transformOrigin: "top center" }}
             className={cn(
-              "viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6"
+              "mobile-composer viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6"
             )}
           >
             <QuickAddBar />

@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { addMonths, addWeeks, format, parseISO, startOfWeek } from "date-fns";
+import { addDays, addMonths, addWeeks, format, parseISO, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -285,7 +285,7 @@ export default function CalendarPage() {
             showing but the side pane isn't. */}
         {sheetOpen && (useSheet || mode === "week") && (
           <DaySheet
-            key={dayKey(selectedDate)}
+            onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
             date={selectedDate}
             items={selectedItems}
             onClose={() => setSheetOpen(false)}
