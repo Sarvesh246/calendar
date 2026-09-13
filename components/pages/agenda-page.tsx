@@ -24,6 +24,8 @@ import {
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { AgendaRows, type AgendaRowSection } from "@/components/agenda-rows";
+import { AgendaSticky } from "@/components/agenda-sticky";
+import type { AgendaStickySection } from "@/lib/agenda-sticky";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
@@ -43,9 +45,6 @@ const GROUP_PAGE_SIZE = 8;
 const FIRST_PAINT_LATER = 24;
 const LATER_PAGE_SIZE = 24;
 const NO_ITEMS: Item[] = [];
-
-const AGENDA_STICKY =
-  "sticky z-10 top-[var(--mobile-header-height)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
 
 const LAYOUTS: { value: AgendaLayout; label: string; Icon: typeof LayoutList }[] = [
   { value: "cards", label: "Cards", Icon: LayoutList },
@@ -141,24 +140,24 @@ export default function AgendaPage() {
   const breakdown = useFilterBreakdown(ahead);
 
   const sections = useMemo(() => {
-    const next: { id: string; label: string; tone: "warn" | "faint" }[] = [];
+    const next: AgendaStickySection[] = [];
     if (overdue.length > 0) {
-      next.push({ id: "overdue", label: `Overdue · ${overdue.length}`, tone: "warn" });
+      next.push({ id: "overdue", kind: "overdue", tone: "warn", count: overdue.length });
     }
     for (const group of visibleGroups) {
-      const label = dayLabel(group.date);
-      const showDate = label === "Tomorrow";
       next.push({
         id: group.key,
-        label: showDate ? `${label}  ${format(group.date, "MMM d")}` : label,
+        kind: "day",
         tone: "faint",
+        count: group.items.length,
+        date: group.date,
       });
     }
     if (visibleLater.length > 0) {
-      next.push({ id: "later", label: "Later", tone: "faint" });
+      next.push({ id: "later", kind: "later", tone: "faint", count: visibleLater.length });
     }
     return next;
-  }, [overdue.length, visibleGroups, visibleLater.length]);
+  }, [overdue.length, visibleGroups, visibleLater]);
 
   const rowSections = useMemo<AgendaRowSection[]>(() => {
     if (!rows) return [];
@@ -177,62 +176,6 @@ export default function AgendaPage() {
     if (visibleLater.length) out.push({ id: "later", label: "Later", tone: "faint", items: visibleLater });
     return out;
   }, [rows, overdue.length, visibleOverdue, visibleGroups, visibleLater]);
-
-  const [stickyId, setStickyId] = useState<string | null>(null);
-  const stickyRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    if (sections.length === 0) {
-      return;
-    }
-    const nodes = sections
-      .map((s) => document.getElementById(`agenda-${s.id}`))
-      .filter((el): el is HTMLElement => Boolean(el));
-    if (nodes.length === 0) return;
-
-    const update = () => {
-      // The pinned label's own bottom edge is the hand-off line. Reading it
-      // beats parsing `--mobile-header-height`, which is a `calc()` with an
-      // `env()` in it — getComputedStyle hands back the token, not a length,
-      // so parseFloat only ever produced NaN and the fallback 56px.
-      const line = stickyRef.current
-        ? stickyRef.current.getBoundingClientRect().bottom
-        : 64;
-      let current = sections[0].id;
-      for (const el of nodes) {
-        if (el.getBoundingClientRect().top <= line) {
-          current = el.id.replace(/^agenda-/, "");
-        } else {
-          break;
-        }
-      }
-      setStickyId((previous) => (previous === current ? previous : current));
-    };
-
-    // One shared rAF gate. The first pass has to clear the handle too —
-    // scheduling `update` directly left `raf` holding a stale but truthy id,
-    // so every later scroll saw "already queued" and the label froze on
-    // whichever section happened to be first.
-    let raf = 0;
-    const schedule = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        update();
-      });
-    };
-
-    schedule();
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    return () => {
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [sections, rows]);
-
-  const sticky = sections.find((s) => s.id === stickyId) ?? sections[0];
 
   const todayLink = todayCount > 0 && (
     <Link
@@ -345,137 +288,127 @@ export default function AgendaPage() {
       )}
       {!isEmpty && <FeedHealthBanner />}
 
-      {sticky && (
-        <p
-          ref={stickyRef}
-          // Purely a visual restatement of the section heading scrolling under
-          // it. A screen reader already reads each day where it starts, so
-          // exposing this too announced every day twice.
-          aria-hidden
-          className={cn(
-            AGENDA_STICKY,
-            "pointer-events-none",
-            sticky.tone === "warn" ? "text-[12px] font-medium text-warn" : "text-[12px] font-medium text-ink-faint"
+      {!isEmpty && (
+        <div className="relative">
+          {sections.length > 0 && (
+            <AgendaSticky sections={sections} now={now} layout={rows ? "rows" : "cards"} />
           )}
-        >
-          {sticky.label}
-        </p>
-      )}
-
-      {rows ? (
-        <>
-          {todayLink}
-          {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
-          {overdue.length > visibleOverdue.length && (
-            <RevealOverdueButton
-              remaining={overdue.length - visibleOverdue.length}
-              onReveal={revealMoreOverdue}
-            />
-          )}
-          {visibleGroups.length < groups.length && (
-            <AgendaContinuation
-              key={`groups-${visibleGroups.length}`}
-              label="Load more days"
-              onReveal={revealMoreGroups}
-            />
-          )}
-          {allGroupsVisible && visibleLater.length < later.length && (
-            <AgendaContinuation
-              key={`later-${visibleLater.length}`}
-              label="Load more later items"
-              onReveal={revealMoreLater}
-            />
-          )}
-        </>
-      ) : (
-        <>
-          {visibleOverdue.length > 0 && (
-            <section id="agenda-overdue" className="agenda-day">
-              <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
-              <div className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {visibleOverdue.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                      {...chrome}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
+          {rows ? (
+            <div className="flex flex-col gap-6">
+              {todayLink}
+              {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
               {overdue.length > visibleOverdue.length && (
                 <RevealOverdueButton
                   remaining={overdue.length - visibleOverdue.length}
                   onReveal={revealMoreOverdue}
                 />
               )}
-            </section>
-          )}
-
-          {todayLink}
-
-          {visibleGroups.map((group) => {
-            const label = dayLabel(group.date);
-            const showDate = label === "Tomorrow";
-            return (
-              <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
-                <p className="mb-2.5 flex items-baseline gap-2 text-[12px] font-medium text-ink-faint">
-                  {label}
-                  {showDate && (
-                    <span className="font-normal text-ink-faint/70">{format(group.date, "MMM d")}</span>
-                  )}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <AnimatePresence initial={false}>
-                    {group.items.map((item) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                        day={group.date}
-                        {...chrome}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </section>
-            );
-          })}
-
-          {visibleGroups.length < groups.length && (
-            <AgendaContinuation
-              key={`groups-${visibleGroups.length}`}
-              label="Load more days"
-              onReveal={revealMoreGroups}
-            />
-          )}
-
-          {visibleLater.length > 0 && (
-            <section id="agenda-later" className="agenda-day">
-              <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
-              <div className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {visibleLater.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                      {...chrome}
+              {visibleGroups.length < groups.length && (
+                <AgendaContinuation
+                  key={`groups-${visibleGroups.length}`}
+                  label="Load more days"
+                  onReveal={revealMoreGroups}
+                />
+              )}
+              {allGroupsVisible && visibleLater.length < later.length && (
+                <AgendaContinuation
+                  key={`later-${visibleLater.length}`}
+                  label="Load more later items"
+                  onReveal={revealMoreLater}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {visibleOverdue.length > 0 && (
+                <section id="agenda-overdue" className="agenda-day">
+                  <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
+                  <div className="flex flex-col gap-2">
+                    <AnimatePresence initial={false}>
+                      {visibleOverdue.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          {...chrome}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                  {overdue.length > visibleOverdue.length && (
+                    <RevealOverdueButton
+                      remaining={overdue.length - visibleOverdue.length}
+                      onReveal={revealMoreOverdue}
                     />
-                  ))}
-                </AnimatePresence>
-              </div>
-            </section>
+                  )}
+                </section>
+              )}
+
+              {todayLink}
+
+              {visibleGroups.map((group) => {
+                const label = dayLabel(group.date);
+                const showDate = label === "Tomorrow";
+                return (
+                  <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
+                    <p className="mb-2.5 flex items-baseline gap-2 text-[12px] font-medium text-ink-faint">
+                      {label}
+                      {showDate && (
+                        <span className="font-normal text-ink-faint/70">{format(group.date, "MMM d")}</span>
+                      )}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <AnimatePresence initial={false}>
+                        {group.items.map((item) => (
+                          <ItemCard
+                            key={item.id}
+                            item={item}
+                            category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                            day={group.date}
+                            {...chrome}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </section>
+                );
+              })}
+
+              {visibleGroups.length < groups.length && (
+                <AgendaContinuation
+                  key={`groups-${visibleGroups.length}`}
+                  label="Load more days"
+                  onReveal={revealMoreGroups}
+                />
+              )}
+
+              {visibleLater.length > 0 && (
+                <section id="agenda-later" className="agenda-day">
+                  <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
+                  <div className="flex flex-col gap-2">
+                    <AnimatePresence initial={false}>
+                      {visibleLater.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          {...chrome}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                </section>
+              )}
+              {allGroupsVisible && visibleLater.length < later.length && (
+                <AgendaContinuation
+                  key={`later-${visibleLater.length}`}
+                  label="Load more later items"
+                  onReveal={revealMoreLater}
+                />
+              )}
+            </div>
           )}
-          {allGroupsVisible && visibleLater.length < later.length && (
-            <AgendaContinuation
-              key={`later-${visibleLater.length}`}
-              label="Load more later items"
-              onReveal={revealMoreLater}
-            />
-          )}
-        </>
+        </div>
       )}
     </div>
   );

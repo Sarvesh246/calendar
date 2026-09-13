@@ -661,6 +661,39 @@ button, a, [role="button"], summary, input, textarea, select, label {
   color: var(--ink);
 }
 
+/* Agenda's pinned date — a dissolving folio, not a toolbar strip.
+ *
+ * No backdrop-filter: a full-bleed sticky re-samples everything beneath it
+ * on every scrolled frame, and a blur there is how the list starts to hitch.
+ * An opaque-to-clear wash of `--surface-base` is cheap and still lets cards
+ * fade out as they travel under the lockup. */
+.agenda-sticky-veil {
+  background: linear-gradient(
+    to bottom,
+    var(--surface-base) 0%,
+    var(--surface-base) 48%,
+    color-mix(in srgb, var(--surface-base) 82%, transparent) 68%,
+    color-mix(in srgb, var(--surface-base) 28%, transparent) 86%,
+    transparent 100%
+  );
+}
+
+.agenda-sticky-veil-warn {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--warn-soft) 72%, var(--surface-base)) 0%,
+    color-mix(in srgb, var(--warn-soft) 30%, var(--surface-base)) 38%,
+    color-mix(in srgb, var(--surface-base) 62%, transparent) 68%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity var(--motion-standard) var(--ease-standard);
+}
+
+.agenda-sticky-veil-warn[data-active] {
+  opacity: 1;
+}
+
 /* Floating glass chrome — tab bar and header cluster share one recipe so
    restoring button blur never requires an opaque page header.
 
