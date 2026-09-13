@@ -12,6 +12,7 @@ import { ItemCard } from "@/components/item-card";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
+import { Scrim } from "@/components/ui/scrim";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
@@ -151,14 +152,7 @@ export function DaySheet({
       {/* Dimmed in proportion to how much the sheet is covering. At the compact
           detent the month has to stay legible — it is the thing you are
           stepping through days *against*. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: expanded ? 1 : 0.35 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        onClick={close}
-        className="overlay-scrim absolute inset-0"
-      />
+      <Scrim onClick={close} amount={expanded ? 1 : 0.35} />
       <motion.div
         role="dialog"
         ref={panelRef}

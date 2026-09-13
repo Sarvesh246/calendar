@@ -525,6 +525,16 @@ html.scroll-locked body {
   overflow: hidden;
 }
 
+/* Reserve the scrollbar's width permanently. Without it, locking the page for
+   a sheet takes the scrollbar away and every fixed element and centred column
+   jumps sideways — then jumps back when the sheet closes. That flinch is read
+   as the app glitching, and it happens on every open and close. */
+@media (pointer: fine) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
+
 /* Keep the app's own fixed chrome welded to the device window while the
    on-screen keyboard is up.
 
@@ -669,8 +679,10 @@ button, a, [role="button"], summary, input, textarea, select, label {
     inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
     0 8px 24px -8px rgb(0 0 0 / 0.3),
     0 2px 8px -4px rgb(0 0 0 / 0.16);
-  backdrop-filter: blur(26px) saturate(140%);
-  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  /* Cheaper than it was (26px/140%). A fixed bar re-blurs everything beneath
+     it on every scrolled frame, and the radius is most of that cost — at this
+     size the glass is indistinguishable and the scroll is not. */
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .mobile-tab-pill {
@@ -690,8 +702,7 @@ button, a, [role="button"], summary, input, textarea, select, label {
     inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
     0 8px 24px -8px rgb(0 0 0 / 0.28),
     0 2px 8px -4px rgb(0 0 0 / 0.14);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(130%);
 }
 
 @supports not ((backdrop-filter: blur(1px))) {
@@ -781,13 +792,47 @@ button, a, [role="button"], summary, input, textarea, select, label {
   background: var(--ink-faint);
 }
 
-/* Overlay scrims — ink-based, theme-aware (not hardcoded black) */
+/* Overlay scrims.
+ *
+ * These were mixed from `--ink`, which is the *text* colour — near-white on
+ * every dark preset. So opening a sheet in the dark themes threw a 35% white
+ * sheet over the whole app: the "background going white" when a menu opens,
+ * and a hard flash back when it closed.
+ *
+ * A scrim's job is to push the page back, which is darkening plus defocusing,
+ * in every theme. So: a neutral veil and a real blur, faded in and out by
+ * whatever is opening. `will-change` keeps the fade on the compositor — a
+ * backdrop filter re-blurring the page on the main thread per frame is exactly
+ * the lag you feel when a menu opens. */
+/* No hand-written `-webkit-backdrop-filter` anywhere in this file, on purpose.
+   Lightning CSS (Next's minifier) treats it as the same property, so a prefixed
+   line written after the standard one *replaced* it — the build shipped only
+   `-webkit-backdrop-filter`, and every browser that doesn't take the prefix
+   (Chrome and Android among them) got no blur at all, with the `@supports`
+   fallback none the wiser. The build adds whatever prefixes the targets need. */
+.overlay-scrim,
+.overlay-scrim-light {
+  will-change: opacity;
+  backdrop-filter: blur(18px);
+}
+
 .overlay-scrim {
-  background: color-mix(in srgb, var(--ink) 35%, transparent);
+  background: rgb(0 0 0 / 0.34);
 }
 
 .overlay-scrim-light {
-  background: color-mix(in srgb, var(--ink) 25%, transparent);
+  background: rgb(0 0 0 / 0.22);
+}
+
+/* Without a backdrop filter the veil is the only separation there is, so it
+   has to carry more of it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .overlay-scrim {
+    background: rgb(0 0 0 / 0.52);
+  }
+  .overlay-scrim-light {
+    background: rgb(0 0 0 / 0.4);
+  }
 }
 
 /* Calendar chips — adopt in month-view via .cal-chip */
@@ -942,7 +987,11 @@ select {
 }
 
 .route-enter {
-  animation: route-enter var(--motion-standard) var(--ease-standard) both;
+  /* Deliberately quicker than `--motion-standard`. A route change is not an
+     element arriving on a page you are already looking at — you are waiting for
+     it, and the reveal is time added to a navigation that already cost you a
+     router commit. */
+  animation: route-enter 150ms var(--ease-standard) both;
 }
 
 @keyframes route-enter-instant {
@@ -965,7 +1014,7 @@ body {
 }
 
 .page-shell > * > * {
-  animation: content-rise var(--motion-standard) var(--ease-standard) both;
+  animation: content-rise 150ms var(--ease-standard) both;
   backface-visibility: hidden;
 }
 /* Skip the stagger on the very first paint — it made cold starts feel blank. */
@@ -978,28 +1027,30 @@ html[data-first-load="1"] .page-shell > * > * {
   animation-delay: 0ms;
 }
 .page-shell > * > *:nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: 24ms;
 }
 .page-shell > * > *:nth-child(3) {
-  animation-delay: 75ms;
+  animation-delay: 44ms;
 }
 .page-shell > * > *:nth-child(4) {
-  animation-delay: 105ms;
+  animation-delay: 60ms;
 }
 .page-shell > * > *:nth-child(5) {
-  animation-delay: 130ms;
+  animation-delay: 72ms;
 }
 .page-shell > * > *:nth-child(6) {
-  animation-delay: 150ms;
+  animation-delay: 82ms;
 }
 .page-shell > * > *:nth-child(n + 7) {
-  animation-delay: 165ms;
+  animation-delay: 90ms;
 }
 
 /* …but not on the three tab routes. Switching tabs already has its own
    motion — the pill travelling under your thumb — and replaying a 165ms
    staggered reveal of every section on top of it made a swap that should feel
-   immediate read as a stutter. The stagger stays where it earns its keep: the
+   immediate read as a stutter. What is left is half what it was: the last
+   section used to land the better part of 400ms after the tap, which is long
+   enough to read as the app thinking rather than as a reveal. The stagger stays where it earns its keep: the
    first arrival at a page you navigated to deliberately (Settings). */
 .route-enter-instant > * > * {
   animation: none;

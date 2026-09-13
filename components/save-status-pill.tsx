@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, CloudOff, RotateCw, TriangleAlert } from "lucide-react";
-import { useDatebookStore } from "@/lib/store";
+import {
+  getLocalWriteCount,
+  getServerLocalWriteCount,
+  subscribeLocalWrites,
+  useDatebookStore,
+} from "@/lib/store";
 import { describeSaveStatus, type SaveStatusView } from "@/lib/save-status";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -47,11 +52,20 @@ export function SaveStatusPill() {
   // effect can read it without holding a ref it would have to write in render.
   const transient = view.transient;
 
+  // A reassurance is worth saying once. "Saved" on every single edit, forever,
+  // is a pill that lives on screen and stops being read — and it was covering
+  // the list while it did it. Anything you might need to act on ignores this
+  // and shows every time.
+  const reassured = useRef(false);
+
   useEffect(() => {
     if (writes === 0) return;
+    if (transient) {
+      if (reassured.current) return;
+      reassured.current = true;
+    }
     // Showing is the effect: it is driven by writes landing and by the sync
     // state changing underneath, neither of which is a render-time value.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisible(true);
     if (!transient) return;
     const t = setTimeout(() => setVisible(false), TRANSIENT_MS);
@@ -167,34 +181,13 @@ function StatusIcon({ tone }: { tone: SaveStatusView["tone"] }) {
 }
 
 /**
- * How many times this session has written something. Watching the persisted
- * collections rather than a save callback means every path counts — quick add,
- * a swipe, the assistant, an import — without each having to remember to report
- * in. Starts at 0, so someone who has only opened the app is never told about a
- * save they didn't make.
+ * Content edits made on this device, this session.
+ *
+ * The store publishes this (see `subscribeLocalWrites`) rather than the pill
+ * inferring it from object identity: a background feed re-sync, a cloud merge,
+ * the rehydration repair and every settings toggle all change the store, and
+ * none of them is something the person did and might be wondering about.
  */
 function useWriteTick(): number {
-  const [writes, setWrites] = useState(0);
-  useEffect(() => {
-    const initial = useDatebookStore.getState();
-    let previous = {
-      items: initial.items,
-      categories: initial.categories,
-      settings: initial.settings,
-    };
-    return useDatebookStore.subscribe((state) => {
-      const changed =
-        state.items !== previous.items ||
-        state.categories !== previous.categories ||
-        state.settings !== previous.settings;
-      if (!changed) return;
-      previous = {
-        items: state.items,
-        categories: state.categories,
-        settings: state.settings,
-      };
-      setWrites((n) => n + 1);
-    });
-  }, []);
-  return writes;
+  return useSyncExternalStore(subscribeLocalWrites, getLocalWriteCount, getServerLocalWriteCount);
 }

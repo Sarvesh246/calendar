@@ -8,6 +8,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
+import { Scrim } from "@/components/ui/scrim";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -95,16 +96,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
 
   return (
         <div className="viewport-pinned-overlay fixed inset-0 z-50">
-          <motion.button
-            type="button"
-            aria-label="Close filter"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="overlay-scrim absolute inset-0"
-            onClick={onClose}
-          />
+          <Scrim label="Close filter" onClick={onClose} />
           <motion.div
             role="dialog"
             ref={panelRef}

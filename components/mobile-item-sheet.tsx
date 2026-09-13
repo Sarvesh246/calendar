@@ -12,6 +12,7 @@ import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/lib/mobile-item-actions";
 import { Reveal } from "@/components/ui/reveal";
+import { Scrim } from "@/components/ui/scrim";
 import type { Item } from "@/lib/types";
 
 /**
@@ -57,14 +58,7 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
 
   return (
     <div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0, transition: { duration: motionTokens.standard, ease: motionTokens.easeInOut } }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        className="overlay-scrim absolute inset-0"
-        onClick={close}
-      />
+      <Scrim onClick={close} />
       <motion.div
         ref={ref}
         role="dialog"
@@ -76,7 +70,11 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
         exit={
           reduced
             ? { opacity: 0, transition: { duration: motionTokens.exit } }
-            : { y: "100%", opacity: 0, transition: { duration: 0.26, ease: motionTokens.easeIn } }
+            // Slides out, never fades: a sheet that goes translucent on the
+            // way down shows the tab bar and the page through itself for a
+            // few frames, which looks like a rendering fault rather than a
+            // dismissal. iOS slides, so this slides.
+            : { y: "100%", transition: { duration: 0.26, ease: motionTokens.easeIn } }
         }
         transition={motionTokens.springGentle}
         drag="y"
