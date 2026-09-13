@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef } from "react";
+import { startTransition, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, SlidersHorizontal, X } from "lucide-react";
+import { summariseFilters } from "@/lib/filter-summary";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
@@ -16,9 +17,18 @@ import { useAllViews } from "@/components/saved-views";
 
 export function FilterButton({ className }: { className?: string }) {
   const filter = useUIStore((s) => s.categoryFilter);
+  const categories = useDatebookStore((s) => s.categories);
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const activeViewId = useUIStore((s) => s.activeViewId);
   const setFilterOpen = useUIStore((s) => s.setFilterOpen);
-  const active = Boolean(filter?.length) || Boolean(activeViewId);
+  const views = useAllViews();
+  const summary = summariseFilters(
+    categories,
+    filter,
+    hideCompleted,
+    views.find((v) => v.id === activeViewId)?.name
+  );
+  const active = summary.active;
 
   return (
     <Button
@@ -28,13 +38,7 @@ export function FilterButton({ className }: { className?: string }) {
         haptic("light");
         setFilterOpen(true);
       }}
-      aria-label={
-        activeViewId
-          ? "Filter, a saved view is on"
-          : active
-            ? `Filter, ${filter!.length} selected`
-            : "Filter by class"
-      }
+      aria-label={active ? `Filters — ${summary.label}. Change filters` : "Filter"}
       className={cn("relative", className, active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent")}
     >
       <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
@@ -72,6 +76,8 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
   useDialogFocus(panelRef, true);
   const categories = useDatebookStore((s) => s.categories);
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const updateSettings = useDatebookStore((s) => s.updateSettings);
   const filter = useUIStore((s) => s.categoryFilter);
   const toggle = useUIStore((s) => s.toggleCategoryFilter);
   const clear = useUIStore((s) => s.clearCategoryFilter);
@@ -79,6 +85,12 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const applyView = useUIStore((s) => s.applyView);
   const views = useAllViews();
   const visible = categories.filter((c) => !c.archived);
+  const summary = summariseFilters(
+    categories,
+    filter,
+    hideCompleted,
+    views.find((v) => v.id === activeViewId)?.name
+  );
 
   return (
         <div className="viewport-pinned-overlay fixed inset-0 z-50">
@@ -100,7 +112,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
               if (event.key === "Escape") { event.stopPropagation(); onClose(); }
             }}
             aria-modal="true"
-            aria-label="Filter by class"
+            aria-label="Filters"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
@@ -111,8 +123,16 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
               aria-hidden
               className="mx-auto mb-2 block h-1 w-10 rounded-full bg-line-strong opacity-75"
             />
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[15px] font-semibold text-ink">Views</p>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[15px] font-semibold text-ink">Filters</p>
+                {/* What's on, right where you turn it off — the sheet showed
+                    ticks only, which say what is selected but never that
+                    anything is being hidden. */}
+                <p className="truncate text-[12px] text-ink-soft">
+                  {summary.active ? summary.label : "Showing everything"}
+                </p>
+              </div>
               <Button
                 variant="tertiary"
                 size="iconSm"
@@ -122,6 +142,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                 <X className="h-4 w-4" strokeWidth={2} />
               </Button>
             </div>
+            <p className="mb-2 text-[15px] font-semibold text-ink">Views</p>
             <div className="mb-4 flex flex-col gap-1">
               {views.map((view) => {
                 const active = view.id === activeViewId;
@@ -168,6 +189,39 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                   </FilterRow>
                 );
               })}
+            </div>
+
+            {/* "Hide completed" lived three taps deep in the overflow menu and
+                emptied lists just as effectively as a class filter. It belongs
+                beside the thing it behaves like. */}
+            <div className="mt-3 border-t border-line pt-3">
+              <FilterRow
+                selected={hideCompleted}
+                onSelect={() => {
+                  haptic("light");
+                  startTransition(() => updateSettings({ hideCompleted: !hideCompleted }));
+                }}
+              >
+                Hide completed
+              </FilterRow>
+              {summary.active && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    // The view goes first: it is what set the classes, so
+                    // clearing the classes alone would leave its status, kind
+                    // and range filters quietly in force.
+                    applyView(null);
+                    clear();
+                    startTransition(() => updateSettings({ hideCompleted: false }));
+                    onClose();
+                  }}
+                  className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
+                >
+                  Reset all filters
+                </button>
+              )}
             </div>
           </motion.div>
         </div>

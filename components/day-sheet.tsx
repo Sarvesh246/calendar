@@ -3,16 +3,19 @@
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
-import { EmptyState } from "@/components/empty-state";
+import { ListEmptyState } from "@/components/list-empty-state";
+import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import type { Item } from "@/lib/types";
+import type { FilterBreakdown } from "@/lib/filters";
+import type { OverlapGroup } from "@/lib/overlap";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 function useBelowLg() {
@@ -33,12 +36,17 @@ export function DaySheet({
   onClose,
   onAdd,
   onStep,
+  breakdown,
+  overlaps = [],
 }: {
   date: Date;
   items: Item[];
   onClose: () => void;
   onAdd?: () => void;
   onStep?: (direction: -1 | 1) => void;
+  /** What the filters are hiding on this day, so "empty" can explain itself. */
+  breakdown?: FilterBreakdown;
+  overlaps?: OverlapGroup[];
 }) {
   const visible = useBelowLg();
   const phone = useMediaQuery("(max-width: 767px)");
@@ -139,6 +147,23 @@ export function DaySheet({
             </div>
             <div className="flex shrink-0" onPointerDown={e => e.stopPropagation()}>
               {phone && onStep && <><button className="flex h-11 w-11 items-center justify-center" aria-label="Previous day" onClick={() => onStep(-1)}><ChevronLeft className="h-5 w-5" /></button><button className="flex h-11 w-11 items-center justify-center" aria-label="Next day" onClick={() => onStep(1)}><ChevronRight className="h-5 w-5" /></button></>}
+              {/* Growing the sheet was a drag-up and nothing else — unreachable
+                  by keyboard, by switch control, and by anyone who can't make a
+                  precise vertical gesture. */}
+              {phone && !expanded && items.length > 0 && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(true);
+                  }}
+                  aria-label="Expand this day"
+                  className="flex h-11 w-11 items-center justify-center text-ink-soft"
+                >
+                  <ChevronUp className="h-5 w-5" strokeWidth={2} />
+                </button>
+              )}
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
@@ -167,9 +192,17 @@ export function DaySheet({
             </button>
           )}
           {items.length === 0 ? (
-            <EmptyState title="Nothing scheduled." sub={`Free day on ${format(date, "MMM d")}.`} />
+            <ListEmptyState
+              scope={format(date, "MMM d")}
+              total={breakdown?.total ?? 0}
+              hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
+              hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+              canAdd={Boolean(onAdd)}
+              onAdd={onAdd}
+            />
           ) : (
             <div className="flex flex-col gap-2">
+              <OverlapNotices groups={overlaps} />
               {items.map((item) => (
                 <ItemCard
                   key={item.id}

@@ -48,6 +48,55 @@ function relativeLuminance([r, g, b]: Rgb): number {
   return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
 }
 
+function contrastRatio(a: Rgb, b: Rgb): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** WCAG AA for body text. The faint tier carries real content — times, counts,
+ *  dates — so it is held to the same bar as everything else. */
+const MIN_TEXT_CONTRAST = 4.5;
+
+/**
+ * Walk a derived text colour back toward the full-strength ink until it is
+ * legible on the surface it actually sits on.
+ *
+ * The faint and soft tiers used to be a blind percentage mix: fine against the
+ * background they were mixed with, arbitrary against anything else. Pick a
+ * mid-grey surface in the theme editor and the faint tier lands near 2:1, which
+ * is a smudge, not text — and it is carrying times, counts and dates.
+ *
+ * `surface` is the hard requirement, matching the rule the rest of this file
+ * already follows: ink is pinned to the cards because that is where text
+ * overwhelmingly renders. `alsoOn` (the page backdrop) is best-effort, because
+ * a light-surface/dark-backdrop palette is a perfectly reasonable pick for
+ * which no single colour can clear AA on both — insisting would only drag the
+ * tier to the ink and throw away the hierarchy for nothing.
+ *
+ * Stepping rather than solving keeps the chosen hue as long as it can.
+ */
+function ensureReadable(colour: Rgb, ink: Rgb, surface: Rgb, alsoOn: Rgb): Rgb {
+  const scoreOf = (c: Rgb) =>
+    contrastRatio(c, surface) >= MIN_TEXT_CONTRAST &&
+    contrastRatio(c, alsoOn) >= MIN_TEXT_CONTRAST;
+  if (scoreOf(colour)) return colour;
+
+  let bestOnSurface: Rgb | null =
+    contrastRatio(colour, surface) >= MIN_TEXT_CONTRAST ? colour : null;
+
+  for (let step = 1; step <= 20; step += 1) {
+    const next = mix(colour, ink, step / 20);
+    if (scoreOf(next)) return next;
+    if (!bestOnSurface && contrastRatio(next, surface) >= MIN_TEXT_CONTRAST) {
+      bestOnSurface = next;
+    }
+  }
+  // Both unreachable: keep whatever cleared the surface, else the ink, which is
+  // the most legible colour this palette has.
+  return bestOnSurface ?? ink;
+}
+
 /** True if `hex` reads as a light color — the same test used to decide body
  *  text color and `color-scheme` for a custom background or accent. */
 export function isLightColor(hex: string): boolean {
@@ -78,8 +127,11 @@ export function buildCustomThemeVars(colors: CustomThemeColors): Record<string, 
   const black: Rgb = [0, 0, 0];
 
   const ink: Rgb = dark ? [244, 244, 245] : [28, 28, 30];
-  const inkSoft = mix(ink, bg, dark ? 0.42 : 0.34);
-  const inkFaint = mix(ink, bg, dark ? 0.66 : 0.58);
+  // Both dimmer tiers are checked against the two things they can sit on: the
+  // page backdrop and the cards. A custom palette has no designer keeping an
+  // eye on that, so the derivation does it.
+  const inkSoft = ensureReadable(mix(ink, bg, dark ? 0.42 : 0.34), ink, surface, bg);
+  const inkFaint = ensureReadable(mix(ink, bg, dark ? 0.66 : 0.58), ink, surface, bg);
 
   // Mixed from `surface` (not `background`) for the same reason as `dark`
   // above — borders overwhelmingly outline surface cards, not the page.

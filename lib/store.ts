@@ -109,6 +109,10 @@ interface DatebookState {
   userId: string | null;
   syncStatus: SyncStatus;
   cloudError: string | null;
+  /** Writes accepted locally but not yet acknowledged by the cloud. Transient. */
+  queuedWrites: number;
+  /** Last observed `navigator.onLine`. Transient. */
+  online: boolean;
   mergeOffer: MergeOffer | null;
   /** Quiet, replaceable cards for other-device edits. Transient. */
   syncNotices: SyncNotice[];
@@ -202,6 +206,8 @@ export const useDatebookStore = create<DatebookState>()(
       lastDeleted: null,
 
       mode: "local",
+      queuedWrites: 0,
+      online: typeof navigator === "undefined" ? true : navigator.onLine !== false,
       userId: null,
       syncStatus: "idle",
       cloudError: null,
@@ -1593,6 +1599,7 @@ function clearPending() {
   }
   pending.settingsDirty = false;
   pending.deletions = {};
+  publishQueueDepth();
 }
 
 function pendingWork() {
@@ -1603,6 +1610,31 @@ function pendingWork() {
       (k) => pending[k].upserts.size > 0 || pending[k].deletes.size > 0
     )
   );
+}
+
+/**
+ * How many rows are waiting to go out. Counted rather than inferred from
+ * `syncStatus`, because "synced" only ever meant "the last batch landed" — a
+ * write made while the tab was offline sat in this queue with the UI still
+ * showing the previous success.
+ */
+/** Rows drained into the batch currently in flight, counted until it settles. */
+let inFlightRows = 0;
+
+function queueDepth(): number {
+  let n = inFlightRows + Object.keys(pending.deletions).length + (pending.settingsDirty ? 1 : 0);
+  for (const k of ["categories", "reminderPresets", "importSources", "items"] as CollKey[]) {
+    n += pending[k].upserts.size + pending[k].deletes.size;
+  }
+  return n;
+}
+
+/** Mirror the queue depth into the store so the UI can speak for it. */
+function publishQueueDepth() {
+  const next = queueDepth();
+  if (useDatebookStore.getState().queuedWrites !== next) {
+    useDatebookStore.setState({ queuedWrites: next });
+  }
 }
 
 function accumulate<T extends { id: string }>(
@@ -1645,6 +1677,15 @@ function drain<T extends { id: string }>(bucket: { upserts: Map<string, T>; dele
   return out;
 }
 
+function countBatch(batch: PendingChanges): number {
+  let n = Object.keys(batch.deletions).length + (batch.settings ? 1 : 0);
+  for (const key of ["categories", "reminderPresets", "importSources", "items"] as CollKey[]) {
+    const b = batch[key] as { upserts: { id: string }[]; deletes: string[] };
+    n += b.upserts.length + b.deletes.length;
+  }
+  return n;
+}
+
 function requeue(batch: PendingChanges) {
   for (const key of ["categories", "reminderPresets", "importSources", "items"] as CollKey[]) {
     const b = batch[key] as { upserts: { id: string }[]; deletes: string[] };
@@ -1680,6 +1721,10 @@ async function flush() {
   pending.deletions = {};
 
   let ok = false;
+  // The batch has left the queue but is not acknowledged; keep it counted so
+  // "Waiting to sync" doesn't blink off mid-flight.
+  inFlightRows = countBatch(batch);
+  publishQueueDepth();
   try {
     const knownCategoryIds = new Set(useDatebookStore.getState().categories.map((c) => c.id));
     await withTimeout(
@@ -1700,6 +1745,8 @@ async function flush() {
     useDatebookStore.setState({ syncStatus: "error", cloudError: describeError(err) });
   } finally {
     flushing = false;
+    inFlightRows = 0;
+    publishQueueDepth();
   }
 
   if (ok) {
@@ -1732,6 +1779,7 @@ useDatebookStore.subscribe((state, prev) => {
     }
   }
   if (changed) scheduleFlush();
+  publishQueueDepth();
 });
 
 const REALTIME_KEY: Record<string, CollKey> = {
@@ -2304,4 +2352,17 @@ function bindConnectivityListeners() {
   document.addEventListener("visibilitychange", resume);
   window.addEventListener("online", resume);
   window.addEventListener("focus", resume);
+
+  // Connectivity is its own signal, separate from whether a sync has been
+  // attempted: an edit made offline must read as "waiting", not "saved",
+  // before any request has had the chance to fail.
+  const publishOnline = () => {
+    const online = navigator.onLine !== false;
+    if (useDatebookStore.getState().online !== online) {
+      useDatebookStore.setState({ online });
+    }
+  };
+  publishOnline();
+  window.addEventListener("online", publishOnline);
+  window.addEventListener("offline", publishOnline);
 }

@@ -569,11 +569,22 @@ export function isEventEnded(item: Item, now = new Date(), day = now): boolean {
   return now.getTime() >= start.getTime() && viewDay <= startOfDay(now).getTime();
 }
 
-export function formatDaySummary(events: number, due: number, overdue: number) {
+export function formatDaySummary(
+  events: number,
+  due: number,
+  overdue: number,
+  /** How many of the day's things the filters are hiding, if any. */
+  hidden = 0
+) {
   const parts: string[] = [];
   if (overdue) parts.push(`${overdue} overdue`);
   if (events) parts.push(`${events} event${events === 1 ? "" : "s"}`);
   if (due) parts.push(`${due} due`);
+  // "Clear day" on a day that is only clear because a filter emptied it is the
+  // headline contradicting the empty state directly underneath it.
+  if (parts.length === 0 && hidden > 0) {
+    return `${hidden} hidden by your filters`;
+  }
   if (parts.length === 0) return "Clear day";
   return parts.join(" · ");
 }

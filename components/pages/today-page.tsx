@@ -7,7 +7,8 @@ import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { useFilteredItems } from "@/lib/use-filtered-items";
+import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
+import { findOverlapGroups } from "@/lib/overlap";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
   dayKey,
@@ -25,7 +26,8 @@ import { classCountdownWindowMs } from "@/lib/class-reminder";
 import { handleItemMenuKey, itemMenuProps } from "@/lib/item-menu";
 import { UpNextStack } from "@/components/up-next-card";
 import { ItemCard } from "@/components/item-card";
-import { EmptyState } from "@/components/empty-state";
+import { ListEmptyState } from "@/components/list-empty-state";
+import { OverlapNotices } from "@/components/overlap-notice";
 import { FocusView } from "@/components/focus-view";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
@@ -63,6 +65,7 @@ function TodayDashboard() {
   const wide = useMediaQuery(WIDE_QUERY);
   const [reviewOverdue, setReviewOverdue] = useState(false);
   const items = useFilteredItems();
+  const allItems = useDatebookStore((s) => s.items);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
   const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
@@ -90,6 +93,12 @@ function TodayDashboard() {
   const dueTodayCount = useMemo(() => openWorkDueOnDay(items, day).length, [items, day]);
   const eventsCount = today.filter((i) => i.type === "event").length;
 
+  // Measured against the *unfiltered* day, so "Clear day" can never be a filter
+  // in disguise and the empty state can name whichever filter emptied it.
+  const todayAll = useMemo(() => itemsOnDay(allItems, day), [allItems, day]);
+  const todayBreakdown = useFilterBreakdown(todayAll);
+  const overlaps = useMemo(() => findOverlapGroups(todayList, day), [todayList, day]);
+
   const header = (
     <header className="flex items-start justify-between gap-3">
       <div>
@@ -98,7 +107,14 @@ function TodayDashboard() {
           {format(day, "EEEE, MMMM d")}
         </h1>
         <p className="mt-1 text-[14px] text-ink-soft">
-          {formatDaySummary(eventsCount, dueTodayCount, overdue.length)}
+          {formatDaySummary(
+            eventsCount,
+            dueTodayCount,
+            overdue.length,
+            todayBreakdown.hiddenByCategory +
+              todayBreakdown.hiddenByCompletion +
+              todayBreakdown.hiddenByView
+          )}
         </p>
       </div>
       <ViewMenu showFocus />
@@ -138,12 +154,18 @@ function TodayDashboard() {
     <section>
       <SectionLabel>Today</SectionLabel>
       {todayList.length === 0 ? (
-        <EmptyState
-          title={overdue.length > 0 ? "Nothing else today." : "Clear day."}
-          sub="Classes and due work will show up here in time order."
+        <ListEmptyState
+          scope="today"
+          total={todayBreakdown.total}
+          hiddenByCategory={todayBreakdown.hiddenByCategory}
+          hiddenByCompletion={todayBreakdown.hiddenByCompletion}
+          hiddenByView={todayBreakdown.hiddenByView}
         />
       ) : (
         <div className="flex flex-col gap-2">
+          {/* Two classes at the same hour read as "first this, then that" in a
+              list. On a phone that sentence is the only warning there is. */}
+          <OverlapNotices groups={overlaps} className="md:hidden" />
           <AnimatePresence initial={false}>
             {todayList.map((item) => (
               <ItemCard

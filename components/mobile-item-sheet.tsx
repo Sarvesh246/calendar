@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { format } from "date-fns";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/lib/mobile-item-actions";
 import type { Item } from "@/lib/types";
@@ -13,6 +14,9 @@ export function MobileItemSheet({ title, onClose, children }: { title: string; o
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, true);
   useLockBodyScroll(true);
+  // Search, the date pickers and the reschedule fields all live near the
+  // bottom of a sheet the keyboard then covers.
+  useKeepFieldVisible(ref, true);
   return createPortal(<div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); onClose(); } }}>
     <div className="overlay-scrim absolute inset-0" onClick={onClose} />
     <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface p-4 pb-[max(1rem,var(--safe-bottom))]">

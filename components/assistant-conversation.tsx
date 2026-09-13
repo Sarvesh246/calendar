@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Check, PanelRight, PictureInPicture2, RotateCw, SquarePen, Sparkles, Trash2, X } from "lucide-react";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { useUIStore } from "@/lib/ui-store";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
+import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useWorkspacePrefs } from "@/lib/workspace-prefs";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { DOCK_MEDIA_QUERY } from "@/lib/assistant-dock";
@@ -43,9 +45,17 @@ export function AssistantConversation({
   const reset = useAssistantSession((s) => s.reset);
   const pendingMessage = useUIStore((s) => s.aiDrawerPendingMessage);
   const canDock = useMediaQuery(DOCK_MEDIA_QUERY);
-  const [input, setInput] = useState("");
+  // A question you were half-way through typing when the drawer was dismissed
+  // is worth exactly as much as one you finished — keep it.
+  const [input, setInput] = useState(() => readDraft("assistant"));
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  useKeepFieldVisible(composerRef, active && !docked);
+
+  useEffect(() => {
+    writeDraft("assistant", input);
+  }, [input]);
 
   useEffect(() => {
     if (!active) return;
@@ -79,6 +89,8 @@ export function AssistantConversation({
   function send(text: string) {
     if (!text.trim()) return;
     setInput("");
+    // Sent is not interrupted — the words are in the thread now.
+    clearDraft("assistant");
     ask(text);
   }
 
@@ -289,6 +301,10 @@ export function AssistantConversation({
           <p className="mb-1.5 px-1 text-[11px] text-ink-faint">Queued — sending after this reply</p>
         )}
         <div
+          ref={composerRef}
+          // Marks the field and Send as one unit, so the keyboard never covers
+          // the button you need to finish with.
+          data-field-group=""
           className={cn(
             "flex items-center gap-2",
             docked
@@ -321,6 +337,7 @@ export function AssistantConversation({
             )}
           />
           <button
+            data-primary-action=""
             onClick={() => send(input)}
             disabled={!input.trim()}
             aria-label="Send"

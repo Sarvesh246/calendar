@@ -45,7 +45,7 @@
   --line-strong: #c7c7cc;
   --ink: #1c1c1e;
   --ink-soft: #636366;
-  --ink-faint: #8e8e93;
+  --ink-faint: #6d6d71;
   --accent: #007aff;
   --accent-2: #0051d5;
   --accent-ink: #ffffff;
@@ -72,7 +72,7 @@
   --line-strong: rgba(255, 255, 255, 0.18);
   --ink: #f5f5f7;
   --ink-soft: #98989d;
-  --ink-faint: #636366;
+  --ink-faint: #858587;
   --accent: #0a84ff;
   --accent-2: #64d2ff;
   --accent-ink: #ffffff;
@@ -99,7 +99,7 @@
   --line-strong: #d0bda0;
   --ink: #2a241c;
   --ink-soft: #6b5c48;
-  --ink-faint: #a3927a;
+  --ink-faint: #716553;
   --accent: #8f4a3c;
   --accent-2: #c17a4a;
   --accent-ink: #fffaf2;
@@ -126,14 +126,14 @@
   --line-strong: #c9bde8;
   --ink: #1f1a32;
   --ink-soft: #5c5574;
-  --ink-faint: #938caa;
+  --ink-faint: #6c6581;
   --accent: #6d4ee8;
   --accent-2: #2bb89c;
   --accent-ink: #ffffff;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
   --warn: #c17429;
   --warn-soft: #f8e6d1;
-  --good: #229a7c;
+  --good: #1b7a63;
   --good-soft: #d9f2ea;
   --shadow-sm: 0 1px 2px rgba(31, 26, 50, 0.06);
   --shadow-md: 0 8px 24px rgba(109, 78, 232, 0.1);
@@ -152,7 +152,7 @@
   --line-strong: rgba(255, 255, 255, 0.22);
   --ink: #ffffff;
   --ink-soft: #a0a0a0;
-  --ink-faint: #5c5c5c;
+  --ink-faint: #797979;
   --accent: #ffffff;
   --accent-2: #ffffff;
   --accent-ink: #000000;
@@ -179,7 +179,7 @@
   --line-strong: rgba(233, 214, 169, 0.18);
   --ink: #f3ead9;
   --ink-soft: #b7ac96;
-  --ink-faint: #7d7565;
+  --ink-faint: #867e6e;
   --accent: #c9a24a;
   --accent-2: #e0b25f;
   --accent-ink: #14110a;
@@ -206,7 +206,7 @@
   --line-strong: #e3b6c2;
   --ink: #3a2c30;
   --ink-soft: #74595f;
-  --ink-faint: #ab8d94;
+  --ink-faint: #7c646a;
   --accent: #c2456b;
   --accent-2: #e56b93;
   --accent-ink: #ffffff;
@@ -233,7 +233,7 @@
   --line-strong: rgba(180, 230, 200, 0.18);
   --ink: #eef4ee;
   --ink-soft: #a3b6a8;
-  --ink-faint: #6a7a6e;
+  --ink-faint: #76857a;
   --accent: #4cba82;
   --accent-2: #8fe0b0;
   --accent-ink: #08110b;
@@ -260,7 +260,7 @@
   --line-strong: #a8b3c0;
   --ink: #1a222c;
   --ink-soft: #4a5563;
-  --ink-faint: #7b8794;
+  --ink-faint: #57626e;
   --accent: #3d556c;
   --accent-2: #5a6f86;
   --accent-ink: #f4f6f8;
@@ -287,7 +287,7 @@
   --line-strong: rgba(255, 200, 170, 0.18);
   --ink: #f6ece7;
   --ink-soft: #b8a89f;
-  --ink-faint: #7c6b62;
+  --ink-faint: #8e7e76;
   --accent: #e56b48;
   --accent-2: #f0946e;
   --accent-ink: #14100e;
@@ -314,7 +314,7 @@
   --line-strong: #a6cddb;
   --ink: #0e2c3a;
   --ink-soft: #3d6574;
-  --ink-faint: #7a9eac;
+  --ink-faint: #4c6d7b;
   --accent: #1788ab;
   --accent-2: #3aafc9;
   --accent-ink: #ffffff;
@@ -562,6 +562,45 @@ html.scroll-locked body {
    fight with Tailwind's `inset-0`. */
 .viewport-pinned-overlay {
   margin-bottom: calc(0px - var(--fixed-drop, 0px));
+}
+
+/* ---------------------------------------------------------------------- */
+/* Larger text, and the parts of the phone UI that used to break under it   */
+/* ---------------------------------------------------------------------- */
+
+/* Turn text up — iOS Display Zoom, Android font scale, browser zoom — and a box
+   sized for one line at a known size no longer holds it.
+ *
+ * The fix is never to shrink the text back: that is precisely the opposite of
+ * what the person asked for. Most of the app grows on its own because its rows
+ * are `min-h-*`; the one place that could not was the month grid, which counted
+ * how many chips fit from a hard-coded pixel height — see `DayCellChips`, which
+ * now measures a real chip instead of assuming one.
+ *
+ * What is left here is the guarantee that a day cell's own contents may shrink
+ * to fit rather than push the date out of the cell, so a larger text size costs
+ * you chips (which have a `+n more`) and never the number of the day. */
+@media (max-width: 767px) {
+  .month-day-date-wrap {
+    min-height: 0;
+  }
+}
+
+/* Someone who has asked the OS for more contrast gets the strongest tier of
+   ink for secondary text, and borders that are actually visible rather than a
+   5%-alpha hairline. Layered on top of the per-theme values, which already
+   clear AA on their own. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-faint: var(--ink-soft);
+    --line: var(--line-strong);
+  }
+  .cal-chip,
+  .surface-card,
+  .mobile-tab-bar,
+  .mobile-header-cluster {
+    border-color: var(--line-strong);
+  }
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without

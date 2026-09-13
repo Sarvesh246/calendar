@@ -3,7 +3,7 @@
 import { useDeferredValue, useMemo } from "react";
 import { useDatebookStore } from "./store";
 import { useDeferredCategoryFilter, useUIStore } from "./ui-store";
-import { applyItemFilters } from "./filters";
+import { applyItemFilters, filterBreakdown, type FilterBreakdown } from "./filters";
 import { useNow } from "./use-now";
 import type { Item } from "./types";
 
@@ -36,5 +36,32 @@ export function useFilteredItems(): Item[] {
     // `clockKey` stands in for `now`, so the list only recomputes when it matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allItems, categoryFilter, hideCompleted, viewFilter, weekStartsOn, clockKey]
+  );
+}
+
+/**
+ * The same filters, reported rather than applied.
+ *
+ * Pages call this with the *unfiltered* items in whatever scope their empty
+ * state describes — a day, the horizon — so that when the list comes back empty
+ * it can say which of the three filters emptied it, and offer the matching way
+ * out. Sharing the plumbing with `useFilteredItems` is the point: a breakdown
+ * that disagreed with the list would be worse than no breakdown at all.
+ */
+export function useFilterBreakdown(items: Item[]): FilterBreakdown {
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
+  const categoryFilter = useDeferredCategoryFilter();
+  const viewFilter = useDeferredValue(useUIStore((s) => s.viewFilter));
+  return useMemo(
+    () =>
+      filterBreakdown(items, {
+        categoryFilter,
+        hideCompleted,
+        viewFilter,
+        now: new Date(),
+        weekStartsOn,
+      }),
+    [items, categoryFilter, hideCompleted, viewFilter, weekStartsOn]
   );
 }

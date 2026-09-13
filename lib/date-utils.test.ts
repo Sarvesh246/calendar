@@ -487,3 +487,18 @@ describe("class countdown and happening-now stack", () => {
     expect(classCountdownLabel(start, new Date(2026, 8, 11, 10, 20))).toBe("Starting now");
   });
 });
+
+describe("formatDaySummary with filters", () => {
+  it("still says Clear day when the day is genuinely empty", () => {
+    expect(formatDaySummary(0, 0, 0)).toBe("Clear day");
+    expect(formatDaySummary(0, 0, 0, 0)).toBe("Clear day");
+  });
+
+  it("says what the filters hid rather than claiming the day is clear", () => {
+    expect(formatDaySummary(0, 0, 0, 3)).toBe("3 hidden by your filters");
+  });
+
+  it("ignores the hidden count once anything is actually showing", () => {
+    expect(formatDaySummary(2, 1, 0, 5)).toBe("2 events · 1 due");
+  });
+});

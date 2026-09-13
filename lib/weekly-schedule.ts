@@ -158,7 +158,13 @@ export function buildWeeklySchedule(
 
 /** Weekdays 0–6 rotated so the user's chosen first day leads. */
 export function weekdayOrder(weekStartsOn: 0 | 1): number[] {
-  return Array.from({ length: 7 }, (_, i) => (i + weekStartsOn) % 7);
+  // Normalised rather than trusted. `settings` is replaced wholesale by the
+  // persisted copy (Zustand's default shallow merge), so a store written by a
+  // build that predates this setting hands back `undefined` — and
+  // `(i + undefined) % 7` is seven NaNs, which is seven weekdays that are all
+  // the same day and, downstream, seven React children with the same key.
+  const start = weekStartsOn === 1 ? 1 : 0;
+  return Array.from({ length: 7 }, (_, i) => (i + start) % 7);
 }
 
 /**

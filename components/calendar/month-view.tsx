@@ -19,6 +19,8 @@ const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const NO_ITEMS: Item[] = [];
 
+/** Design-time chip metrics. Real ones are measured — see `DayCellChips` — so
+ *  a larger text size loses chips to the `+n more` rather than clipping them. */
 const CHIP_HEIGHT = 23;
 const CHIP_GAP = 4;
 const MORE_LINE_HEIGHT = 16;
@@ -101,6 +103,11 @@ function DayCellChips({
     el.addEventListener("pointerdown", onDown);
     return () => el.removeEventListener("pointerdown", onDown);
   }, [date]);
+  const chipRef = useRef<HTMLSpanElement>(null);
+  // How tall a chip *actually* is. The constant above is what it measures at
+  // the design text size; turn text up and the real chip is taller, so counting
+  // with the constant fitted one chip too many and the cell clipped it.
+  const [chipHeight, setChipHeight] = useState(CHIP_HEIGHT);
 
   useEffect(() => {
     const el = ref.current;
@@ -116,16 +123,40 @@ function DayCellChips({
   // that briefly renders its whole list and then trims reads as a flicker.
   const fitCount =
     areaHeight > 0
-      ? fitCountVertical(areaHeight, items.length, CHIP_HEIGHT, CHIP_GAP, MORE_LINE_HEIGHT)
+      ? fitCountVertical(
+          areaHeight,
+          items.length,
+          chipHeight,
+          CHIP_GAP,
+          // The overflow line scales with the chips it stands in for.
+          Math.round((MORE_LINE_HEIGHT / CHIP_HEIGHT) * chipHeight)
+        )
       : 0;
 
   const visible = items.slice(0, fitCount);
   const hidden = items.slice(fitCount);
   const hiddenTitles = hidden.map((i) => i.title).join(", ");
 
+  // Declared after `visible` so the dependency can name the node being watched.
+  // Re-subscribing only when the first chip changes keeps this to one stable
+  // observer per populated cell rather than a new one every render.
+  const firstChipId = visible[0]?.id;
+  useEffect(() => {
+    const chip = chipRef.current;
+    if (!chip) return;
+    const read = () => {
+      const height = Math.round(chip.getBoundingClientRect().height);
+      if (height > 0) setChipHeight((prev) => (prev === height ? prev : height));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(chip);
+    return () => ro.disconnect();
+  }, [firstChipId]);
+
   return (
     <div ref={ref} className="month-day-chips relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
-      {visible.map((item) => {
+      {visible.map((item, index) => {
         const color = colorOf(item.categoryId);
         const done =
           (item.type !== "event" && item.status === "done") || isEventEnded(item, now, date);
@@ -133,6 +164,7 @@ function DayCellChips({
         return (
           <span
             key={item.id}
+            ref={index === 0 ? chipRef : undefined}
             title={item.title}
             data-chip-id={item.id}
             {...itemMenuProps(item.id, dayKey(date))}
