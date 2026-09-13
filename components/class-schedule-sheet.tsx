@@ -20,6 +20,7 @@ import { defaultUntilIso } from "@/lib/repeat";
 import { nanoid } from "@/lib/nanoid";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
+import { Scrim } from "@/components/ui/scrim";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WeekdayChips } from "@/components/weekday-chips";
@@ -274,15 +275,7 @@ function ClassScheduleSheetBody() {
 
   return (
         <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
-          <motion.button
-            type="button"
-            aria-label="Dismiss"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="overlay-scrim absolute inset-0"
-            onClick={close}
-          />
+          <Scrim label="Dismiss" onClick={close} />
           <motion.div
             role="dialog"
             aria-modal="true"

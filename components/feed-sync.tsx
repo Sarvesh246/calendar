@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useDatebookStore } from "@/lib/store";
+import { runSilently, useDatebookStore } from "@/lib/store";
 import { fetchCalendarFeed, FeedFetchError, isHttpFeedUrl } from "@/lib/calendar-import";
 import { mayAttempt, noteFeedFailure, noteFeedSuccess } from "@/lib/feed-retry";
 
@@ -43,7 +43,8 @@ export function FeedSync() {
             const feed = await fetchCalendarFeed(source.url);
             const current = useDatebookStore.getState();
             if (current.userId !== userId || !current.importSources.some((s) => s.id === source.id)) continue;
-            applyImport(source.url, feed);
+            // A re-sync nobody asked for shouldn't pop a "Saved" pill.
+            runSilently(() => applyImport(source.url, feed));
             noteFeedSuccess(source.url);
           } catch (err) {
             const rateLimited = err instanceof FeedFetchError && err.rateLimited;

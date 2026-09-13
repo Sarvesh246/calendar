@@ -1267,12 +1267,16 @@ export const useDatebookStore = create<DatebookState>()(
           items !== state.items
         ) {
           queueMicrotask(() => {
-            useDatebookStore.setState({
-              categories,
-              importSources,
-              reminderPresets,
-              settings,
-              items,
+            // A repair, not an edit — it must not tell anyone they saved
+            // something.
+            runSilently(() => {
+              useDatebookStore.setState({
+                categories,
+                importSources,
+                reminderPresets,
+                settings,
+                items,
+              });
             });
           });
         }
@@ -1757,6 +1761,66 @@ async function flush() {
     scheduleFlushRetry();
   }
 }
+
+/**
+ * "Something you did changed your data."
+ *
+ * The save pill used to work this out by watching the whole store for a new
+ * object identity, which meant it spoke for things nobody had asked about:
+ * flipping "hide completed", picking a theme, a background feed re-sync, the
+ * sanitising pass that runs over rehydrated storage, and every row a cloud
+ * merge brought in. A pill that says "Saved" when you toggled a switch you can
+ * already see the result of is noise, and noise is what made the real message —
+ * "Waiting to sync" — easy to ignore.
+ *
+ * So this counts content edits only: items and categories, made here, by the
+ * person. Settings are deliberately excluded — a preference applies visibly and
+ * instantly, and needs no receipt.
+ */
+let localWrites = 0;
+const localWriteListeners = new Set<() => void>();
+
+/**
+ * Writes made *for* the user rather than *by* them — a background feed re-sync,
+ * a repair pass. They still persist and still sync; they just don't announce
+ * themselves.
+ */
+let silentDepth = 0;
+
+export function runSilently<T>(fn: () => T): T {
+  silentDepth += 1;
+  try {
+    return fn();
+  } finally {
+    silentDepth -= 1;
+  }
+}
+
+export function subscribeLocalWrites(listener: () => void) {
+  localWriteListeners.add(listener);
+  return () => {
+    localWriteListeners.delete(listener);
+  };
+}
+
+export function getLocalWriteCount() {
+  return localWrites;
+}
+
+/** Never a mismatched snapshot: the server has made no writes. */
+export function getServerLocalWriteCount() {
+  return 0;
+}
+
+useDatebookStore.subscribe((state, prev) => {
+  if (applyingRemote || silentDepth > 0) return;
+  // Rehydration and the sanitising repair that follows it both land as ordinary
+  // `setState` calls; neither is an edit.
+  if (!useDatebookStore.persist.hasHydrated()) return;
+  if (state.items === prev.items && state.categories === prev.categories) return;
+  localWrites += 1;
+  for (const listener of localWriteListeners) listener();
+});
 
 // Diff every store transition; queue the delta when cloud-connected.
 useDatebookStore.subscribe((state, prev) => {

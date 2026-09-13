@@ -256,6 +256,37 @@ export function useKeyboardInset() {
       });
     };
 
+    /**
+     * A visual-viewport scroll with no field focused and no pinch is the
+     * address bar sliding, or iOS's own momentum — every frame of a scroll,
+     * in other words. The full pass reads four probe rectangles and writes
+     * `--fixed-drop` between them, each of which forces layout; running that
+     * on a scroll frame is most of why scrolling stuttered.
+     *
+     * Nothing in that pass can change from a pan alone, so this does the one
+     * thing that can: `--viewport-pan`, from two cheap reads, in the same
+     * terms `resolveViewportOffsets` uses.
+     */
+    let panRaf = 0;
+    const schedulePanOnly = () => {
+      if (panRaf) return;
+      panRaf = requestAnimationFrame(() => {
+        panRaf = 0;
+        const visibleHeight = vv ? vv.height : window.innerHeight;
+        const covered = visibleHeight < root.clientHeight - 1;
+        const pan = covered ? Math.max(0, Math.round(vv?.offsetTop ?? 0)) : 0;
+        root.style.setProperty("--viewport-pan", `${pan}px`);
+      });
+    };
+
+    const onViewportScroll = () => {
+      if (isTypingTarget(document.activeElement) || (vv && vv.scale > 1.01)) {
+        schedule();
+        return;
+      }
+      schedulePanOnly();
+    };
+
     let timers: ReturnType<typeof setTimeout>[] = [];
     const settle = () => {
       timers.forEach(clearTimeout);
@@ -300,7 +331,7 @@ export function useKeyboardInset() {
     settle();
 
     vv?.addEventListener("resize", schedule);
-    vv?.addEventListener("scroll", schedule);
+    vv?.addEventListener("scroll", onViewportScroll);
     window.addEventListener("focusin", onFocusIn);
     window.addEventListener("focusout", onFocusOut);
     window.addEventListener("resize", schedule);
@@ -312,11 +343,12 @@ export function useKeyboardInset() {
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      if (panRaf) cancelAnimationFrame(panRaf);
       timers.forEach(clearTimeout);
       timers = [];
       ro.disconnect();
       vv?.removeEventListener("resize", schedule);
-      vv?.removeEventListener("scroll", schedule);
+      vv?.removeEventListener("scroll", onViewportScroll);
       window.removeEventListener("focusin", onFocusIn);
       window.removeEventListener("focusout", onFocusOut);
       window.removeEventListener("resize", schedule);

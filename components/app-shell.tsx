@@ -6,6 +6,7 @@ import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, Plus, Search, Sparkles } from "lucide-react";
+import { Scrim } from "@/components/ui/scrim";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
@@ -221,17 +222,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <AnimatePresence>
         {floatingAdd && (
-          <motion.button
+          <Scrim
             key="quick-add-scrim"
-            type="button"
-            aria-label="Dismiss add"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-            className="viewport-pinned-top viewport-pinned-overlay overlay-scrim-light fixed inset-0 z-[45]"
+            label="Dismiss add"
+            tone="light"
             onClick={closeQuickAdd}
             onPointerDown={closeQuickAdd}
+            className="viewport-pinned-top viewport-pinned-overlay fixed inset-0 z-[45]"
           />
         )}
       </AnimatePresence>
