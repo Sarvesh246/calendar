@@ -1,8 +1,9 @@
 "use client";
 
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
-import { Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
@@ -31,13 +32,16 @@ export function DaySheet({
   items,
   onClose,
   onAdd,
+  onStep,
 }: {
   date: Date;
   items: Item[];
   onClose: () => void;
   onAdd?: () => void;
+  onStep?: (direction: -1 | 1) => void;
 }) {
   const visible = useBelowLg();
+  const phone = useMediaQuery("(max-width: 767px)");
   const panelRef = useRef<HTMLDivElement>(null);
   useDialogFocus(panelRef, visible);
   useLockBodyScroll(visible);
@@ -46,12 +50,15 @@ export function DaySheet({
   const headingId = useId();
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
+  const [expanded, setExpanded] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
 
   useEffect(() => {
     closeGuard.current = false;
+    listRef.current?.scrollTo(0, 0);
   }, [date]);
 
   useEffect(() => {
@@ -100,13 +107,14 @@ export function DaySheet({
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
           setDragging(false);
+          if (info.offset.y < -40) setExpanded(true);
           if (info.offset.y > 88 || info.velocity.y > 700) {
             haptic("light");
             close();
           }
         }}
-        className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-50 flex min-h-[min(72dvh,640px)] max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
-        style={{ paddingBottom: "var(--safe-bottom)" }}
+        className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
+        style={{ paddingBottom: "var(--safe-bottom)", minHeight: !phone ? "min(72dvh, 640px)" : undefined, height: !phone ? undefined : expanded || items.length > 3 ? "min(82dvh, 760px)" : `min(${items.length === 0 ? 36 : 44 + items.length * 6}dvh, 560px)` }}
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
@@ -129,6 +137,8 @@ export function DaySheet({
                   : `${items.length} thing${items.length === 1 ? "" : "s"} scheduled`}
               </p>
             </div>
+            <div className="flex shrink-0" onPointerDown={e => e.stopPropagation()}>
+              {phone && onStep && <><button className="flex h-11 w-11 items-center justify-center" aria-label="Previous day" onClick={() => onStep(-1)}><ChevronLeft className="h-5 w-5" /></button><button className="flex h-11 w-11 items-center justify-center" aria-label="Next day" onClick={() => onStep(1)}><ChevronRight className="h-5 w-5" /></button></>}
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
@@ -137,13 +147,15 @@ export function DaySheet({
                 close();
               }}
               aria-label="Close"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-soft transition-colors hover:text-ink"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-soft transition-colors hover:text-ink"
             >
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
+            </div>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-6 pt-0 [-webkit-overflow-scrolling:touch]">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-6 pt-0 [-webkit-overflow-scrolling:touch]">
+          {phone && <p className="mb-2 text-[12px] text-ink-soft">● {items.filter(i => i.type === "event").length} scheduled · ◆ {items.filter(i => i.type !== "event" && i.status !== "done").length} due work</p>}
           {onAdd && (
             <button
               type="button"

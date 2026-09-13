@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
@@ -38,6 +39,8 @@ export default function TodayPage() {
 }
 
 function TodayDashboard() {
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const [reviewOverdue, setReviewOverdue] = useState(false);
   const allItems = useDatebookStore((s) => s.items);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
@@ -97,10 +100,12 @@ function TodayDashboard() {
 
       {overdue.length > 0 && (
         <section>
-          <SectionLabel>Overdue · {overdue.length}</SectionLabel>
+          <div className="flex items-center justify-between"><SectionLabel>Overdue · {overdue.length}</SectionLabel>
+            {mobile && overdue.length > 3 && <button className="min-h-11 px-2 text-[13px] font-medium text-accent" aria-expanded={reviewOverdue} onClick={() => setReviewOverdue(!reviewOverdue)}>{reviewOverdue ? "Show less" : `Review all ${overdue.length}`}</button>}
+          </div>
           <div className="flex flex-col gap-2">
             <AnimatePresence initial={false}>
-              {overdue.map((item) => (
+              {(mobile && !reviewOverdue ? overdue.slice(0, 3) : overdue).map((item) => (
                 <ItemCard
                   key={item.id}
                   item={item}

@@ -130,20 +130,16 @@ function DayCellMobilePreview({
   const open = openItemsOnDay(items);
   const overdue = items.some(isOverdue);
   if (open.length === 0) return null;
-  const categories = [...new Set(open.map((i) => i.categoryId))].slice(0, 3);
+  const event = open.find(i => i.type === "event");
+  const due = open.find(i => i.type !== "event");
+  const markers = [...new Map([event, due, ...open].filter((i): i is Item => Boolean(i)).map(i => [i.id, i])).values()].slice(0, 3);
 
   return (
     <div className="month-day-preview flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
-      <span className={cn("text-[11px] font-medium tabular-nums leading-none", overdue ? "text-warn" : "text-ink-faint")}>
-        +{open.length}
-      </span>
-      {categories.length > 0 && (
-        <div className="flex items-center gap-0.5">
-          {categories.map((id) => (
-            <span key={id} className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(id) }} />
-          ))}
-        </div>
-      )}
+      <div className="flex items-center gap-1" aria-label={`${open.filter(i => i.type === "event").length} scheduled, ${open.filter(i => i.type !== "event").length} due`}>
+        {markers.map(i => <span key={i.id} className={cn("h-1.5 w-1.5", i.type === "event" ? "rounded-full" : "rounded-[1px] rotate-45")} style={{ background: colorOf(i.categoryId) }} />)}
+      </div>
+      {open.length > 3 && <span className={cn("text-[10px] tabular-nums leading-none", overdue ? "text-warn" : "text-ink-faint")}>+{open.length - 3}</span>}
     </div>
   );
 }

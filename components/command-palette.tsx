@@ -1,5 +1,7 @@
 "use client";
 
+import { MobileSearch } from "@/components/mobile-search";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
@@ -31,6 +33,7 @@ function sortPaletteItems(items: Item[]) {
 }
 
 export function CommandPalette() {
+  const mobile = useMediaQuery("(max-width: 767px)");
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
 
@@ -46,7 +49,7 @@ export function CommandPalette() {
   }, [open, setOpen]);
 
   if (!open) return null;
-  return <CommandPaletteDialog />;
+  return mobile ? <MobileSearch onClose={() => setOpen(false)} /> : <CommandPaletteDialog />;
 }
 
 function CommandPaletteDialog() {

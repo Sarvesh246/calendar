@@ -1,5 +1,6 @@
 "use client";
 
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Bell, Plus, Tag, X } from "lucide-react";
@@ -23,6 +24,8 @@ import { cn } from "@/lib/utils";
 type Phase = "idle" | "preview" | "ask" | "bulk";
 
 export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const [reminderOverride, setReminderOverride] = useState<number | null>(null);
   const categories = useDatebookStore((s) => s.categories);
   const addItem = useDatebookStore((s) => s.addItem);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -93,7 +96,9 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   function confirm() {
     if (!parsed) return;
     const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
-    const reminders = parsed.reminderMinutesBefore
+    const reminders = reminderOverride !== null
+      ? (reminderOverride === 0 ? undefined : [{ id: nanoid(), itemId: "", offsetMinutes: reminderOverride, label: `${reminderOverride} minutes before` }])
+      : parsed.reminderMinutesBefore
       ? [
           {
             id: nanoid(),
@@ -143,6 +148,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   }
 
   function reset() {
+    setReminderOverride(null);
     setText("");
     setParsed(null);
     setBulk(null);
@@ -163,7 +169,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     : "";
 
   return (
-    <div className="relative w-full">
+    <div className={cn("relative w-full", mobile && "mobile-quick-add rounded-xl bg-surface p-2")}>
       <div
         className={cn(
           "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
@@ -225,7 +231,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                 ? `Add to ${format(new Date(`${dateKey}T12:00:00`), "EEE, MMM d")}…`
                 : "Assignment, class, or task…"
             }
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
+            className="min-w-0 flex-1 bg-transparent text-[16px] md:text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
         </div>
         {!embedded && (
@@ -325,7 +331,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                   {category.name}
                 </span>
               )}
-              {parsed.reminderLabel && (
+              {!mobile && parsed.reminderLabel && (
                 <span className="flex items-center gap-1 rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
                   <Bell className="h-3 w-3" strokeWidth={1.75} />
                   {parsed.reminderLabel}
@@ -337,6 +343,19 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                 </span>
               )}
             </div>
+            {mobile && <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
+              <label className="flex flex-col gap-1">Date<input aria-label="Item date" type="date" className="min-h-11 min-w-0 rounded-lg bg-surface-sunken px-2 text-[16px]" value={format(parsed.at, "yyyy-MM-dd")} onChange={(e) => {
+                if (!e.target.value) return;
+                const at = new Date(`${e.target.value}T00:00:00`);
+                at.setHours(parsed.at.getHours(), parsed.at.getMinutes());
+                const delta = at.getTime() - parsed.at.getTime();
+                setParsed({ ...parsed, at, ...(parsed.endAt ? { endAt: new Date(parsed.endAt.getTime() + delta) } : {}) });
+              }} /></label>
+              <label className="flex flex-col gap-1">Class<select aria-label="Item class" className="min-h-11 min-w-0 rounded-lg bg-surface-sunken px-2" value={parsed.categoryId ?? categories[0]?.id ?? ""} onChange={(e) => setParsed({ ...parsed, categoryId: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label className="col-span-2 flex items-center justify-between gap-2 rounded-lg bg-surface-sunken px-2">Reminder<select aria-label="Item reminder" className="min-h-11 bg-transparent" value={reminderOverride ?? "parsed"} onChange={(e) => setReminderOverride(e.target.value === "parsed" ? null : Number(e.target.value))}>
+                <option value="parsed">{parsed.reminderLabel ?? "Use defaults"}</option><option value="0">None</option><option value="10">10 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option>
+              </select></label>
+            </div>}
             <div className="mt-3.5 flex justify-end gap-2">
               <Button variant="tertiary" size="sm" onClick={reset}>
                 Cancel

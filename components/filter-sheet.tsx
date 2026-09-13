@@ -26,7 +26,7 @@ export function FilterButton({ className }: { className?: string }) {
         setFilterOpen(true);
       }}
       aria-label={active ? `Filter, ${filter!.length} selected` : "Filter by class"}
-      className={cn("relative", className)}
+      className={cn("relative", className, active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent")}
     >
       <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
       {/* The "filters are on" dot springs in rather than blinking, so the state

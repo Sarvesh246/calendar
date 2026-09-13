@@ -1,6 +1,9 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "@/lib/use-media-query";
+import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
+import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, MapPin } from "lucide-react";
@@ -97,6 +100,7 @@ function CompleteButton({
   return (
     <button
       type="button"
+      onKeyDown={e => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         haptic(done ? "light" : "success");
@@ -238,6 +242,8 @@ function ExpandPanel({
   clock24h: boolean;
   onCollapse: () => void;
 }) {
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(open);
   if (open && !loaded) setLoaded(true);
 
@@ -251,7 +257,14 @@ function ExpandPanel({
   return (
     <div className={cn("item-card-expand", open && "is-open")}>
       <div className="item-card-expand-inner">
-        {loaded && (
+        {loaded && mobile && <div className="mt-3 space-y-3 border-t border-line pt-3 text-[13px]" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+          {item.description && <p className="whitespace-pre-wrap break-words text-ink-soft">{item.description}</p>}
+          {item.location && <p className="text-ink-soft">{item.location}</p>}
+          {item.url && /^https?:\/\//i.test(item.url) && <a className="inline-flex min-h-11 items-center text-accent" href={item.url} target="_blank" rel="noopener noreferrer">Open link</a>}
+          <button className="min-h-11 w-full rounded-lg border border-line text-accent" onClick={() => setEditing(true)}>Edit item</button>
+          {editing && <MobileItemSheet title="Edit item" onClose={() => setEditing(false)}><ItemEditor item={item} category={category} clock24h={clock24h} StatusSegmented={StatusSegmented} onCollapse={() => setEditing(false)} /></MobileItemSheet>}
+        </div>}
+        {loaded && !mobile && (
           <ItemEditor
             item={item}
             category={category}
@@ -483,6 +496,11 @@ function AssignmentCard({
   clock24h: boolean;
   showCategoryDot: boolean;
 }) {
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const [actions, setActions] = useState<"status" | "reschedule" | "edit" | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
   const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
   const color = category?.color ?? "#8a8a94";
   const status = item.status ?? "todo";
@@ -497,7 +515,21 @@ function AssignmentCard({
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
-      onClick={toggle}
+      onTouchStart={e => { if (!mobile || (e.target as HTMLElement).closest("button, a, input, select, textarea")) return; const t = e.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }; }}
+      style={mobile ? { touchAction: "pan-y", transform: `translateX(${swipeOffset}px)` } : undefined}
+      onTouchMove={e => { const start = touchStart.current; if (!start || expanded) return; const t = e.touches[0]; const dx = t.clientX - start.x; const dy = t.clientY - start.y; if (Math.abs(dy) > Math.abs(dx)) { touchStart.current = null; setSwipeOffset(0); return; } setSwipeOffset(Math.max(-36, Math.min(36, dx / 3))); }}
+      onTouchCancel={() => { touchStart.current = null; setSwipeOffset(0); }}
+      onTouchEnd={e => {
+        setSwipeOffset(0);
+        const start = touchStart.current; touchStart.current = null;
+        if (!start || !mobile || expanded) return;
+        const t = e.changedTouches[0]; const dx = t.clientX - start.x; const dy = t.clientY - start.y;
+        if (Math.abs(dx) < 75 || Math.abs(dx) < Math.abs(dy) * 2) return;
+        swiped.current = true;
+        window.setTimeout(() => { swiped.current = false; }, 400);
+        if (dx < 0) setActions("reschedule"); else changeMobileStatus(item, status === "doing" ? "done" : "doing");
+      }}
+      onClick={() => { if (!swiped.current) toggle(); }}
       onKeyDown={keyToggle}
       className={cn(
         "bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
@@ -508,8 +540,9 @@ function AssignmentCard({
       )}
     >
       <div className="flex items-center gap-1">
-        <CompleteButton status={status} color={color} onToggle={() => toggleItemDone(item.id)} />
+        <CompleteButton status={status} color={color} onToggle={() => mobile ? changeMobileStatus(item, done ? "todo" : "done") : toggleItemDone(item.id)} />
 
+        {mobile && <button aria-label="Task status and actions" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-soft" onClick={e => { e.stopPropagation(); setActions("status"); }} onKeyDown={e => e.stopPropagation()}><ChevronDown className="h-4 w-4" /></button>}
         <div className="min-w-0 flex-1">
           <p
             className={cn(
@@ -555,6 +588,8 @@ function AssignmentCard({
         <ExpandChevron expanded={expanded} />
       </div>
 
+      {mobile && actions && actions !== "edit" && <MobileTaskActions item={item} initialReschedule={actions === "reschedule"} onClose={() => setActions(null)} onEdit={() => setActions("edit")} />}
+      {mobile && actions === "edit" && <MobileItemSheet title="Edit item" onClose={() => setActions(null)}><ItemEditor item={item} category={category} clock24h={clock24h} StatusSegmented={StatusSegmented} onCollapse={() => setActions(null)} /></MobileItemSheet>}
       <ExpandPanel
         open={expanded}
         item={item}
