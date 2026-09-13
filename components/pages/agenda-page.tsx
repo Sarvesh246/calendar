@@ -7,7 +7,7 @@ import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
@@ -41,7 +41,7 @@ export default function AgendaPage() {
   const router = useRouter();
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
   const allItems = useDatebookStore((s) => s.items);
-  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  const categoryFilter = useDeferredCategoryFilter();
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const chrome = useItemCardChrome();

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
 import { applyItemFilters } from "@/lib/filters";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
@@ -42,7 +42,7 @@ function TodayDashboard() {
   const mobile = useMediaQuery("(max-width: 767px)");
   const [reviewOverdue, setReviewOverdue] = useState(false);
   const allItems = useDatebookStore((s) => s.items);
-  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  const categoryFilter = useDeferredCategoryFilter();
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);

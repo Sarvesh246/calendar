@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition } from "react";
+import { startTransition, useDeferredValue } from "react";
 import { create } from "zustand";
 
 interface UIState {
@@ -47,6 +47,17 @@ const closedAdd = {
   quickAddDateKey: null,
   quickAddTime: null,
 } as const;
+
+/**
+ * The category filter for views that re-filter and re-render every item.
+ * Zustand updates reach React through `useSyncExternalStore`, which always
+ * renders synchronously — `startTransition` around `set` does not defer it —
+ * so reading the raw value made a filter tap block paint on all mounted pages.
+ * Deferring here lets the sidebar/filter controls respond first.
+ */
+export function useDeferredCategoryFilter() {
+  return useDeferredValue(useUIStore((s) => s.categoryFilter));
+}
 
 export const useUIStore = create<UIState>((set, get) => ({
   commandPaletteOpen: false,
