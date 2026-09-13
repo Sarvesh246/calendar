@@ -685,11 +685,43 @@ button, a, [role="button"], summary, input, textarea, select, label {
   backdrop-filter: blur(18px) saturate(130%);
 }
 
+/* The global control rule uses `manipulation`, which includes horizontal pan.
+   A swipe begins on a tab link, so the browser otherwise cancels the captured
+   pointer as soon as it decides to own that horizontal gesture. Keep vertical
+   page scrolling available while reserving horizontal movement for the tabs. */
+.mobile-tab-bar,
+.mobile-tab-bar a {
+  touch-action: pan-y;
+}
+
 .mobile-tab-pill {
   border-radius: 9999px;
   background: color-mix(in srgb, var(--ink) 5.5%, var(--surface-elevated));
   border: 0.5px solid color-mix(in srgb, var(--line) 70%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+/* The primary action is a separate control, not a fourth tab. It shares the
+   dock's depth and highlight while keeping the accent fill that makes adding
+   unmistakable in every appearance preset. */
+.mobile-add-button {
+  isolation: isolate;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 76%, var(--line-strong));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+    0 8px 24px -8px rgb(0 0 0 / 0.3),
+    0 2px 8px -4px rgb(0 0 0 / 0.16);
+  transition:
+    filter var(--motion-micro) var(--ease-standard),
+    box-shadow var(--motion-standard) var(--ease-standard);
+}
+
+@media (hover: hover) {
+  .mobile-add-button:hover {
+    filter: brightness(1.04);
+  }
 }
 
 /* Same glass recipe as the tab bar — a compact card that sits just above it. */

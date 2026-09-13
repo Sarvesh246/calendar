@@ -206,20 +206,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <ViewStateSync />
-
-      {!focusMode && !onSettings && !quickAddOpen && (
-        <Button
-          variant="fab"
-          size="fab"
-          onClick={openAdd}
-          aria-label="Add item"
-          className="viewport-pinned-bottom fixed right-4 z-40 md:hidden"
-          style={{ bottom: "calc(var(--safe-bottom) + var(--tab-bar-rest) + 5.25rem)" }}
-        >
-          <Plus className="h-6 w-6" strokeWidth={2.25} />
-        </Button>
-      )}
-
       <AnimatePresence>
         {floatingAdd && (
           <Scrim
