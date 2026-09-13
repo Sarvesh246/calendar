@@ -7,11 +7,13 @@ import { X } from "lucide-react";
 import { format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/lib/mobile-item-actions";
 import { Reveal } from "@/components/ui/reveal";
+import { SheetHandle } from "@/components/sheet-handle";
 import { Scrim } from "@/components/ui/scrim";
 import type { Item } from "@/lib/types";
 
@@ -47,6 +49,7 @@ export function MobileItemSheet({ title, onClose, children }: { title: string; o
 
 function MobileItemSheetBody({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
   const reduced = prefersReducedMotion();
@@ -55,6 +58,7 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
   // Search, the date pickers and the reschedule fields all live near the
   // bottom of a sheet the keyboard then covers.
   useKeepFieldVisible(ref, true);
+  useSheetOverscroll(scrollRef, dragControls);
 
   return (
     <div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
@@ -78,38 +82,30 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
         }
         transition={motionTokens.springGentle}
         style={{ willChange: "transform" }}
-        drag="y"
-        dragListener={false}
+        {...SHEET_DRAG}
         dragControls={dragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.02, bottom: 0.55 }}
-        dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
           setDragging(false);
-          if (info.offset.y > 88 || info.velocity.y > 700) {
+          if (shouldDismissSheet(info)) {
             haptic("light");
             close();
           }
         }}
-        className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-2"
+        className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-0.5"
       >
-        <div
-          className="flex shrink-0 cursor-grab touch-none flex-col items-center active:cursor-grabbing"
-          onPointerDown={(e) => dragControls.start(e)}
+        <SheetHandle dragControls={dragControls} dragging={dragging} />
+        <header
+          className="flex shrink-0 cursor-grab items-center justify-between gap-3 active:cursor-grabbing"
+          onPointerDown={(e) => startSheetDrag(dragControls, e)}
         >
-          <motion.span
-            aria-hidden
-            animate={{ scaleX: dragging ? 1.25 : 1, opacity: dragging ? 1 : 0.75 }}
-            transition={motionTokens.springSnappy}
-            className="h-1 w-10 rounded-full bg-line-strong"
-          />
-        </div>
-        <header className="mt-2 flex shrink-0 items-center justify-between gap-3" onPointerDown={e => e.stopPropagation()}><h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2><button aria-label="Close item sheet" className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button></header>
+          <h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2>
+          <button aria-label="Close item sheet" className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button>
+        </header>
         {/* `px-1 -mx-1` so a focus ring — which is drawn 2px *outside* the
             field — isn't shaved off by this scroll container's edges. A ring
             clipped on three sides reads as a rendering bug, not as focus. */}
-        <div className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1" onPointerDown={e => e.stopPropagation()}>{title === "Edit item" && <p className="text-[12px] text-ink-soft">Changes save as you edit.</p>}{children}</div>
+        <div ref={scrollRef} className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1">{title === "Edit item" && <p className="text-[12px] text-ink-soft">Changes save as you edit.</p>}{children}</div>
       </motion.div>
     </div>
   );

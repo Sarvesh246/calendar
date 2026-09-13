@@ -511,6 +511,7 @@ export function MonthView({
     <motion.div
       onPan={onPan}
       onPanEnd={onPanEnd}
+      data-page-swipe="off"
       style={{ touchAction: "pan-y" }}
       className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 sm:p-3"
     >

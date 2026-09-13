@@ -12,7 +12,9 @@ import { ItemCard } from "@/components/item-card";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
+import { SHEET_DRAG, shouldDismissSheet, shouldExpandSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
 import { Scrim } from "@/components/ui/scrim";
+import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
@@ -104,6 +106,7 @@ export function DaySheet({
   const setExpanded = (value: boolean) => setDetent(value ? "full" : "compact");
   const listRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  useSheetOverscroll(listRef, dragControls, visible);
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
 
@@ -167,19 +170,17 @@ export function DaySheet({
         dragListener={false}
         dragControls={dragControls}
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.02, bottom: 0.6 }}
-        dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
+        dragElastic={{ top: 0.04, bottom: 0.72 }}
+        dragTransition={{ bounceStiffness: 380, bounceDamping: 34 }}
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
           setDragging(false);
-          const flungDown = info.velocity.y > 700;
-          const flungUp = info.velocity.y < -700;
-          if (info.offset.y < -40 || flungUp) {
+          if (shouldExpandSheet(info)) {
             if (!expanded) haptic("light");
             setDetent("full");
             return;
           }
-          if (info.offset.y > 88 || flungDown) {
+          if (shouldDismissSheet(info)) {
             haptic("light");
             // From full, a downward drag steps to compact rather than closing —
             // one gesture, one change, and the way back up is obvious.
@@ -196,15 +197,10 @@ export function DaySheet({
         }}
       >
         <div
-          className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
-          onPointerDown={(e) => dragControls.start(e)}
+          className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-0.5 active:cursor-grabbing"
+          onPointerDown={(e) => startSheetDrag(dragControls, e)}
         >
-          <motion.span
-            aria-hidden
-            animate={{ scaleX: dragging ? 1.25 : 1, opacity: dragging ? 1 : 0.75 }}
-            transition={motionTokens.springSnappy}
-            className="h-1 w-10 rounded-full bg-line-strong"
-          />
+          <SheetHandle dragControls={dragControls} dragging={dragging} className="py-2" />
           <div className="flex w-full items-center justify-between gap-2 px-3 pb-2 pt-3">
             {/* Previous sits on the left of the title it changes, next on the
                 right, so the control and the direction agree. */}

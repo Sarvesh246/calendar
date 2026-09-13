@@ -138,12 +138,6 @@ export function AgendaSticky({
               </motion.div>
             </AnimatePresence>
           </div>
-          <span
-            className={cn(
-              "mt-2.5 block h-px origin-left rounded-full transition-[width,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-              warn ? "w-9 bg-warn/80" : "w-6 bg-ink/20"
-            )}
-          />
         </div>
       </motion.div>
     </div>

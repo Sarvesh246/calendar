@@ -103,7 +103,7 @@ export function UpNextStack({
   const reduce = prefersReducedMotion();
 
   return (
-    <div>
+    <div data-page-swipe="off">
       <AnimatePresence initial={false} mode="wait">
         {expanded && count > 1 ? (
           <motion.div

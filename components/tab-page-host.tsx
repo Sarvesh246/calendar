@@ -11,9 +11,12 @@ import {
   useState,
   type ComponentType,
 } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { isTabRoute, TAB_ROUTES, type TabRoute } from "@/lib/tab-routes";
 import { flushViewState, recallScroll, rememberScroll } from "@/lib/view-state";
+import { useTabPageSwipe } from "@/lib/use-tab-page-swipe";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
   "/today": () => import("@/components/pages/today-page"),
@@ -92,28 +95,47 @@ export function TabPageHost({ pathname }: { pathname: string }) {
 
   const active = isTabRoute(pathname) ? pathname : null;
   useTabScrollMemory(active);
+  const phone = useMediaQuery("(max-width: 767px)");
+  const hostRef = useRef<HTMLDivElement>(null);
+  const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
   return (
-    <>
+    <div
+      ref={hostRef}
+      className={cn(
+        "relative min-w-0 touch-pan-y",
+        active === "/calendar" && "flex min-h-0 flex-1 flex-col",
+        swipe.dragging && "overflow-hidden touch-none"
+      )}
+    >
       {TAB_ROUTES.map((href) => {
-        if (!mounted[href] && href !== pathname) return null;
+        if (!mounted[href] && href !== pathname && href !== swipe.peek) return null;
         const Page = pages[href];
         const isActive = active === href;
+        const isPeek = swipe.peek === href;
         return (
-          <Activity key={href} mode={isActive ? "visible" : "hidden"}>
-          <div
+          <Activity key={href} mode={isActive || isPeek ? "visible" : "hidden"}>
+          <motion.div
             className={cn(
-              href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden"
+              href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
+              isPeek && "pointer-events-none absolute inset-0 overflow-auto overscroll-contain"
             )}
+            style={
+              isActive
+                ? { x: swipe.x, willChange: "transform" }
+                : isPeek
+                  ? { x: swipe.peekX, willChange: "transform" }
+                  : undefined
+            }
           >
             <Page />
-          </div>
+          </motion.div>
           </Activity>
         );
       })}
-    </>
+    </div>
   );
 }
 

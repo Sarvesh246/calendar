@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const BLUR_PX = 18;
 
 /** Veil strength at full amount, per tone. */
-const DIM = { default: 0.34, light: 0.22 } as const;
+const DIM = { default: 0.34, light: 0.26 } as const;
 
 /**
  * The veil behind every sheet and dialog.
@@ -21,6 +21,10 @@ const DIM = { default: 0.34, light: 0.22 } as const;
  * opacity animates. This matches the Assistant (the smooth reference surface)
  * and lets the compositor reuse one blurred layer instead of rasterizing a new
  * blur radius on every frame.
+ *
+ * `snap` is for overlays that appear over live text (the + composer). A 340ms
+ * fade left a frame of un-blurred type flashing through; starting already
+ * partly opaque and arriving in a tenth of a second hides that.
  */
 export function Scrim({
   onClick,
@@ -28,6 +32,7 @@ export function Scrim({
   label,
   amount = 1,
   tone = "default",
+  pace = "emphasis",
   className,
 }: {
   onClick?: () => void;
@@ -38,6 +43,7 @@ export function Scrim({
   /** 0–1. Below 1 the page stays partly legible (the day sheet's compact detent). */
   amount?: number;
   tone?: "default" | "light";
+  pace?: "emphasis" | "snap";
   className?: string;
 }) {
   const reduced = prefersReducedMotion();
@@ -45,9 +51,10 @@ export function Scrim({
     backgroundColor: `rgba(0,0,0,${(DIM[tone] * amount).toFixed(3)})`,
     backdropFilter: `blur(${Math.round(BLUR_PX * amount)}px)`,
   };
+  const snap = pace === "snap" && !reduced;
 
   const props = {
-    initial: { opacity: 0 },
+    initial: { opacity: snap ? 0.78 : 0 },
     animate: { opacity: 1 },
     exit: {
       opacity: 0,
@@ -55,7 +62,9 @@ export function Scrim({
     },
     transition: reduced
       ? { duration: motionTokens.micro }
-      : { duration: motionTokens.emphasis, ease: motionTokens.ease },
+      : snap
+        ? { duration: motionTokens.micro, ease: motionTokens.ease }
+        : { duration: motionTokens.emphasis, ease: motionTokens.ease },
     style: treatment,
     className: cn(
       tone === "light" ? "overlay-scrim-light" : "overlay-scrim",

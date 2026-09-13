@@ -28,6 +28,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
 import { navigateTab } from "@/lib/tab-nav";
+import { commitTabFromGesture, pillSpringForVelocity } from "@/lib/tab-swipe";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -247,6 +248,8 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const startX = useRef(0);
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
+  const velocityX = useRef(0);
+  const lastMove = useRef({ x: 0, t: 0 });
   // True while the click that follows a pointerup is one this bar already
   // acted on. It expires on its own so a gesture that dies without a pointerup
   // — or a keyboard activation — still reaches the link's own handler.
@@ -271,9 +274,8 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const tabWidth = trackWidth / NAV.length;
   const pillX = useTransform([baseX, dragX], ([b, d]) => (b as number) + (d as number));
 
-  // Mass and damping tuned so a released pill settles once, without the second
-  // bounce that read as a stutter at the end of every swipe.
-  const pillSpring = { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.6 };
+  // The spring itself is chosen from the finger's leftover speed so a throw
+  // overshoots once and a slow drag settles without a second bounce.
   const settled = useRef(false);
   // Where the pill is currently springing to, so the route-change effect below
   // doesn't restart an animation that is already heading to the right tab.
@@ -281,13 +283,13 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
 
   /** Move the pill to a tab, folding any in-progress drag into the resting
    *  offset first so the spring starts from where the finger left it. */
-  function settlePillTo(index: number) {
+  function settlePillTo(index: number, velocity = 0) {
     if (!tabWidth) return;
     const target = index * tabWidth;
     baseX.set(baseX.get() + dragX.get());
     dragX.set(0);
     settleTarget.current = target;
-    void animate(baseX, target, pillSpring).then(() => {
+    void animate(baseX, target, pillSpringForVelocity(velocity)).then(() => {
       if (settleTarget.current === target) settleTarget.current = null;
     });
   }
@@ -337,8 +339,8 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     if (settleTarget.current === target) return; // already on its way there
     if (Math.abs(baseX.get() + dragX.get() - target) < 0.5) return;
     settlePillTo(activeIndex);
-    // `pillSpring` and `settlePillTo` are stable for a given tabWidth; listing
-    // them would restart the spring on every render.
+    // settlePillTo is stable for a given tabWidth; listing it would restart
+    // the spring on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, tabWidth, baseX, dragX]);
 
@@ -359,6 +361,8 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     pointerId.current = e.pointerId;
     startX.current = e.clientX;
     indexAtStart.current = activeIndex;
+    velocityX.current = 0;
+    lastMove.current = { x: e.clientX, t: e.timeStamp };
     // Capture from the first frame: without it Chromium hands a horizontal
     // drag over to its own gesture handling and fires `pointercancel` two
     // moves in, which is the swipe dying halfway across the bar.
@@ -368,10 +372,15 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   function onPointerMove(e: React.PointerEvent) {
     if (!dragging.current || pointerId.current !== e.pointerId || !tabWidth) return;
     const dx = e.clientX - startX.current;
+    const dt = e.timeStamp - lastMove.current.t;
+    if (dt > 0) velocityX.current = ((e.clientX - lastMove.current.x) / dt) * 1000;
+    lastMove.current = { x: e.clientX, t: e.timeStamp };
     if (Math.abs(dx) > 6) didDrag.current = true;
     const min = -(indexAtStart.current * tabWidth);
     const max = (NAV.length - 1 - indexAtStart.current) * tabWidth;
-    dragX.set(Math.max(min, Math.min(max, dx)));
+    if (dx > max) dragX.set(max + (dx - max) * 0.28);
+    else if (dx < min) dragX.set(min + (dx - min) * 0.28);
+    else dragX.set(dx);
   }
 
   function onPointerUp(e: React.PointerEvent) {
@@ -397,13 +406,20 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // throw toward a neighbour, a press that didn't is a tap on whatever tab
     // it landed on.
     const target = didDrag.current
-      ? Math.round(indexAtStart.current + dragX.get() / tabWidth)
+      ? commitTabFromGesture({
+          startIndex: indexAtStart.current,
+          offset: dragX.get(),
+          velocity: velocityX.current,
+          tabWidth,
+          count: NAV.length,
+        })
       : indexAtX(e.clientX, e.currentTarget);
     const clamped = Math.max(0, Math.min(NAV.length - 1, target));
 
     // Either way the pill settles on a spring from where it was released; a
-    // navigation just changes which tab it settles on.
-    settlePillTo(clamped);
+    // navigation just changes which tab it settles on. The spring carries the
+    // throw's leftover speed so a flick bounces and a careful drag does not.
+    settlePillTo(clamped, velocityX.current);
     if (clamped !== currentIndex) {
       haptic("light");
       navigateTab(router, NAV[clamped].href);
@@ -451,7 +467,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                 className="mobile-tab-pill absolute inset-y-0 left-0"
                 style={{ width: tabWidth, x: pillX, willChange: "transform" }}
                 animate={{ scale: isDragging ? 1.015 : 1 }}
-                transition={pillSpring}
+                transition={pillSpringForVelocity(0)}
               />
             )}
           </span>

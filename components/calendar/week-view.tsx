@@ -572,6 +572,7 @@ function MobileWeekPager({
           setPage((p) => (p === next ? p : next));
         }}
         className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-page-swipe="off"
       >
         {days.map((day, i) => {
           const dayItems = byDay.get(dayKey(day)) ?? NO_ITEMS;

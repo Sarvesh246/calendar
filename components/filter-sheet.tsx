@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useRef } from "react";
+import { startTransition, useRef, useState } from "react";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { Check, SlidersHorizontal, X } from "lucide-react";
 import { summariseFilters } from "@/lib/filter-summary";
@@ -8,7 +8,9 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
+import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
 import { Scrim } from "@/components/ui/scrim";
+import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -75,8 +77,11 @@ export function FilterSheet() {
 
 function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
+  const [dragging, setDragging] = useState(false);
   useDialogFocus(panelRef, true);
+  useSheetOverscroll(scrollRef, dragControls);
   const categories = useDatebookStore((s) => s.categories);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
@@ -111,14 +116,12 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
             style={{ willChange: "transform" }}
-            drag="y"
-            dragListener={false}
+            {...SHEET_DRAG}
             dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0.02, bottom: 0.55 }}
-            dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
+            onDragStart={() => setDragging(true)}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 88 || info.velocity.y > 700) {
+              setDragging(false);
+              if (shouldDismissSheet(info)) {
                 haptic("light");
                 onClose();
               }
@@ -127,16 +130,13 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             // is what keeps a sheet clear of the status bar, and this one was
             // measuring against the full visible viewport like the search sheet
             // used to — far enough up that its own close button was unreachable.
-            className="mobile-action-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] flex-col rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-2 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
+            className="mobile-action-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] flex-col rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-0.5 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
           >
-            {/* Draggable, not decorative — see `MobileItemSheet`. */}
+            <SheetHandle dragControls={dragControls} dragging={dragging} />
             <div
-              className="flex shrink-0 cursor-grab touch-none flex-col items-center pb-2 active:cursor-grabbing"
-              onPointerDown={(e) => dragControls.start(e)}
+              className="mb-3 flex cursor-grab items-center justify-between gap-2 active:cursor-grabbing"
+              onPointerDown={(e) => startSheetDrag(dragControls, e)}
             >
-              <span aria-hidden className="h-1 w-10 rounded-full bg-line-strong opacity-75" />
-            </div>
-            <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[15px] font-semibold text-ink">Filters</p>
                 {/* What's on, right where you turn it off — the sheet showed
@@ -155,7 +155,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                 <X className="h-4 w-4" strokeWidth={2} />
               </Button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onPointerDown={(e) => e.stopPropagation()}>
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <p className="mb-2 text-[15px] font-semibold text-ink">Views</p>
             <div className="mb-4 flex flex-col gap-1">
               {views.map((view) => {
