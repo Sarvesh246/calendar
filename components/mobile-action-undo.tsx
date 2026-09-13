@@ -1,10 +1,64 @@
 "use client";
+
 import { useEffect } from "react";
-import { useMobileUndo } from "@/lib/mobile-item-actions";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, RotateCcw } from "lucide-react";
+import { useActionUndo } from "@/lib/action-undo";
+import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
+
+const UNDO_WINDOW_MS = 8000;
+
+/**
+ * Undo for any reversible edit — a move, a status change, a batch edit, a
+ * duplicate. Same shape and timing as the delete toast so the two read as one
+ * system.
+ */
 export function MobileActionUndo() {
-  const action = useMobileUndo(s => s.action);
-  const set = useMobileUndo(s => s.set);
-  useEffect(() => { if (!action) return; const timer = setTimeout(() => set(null), 10000); return () => clearTimeout(timer); }, [action, set]);
-  if (!action) return null;
-  return <div role="status" className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 shadow-lg"><span className="text-[13px]">{action.label}</span><button className="min-h-11 px-2 font-medium text-accent" onClick={() => { action.undo(); set(null); }}>Undo</button></div>;
+  const action = useActionUndo((s) => s.action);
+  const set = useActionUndo((s) => s.set);
+
+  useEffect(() => {
+    if (!action) return;
+    const timer = window.setTimeout(() => {
+      if (useActionUndo.getState().action === action) set(null);
+    }, UNDO_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [action, set]);
+
+  return (
+    <AnimatePresence>
+      {action && (
+        <motion.div
+          key={action.stamp}
+          role="status"
+          initial={{ opacity: 0, y: 16, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.96 }}
+          transition={motionTokens.spring}
+          className="pointer-events-auto relative flex w-full max-w-[420px] items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface py-2.5 pl-3.5 pr-2 text-[13px] text-ink"
+        >
+          <Check className="h-3.5 w-3.5 shrink-0 text-good" strokeWidth={2.5} />
+          <span className="min-w-0 flex-1 truncate">{action.label}</span>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("success");
+              set(null);
+              action.undo();
+            }}
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 font-medium text-accent transition-colors hover:bg-accent-soft md:min-h-9"
+          >
+            <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
+            Undo
+          </button>
+          <span
+            aria-hidden
+            className="toast-drain absolute inset-x-0 bottom-0 h-[2px] origin-left bg-accent/50"
+            style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 }

@@ -22,6 +22,7 @@ import {
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
+import { SidebarViews } from "./saved-views";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
@@ -66,6 +67,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const toggleCategoryFilter = useUIStore((s) => s.toggleCategoryFilter);
   const clearCategoryFilter = useUIStore((s) => s.clearCategoryFilter);
+  const activeViewId = useUIStore((s) => s.activeViewId);
   const filterCount = categoryFilter?.length ?? 0;
 
   return (
@@ -137,9 +139,10 @@ export function Sidebar({ pathname }: { pathname: string }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: motionTokens.micro }}
-              className="mt-6 flex flex-col gap-0.5"
+              className="flex flex-col gap-0.5"
             >
-              <div className="flex items-center justify-between px-2.5">
+              <SidebarViews />
+              <div className="mt-6 flex items-center justify-between px-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
                   Categories
                 </p>
@@ -189,12 +192,12 @@ export function Sidebar({ pathname }: { pathname: string }) {
 
         {/* The list folds away with the rail, but the filter doesn't — so the
             rail keeps saying "you're seeing a subset" and opens back up to it. */}
-        {collapsed && filterCount > 0 && (
+        {collapsed && (filterCount > 0 || activeViewId) && (
           <button
             type="button"
             onClick={() => setSidebarCollapsed(false)}
-            title={`Showing ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}
-            aria-label={`Filtered to ${filterCount} categor${filterCount === 1 ? "y" : "ies"}. Expand sidebar to change.`}
+            title={activeViewId ? "A saved view is on" : `Showing ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}
+            aria-label={`${activeViewId ? "A saved view is narrowing the list" : `Filtered to ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}. Expand sidebar to change.`}
             className="mt-6 flex items-center rounded-lg px-2.5 py-2 text-accent transition-colors hover:bg-surface-sunken"
           >
             <span className="relative">

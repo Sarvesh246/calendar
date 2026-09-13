@@ -3,12 +3,14 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
-import { applyItemFilters } from "@/lib/filters";
+import { useUIStore } from "@/lib/ui-store";
+import { useFilteredItems } from "@/lib/use-filtered-items";
+import { useWorkspacePrefs, type AgendaLayout } from "@/lib/workspace-prefs";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
   dayKey,
@@ -21,35 +23,43 @@ import {
   weekWorkloadFromByDay,
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
+import { AgendaRows, type AgendaRowSection } from "@/components/agenda-rows";
 import { EmptyState } from "@/components/empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { ViewMenu } from "@/components/view-menu";
 import { Button } from "@/components/ui/button";
+import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
 const HORIZON_DAYS = 120;
 const FIRST_PAINT_DAYS = 14;
+const NO_ITEMS: Item[] = [];
 
 const AGENDA_STICKY =
   "sticky z-10 top-[var(--mobile-header-height)] -mx-4 mb-2.5 border-b border-line/50 bg-surface-base px-4 py-2.5 md:top-0";
+
+const LAYOUTS: { value: AgendaLayout; label: string; Icon: typeof LayoutList }[] = [
+  { value: "cards", label: "Cards", Icon: LayoutList },
+  { value: "rows", label: "Rows", Icon: Rows3 },
+];
 
 export default function AgendaPage() {
   const now = useNow();
   const router = useRouter();
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
-  const allItems = useDatebookStore((s) => s.items);
-  const categoryFilter = useDeferredCategoryFilter();
-  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const items = useFilteredItems();
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const chrome = useItemCardChrome();
   const categoriesById = useCategoriesById();
-  const items = useMemo(
-    () => applyItemFilters(allItems, { categoryFilter, hideCompleted }),
-    [allItems, categoryFilter, hideCompleted]
-  );
+  const desktop = useMediaQuery("(min-width: 768px)");
+  const layout = useWorkspacePrefs((s) => s.agendaLayout);
+  const setLayout = useWorkspacePrefs((s) => s.setAgendaLayout);
+  // Rows are a desk layout; a phone always gets cards.
+  const rows = desktop && layout === "rows";
 
   const overdue = useMemo(
     () =>
@@ -105,7 +115,7 @@ export default function AgendaPage() {
     return groups.filter((g) => g.date < limit);
   }, [groups, showHorizon]);
 
-  const visibleLater = showHorizon ? later : [];
+  const visibleLater = showHorizon ? later : NO_ITEMS;
 
   const isEmpty =
     overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
@@ -129,6 +139,24 @@ export default function AgendaPage() {
     }
     return next;
   }, [overdue.length, visibleGroups, visibleLater.length]);
+
+  const rowSections = useMemo<AgendaRowSection[]>(() => {
+    if (!rows) return [];
+    const out: AgendaRowSection[] = [];
+    if (overdue.length) out.push({ id: "overdue", label: `Overdue · ${overdue.length}`, tone: "warn", items: overdue });
+    for (const g of visibleGroups) {
+      const label = dayLabel(g.date);
+      out.push({
+        id: g.key,
+        label: label === format(g.date, "EEEE, MMMM d") ? label : `${label} · ${format(g.date, "MMM d")}`,
+        tone: "faint",
+        items: g.items,
+        dayKey: g.key,
+      });
+    }
+    if (visibleLater.length) out.push({ id: "later", label: "Later", tone: "faint", items: visibleLater });
+    return out;
+  }, [rows, overdue, visibleGroups, visibleLater]);
 
   const [stickyId, setStickyId] = useState<string | null>(null);
   const stickyRef = useRef<HTMLParagraphElement>(null);
@@ -182,18 +210,63 @@ export default function AgendaPage() {
       window.removeEventListener("resize", schedule);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [sections]);
+  }, [sections, rows]);
 
   const sticky = sections.find((s) => s.id === stickyId) ?? sections[0];
 
+  const todayLink = todayCount > 0 && (
+    <Link
+      href="/today"
+      className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft hover:border-line-strong"
+    >
+      <span>Today</span>
+      <span className="font-medium text-ink">
+        {todayCount} item{todayCount === 1 ? "" : "s"} · Open Today
+      </span>
+    </Link>
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6">
+    <div className={cn("mx-auto flex w-full flex-col gap-6", rows ? "max-w-[1080px]" : "max-w-[880px]")}>
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agenda</h1>
           <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <div role="radiogroup" aria-label="Agenda layout" className="hidden items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 md:flex">
+            {LAYOUTS.map(({ value, label, Icon }) => {
+              const active = layout === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => {
+                    if (active) return;
+                    haptic("light");
+                    startTransition(() => setLayout(value));
+                  }}
+                  className={cn(
+                    "press-none relative flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium",
+                    "transition-colors duration-[var(--motion-standard)]",
+                    active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="agenda-layout-pill"
+                      className="absolute inset-0 rounded-md bg-accent"
+                      transition={motionTokens.spring}
+                    />
+                  )}
+                  <Icon className="relative z-[1] h-3.5 w-3.5" strokeWidth={1.9} />
+                  <span className="relative z-[1]">{label}</span>
+                </button>
+              );
+            })}
+          </div>
           {/* Agenda answers "what's next"; the timetable answers "what does a
               week look like". They belong within reach of each other. */}
           <Button
@@ -262,80 +335,79 @@ export default function AgendaPage() {
         </p>
       )}
 
-      {overdue.length > 0 && (
-        <section id="agenda-overdue" className="agenda-day">
-          <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
-          <div className="flex flex-col gap-2">
-            <AnimatePresence initial={false}>
-              {overdue.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                  {...chrome}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        </section>
-      )}
+      {rows ? (
+        <>
+          {todayLink}
+          {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
+        </>
+      ) : (
+        <>
+          {overdue.length > 0 && (
+            <section id="agenda-overdue" className="agenda-day">
+              <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
+              <div className="flex flex-col gap-2">
+                <AnimatePresence initial={false}>
+                  {overdue.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                      {...chrome}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </section>
+          )}
 
-      {todayCount > 0 && (
-        <Link
-          href="/today"
-          className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft hover:border-line-strong"
-        >
-          <span>Today</span>
-          <span className="font-medium text-ink">
-            {todayCount} item{todayCount === 1 ? "" : "s"} · Open Today
-          </span>
-        </Link>
-      )}
+          {todayLink}
 
-      {visibleGroups.map((group) => {
-        const label = dayLabel(group.date);
-        const showDate = label === "Tomorrow";
-        return (
-          <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
-            <p className="mb-2.5 flex items-baseline gap-2 text-[12px] font-medium text-ink-faint">
-              {label}
-              {showDate && (
-                <span className="font-normal text-ink-faint/70">{format(group.date, "MMM d")}</span>
-              )}
-            </p>
-            <div className="flex flex-col gap-2">
-              <AnimatePresence initial={false}>
-                {group.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                    day={group.date}
-                    {...chrome}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
-          </section>
-        );
-      })}
+          {visibleGroups.map((group) => {
+            const label = dayLabel(group.date);
+            const showDate = label === "Tomorrow";
+            return (
+              <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
+                <p className="mb-2.5 flex items-baseline gap-2 text-[12px] font-medium text-ink-faint">
+                  {label}
+                  {showDate && (
+                    <span className="font-normal text-ink-faint/70">{format(group.date, "MMM d")}</span>
+                  )}
+                </p>
+                <div className="flex flex-col gap-2">
+                  <AnimatePresence initial={false}>
+                    {group.items.map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                        day={group.date}
+                        {...chrome}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </section>
+            );
+          })}
 
-      {visibleLater.length > 0 && (
-        <section id="agenda-later" className="agenda-day">
-          <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
-          <div className="flex flex-col gap-2">
-            <AnimatePresence initial={false}>
-              {visibleLater.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                  {...chrome}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        </section>
+          {visibleLater.length > 0 && (
+            <section id="agenda-later" className="agenda-day">
+              <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
+              <div className="flex flex-col gap-2">
+                <AnimatePresence initial={false}>
+                  {visibleLater.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                      {...chrome}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

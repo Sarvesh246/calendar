@@ -11,11 +11,14 @@ import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { viewSummary } from "@/lib/views";
+import { useAllViews } from "@/components/saved-views";
 
 export function FilterButton({ className }: { className?: string }) {
   const filter = useUIStore((s) => s.categoryFilter);
+  const activeViewId = useUIStore((s) => s.activeViewId);
   const setFilterOpen = useUIStore((s) => s.setFilterOpen);
-  const active = Boolean(filter?.length);
+  const active = Boolean(filter?.length) || Boolean(activeViewId);
 
   return (
     <Button
@@ -25,7 +28,13 @@ export function FilterButton({ className }: { className?: string }) {
         haptic("light");
         setFilterOpen(true);
       }}
-      aria-label={active ? `Filter, ${filter!.length} selected` : "Filter by class"}
+      aria-label={
+        activeViewId
+          ? "Filter, a saved view is on"
+          : active
+            ? `Filter, ${filter!.length} selected`
+            : "Filter by class"
+      }
       className={cn("relative", className, active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent")}
     >
       <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
@@ -66,6 +75,9 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const filter = useUIStore((s) => s.categoryFilter);
   const toggle = useUIStore((s) => s.toggleCategoryFilter);
   const clear = useUIStore((s) => s.clearCategoryFilter);
+  const activeViewId = useUIStore((s) => s.activeViewId);
+  const applyView = useUIStore((s) => s.applyView);
+  const views = useAllViews();
   const visible = categories.filter((c) => !c.archived);
 
   return (
@@ -99,8 +111,8 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
               aria-hidden
               className="mx-auto mb-2 block h-1 w-10 rounded-full bg-line-strong opacity-75"
             />
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[15px] font-semibold text-ink">Classes</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[15px] font-semibold text-ink">Views</p>
               <Button
                 variant="tertiary"
                 size="iconSm"
@@ -110,6 +122,25 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                 <X className="h-4 w-4" strokeWidth={2} />
               </Button>
             </div>
+            <div className="mb-4 flex flex-col gap-1">
+              {views.map((view) => {
+                const active = view.id === activeViewId;
+                return (
+                  <FilterRow
+                    key={view.id}
+                    selected={active}
+                    onSelect={() => {
+                      haptic("light");
+                      applyView(active ? null : view);
+                    }}
+                  >
+                    {view.name}
+                    <span className="block truncate text-[11.5px] text-ink-faint">{viewSummary(view)}</span>
+                  </FilterRow>
+                );
+              })}
+            </div>
+            <p className="mb-2 text-[15px] font-semibold text-ink">Classes</p>
             <div className="flex flex-col gap-1">
               <FilterRow
                 selected={!filter}
