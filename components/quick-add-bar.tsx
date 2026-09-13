@@ -1,7 +1,7 @@
 "use client";
 
 import { useMediaQuery } from "@/lib/use-media-query";
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Bell, Plus, Tag, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -18,16 +18,47 @@ import { formatTime } from "@/lib/date-utils";
 import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
-import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
+import { haptic } from "@/lib/haptic";
+import { clearDraft, readDraft, readJsonDraft, writeDraft, writeJsonDraft } from "@/lib/drafts";
+import {
+  onDay,
+  reminderChipLabel,
+  resolveComposer,
+  type ComposerOverrides,
+} from "@/lib/composer-fields";
+import { ComposerChips } from "@/components/composer-chips";
+import { readViewState } from "@/lib/view-state";
+import { useResolvedPathname } from "@/lib/tab-nav";
+import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Phase = "idle" | "preview" | "ask" | "bulk";
 
+/** Anything in storage is untrusted — an older build's shape, or a hand edit. */
+function readComposerOverrides(): ComposerOverrides {
+  const stored = readJsonDraft<Record<string, unknown>>(
+    "quick-add-fields",
+    (v): v is Record<string, unknown> => Boolean(v) && typeof v === "object"
+  );
+  if (!stored) return {};
+  const next: ComposerOverrides = {};
+  if (typeof stored.dateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(stored.dateKey)) {
+    next.dateKey = stored.dateKey;
+  }
+  if (typeof stored.categoryId === "string") next.categoryId = stored.categoryId;
+  if (typeof stored.reminderMinutes === "number" && Number.isFinite(stored.reminderMinutes)) {
+    next.reminderMinutes = stored.reminderMinutes;
+  }
+  return next;
+}
+
 export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const mobile = useMediaQuery("(max-width: 767px)");
-  const [reminderOverride, setReminderOverride] = useState<number | null>(null);
+  // What you corrected by tapping a chip. Empty means "whatever the sentence,
+  // the context and the defaults work out to".
+  const [overrides, setOverrides] = useState<ComposerOverrides>(() => readComposerOverrides());
   const categories = useDatebookStore((s) => s.categories);
   const addItem = useDatebookStore((s) => s.addItem);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -41,6 +72,29 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const setTimeHint = useUIStore((s) => s.setQuickAddTime);
   const durationHint = useUIStore((s) => s.quickAddDurationMin);
   const askAI = useUIStore((s) => s.askAI);
+  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  // "Adding within a class uses that class" — on a phone, working inside one
+  // class *is* having filtered to it. Two filtered classes is not a context, it
+  // is a shortlist, so only a single selection counts.
+  const contextCategoryId = categoryFilter?.length === 1 ? categoryFilter[0] : null;
+
+  /**
+   * The day the calendar is showing, when that is where you are.
+   *
+   * "Add to this day" already passes a date, but the floating add button — the
+   * one actually within thumb reach — went through the generic `openAdd`, which
+   * knows nothing about the calendar. Tapping a Thursday and then tapping Add
+   * offered you today, which is not what anyone means by that sequence.
+   *
+   * Resolved after mount rather than during render: the selected day lives in
+   * `sessionStorage`, which the server cannot see, and a chip that disagreed
+   * with the server's markup would fail hydration.
+   */
+  const pathname = useResolvedPathname();
+  const mounted = useHasMounted();
+  const calendarDayKey =
+    mounted && pathname === "/calendar" ? readViewState().calendarSelected ?? null : null;
+  const contextDateKey = dateKey ?? calendarDayKey;
 
   /** A span swept out on the week grid sizes an event the text didn't. */
   const withDuration = (r: ParsedQuickAdd): ParsedQuickAdd =>
@@ -88,6 +142,58 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     writeDraft("quick-add", text);
   }, [text]);
 
+  useEffect(() => {
+    // Strip the `undefined`s a reset leaves behind, so an emptied override set
+    // is stored as "nothing" rather than as three explicit blanks.
+    const stored = Object.fromEntries(
+      Object.entries(overrides).filter(([, v]) => v !== undefined)
+    );
+    writeJsonDraft("quick-add-fields", stored);
+  }, [overrides]);
+
+  /**
+   * What the chips are describing: the sentence as it stands right now, parsed
+   * on every keystroke rather than only when you press Add.
+   *
+   * Deferred, because parsing on the keystroke itself put a regex pass between
+   * the tap and the character appearing. The chips lagging the text by a frame
+   * is invisible; the text lagging your thumb is not.
+   */
+  const deferredText = useDeferredValue(text);
+  const liveParse = useMemo(() => {
+    const trimmed = deferredText.trim();
+    if (!trimmed) return null;
+    const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
+    return withDuration(
+      parseQuickAdd(deferredText, categories, {
+        ...(anchor ? { anchor } : {}),
+        ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredText, dateKey, timeHint, durationHint, categories]);
+
+  const defaultReminderMinutes = useMemo(() => {
+    const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
+    return defaults.length ? defaults[0].offsetMinutes : null;
+  }, [defaultReminderPresetIds, reminderPresets]);
+
+  const now = useMemo(() => new Date(), [dateKey, deferredText]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resolved = useMemo(
+    () =>
+      resolveComposer(
+        liveParse,
+        {
+          dateKey: contextDateKey,
+          categoryId: contextCategoryId,
+          defaultReminderMinutes,
+          fallbackCategoryId: categories[0]?.id,
+        },
+        overrides
+      ),
+    [liveParse, contextDateKey, contextCategoryId, defaultReminderMinutes, overrides, categories]
+  );
+
   /** Try the pasted-schedule path. Returns true when it took over. */
   function tryBulk(raw: string): boolean {
     if (!looksLikeBulkPaste(raw)) return false;
@@ -107,6 +213,13 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       setPhase("ask");
       return;
     }
+    // On a phone the chips have been showing the day, class and reminder the
+    // whole time you were typing, so the preview card would be asking you to
+    // confirm something you have been looking at. One tap adds.
+    if (mobile) {
+      commit(liveParse);
+      return;
+    }
     const anchor = dateKey ? new Date(`${dateKey}T12:00:00`) : undefined;
     const result = parseQuickAdd(text, categories, {
       ...(anchor ? { anchor } : {}),
@@ -116,37 +229,66 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     setPhase("preview");
   }
 
-  function confirm() {
-    if (!parsed) return;
-    const defaults = remindersFromPresetIds(defaultReminderPresetIds, reminderPresets);
-    const reminders = reminderOverride !== null
-      ? (reminderOverride === 0 ? undefined : [{ id: nanoid(), itemId: "", offsetMinutes: reminderOverride, label: `${reminderOverride} minutes before` }])
-      : parsed.reminderMinutesBefore
-      ? [
-          {
-            id: nanoid(),
-            itemId: "",
-            offsetMinutes: parsed.reminderMinutesBefore,
-            label: parsed.reminderLabel ?? "Reminder",
-          },
-        ]
-      : defaults.length
-        ? defaults
-        : undefined;
-    const willHaveReminder = Boolean(reminders?.length);
+  /**
+   * Add the item the chips are describing.
+   *
+   * `source` is the parse to build on: the live one when saving straight from
+   * the composer (phones), the frozen one behind the preview card (desktop).
+   * Either way the chips win, because a chip is something you chose.
+   */
+  function commit(source: ParsedQuickAdd | null) {
+    if (!source) return;
+    const fields = resolveComposer(
+      source,
+      {
+        dateKey: contextDateKey,
+        categoryId: contextCategoryId,
+        defaultReminderMinutes,
+        fallbackCategoryId: categories[0]?.id,
+      },
+      overrides
+    );
+
+    const at = fields.date.value;
+    // The end moves with the start, so correcting the day of a 2–3pm event
+    // keeps it two hours long instead of running to yesterday's 3pm.
+    const endAt = source.endAt ? onDay(source.endAt, at) : undefined;
+
+    const minutes = fields.reminderMinutes.value;
+    const reminders =
+      minutes === null
+        ? undefined
+        : [
+            {
+              id: nanoid(),
+              itemId: "",
+              offsetMinutes: minutes,
+              label:
+                fields.reminderMinutes.source === "typed" && source.reminderLabel
+                  ? source.reminderLabel
+                  : reminderChipLabel(minutes),
+            },
+          ];
+
     addItem({
-      title: parsed.title,
-      type: parsed.type,
-      categoryId: parsed.categoryId ?? categories[0]?.id,
-      at: parsed.at.toISOString(),
-      ...(parsed.endAt ? { endAt: parsed.endAt.toISOString() } : {}),
-      ...(parsed.allDay ? { allDay: true } : {}),
-      ...(parsed.repeat ? { repeat: parsed.repeat } : {}),
-      status: parsed.type === "event" ? undefined : "todo",
+      title: source.title,
+      type: source.type,
+      // Whatever the chip said, including a deliberate "No class".
+      categoryId: fields.categoryId.value ?? "",
+      at: at.toISOString(),
+      ...(endAt ? { endAt: endAt.toISOString() } : {}),
+      ...(source.allDay ? { allDay: true } : {}),
+      ...(source.repeat ? { repeat: source.repeat } : {}),
+      status: source.type === "event" ? undefined : "todo",
       reminders,
     });
-    if (willHaveReminder) void maybePromptForReminders(reminderContext);
+    if (reminders) void maybePromptForReminders(reminderContext);
+    haptic("success");
     reset();
+  }
+
+  function confirm() {
+    commit(parsed);
   }
 
   function addAnyway() {
@@ -179,7 +321,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
    * the thing you were writing now exists.
    */
   function reset({ keepDraft = false }: { keepDraft?: boolean } = {}) {
-    setReminderOverride(null);
+    setOverrides({});
     if (keepDraft) {
       // Only the parse is thrown away — the sentence stays.
       setParsed(null);
@@ -193,6 +335,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     }
     setText("");
     clearDraft("quick-add");
+    clearDraft("quick-add-fields");
     setParsed(null);
     setBulk(null);
     setPicked([]);
@@ -330,6 +473,18 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         </button>
       </div>
 
+      {/* Phones only. On a desktop the preview card has room to lay the same
+          three facts out in full, and there is no keyboard covering it. */}
+      {mobile && phase === "idle" && (
+        <ComposerChips
+          resolved={resolved}
+          overrides={overrides}
+          onChange={(patch) => setOverrides((o) => ({ ...o, ...patch }))}
+          categories={categories}
+          now={now}
+        />
+      )}
+
       <AnimatePresence>
         {phase === "ask" && (
           <motion.div
@@ -411,19 +566,6 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                 </span>
               )}
             </div>
-            {mobile && <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-              <label className="flex flex-col gap-1">Date<input aria-label="Item date" type="date" className="min-h-11 min-w-0 rounded-lg bg-surface-sunken px-2 text-[16px]" value={format(parsed.at, "yyyy-MM-dd")} onChange={(e) => {
-                if (!e.target.value) return;
-                const at = new Date(`${e.target.value}T00:00:00`);
-                at.setHours(parsed.at.getHours(), parsed.at.getMinutes());
-                const delta = at.getTime() - parsed.at.getTime();
-                setParsed({ ...parsed, at, ...(parsed.endAt ? { endAt: new Date(parsed.endAt.getTime() + delta) } : {}) });
-              }} /></label>
-              <label className="flex flex-col gap-1">Class<select aria-label="Item class" className="min-h-11 min-w-0 rounded-lg bg-surface-sunken px-2" value={parsed.categoryId ?? categories[0]?.id ?? ""} onChange={(e) => setParsed({ ...parsed, categoryId: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-              <label className="col-span-2 flex items-center justify-between gap-2 rounded-lg bg-surface-sunken px-2">Reminder<select aria-label="Item reminder" className="min-h-11 bg-transparent" value={reminderOverride ?? "parsed"} onChange={(e) => setReminderOverride(e.target.value === "parsed" ? null : Number(e.target.value))}>
-                <option value="parsed">{parsed.reminderLabel ?? "Use defaults"}</option><option value="0">None</option><option value="10">10 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option>
-              </select></label>
-            </div>}
             <div className="mt-3.5 flex justify-end gap-2">
               <Button variant="tertiary" size="sm" onClick={() => reset({ keepDraft: true })}>
                 Cancel

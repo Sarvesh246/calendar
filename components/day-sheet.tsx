@@ -2,8 +2,8 @@
 
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useId, useRef, useState } from "react";
-import { motion, useDragControls } from "framer-motion";
-import { ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
@@ -13,10 +13,26 @@ import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 import type { FilterBreakdown } from "@/lib/filters";
 import type { OverlapGroup } from "@/lib/overlap";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+
+/** The heading travels the way the day did — the only cue that says which. */
+const headingVariants = {
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 18 : -18 }),
+  center: { opacity: 1, x: 0 },
+  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -18 : 18 }),
+};
+
+type Detent = "compact" | "full";
+
+/** Compact stops well short of the month grid; full is for reading a long day. */
+const DETENT_HEIGHT: Record<Detent, string> = {
+  compact: "min(46dvh, 420px)",
+  full: "min(88dvh, 780px)",
+};
 
 function useBelowLg() {
   const [below, setBelow] = useState(false);
@@ -56,13 +72,57 @@ export function DaySheet({
   const dragControls = useDragControls();
   const closeGuard = useRef(false);
   const headingId = useId();
-  const label = dayLabel(date);
-  const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
-  const [expanded, setExpanded] = useState(false);
+  const relative = dayLabel(date);
+  const isRelative = relative === "Today" || relative === "Tomorrow" || relative === "Yesterday";
+  // "Thursday, September 17" does not fit between a previous, a next, an expand
+  // and a close button, and a truncated date is worse than a short one.
+  const label = isRelative ? relative : format(date, "EEE, MMM d");
+  const eventCount = items.filter((i) => i.type === "event").length;
+  const dueCount = items.filter((i) => i.type !== "event" && i.status !== "done").length;
+  const subtitle = isRelative
+    ? format(date, "EEEE, MMMM d")
+    : items.length === 0
+      ? "Nothing scheduled"
+      : [
+          eventCount > 0 && `${eventCount} scheduled`,
+          dueCount > 0 && `${dueCount} due`,
+        ]
+          .filter(Boolean)
+          .join(" · ") || `${items.length} completed`;
+  /**
+   * Two heights, not one.
+   *
+   * The sheet used to size itself to its contents, which meant a busy day
+   * covered the month and a quiet one left a gap — and either way the height
+   * was a surprise. Two detents make it a place: `compact` deliberately stops
+   * short so the month grid stays readable above it (the whole reason you
+   * opened a day *from* the calendar), and `full` is for reading a long day.
+   */
+  const [detent, setDetent] = useState<Detent>("compact");
+  const expanded = detent === "full";
+  const setExpanded = (value: boolean) => setDetent(value ? "full" : "compact");
   const listRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
+
+  /**
+   * Which way the day last moved, so the heading can travel that way.
+   *
+   * Derived during render rather than in an effect: React re-runs this
+   * component immediately on a render-phase update, before anything is
+   * committed, so the direction is known on the same frame the new day is —
+   * an effect would leave the first frame of the transition going the wrong way.
+   */
+  const dayKeyValue = date.toDateString();
+  const [travel, setTravel] = useState<{ at: number; dir: 1 | -1 }>(() => ({
+    at: date.getTime(),
+    dir: 1,
+  }));
+  if (travel.at !== date.getTime()) {
+    setTravel({ at: date.getTime(), dir: date.getTime() > travel.at ? 1 : -1 });
+  }
+  const direction = travel.dir;
 
   useEffect(() => {
     closeGuard.current = false;
@@ -88,9 +148,12 @@ export function DaySheet({
 
   return (
     <div className="viewport-pinned-overlay fixed inset-0 z-50 lg:hidden">
+      {/* Dimmed in proportion to how much the sheet is covering. At the compact
+          detent the month has to stay legible — it is the thing you are
+          stepping through days *against*. */}
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        animate={{ opacity: expanded ? 1 : 0.35 }}
         exit={{ opacity: 0 }}
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
         onClick={close}
@@ -115,14 +178,28 @@ export function DaySheet({
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
           setDragging(false);
-          if (info.offset.y < -40) setExpanded(true);
-          if (info.offset.y > 88 || info.velocity.y > 700) {
+          const flungDown = info.velocity.y > 700;
+          const flungUp = info.velocity.y < -700;
+          if (info.offset.y < -40 || flungUp) {
+            if (!expanded) haptic("light");
+            setDetent("full");
+            return;
+          }
+          if (info.offset.y > 88 || flungDown) {
             haptic("light");
-            close();
+            // From full, a downward drag steps to compact rather than closing —
+            // one gesture, one change, and the way back up is obvious.
+            if (expanded) setDetent("compact");
+            else close();
           }
         }}
         className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
-        style={{ paddingBottom: "var(--safe-bottom)", minHeight: !phone ? "min(72dvh, 640px)" : undefined, height: !phone ? undefined : expanded || items.length > 3 ? "min(82dvh, 760px)" : `min(${items.length === 0 ? 36 : 44 + items.length * 6}dvh, 560px)` }}
+        style={{
+          paddingBottom: "var(--safe-bottom)",
+          minHeight: !phone ? "min(72dvh, 640px)" : undefined,
+          height: !phone ? undefined : DETENT_HEIGHT[detent],
+          transition: dragging ? "none" : "height var(--motion-emphasis) var(--ease-standard)",
+        }}
       >
         <div
           className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2 active:cursor-grabbing"
@@ -134,34 +211,74 @@ export function DaySheet({
             transition={motionTokens.springSnappy}
             className="h-1 w-10 rounded-full bg-line-strong"
           />
-          <div className="flex w-full items-start justify-between gap-3 px-4 pb-2 pt-3">
-            <div className="min-w-0">
-              <p id={headingId} className="text-[16px] font-semibold text-ink">
-                {label}
-              </p>
-              <p className="mt-0.5 text-[12.5px] text-ink-faint">
-                {showDate
-                  ? format(date, "EEEE, MMMM d")
-                  : `${items.length} thing${items.length === 1 ? "" : "s"} scheduled`}
-              </p>
+          <div className="flex w-full items-center justify-between gap-2 px-3 pb-2 pt-3">
+            {/* Previous sits on the left of the title it changes, next on the
+                right, so the control and the direction agree. */}
+            {phone && onStep ? (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onStep(-1); }}
+                aria-label="Previous day"
+                className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+              </button>
+            ) : null}
+
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+                <motion.div
+                  key={dayKeyValue}
+                  custom={direction}
+                  variants={headingVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                  className={cn(phone && onStep ? "text-center" : "text-left")}
+                >
+                  <p id={headingId} className="truncate text-[16px] font-semibold text-ink">
+                    {label}
+                  </p>
+                  <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">{subtitle}</p>
+                </motion.div>
+              </AnimatePresence>
             </div>
-            <div className="flex shrink-0" onPointerDown={e => e.stopPropagation()}>
-              {phone && onStep && <><button className="flex h-11 w-11 items-center justify-center" aria-label="Previous day" onClick={() => onStep(-1)}><ChevronLeft className="h-5 w-5" /></button><button className="flex h-11 w-11 items-center justify-center" aria-label="Next day" onClick={() => onStep(1)}><ChevronRight className="h-5 w-5" /></button></>}
-              {/* Growing the sheet was a drag-up and nothing else — unreachable
-                  by keyboard, by switch control, and by anyone who can't make a
-                  precise vertical gesture. */}
-              {phone && !expanded && items.length > 0 && (
+
+            <div className="flex shrink-0 items-center" onPointerDown={e => e.stopPropagation()}>
+              {phone && onStep && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); onStep(1); }}
+                  aria-label="Next day"
+                  className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
+                >
+                  <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                </button>
+              )}
+              {/* Changing detent was a drag and nothing else — unreachable by
+                  keyboard, by switch control, and by anyone who can't make a
+                  precise vertical gesture. Both directions, always. */}
+              {phone && (
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setExpanded(true);
+                    haptic("light");
+                    setExpanded(!expanded);
                   }}
-                  aria-label="Expand this day"
-                  className="flex h-11 w-11 items-center justify-center text-ink-soft"
+                  aria-label={expanded ? "Shrink this day" : "Expand this day"}
+                  aria-expanded={expanded}
+                  className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
                 >
-                  <ChevronUp className="h-5 w-5" strokeWidth={2} />
+                  {expanded ? (
+                    <ChevronDown className="h-5 w-5" strokeWidth={2} />
+                  ) : (
+                    <ChevronUp className="h-5 w-5" strokeWidth={2} />
+                  )}
                 </button>
               )}
             <button
@@ -172,7 +289,7 @@ export function DaySheet({
                 close();
               }}
               aria-label="Close"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-soft transition-colors hover:text-ink"
+              className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:bg-surface-sunken"
             >
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
@@ -180,7 +297,6 @@ export function DaySheet({
           </div>
         </div>
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-6 pt-0 [-webkit-overflow-scrolling:touch]">
-          {phone && <p className="mb-2 text-[12px] text-ink-soft">● {items.filter(i => i.type === "event").length} scheduled · ◆ {items.filter(i => i.type !== "event" && i.status !== "done").length} due work</p>}
           {onAdd && (
             <button
               type="button"

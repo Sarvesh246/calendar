@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { addDays, format, startOfDay } from "date-fns";
+import { TriangleAlert } from "lucide-react";
+import { haptic } from "@/lib/haptic";
+import { prefersReducedMotion } from "@/lib/motion";
+import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
@@ -110,7 +113,9 @@ function TodayDashboard() {
           {formatDaySummary(
             eventsCount,
             dueTodayCount,
-            overdue.length,
+            // The attention strip right below says this, in more detail and with
+            // a way to act on it. Saying it twice makes the headline noise.
+            mobile ? 0 : overdue.length,
             todayBreakdown.hiddenByCategory +
               todayBreakdown.hiddenByCompletion +
               todayBreakdown.hiddenByView
@@ -130,8 +135,40 @@ function TodayDashboard() {
     />
   );
 
+  /**
+   * What needs attention, in one line, above the day.
+   *
+   * The overdue list used to sit between "happening now" and today's schedule,
+   * which meant three late assignments pushed the thing you actually opened the
+   * app for below the fold. But hiding the backlog entirely is worse — it is the
+   * one thing that genuinely needs you.
+   *
+   * So the backlog gets a line here and its cards further down: you see that it
+   * exists, and how stale it is, without it taking the day's place.
+   */
+  const attentionStrip = mobile && overdue.length > 0 && (
+    <button
+      type="button"
+      onClick={() => {
+        haptic("light");
+        setReviewOverdue(true);
+        document
+          .getElementById("today-overdue")
+          ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+      }}
+      className="press-none flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-warn/40 bg-warn-soft px-3 text-left"
+    >
+      <TriangleAlert className="h-4 w-4 shrink-0 text-warn" strokeWidth={2} aria-hidden />
+      <span className="min-w-0 flex-1 text-[13px] font-medium text-warn">
+        {overdue.length} overdue
+        <span className="font-normal opacity-80"> · {overdueAgeLabel(overdue, now)}</span>
+      </span>
+      <span className="shrink-0 text-[12.5px] font-semibold text-warn">Review</span>
+    </button>
+  );
+
   const overdueSection = overdue.length > 0 && (
-    <section>
+    <section id="today-overdue" className="scroll-mt-[calc(var(--mobile-header-height)+0.75rem)]">
       <div className="flex items-center justify-between"><SectionLabel>Overdue · {overdue.length}</SectionLabel>
         {mobile && overdue.length > 3 && <button className="min-h-11 px-2 text-[13px] font-medium text-accent" aria-expanded={reviewOverdue} onClick={() => setReviewOverdue(!reviewOverdue)}>{reviewOverdue ? "Show less" : `Review all ${overdue.length}`}</button>}
       </div>
@@ -276,11 +313,27 @@ function TodayDashboard() {
       <FeedHealthBanner />
       {header}
       {happening}
-      {overdueSection}
+      {/* Now, then what needs attention in one line, then the day itself. The
+          backlog's own cards come after the day, not in front of it. */}
+      {attentionStrip}
       {todaySection}
+      {overdueSection}
       {tomorrowSection}
     </div>
   );
+}
+
+/** "oldest 4 days late", or "since yesterday" when it is only just late. */
+function overdueAgeLabel(overdue: Item[], now: Date): string {
+  let oldest = 0;
+  for (const item of overdue) {
+    const at = new Date(item.at).getTime();
+    if (Number.isNaN(at)) continue;
+    oldest = Math.max(oldest, differenceInCalendarDays(now, new Date(at)));
+  }
+  if (oldest <= 0) return "due earlier today";
+  if (oldest === 1) return "since yesterday";
+  return `oldest ${oldest} days late`;
 }
 
 function HappeningNowSection({

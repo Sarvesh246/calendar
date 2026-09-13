@@ -64,10 +64,13 @@ export function SaveStatusPill() {
   const current = view;
 
   return (
-    <div
-      className="viewport-pinned-bottom pointer-events-none fixed inset-x-0 z-[55] flex justify-center px-4 md:hidden"
-      style={{ bottom: "calc(var(--safe-bottom) + var(--tab-bar-rest) + 4.5rem)" }}
-    >
+    // Positioned by `ToastViewport`, in the same column as the undo snackbars:
+    // both live just above the tab bar, and two things laying claim to that
+    // strip independently is how they ended up on top of each other.
+    // The right gutter keeps it clear of the add button: an undo snackbar covers
+    // that for a few seconds and nobody minds, but "Waiting to sync" stays until
+    // the network comes back, and it must not sit on top of Add for that long.
+    <div className="save-status-pill flex w-full justify-center pr-[4.5rem] md:hidden">
       <AnimatePresence>
         {visible && current && (
           <motion.div

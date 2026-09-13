@@ -14,7 +14,6 @@ import { DeferredFeedSync } from "./deferred-feed-sync";
 import { ToastViewport } from "./toast-viewport";
 import { MobileHeaderActions } from "./mobile-header-actions";
 import { FilterSummaryBar } from "./filter-summary-bar";
-import { SaveStatusPill } from "./save-status-pill";
 import { ViewStateSync } from "./view-state-sync";
 import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
@@ -206,7 +205,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <ViewStateSync />
-      {!focusMode && <SaveStatusPill />}
 
       {!focusMode && !onSettings && !quickAddOpen && (
         <Button

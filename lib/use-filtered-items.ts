@@ -5,6 +5,7 @@ import { useDatebookStore } from "./store";
 import { useDeferredCategoryFilter, useUIStore } from "./ui-store";
 import { applyItemFilters, filterBreakdown, type FilterBreakdown } from "./filters";
 import { useNow } from "./use-now";
+import { useCompletionLinger } from "./use-completion-linger";
 import type { Item } from "./types";
 
 /**
@@ -24,7 +25,7 @@ export function useFilteredItems(): Item[] {
   const clockKey =
     range === "any" ? "" : range === "overdue" ? String(Math.floor(now.getTime() / 60_000)) : now.toDateString();
 
-  return useMemo(
+  const filtered = useMemo(
     () =>
       applyItemFilters(allItems, {
         categoryFilter,
@@ -37,6 +38,10 @@ export function useFilteredItems(): Item[] {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allItems, categoryFilter, hideCompleted, viewFilter, weekStartsOn, clockKey]
   );
+
+  // Ticking something off should look like finishing it, not like it never
+  // happened — see `useCompletionLinger`.
+  return useCompletionLinger(filtered);
 }
 
 /**
