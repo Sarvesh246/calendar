@@ -8,7 +8,7 @@ import { addDays, format, startOfDay } from "date-fns";
 import { CalendarClock, LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { useFilteredItems } from "@/lib/use-filtered-items";
+import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
 import { useWorkspacePrefs, type AgendaLayout } from "@/lib/workspace-prefs";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
@@ -24,7 +24,7 @@ import {
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
 import { AgendaRows, type AgendaRowSection } from "@/components/agenda-rows";
-import { EmptyState } from "@/components/empty-state";
+import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { ViewMenu } from "@/components/view-menu";
@@ -51,6 +51,7 @@ export default function AgendaPage() {
   const now = useNow();
   const router = useRouter();
   const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
+  const allItems = useDatebookStore((s) => s.items);
   const items = useFilteredItems();
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const chrome = useItemCardChrome();
@@ -119,6 +120,17 @@ export default function AgendaPage() {
 
   const isEmpty =
     overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
+
+  // Agenda's scope is everything from today on, so a horizon full of completed
+  // work reads as "Everything completed" rather than an empty calendar.
+  const ahead = useMemo(() => {
+    const today = startOfDay(now).getTime();
+    return allItems.filter((it) => {
+      const at = new Date(it.at).getTime();
+      return !Number.isNaN(at) && at >= today;
+    });
+  }, [allItems, now]);
+  const breakdown = useFilterBreakdown(ahead);
 
   const sections = useMemo(() => {
     const next: { id: string; label: string; tone: "warn" | "faint" }[] = [];
@@ -314,9 +326,12 @@ export default function AgendaPage() {
         <>
           <OnboardingCard />
           <FeedHealthBanner />
-          <EmptyState
-            title="Nothing on the horizon."
-            sub="Use Add to put something on a day whenever you're ready."
+          <ListEmptyState
+            scope="the agenda"
+            total={breakdown.total}
+            hiddenByCategory={breakdown.hiddenByCategory}
+            hiddenByCompletion={breakdown.hiddenByCompletion}
+            hiddenByView={breakdown.hiddenByView}
           />
         </>
       )}
@@ -325,6 +340,10 @@ export default function AgendaPage() {
       {sticky && (
         <p
           ref={stickyRef}
+          // Purely a visual restatement of the section heading scrolling under
+          // it. A screen reader already reads each day where it starts, so
+          // exposing this too announced every day twice.
+          aria-hidden
           className={cn(
             AGENDA_STICKY,
             "pointer-events-none",

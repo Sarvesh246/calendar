@@ -27,7 +27,7 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
   const current = items.find(i => i.id === selected);
   function remember(value: string) { const trimmed = value.trim(); if (!trimmed) return; const next = [trimmed, ...recent.filter(s => s !== trimmed)].slice(0, 5); setRecent(next); try { localStorage.setItem(recentKey, JSON.stringify(next)); } catch { /* Search still works without storage. */ } }
   return <MobileItemSheet title="Search items" onClose={onClose}>
-    <input aria-label="Search items" autoFocus className={`${field} w-full text-[16px]`} placeholder="Title, notes, location…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") remember(query); }} />
+    <div data-field-group=""><input aria-label="Search items" autoFocus className={`${field} w-full text-[16px]`} placeholder="Title, notes, location…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") remember(query); }} /></div>
     <div className="my-3 grid grid-cols-2 gap-2">
       <select aria-label="Search class" className={field} value={category} onChange={e => setCategory(e.target.value)}><option value="">All classes</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       <select aria-label="Search status" className={field} value={status} onChange={e => setStatus(e.target.value)}><option value="">All statuses</option><option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option></select>

@@ -18,6 +18,8 @@ import { formatTime } from "@/lib/date-utils";
 import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
 import { motion as motionTokens } from "@/lib/motion";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
+import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -47,30 +49,44 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       : r;
   const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
 
-  const [text, setText] = useState("");
+  // Whatever was half-typed when the sheet was last dismissed. A phone
+  // interrupts you constantly — a notification, a backgrounded tab, a mis-swipe
+  // — and losing the sentence you were mid-way through is the most annoying
+  // thing a small app can do.
+  const [text, setText] = useState(() => readDraft("quick-add"));
   const [phase, setPhase] = useState<Phase>("idle");
   const [focused, setFocused] = useState(false);
   const [parsed, setParsed] = useState<ParsedQuickAdd | null>(null);
   const [bulk, setBulk] = useState<{ drafts: BulkDraft[]; skipped: string[] } | null>(null);
   const [picked, setPicked] = useState<boolean[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useKeepFieldVisible(rootRef, mobile);
   // The field is a single line, so a multi-line paste would arrive with its
   // newlines flattened — and with them, any hope of telling the rows apart.
   // The original text is kept here instead.
   const rawRef = useRef<string>("");
 
   useEffect(() => {
-    if (prefill !== null) {
+    if (prefill === null) return;
+    // An empty prefill means "open a blank composer", which is now the same
+    // request as "open the composer" — so it must not wipe a draft the user is
+    // coming back to finish. Only actual prefill text replaces what's there.
+    if (prefill !== "") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setText(prefill);
-      inputRef.current?.focus();
-      setPrefill(null);
     }
+    inputRef.current?.focus();
+    setPrefill(null);
   }, [prefill, setPrefill]);
 
   useEffect(() => {
     if (dateKey) inputRef.current?.focus();
   }, [dateKey]);
+
+  useEffect(() => {
+    writeDraft("quick-add", text);
+  }, [text]);
 
   /** Try the pasted-schedule path. Returns true when it took over. */
   function tryBulk(raw: string): boolean {
@@ -154,9 +170,29 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     reset();
   }
 
-  function reset() {
+  /**
+   * Put the bar back to nothing.
+   *
+   * `keepDraft` is the difference between finishing and being interrupted:
+   * cancelling out of a preview, or closing the sheet, leaves the words where
+   * you can pick them back up; actually adding the item clears them, because
+   * the thing you were writing now exists.
+   */
+  function reset({ keepDraft = false }: { keepDraft?: boolean } = {}) {
     setReminderOverride(null);
+    if (keepDraft) {
+      // Only the parse is thrown away — the sentence stays.
+      setParsed(null);
+      setBulk(null);
+      setPicked([]);
+      setPhase("idle");
+      setDateKey(null);
+      setTimeHint(null);
+      closeQuickAdd();
+      return;
+    }
     setText("");
+    clearDraft("quick-add");
     setParsed(null);
     setBulk(null);
     setPicked([]);
@@ -189,8 +225,14 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     : "";
 
   return (
-    <div className={cn("relative w-full", mobile && "mobile-quick-add rounded-xl bg-surface p-2")}>
+    <div
+      ref={rootRef}
+      className={cn("relative w-full", mobile && "mobile-quick-add rounded-xl bg-surface p-2")}
+    >
       <div
+        // Marks the field and its send button as one unit, so the keyboard
+        // never covers the button you need to finish with.
+        data-field-group=""
         className={cn(
           "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
@@ -240,7 +282,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                 if (phase === "preview") confirm();
                 else submit();
               }
-              if (e.key === "Escape") reset();
+              if (e.key === "Escape") reset({ keepDraft: true });
             }}
             enterKeyHint="go"
             aria-label="New item"
@@ -255,12 +297,18 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
           />
         </div>
         {!embedded && (
-          <Button variant="tertiary" size="iconSm" onClick={reset} aria-label="Close">
+          <Button
+            variant="tertiary"
+            size="iconSm"
+            onClick={() => reset({ keepDraft: true })}
+            aria-label="Close"
+          >
             <X className="h-4 w-4" strokeWidth={2} />
           </Button>
         )}
         <button
           type="button"
+          data-primary-action=""
           onClick={submit}
           disabled={!ready}
           aria-label="Add"
@@ -293,7 +341,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
           >
             <p className="text-[13px] text-ink-soft">This looks like a question, not something to add.</p>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <Button variant="tertiary" size="sm" onClick={reset}>
+              <Button variant="tertiary" size="sm" onClick={() => reset({ keepDraft: true })}>
                 Cancel
               </Button>
               <Button variant="secondary" size="sm" onClick={addAnyway}>
@@ -318,7 +366,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             skipped={bulk.skipped}
             selected={picked}
             onToggle={(i) => setPicked((p) => p.map((v, j) => (j === i ? !v : v)))}
-            onCancel={reset}
+            onCancel={() => reset({ keepDraft: true })}
             onConfirm={confirmBulk}
             onAskAI={() => {
               askAI(
@@ -377,7 +425,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
               </select></label>
             </div>}
             <div className="mt-3.5 flex justify-end gap-2">
-              <Button variant="tertiary" size="sm" onClick={reset}>
+              <Button variant="tertiary" size="sm" onClick={() => reset({ keepDraft: true })}>
                 Cancel
               </Button>
               <Button variant="primary" size="sm" onClick={confirm}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, MapPin } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
 import { applyCategoryFilter } from "@/lib/filters";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/weekly-schedule";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { PhoneSchedule } from "@/components/schedule/phone-schedule";
 import { cn } from "@/lib/utils";
 
 /** Vertical scale of the timetable. One minute ≈ one pixel reads at a glance
@@ -106,9 +107,11 @@ export default function SchedulePage() {
             colorOf={colorOf}
           />
 
-          <DayList
+          {/* Phones get a day at a time on a real timeline; from `md` up the
+              grid above already answers the same question better. */}
+          <PhoneSchedule
             schedule={schedule}
-            today={today}
+            weekStartsOn={weekStartsOn}
             clock24h={clock24h}
             colorOf={colorOf}
             nameOf={nameOf}
@@ -333,118 +336,6 @@ function TimetableGrid({
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** The same week, read top to bottom. Phones, and anyone who prefers a list. */
-function DayList({
-  schedule,
-  today,
-  clock24h,
-  colorOf,
-  nameOf,
-}: {
-  schedule: ReturnType<typeof buildWeeklySchedule>;
-  today: number;
-  clock24h: boolean;
-  colorOf: (categoryId?: string) => string;
-  nameOf: (categoryId?: string) => string | undefined;
-}) {
-  return (
-    <div className="flex flex-col gap-3 md:hidden">
-      {schedule.days.map((day) => {
-        const blocks = schedule.blocks.filter((b) => b.day === day);
-        const minutes = blocks.reduce((sum, b) => sum + (b.endMin - b.startMin), 0);
-        const isToday = today === day;
-        return (
-          <section
-            key={day}
-            className={cn(
-              "overflow-hidden rounded-xl border bg-surface",
-              isToday ? "border-accent/45" : "border-line"
-            )}
-          >
-            <header
-              className={cn(
-                "flex items-center justify-between gap-2 px-4 py-2.5",
-                isToday && "bg-accent-soft"
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <p
-                  className={cn(
-                    "text-[13.5px] font-semibold",
-                    isToday ? "text-accent" : "text-ink"
-                  )}
-                >
-                  {weekdayLong(day)}
-                </p>
-                {isToday && (
-                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
-                    Today
-                  </span>
-                )}
-              </div>
-              <p className="text-[11.5px] tabular-nums text-ink-faint">
-                {blocks.length} · {formatDuration(minutes)}
-              </p>
-            </header>
-            <div className="flex flex-col">
-              {blocks.map((block) => {
-                const raw = nameOf(block.categoryId);
-                const category =
-                  raw && !block.title.toLowerCase().startsWith(raw.toLowerCase())
-                    ? raw
-                    : undefined;
-                return (
-                  <div
-                    key={block.key}
-                    className="flex items-stretch gap-3 border-t border-line px-4 py-2.5"
-                  >
-                    <div className="w-[64px] shrink-0 pt-0.5 text-right">
-                      <p className="text-[12.5px] font-medium tabular-nums text-ink">
-                        {formatClock(
-                          Math.floor(block.startMin / 60),
-                          block.startMin % 60,
-                          clock24h
-                        )}
-                      </p>
-                      <p className="text-[11px] tabular-nums text-ink-faint">
-                        {formatClock(Math.floor(block.endMin / 60), block.endMin % 60, clock24h)}
-                      </p>
-                    </div>
-                    <span
-                      aria-hidden
-                      className="w-[3px] shrink-0 rounded-full"
-                      style={{ background: colorOf(block.categoryId) }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-medium text-ink">{block.title}</p>
-                      <p className="mt-0.5 flex items-center gap-1 truncate text-[11.5px] text-ink-soft">
-                        {category && <span className="truncate">{category}</span>}
-                        {category && block.location && <span aria-hidden>·</span>}
-                        {block.location && (
-                          <>
-                            <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.9} />
-                            <span className="truncate">{block.location}</span>
-                          </>
-                        )}
-                        {!category && !block.location && (
-                          <span>{formatDuration(block.endMin - block.startMin)}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
-      <p className="sr-only">
-        Weekdays shown: {schedule.days.map((d) => weekdayShort(d)).join(", ")}
-      </p>
     </div>
   );
 }

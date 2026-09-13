@@ -5,9 +5,12 @@ import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
-import { EmptyState } from "@/components/empty-state";
+import { ListEmptyState } from "@/components/list-empty-state";
+import { OverlapNotices } from "@/components/overlap-notice";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { FilterBreakdown } from "@/lib/filters";
+import type { OverlapGroup } from "@/lib/overlap";
 import type { Item } from "@/lib/types";
 
 export function DayAgenda({
@@ -15,11 +18,16 @@ export function DayAgenda({
   items,
   onAdd,
   className,
+  breakdown,
+  overlaps = [],
 }: {
   date: Date;
   items: Item[];
   onAdd?: () => void;
   className?: string;
+  /** What the filters are hiding on this day, so "empty" can explain itself. */
+  breakdown?: FilterBreakdown;
+  overlaps?: OverlapGroup[];
 }) {
   const label = dayLabel(date);
   const showDate = label === "Today" || label === "Tomorrow" || label === "Yesterday";
@@ -43,9 +51,20 @@ export function DayAgenda({
         )}
       </div>
       {items.length === 0 ? (
-        <EmptyState title="Nothing scheduled." sub={`Free day on ${format(date, "MMM d")}.`} />
+        <ListEmptyState
+          scope={format(date, "MMM d")}
+          total={breakdown?.total ?? 0}
+          hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
+          hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+          canAdd={Boolean(onAdd)}
+          onAdd={onAdd}
+          compact
+        />
       ) : (
         <div className="-mr-1 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1">
+          {/* Phones only: the desktop pane sits beside a grid that already
+              draws collisions side by side. */}
+          <OverlapNotices groups={overlaps} className="mb-2 md:hidden" />
           {/* Nested stack so cards keep intrinsic height. A flex-col scroller
               shrinks its children to fit, which squashed expanded editors. */}
           <div className="flex flex-col gap-2">

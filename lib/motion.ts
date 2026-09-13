@@ -34,6 +34,10 @@ export const motion = {
   springGentle: { type: "spring" as const, stiffness: 320, damping: 34, mass: 0.9 },
   /** Layout/size changes: critically damped, so height never bounces. */
   springLayout: { type: "spring" as const, stiffness: 400, damping: 40, mass: 0.8 },
+
+  /** The plain fade a disclosure falls back to under reduced motion, where an
+   *  animating height would reflow the page the reader is looking at. */
+  tweenStandard: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] as const },
 };
 
 /** Tween shorthands, so callers don't repeat `{ duration, ease }` everywhere. */

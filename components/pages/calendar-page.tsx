@@ -1,12 +1,14 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { addDays, addMonths, addWeeks, format, isSameMonth, parseISO, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore, type CalendarCommand } from "@/lib/ui-store";
-import { useFilteredItems } from "@/lib/use-filtered-items";
+import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
+import { findOverlapGroups } from "@/lib/overlap";
+import { patchViewState, readViewState } from "@/lib/view-state";
 import { useWorkspacePrefs, type CalendarMode } from "@/lib/workspace-prefs";
 import { useAssistantDockable, DOCK_MEDIA_QUERY } from "@/lib/assistant-dock";
 import { dayKey, itemsOnDay, weekDays } from "@/lib/date-utils";
@@ -21,6 +23,29 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
+
+/**
+ * Where the calendar was when you last looked at it.
+ *
+ * Anchor and selected day live in `useState`, so any trip out of the tab host —
+ * Settings, the schedule, a reload after iOS reclaimed the tab — snapped the
+ * calendar back to today's month with today selected. (Month/week mode is not
+ * here: `useWorkspacePrefs` already owns and persists that, and two owners for
+ * one value is how they drift apart.)
+ *
+ * The restore deliberately does *not* happen in a `useState` initialiser,
+ * tempting as that is: those run during the server render too, where there is
+ * no `sessionStorage`, so the server would say "September" and the client
+ * "October" and React would throw the whole tree away as a hydration mismatch.
+ * A layout effect runs after hydration but before the browser paints, which
+ * gets the same "already in the right place" result honestly.
+ */
+function rememberedDate(key: "calendarAnchor" | "calendarSelected"): Date | null {
+  const value = readViewState()[key];
+  if (!value) return null;
+  const parsed = parseISO(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /** From `lg` up the day's details sit in the side pane; below it they need the sheet. */
 function belowLg() {
@@ -45,6 +70,7 @@ const gridVariants = {
 
 export default function CalendarPage() {
   const items = useFilteredItems();
+  const allItems = useDatebookStore((s) => s.items);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const mobileDayDetails = useDatebookStore((s) => s.settings.mobileDayDetails);
   const shortScreen = useMediaQuery("(max-height: 540px)");
@@ -95,6 +121,33 @@ export default function CalendarPage() {
     setCalendarFocusDate(null);
   }, [calendarFocusDate, setCalendarFocusDate, useSheet]);
 
+  const restored = useRef(false);
+  useLayoutEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    // A pending focus date (arriving from search or the agenda) is a more
+    // specific instruction than "put me back where I was".
+    if (useUIStore.getState().calendarFocusDate) return;
+    const rememberedAnchor = rememberedDate("calendarAnchor");
+    const rememberedSelected = rememberedDate("calendarSelected");
+    // Reading browser storage is exactly the "synchronise with an external
+    // system" case effects are for; it just happens to land in state.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (rememberedAnchor) setAnchor(rememberedAnchor);
+    if (rememberedSelected) setSelectedDate(rememberedSelected);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  useEffect(() => {
+    // Don't overwrite the memory with today's date before the restore above has
+    // had its turn — that would erase the thing it is about to read.
+    if (!restored.current) return;
+    patchViewState({
+      calendarAnchor: dayKey(anchor),
+      calendarSelected: dayKey(selectedDate),
+    });
+  }, [anchor, selectedDate]);
+
   // On a wide calendar the assistant opens in the side pane rather than over
   // the grid, so you can keep clicking dates while you talk.
   useEffect(() => {
@@ -106,6 +159,18 @@ export default function CalendarPage() {
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
   const selectedItems = useMemo(() => itemsOnDay(items, selectedDate), [items, selectedDate]);
+
+  // Counted against the *unfiltered* day, so an empty panel can say whether the
+  // day is free, finished, or filtered — and offer the matching way out.
+  const selectedAll = useMemo(
+    () => itemsOnDay(allItems, selectedDate),
+    [allItems, selectedDate]
+  );
+  const selectedBreakdown = useFilterBreakdown(selectedAll);
+  const selectedOverlaps = useMemo(
+    () => findOverlapGroups(selectedItems, selectedDate),
+    [selectedItems, selectedDate]
+  );
 
   function step(dir: 1 | -1, immediate = false) {
     haptic("light");
@@ -360,7 +425,14 @@ export default function CalendarPage() {
 
         {!useSheet && mode === "month" && (
           <section className="flex h-[32%] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-surface p-3 lg:hidden">
-            <DayAgenda className="flex-1" date={selectedDate} items={selectedItems} onAdd={addToSelected} />
+            <DayAgenda
+              className="flex-1"
+              date={selectedDate}
+              items={selectedItems}
+              onAdd={addToSelected}
+              breakdown={selectedBreakdown}
+              overlaps={selectedOverlaps}
+            />
           </section>
         )}
 
@@ -388,6 +460,8 @@ export default function CalendarPage() {
             items={selectedItems}
             onClose={() => setSheetOpen(false)}
             onAdd={addToSelected}
+            breakdown={selectedBreakdown}
+            overlaps={selectedOverlaps}
           />
         )}
       </AnimatePresence>

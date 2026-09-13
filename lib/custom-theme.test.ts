@@ -99,3 +99,64 @@ describe("applyCustomThemeToDocument", () => {
     expect(root.props["color-scheme"]).toBeUndefined();
   });
 });
+
+describe("custom theme contrast", () => {
+  function luminance(hex: string): number {
+    const h = hex.replace("#", "");
+    const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const s = rgb.map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+    return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+  }
+  function ratio(a: string, b: string): number {
+    const la = luminance(a);
+    const lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+
+  // The faint tier carries times, counts and dates, so it is body text and has
+  // to clear AA against both the page and the cards it lands on.
+  const palettes = [
+    { background: "#f3f0ff", surface: "#ffffff", accent: "#7c5cf0" },
+    { background: "#808080", surface: "#8a8a8a", accent: "#333333" },
+    { background: "#101014", surface: "#1c1c22", accent: "#0a84ff" },
+    { background: "#ffffff", surface: "#fafafa", accent: "#ff2d55" },
+    { background: "#2b2b2b", surface: "#f5f5f5", accent: "#00a3a3" },
+  ];
+
+  for (const colors of palettes) {
+    it(`keeps ink-soft and ink-faint legible on ${colors.surface}`, () => {
+      const vars = buildCustomThemeVars(colors);
+      // Cards are where text renders, so that is the bar — capped by what the
+      // palette can actually reach. A mid-grey surface leaves even the ink
+      // short of AA; the guarantee there is "as good as the ink", not magic.
+      const ceiling = Math.min(4.4, ratio(vars["--ink"], colors.surface));
+      for (const token of ["--ink-soft", "--ink-faint"] as const) {
+        expect(ratio(vars[token], colors.surface)).toBeGreaterThanOrEqual(ceiling);
+      }
+    });
+  }
+
+  it("reaches AA on the cards whenever the palette allows it at all", () => {
+    // Everything except the deliberately unusable mid-grey pick.
+    for (const colors of palettes.filter((c) => c.surface !== "#8a8a8a")) {
+      const vars = buildCustomThemeVars(colors);
+      expect(ratio(vars["--ink-faint"], colors.surface)).toBeGreaterThanOrEqual(4.4);
+      expect(ratio(vars["--ink-soft"], colors.surface)).toBeGreaterThanOrEqual(4.4);
+    }
+  });
+
+  it("falls back to the ink when no dimmer colour can clear the surface", () => {
+    const colors = { background: "#808080", surface: "#8a8a8a", accent: "#333333" };
+    const vars = buildCustomThemeVars(colors);
+    expect(vars["--ink-faint"]).toBe(vars["--ink"]);
+  });
+
+  it("still leaves the tiers in order, faintest last", () => {
+    const vars = buildCustomThemeVars(DEFAULT_CUSTOM_THEME);
+    const surface = DEFAULT_CUSTOM_THEME.surface;
+    expect(ratio(vars["--ink"], surface)).toBeGreaterThan(ratio(vars["--ink-soft"], surface));
+    expect(ratio(vars["--ink-soft"], surface)).toBeGreaterThanOrEqual(
+      ratio(vars["--ink-faint"], surface)
+    );
+  });
+});

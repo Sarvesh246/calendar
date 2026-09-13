@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeeklySchedule, placeDayBlocks, formatDuration } from "./weekly-schedule";
+import { buildWeeklySchedule, placeDayBlocks, formatDuration, weekdayOrder } from "./weekly-schedule";
 import type { Item } from "./types";
 
 const NOW = new Date("2026-09-16T12:00:00");
@@ -141,5 +141,20 @@ describe("formatDuration", () => {
     expect(formatDuration(50)).toBe("50m");
     expect(formatDuration(120)).toBe("2h");
     expect(formatDuration(145)).toBe("2h 25m");
+  });
+});
+
+describe("weekdayOrder", () => {
+  it("starts on Sunday or Monday as asked", () => {
+    expect(weekdayOrder(0)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(weekdayOrder(1)).toEqual([1, 2, 3, 4, 5, 6, 0]);
+  });
+
+  it("survives a store persisted before the setting existed", () => {
+    // Zustand replaces `settings` wholesale on rehydrate, so an older store
+    // yields `undefined` here. Seven NaNs would be seven identical React keys.
+    const order = weekdayOrder(undefined as unknown as 0 | 1);
+    expect(order).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(new Set(order).size).toBe(7);
   });
 });
