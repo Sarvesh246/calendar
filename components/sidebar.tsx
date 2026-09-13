@@ -14,6 +14,7 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   RefreshCw,
   Settings,
   SlidersHorizontal,
@@ -228,7 +229,10 @@ export function Sidebar({ pathname }: { pathname: string }) {
 /** Swipeable bottom tab bar — drag left/right to move between main views. */
 function MobileBottomNav({ pathname }: { pathname: string }) {
   const router = useRouter();
-  const navRef = useRef<HTMLDivElement>(null);
+  const quickAddOpen = useUIStore((s) => s.quickAddOpen);
+  const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
+  const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
+  const navRef = useRef<HTMLElement>(null);
   const [navWidth, setNavWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   // -1 on a route the bar has no tab for (Schedule, Settings). The pill still
@@ -293,6 +297,12 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     haptic("light");
     settlePillTo(index);
     navigateTab(router, NAV[index].href);
+  }
+
+  function openAdd() {
+    haptic("light");
+    setQuickAddPrefill("");
+    setQuickAddOpen(true);
   }
 
   useEffect(() => {
@@ -418,70 +428,92 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // keyboard and dropping back a beat after it closes.
     // `--tab-bar-rest` is the extra lift above the home indicator / screen
     // edge so the pill is not flush with the bottom.
-    <nav className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
-      <div
-        ref={navRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-        className="mobile-tab-bar relative mx-auto flex max-w-md touch-pan-y items-stretch rounded-full p-1"
-      >
-        {navWidth > 0 && (
-          <motion.span
-            aria-hidden
-            className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
-            style={{ width: tabWidth, x: pillX, willChange: "transform" }}
-            animate={{ scale: isDragging ? 1.015 : 1 }}
-            transition={pillSpring}
-          />
-        )}
-        {NAV.map((item, index) => {
-          const active = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              prefetch
-              aria-current={active ? "page" : undefined}
-              onClick={(e) => {
-                // On touch this click follows a pointerup the bar already
-                // acted on; acting again would push the same route twice. On a
-                // mouse it never arrives at all, because the bar is holding
-                // pointer capture. What is left — keyboard activation, or a
-                // gesture the browser cancelled — is a genuine request.
-                if (pointerHandled.current) {
-                  e.preventDefault();
-                  return;
-                }
-                if (index !== currentIndex) {
-                  e.preventDefault();
-                  navigateTo(index);
-                }
-              }}
-              className="press-none relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10.5px] font-medium tracking-[0.01em]"
-            >
-              <Icon
-                className={cn(
-                  "h-[22px] w-[22px] transition-colors duration-[var(--motion-standard)]",
-                  active ? "text-accent" : "text-ink-faint"
-                )}
-                strokeWidth={active ? 2.1 : 1.85}
-              />
-              <span
-                className={cn(
-                  "transition-colors duration-[var(--motion-standard)]",
-                  active ? "font-semibold text-ink" : "text-ink-faint"
-                )}
+    <div className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
+      <div className="mx-auto flex h-[58px] max-w-md items-stretch gap-2.5">
+        <nav
+          aria-label="Primary"
+          ref={navRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          className="mobile-tab-bar relative flex min-w-0 flex-1 touch-pan-y items-stretch rounded-full p-1"
+        >
+          {navWidth > 0 && (
+            <motion.span
+              aria-hidden
+              className="mobile-tab-pill pointer-events-none absolute inset-y-1 left-0"
+              style={{ width: tabWidth, x: pillX, willChange: "transform" }}
+              animate={{ scale: isDragging ? 1.015 : 1 }}
+              transition={pillSpring}
+            />
+          )}
+          {NAV.map((item, index) => {
+            const active = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch
+                draggable={false}
+                aria-current={active ? "page" : undefined}
+                onClick={(e) => {
+                  // On touch this click follows a pointerup the bar already
+                  // acted on; acting again would push the same route twice. On a
+                  // mouse it never arrives at all, because the bar is holding
+                  // pointer capture. What is left — keyboard activation, or a
+                  // gesture the browser cancelled — is a genuine request.
+                  if (pointerHandled.current) {
+                    e.preventDefault();
+                    return;
+                  }
+                  if (index !== currentIndex) {
+                    e.preventDefault();
+                    navigateTo(index);
+                  }
+                }}
+                className="press-none relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10.5px] font-medium tracking-[0.01em]"
               >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+                <Icon
+                  className={cn(
+                    "h-[22px] w-[22px] transition-colors duration-[var(--motion-standard)]",
+                    active ? "text-accent" : "text-ink-faint"
+                  )}
+                  strokeWidth={active ? 2.1 : 1.85}
+                />
+                <span
+                  className={cn(
+                    "transition-colors duration-[var(--motion-standard)]",
+                    active ? "font-semibold text-ink" : "text-ink-faint"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+        <motion.button
+          type="button"
+          aria-label="Add item"
+          aria-hidden={quickAddOpen}
+          tabIndex={quickAddOpen ? -1 : 0}
+          disabled={quickAddOpen}
+          onClick={openAdd}
+          initial={false}
+          animate={{ opacity: quickAddOpen ? 0 : 1, scale: quickAddOpen ? 0.84 : 1 }}
+          whileTap={quickAddOpen ? undefined : { scale: 0.94 }}
+          transition={{
+            opacity: { duration: motionTokens.micro, ease: motionTokens.ease },
+            scale: motionTokens.springSnappy,
+          }}
+          className="mobile-add-button press-none flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none"
+        >
+          <Plus className="h-6 w-6" strokeWidth={2.25} />
+        </motion.button>
       </div>
-    </nav>
+    </div>
   );
 }
 
