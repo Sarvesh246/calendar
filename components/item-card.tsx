@@ -4,6 +4,7 @@ import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
+import { MobileQuickActions } from "@/components/mobile-quick-actions";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen } from "lucide-react";
@@ -453,6 +454,11 @@ function EventCard({
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
+      // Named explicitly, because a `role="button"` with no label takes its
+      // name from everything inside it — which, now that the card carries its
+      // own action buttons, meant a screen reader announced "Physics Lecture
+      // Start working on this Reschedule" as the name of one control.
+      aria-label={`${item.title}${ended ? ", ended" : ""}. Show details`}
       onClick={toggle}
       onKeyDown={(e) => {
         if (!handleItemMenuKey(e, item.id, day ? dayKey(day) : undefined)) keyToggle(e);
@@ -573,6 +579,9 @@ function AssignmentCard({
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
+      // See the event card above: without this the card's name absorbs the
+      // labels of the quick actions sitting inside it.
+      aria-label={`${item.title}. ${done ? "Done" : status === "doing" ? "In progress" : overdue ? "Overdue" : "To do"}. Show details`}
       onTouchStart={e => { if (!mobile || (e.target as HTMLElement).closest("button, a, input, select, textarea")) return; const t = e.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }; }}
       style={mobile ? { touchAction: "pan-y", transform: `translateX(${swipeOffset}px)` } : undefined}
       onTouchMove={e => { const start = touchStart.current; if (!start || expanded) return; const t = e.touches[0]; const dx = t.clientX - start.x; const dy = t.clientY - start.y; if (Math.abs(dy) > Math.abs(dx)) { touchStart.current = null; setSwipeOffset(0); return; } setSwipeOffset(Math.max(-36, Math.min(36, dx / 3))); }}
@@ -603,7 +612,6 @@ function AssignmentCard({
       <div className="relative flex items-center gap-1">
         <CompleteButton status={status} color={color} onToggle={() => mobile ? changeMobileStatus(item, done ? "todo" : "done") : toggleItemDone(item.id)} />
 
-        {mobile && <button aria-label="Task status and actions" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-soft" onClick={e => { e.stopPropagation(); setActions("status"); }} onKeyDown={e => e.stopPropagation()}><ChevronDown className="h-4 w-4" /></button>}
         <div className="min-w-0 flex-1">
           <p
             className={cn(
@@ -645,6 +653,11 @@ function AssignmentCard({
               expanded && "scale-50 opacity-0"
             )}
           />
+        )}
+        {/* Named controls for exactly what the swipes do, so the swipes are a
+            shortcut rather than the only route. */}
+        {mobile && (
+          <MobileQuickActions item={item} onReschedule={() => setActions("reschedule")} />
         )}
         <CardQuickActions item={item} />
         <ExpandChevron expanded={expanded} />

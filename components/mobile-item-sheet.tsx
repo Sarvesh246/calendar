@@ -1,49 +1,258 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
 import { format } from "date-fns";
+import { haptic } from "@/lib/haptic";
+import { motion as motionTokens } from "@/lib/motion";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/lib/mobile-item-actions";
 import type { Item } from "@/lib/types";
 
+/**
+ * Every bottom sheet in the app, with one set of manners.
+ *
+ * Add, edit, search and the task actions all used to be their own arrangement
+ * of scrim, corners and close button, and only one of them could be flicked
+ * away. Worse, the grabber bar at the top — the universal "you can drag this"
+ * — was decorative in every one of them, which is a promise the interface makes
+ * and then doesn't keep.
+ *
+ * So: one component. Tap the scrim, press Escape, hit the close button, or
+ * flick it down. All four always work, everywhere, and the grabber means what
+ * it looks like it means.
+ */
 export function MobileItemSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
+  const [dragging, setDragging] = useState(false);
   useDialogFocus(ref, true);
   useLockBodyScroll(true);
   // Search, the date pickers and the reschedule fields all live near the
   // bottom of a sheet the keyboard then covers.
   useKeepFieldVisible(ref, true);
+
   return createPortal(<div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); onClose(); } }}>
     <div className="overlay-scrim absolute inset-0" onClick={onClose} />
-    <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface p-4 pb-[max(1rem,var(--safe-bottom))]">
-      <header className="flex shrink-0 items-center justify-between gap-3"><h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2><button aria-label="Close item sheet" className="flex h-11 w-11 shrink-0 items-center justify-center" onClick={onClose}><X className="h-5 w-5" /></button></header>
-      <div className="min-h-0 overflow-y-auto overscroll-contain">{title === "Edit item" && <p className="text-[12px] text-ink-soft">Changes save as you edit.</p>}{children}</div>
-    </div>
+    <motion.div
+      ref={ref}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      tabIndex={-1}
+      drag="y"
+      dragListener={false}
+      dragControls={dragControls}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0.02, bottom: 0.55 }}
+      dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
+      onDragStart={() => setDragging(true)}
+      onDragEnd={(_, info) => {
+        setDragging(false);
+        if (info.offset.y > 88 || info.velocity.y > 700) {
+          haptic("light");
+          onClose();
+        }
+      }}
+      className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-2"
+    >
+      <div
+        className="flex shrink-0 cursor-grab touch-none flex-col items-center active:cursor-grabbing"
+        onPointerDown={(e) => dragControls.start(e)}
+      >
+        <motion.span
+          aria-hidden
+          animate={{ scaleX: dragging ? 1.25 : 1, opacity: dragging ? 1 : 0.75 }}
+          transition={motionTokens.springSnappy}
+          className="h-1 w-10 rounded-full bg-line-strong"
+        />
+      </div>
+      <header className="mt-2 flex shrink-0 items-center justify-between gap-3" onPointerDown={e => e.stopPropagation()}><h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2><button aria-label="Close item sheet" className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={onClose}><X className="h-5 w-5" /></button></header>
+      <div className="min-h-0 overflow-y-auto overscroll-contain" onPointerDown={e => e.stopPropagation()}>{title === "Edit item" && <p className="text-[12px] text-ink-soft">Changes save as you edit.</p>}{children}</div>
+    </motion.div>
   </div>, document.body);
 }
-const control = "min-h-11 rounded-lg border border-line bg-surface-sunken px-3 text-[13px]";
-export function MobileTaskActions({ item, onClose, onEdit, initialReschedule = false }: { item: Item; onClose: () => void; onEdit: () => void; initialReschedule?: boolean }) {
-  const [reschedule, setReschedule] = useState(initialReschedule);
-  const [plan, setPlan] = useState(item.type === "assignment" || Boolean(item.sourceId));
+const control =
+  "press-none min-h-11 rounded-lg border border-line bg-surface-sunken px-3 text-[13px] text-ink";
+
+/** The next Saturday — "this weekend" as a date you can hand to a picker. */
+function nextWeekend(now = new Date()): string {
+  const days = (6 - now.getDay() + 7) % 7 || 7;
+  return relativeScheduleDate(days, now);
+}
+
+/**
+ * Everything you can do to a task without opening its editor.
+ *
+ * The reschedule half used to be one date picker behind a "Reschedule options"
+ * dropdown offering "Plan when to work" or "Change actual deadline". That is a
+ * genuinely important distinction — moving a deadline changes what the app owes
+ * you, planning a work session doesn't — and burying it in a select meant the
+ * default silently decided it. Worse, on an imported assignment, "change the
+ * deadline" quietly overrides what Canvas says is due.
+ *
+ * They are two destinations now, each with its own heading, its own explanation
+ * and its own buttons. You cannot move a deadline by accident, because moving a
+ * deadline is something you have to aim at.
+ */
+export function MobileTaskActions({
+  item,
+  onClose,
+  onEdit,
+  initialReschedule = false,
+}: {
+  item: Item;
+  onClose: () => void;
+  onEdit: () => void;
+  initialReschedule?: boolean;
+}) {
+  const [open, setOpen] = useState(initialReschedule);
+  const status = item.status ?? "todo";
+  const isEvent = item.type === "event";
+  const apply = (date: string, planWork: boolean) => {
+    mobileReschedule(item, date, planWork);
+    onClose();
+  };
+
+  return (
+    <MobileItemSheet title={item.title} onClose={onClose}>
+      <p className="mb-3 text-[12px] text-ink-soft">
+        {isEvent ? "Starts" : "Due"}: {format(new Date(item.at), "EEE, MMM d · p")}
+      </p>
+
+      {!isEvent && (
+        <>
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-sunken p-1" aria-label="Task status">
+            {(
+              [
+                ["todo", "To do"],
+                ["doing", "In progress"],
+                ["done", "Done"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                aria-pressed={status === value}
+                className={`${control} ${status === value ? "border-transparent bg-accent text-accent-ink" : "border-transparent bg-transparent"}`}
+                onClick={() => {
+                  changeMobileStatus(item, value);
+                  onClose();
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Swipe right to start or complete, left to reschedule — or use the buttons on the card.
+          </p>
+        </>
+      )}
+
+      <div className="my-3 flex gap-2">
+        <button className={`${control} flex-1`} aria-expanded={open} onClick={() => setOpen(!open)}>
+          {isEvent ? "Move" : "Reschedule"}
+        </button>
+        <button className={`${control} flex-1`} onClick={onEdit}>
+          Edit item
+        </button>
+      </div>
+
+      {open && (
+        <div className="space-y-4 border-t border-line pt-3">
+          {/* Work sessions first: for an assignment it is almost always what
+              "I'll do this tomorrow" actually means. */}
+          {!isEvent && (
+            <RescheduleGroup
+              title="Plan a work session"
+              detail="Adds a separate task for when you'll work on it. The deadline doesn't move."
+              confirmLabel="Plan work"
+              choices={[
+                { label: "Tomorrow", date: relativeScheduleDate(1) },
+                { label: "This weekend", date: nextWeekend() },
+              ]}
+              onApply={(date) => apply(date, true)}
+            />
+          )}
+
+          <RescheduleGroup
+            tone="warn"
+            title={isEvent ? "Move this event" : "Move the deadline"}
+            detail={
+              isEvent
+                ? "Changes when this event actually happens."
+                : `Changes when this is actually due.${item.sourceId ? " This overrides the imported deadline." : ""}`
+            }
+            confirmLabel={isEvent ? "Move event" : "Change deadline"}
+            choices={[
+              { label: "Tomorrow", date: relativeScheduleDate(1) },
+              { label: "Next week", date: relativeScheduleDate(7) },
+            ]}
+            onApply={(date) => apply(date, false)}
+          />
+        </div>
+      )}
+    </MobileItemSheet>
+  );
+}
+
+function RescheduleGroup({
+  title,
+  detail,
+  confirmLabel,
+  choices,
+  onApply,
+  tone = "plain",
+}: {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  choices: { label: string; date: string }[];
+  onApply: (date: string) => void;
+  tone?: "plain" | "warn";
+}) {
   const [date, setDate] = useState(relativeScheduleDate(1));
-  const apply = (next: string) => { mobileReschedule(item, next, plan); onClose(); };
-  return <MobileItemSheet title={item.title} onClose={onClose}>
-    <p className="mb-3 text-[12px] text-ink-soft">Deadline: {format(new Date(item.at), "EEE, MMM d · p")}</p>
-    <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-sunken p-1" aria-label="Task status">
-      {([['todo', 'To do'], ['doing', 'In progress'], ['done', 'Done']] as const).map(([value, label]) => <button key={value} aria-pressed={(item.status ?? "todo") === value} className={`${control} ${(item.status ?? "todo") === value ? "bg-accent text-accent-ink" : ""}`} onClick={() => { changeMobileStatus(item, value); onClose(); }}>{label}</button>)}
-    </div>
-    <p className="mt-2 text-[11px] text-ink-faint">Swipe right to start or complete; left to reschedule. Tap the circle for quick completion.</p>
-    <div className="my-3 flex gap-2"><button className={`${control} flex-1`} aria-expanded={reschedule} onClick={() => setReschedule(!reschedule)}>Reschedule</button><button className={`${control} flex-1`} onClick={onEdit}>Edit item</button></div>
-    {reschedule && <div className="space-y-3 border-t border-line pt-3">
-      <label className="flex flex-col gap-1 text-[12px]">Reschedule options<select aria-label="Reschedule mode" className={control} value={plan ? "plan" : "deadline"} onChange={e => setPlan(e.target.value === "plan")}><option value="plan">Plan when to work</option><option value="deadline">Change actual deadline</option></select></label>
-      <p className="text-[12px] text-ink-soft">{plan ? "Creates a separate work task. The original deadline stays unchanged." : "Changes the actual due date for this item."}{item.sourceId && !plan && " This is a local override of the imported deadline."}</p>
-      <div className="grid grid-cols-2 gap-2"><button className={control} onClick={() => apply(relativeScheduleDate(1))}>Tomorrow</button><button className={control} onClick={() => apply(relativeScheduleDate(7))}>Next week</button></div>
-      <label className="flex flex-col gap-1 text-[12px]">Choose date<input aria-label="Reschedule date" type="date" className={`${control} min-w-0 text-[16px]`} value={date} onChange={e => setDate(e.target.value)} /></label>
-      <button className={`${control} w-full bg-accent text-accent-ink`} disabled={!date} onClick={() => apply(date)}>{plan ? "Plan work" : "Change deadline"}</button>
-    </div>}
-  </MobileItemSheet>;
+  const headingId = useId();
+
+  return (
+    <section aria-labelledby={headingId}>
+      <h3
+        id={headingId}
+        className={`text-[13px] font-semibold ${tone === "warn" ? "text-warn" : "text-ink"}`}
+      >
+        {title}
+      </h3>
+      <p className="mb-2 mt-0.5 text-[12px] text-ink-soft">{detail}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {choices.map((choice) => (
+          <button key={choice.label} className={control} onClick={() => onApply(choice.date)}>
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <label className="flex min-w-0 flex-1 items-center gap-2 text-[12px] text-ink-soft">
+          <span className="shrink-0">Or</span>
+          <input
+            aria-label={`${title}: pick a date`}
+            type="date"
+            className={`${control} min-w-0 flex-1 text-[16px]`}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </label>
+        <button
+          className={`${control} shrink-0 ${tone === "warn" ? "border-transparent bg-warn text-[var(--accent-ink)]" : "border-transparent bg-accent text-accent-ink"}`}
+          disabled={!date}
+          onClick={() => onApply(date)}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </section>
+  );
 }

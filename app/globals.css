@@ -603,6 +603,20 @@ html.scroll-locked body {
   }
 }
 
+/* A sheet is open, so the save status steps back.
+ *
+ * It is a passive reassurance about something you have already done; floating
+ * it over the middle of a sheet you are currently working in makes it an
+ * interruption instead. `scroll-locked` is on the root whenever any sheet or
+ * dialog is up (see `useLockBodyScroll`), which makes it the one signal every
+ * overlay in the app already shares. The undo snackbar deliberately does *not*
+ * do this — that one is actionable, and reaching it over a sheet is the point. */
+:root.scroll-locked .save-status-pill {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-standard) var(--ease-standard);
+}
+
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
    blocking pan on the page itself. */
 button, a, [role="button"], summary, input, textarea, select, label {

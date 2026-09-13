@@ -1,6 +1,7 @@
 "use client";
 
 import { MobileActionUndo } from "./mobile-action-undo";
+import { SaveStatusPill } from "./save-status-pill";
 import { UndoToast } from "./undo-toast";
 import { SyncNoticeToasts } from "./sync-notice-toast";
 
@@ -18,6 +19,9 @@ export function ToastViewport() {
       <div className="viewport-pinned-bottom pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] z-[80] flex flex-col items-center gap-2 px-4 transition-[bottom] duration-[var(--motion-standard)] md:bottom-[var(--toast-lift,1.5rem)]">
         <UndoToast />
         <MobileActionUndo />
+        {/* Last, so an undo — which expires — is never pushed off the screen
+            edge by a save status that may be sitting there indefinitely. */}
+        <SaveStatusPill />
       </div>
     </>
   );

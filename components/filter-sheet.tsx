@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { Check, SlidersHorizontal, X } from "lucide-react";
 import { summariseFilters } from "@/lib/filter-summary";
 import { useDatebookStore } from "@/lib/store";
@@ -74,6 +74,7 @@ export function FilterSheet() {
 
 function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
   useDialogFocus(panelRef, true);
   const categories = useDatebookStore((s) => s.categories);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
@@ -117,12 +118,31 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             animate={{ y: 0 }}
             exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
-            className="absolute inset-x-0 bottom-0 mx-auto max-h-[calc(var(--visible-height,100dvh)-1rem)] overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-3 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
+            drag="y"
+            dragListener={false}
+            dragControls={dragControls}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0.02, bottom: 0.55 }}
+            dragTransition={{ bounceStiffness: 420, bounceDamping: 40 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 88 || info.velocity.y > 700) {
+                haptic("light");
+                onClose();
+              }
+            }}
+            // `mobile-action-sheet` rather than its own max-height: that class
+            // is what keeps a sheet clear of the status bar, and this one was
+            // measuring against the full visible viewport like the search sheet
+            // used to — far enough up that its own close button was unreachable.
+            className="mobile-action-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] flex-col rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-2 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
           >
-            <span
-              aria-hidden
-              className="mx-auto mb-2 block h-1 w-10 rounded-full bg-line-strong opacity-75"
-            />
+            {/* Draggable, not decorative — see `MobileItemSheet`. */}
+            <div
+              className="flex shrink-0 cursor-grab touch-none flex-col items-center pb-2 active:cursor-grabbing"
+              onPointerDown={(e) => dragControls.start(e)}
+            >
+              <span aria-hidden className="h-1 w-10 rounded-full bg-line-strong opacity-75" />
+            </div>
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[15px] font-semibold text-ink">Filters</p>
@@ -142,6 +162,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                 <X className="h-4 w-4" strokeWidth={2} />
               </Button>
             </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onPointerDown={(e) => e.stopPropagation()}>
             <p className="mb-2 text-[15px] font-semibold text-ink">Views</p>
             <div className="mb-4 flex flex-col gap-1">
               {views.map((view) => {
@@ -222,6 +243,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                   Reset all filters
                 </button>
               )}
+            </div>
             </div>
           </motion.div>
         </div>

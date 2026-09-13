@@ -16,7 +16,7 @@
 
 const PREFIX = "datebook-draft:";
 
-export type DraftKey = "quick-add" | "assistant" | `item:${string}`;
+export type DraftKey = "quick-add" | "quick-add-fields" | "assistant" | `item:${string}`;
 
 function storage(): Storage | null {
   try {
@@ -59,4 +59,30 @@ export function clearDraft(key: DraftKey) {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * A draft that is an object rather than a sentence — the composer's chip
+ * corrections, which are as much a part of "what I was in the middle of" as the
+ * words are. Losing "…but on Friday, for BIOL" while keeping the title would be
+ * its own small betrayal.
+ */
+export function readJsonDraft<T>(key: DraftKey, isValid: (value: unknown) => value is T): T | null {
+  const raw = readDraft(key);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isValid(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeJsonDraft(key: DraftKey, value: object) {
+  const keys = Object.keys(value);
+  if (keys.length === 0) {
+    clearDraft(key);
+    return;
+  }
+  writeDraft(key, JSON.stringify(value));
 }
