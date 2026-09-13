@@ -613,8 +613,16 @@ html.scroll-locked body {
  * do this — that one is actionable, and reaching it over a sheet is the point. */
 :root.scroll-locked .save-status-pill {
   opacity: 0;
+  /* Steps down and out rather than blinking off — a sheet opening over it
+     shouldn't read as something disappearing. */
+  transform: translateY(6px) scale(0.98);
   pointer-events: none;
-  transition: opacity var(--motion-standard) var(--ease-standard);
+}
+
+.save-status-pill {
+  transition:
+    opacity var(--motion-standard) var(--ease-standard),
+    transform var(--motion-standard) var(--ease-standard);
 }
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
@@ -875,6 +883,17 @@ button.press-none:active,
 a.press-none:active,
 [role="button"].press-none:active {
   transform: none;
+}
+
+/* Fields ease into focus too. Without this the accent ring and the border
+   colour snapped on, which next to the buttons above read as a different,
+   cheaper app. */
+input,
+textarea,
+select {
+  transition-property: border-color, background-color, box-shadow, outline-color, color;
+  transition-duration: var(--motion-standard);
+  transition-timing-function: var(--ease-standard);
 }
 
 /* Large surfaces — cards, day cells, list rows. A 3% squeeze on something the
@@ -1402,7 +1421,8 @@ html.calendar-dragging * {
   .mobile-action-sheet input, .mobile-action-sheet textarea, .mobile-action-sheet select { font-size: 16px; }
 }
 
-@keyframes mobile-sheet-enter { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
-  .mobile-action-sheet { animation: mobile-sheet-enter 220ms var(--ease-standard) both; }
-}
+/* No CSS entrance animation here on purpose. Every `.mobile-action-sheet` is
+   a Framer Motion surface that animates — and is dragged — on `transform`; a
+   keyframe writing the same property fought the drag and the exit, which is
+   what made sheets jump at the moment they were closing. Motion owns the
+   transform, CSS owns the geometry. */
