@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
@@ -131,6 +131,7 @@ export default function AgendaPage() {
   }, [overdue.length, visibleGroups, visibleLater.length]);
 
   const [stickyId, setStickyId] = useState<string | null>(null);
+  const stickyRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (sections.length === 0) {
@@ -142,10 +143,13 @@ export default function AgendaPage() {
     if (nodes.length === 0) return;
 
     const update = () => {
-      const header = parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue("--mobile-header-height")
-      );
-      const line = (Number.isFinite(header) ? header : 56) + 8;
+      // The pinned label's own bottom edge is the hand-off line. Reading it
+      // beats parsing `--mobile-header-height`, which is a `calc()` with an
+      // `env()` in it — getComputedStyle hands back the token, not a length,
+      // so parseFloat only ever produced NaN and the fallback 56px.
+      const line = stickyRef.current
+        ? stickyRef.current.getBoundingClientRect().bottom
+        : 64;
       let current = sections[0].id;
       for (const el of nodes) {
         if (el.getBoundingClientRect().top <= line) {
@@ -154,19 +158,28 @@ export default function AgendaPage() {
           break;
         }
       }
-      setStickyId((previous) => previous === current ? previous : current);
+      setStickyId((previous) => (previous === current ? previous : current));
     };
 
-    let raf = requestAnimationFrame(update);
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(() => {
+    // One shared rAF gate. The first pass has to clear the handle too —
+    // scheduling `update` directly left `raf` holding a stale but truthy id,
+    // so every later scroll saw "already queued" and the label froze on
+    // whichever section happened to be first.
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
         raf = 0;
         update();
       });
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
+
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [sections]);
@@ -238,6 +251,7 @@ export default function AgendaPage() {
 
       {sticky && (
         <p
+          ref={stickyRef}
           className={cn(
             AGENDA_STICKY,
             "pointer-events-none",
