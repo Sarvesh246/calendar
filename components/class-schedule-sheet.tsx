@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useId, useRef, useState } from "react";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { CalendarClock, Plus, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -20,7 +20,9 @@ import { defaultUntilIso } from "@/lib/repeat";
 import { nanoid } from "@/lib/nanoid";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
+import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
 import { Scrim } from "@/components/ui/scrim";
+import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WeekdayChips } from "@/components/weekday-chips";
@@ -150,6 +152,11 @@ function ClassScheduleSheetBody() {
   const categories = allCategories.filter((c) => !c.archived);
   const addItem = useDatebookStore((s) => s.addItem);
   const headingId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
+  const [dragging, setDragging] = useState(false);
+  useSheetOverscroll(scrollRef, dragControls);
 
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -278,19 +285,35 @@ function ClassScheduleSheetBody() {
           <Scrim label="Dismiss" onClick={close} />
           <motion.div
             role="dialog"
+            ref={panelRef}
             aria-modal="true"
             aria-labelledby={headingId}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springGentle}
             style={{
+              willChange: "transform",
               maxHeight:
                 "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.25rem)",
             }}
-            className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface"
+            {...SHEET_DRAG}
+            dragControls={dragControls}
+            onDragStart={() => setDragging(true)}
+            onDragEnd={(_, info) => {
+              setDragging(false);
+              if (shouldDismissSheet(info)) {
+                haptic("light");
+                close();
+              }
+            }}
+            className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface pt-0.5"
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-3 py-3">
+            <SheetHandle dragControls={dragControls} dragging={dragging} />
+            <div
+              className="flex shrink-0 cursor-grab items-start justify-between gap-3 border-b border-line/70 px-3 pb-3 active:cursor-grabbing"
+              onPointerDown={(e) => startSheetDrag(dragControls, e)}
+            >
               <div className="min-w-0">
                 <p id={headingId} className="text-[16px] font-semibold text-ink">
                   Add class times
@@ -310,6 +333,7 @@ function ClassScheduleSheetBody() {
             </div>
 
             <div
+              ref={scrollRef}
               className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3"
               style={{
                 maxHeight:

@@ -886,7 +886,7 @@ button, a, [role="button"], summary, input, textarea, select, label {
 }
 
 .overlay-scrim-light {
-  background: rgb(0 0 0 / 0.22);
+  background: rgb(0 0 0 / 0.26);
 }
 
 /* Without a backdrop filter the veil is the only separation there is, so it
@@ -1119,6 +1119,32 @@ html[data-first-load="1"] .page-shell > * > * {
    first arrival at a page you navigated to deliberately (Settings). */
 .route-enter-instant > * > * {
   animation: none;
+}
+
+/* Cold-start veil. Matches the page so the iOS splash and the first paint
+   are the same material, then the mark springs in and the veil lifts. */
+.boot-splash {
+  background: var(--surface-base);
+}
+.boot-splash-bloom {
+  position: absolute;
+  inset: -3.5rem;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 32%, transparent) 0%,
+    transparent 68%
+  );
+  pointer-events: none;
+}
+.boot-splash-plate {
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-base));
+  box-shadow:
+    0 28px 50px -22px rgb(0 0 0 / 0.55),
+    0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.boot-splash-mark {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
 /* Assistant sheet + backdrop — pure CSS enter/exit so visibility never rides on

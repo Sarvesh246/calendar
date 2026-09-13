@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { useDatebookStore } from "@/lib/store";
 import { sanitizeSettings } from "@/lib/sanitize-store";
 import type { LandingView } from "@/lib/types";
@@ -14,6 +13,8 @@ function landingRoute(): string {
   return LANDING.includes(view) ? `/${view}` : "/today";
 }
 
+/** The boot splash in the shell is the launch face. This route only waits
+ *  for hydration and then hands off to the landing tab. */
 export default function RootPage() {
   const router = useRouter();
 
@@ -29,17 +30,5 @@ export default function RootPage() {
     return persist.onFinishHydration(go);
   }, [router]);
 
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-      <Image
-        src="/icon-192.png"
-        alt=""
-        width={72}
-        height={72}
-        priority
-        className="rounded-[18px] shadow-md animate-[pulse_1.8s_ease-in-out_infinite]"
-      />
-      <p className="text-[20px] italic text-ink-soft">Datebook</p>
-    </div>
-  );
+  return <div className="min-h-[40vh]" aria-hidden />;
 }

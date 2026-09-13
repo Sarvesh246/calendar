@@ -24,6 +24,7 @@ import { FocusedItemRelay } from "@/lib/item-focus";
 import { isTabRoute } from "@/lib/tab-routes";
 import { useResolvedPathname } from "@/lib/tab-nav";
 import { TabPageHost } from "@/components/tab-page-host";
+import { BootSplash } from "@/components/boot-splash";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useWorkspacePrefs } from "@/lib/workspace-prefs";
@@ -212,6 +213,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key="quick-add-scrim"
             label="Dismiss add"
             tone="light"
+            pace="snap"
             onPointerDown={closeQuickAdd}
             className="viewport-pinned-top viewport-pinned-overlay fixed inset-0 z-[45]"
           />
@@ -262,6 +264,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <DeferredFeedSync />
       <MergeCloudDialog />
       <StorageSync />
+      <BootSplash />
     </div>
   );
 }
