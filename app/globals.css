@@ -1012,6 +1012,91 @@ html[data-first-load="1"] .page-shell > * > * {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Calendar direct manipulation                                            */
+/* ---------------------------------------------------------------------- */
+
+/* While something is being carried across the calendar, nothing underneath
+   should select text or flip the cursor back to a pointer. */
+html.pane-resizing,
+html.pane-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+html.calendar-dragging,
+html.calendar-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.month-day-cell[data-drop-active] {
+  background-color: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.week-day-head[data-drop-active],
+.week-allday-cell[data-drop-active] {
+  background-color: var(--accent-soft);
+}
+
+.drag-ghost {
+  animation: drag-ghost-in 120ms var(--ease-standard);
+}
+@keyframes drag-ghost-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Planned work reads as time you set aside, not a class you attend. */
+.work-session-block {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--cat) 12%, transparent) 0 5px,
+    transparent 5px 10px
+  );
+}
+
+.pane-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition:
+    opacity var(--motion-standard) var(--ease-standard),
+    background-color var(--motion-standard) var(--ease-standard),
+    height var(--motion-standard) var(--ease-standard);
+}
+.pane-resize-handle:hover::after,
+.pane-resize-handle:focus-visible::after,
+.pane-resize-handle[data-active]::after {
+  opacity: 1;
+}
+.pane-resize-handle[data-active]::after,
+.pane-resize-handle:focus-visible::after {
+  background: var(--accent);
+  height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drag-ghost {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
 /* Command palette (cmdk over Radix Dialog)                               */
 /* ---------------------------------------------------------------------- */
 

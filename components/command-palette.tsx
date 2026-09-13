@@ -6,9 +6,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
+  Bookmark,
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  CalendarSearch,
+  Keyboard,
   ListChecks,
   Plus,
   Settings,
@@ -17,12 +20,14 @@ import {
   Upload,
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { useUIStore } from "@/lib/ui-store";
+import { useUIStore, type CalendarCommand } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
-import { dayKey, isOverdue } from "@/lib/date-utils";
-import { isToday, startOfDay } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
 import { searchItems } from "@/lib/search";
+import { navigateTab } from "@/lib/tab-nav";
+import { useAllViews } from "@/components/saved-views";
+import { useModKeyLabel } from "@/components/keyboard-shortcuts";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -64,8 +69,11 @@ function CommandPaletteDialog() {
     const { items, categories } = useDatebookStore.getState();
     return { sortedItems: sortPaletteItems(items), categories };
   });
-  const setFocusedItemId = useUIStore((s) => s.setFocusedItemId);
-  const setCalendarFocusDate = useUIStore((s) => s.setCalendarFocusDate);
+  const openInspector = useUIStore((s) => s.openInspector);
+  const applyView = useUIStore((s) => s.applyView);
+  const activeViewId = useUIStore((s) => s.activeViewId);
+  const views = useAllViews();
+  const mod = useModKeyLabel();
   useLockBodyScroll(true);
   const visibleItems = query.trim()
     ? searchItems(sortedItems, categories, query).slice(0, 100)
@@ -85,8 +93,14 @@ function CommandPaletteDialog() {
   }
 
   function go(path: string) {
-    router.push(path);
+    navigateTab(router, path);
     setPaletteOpen(false);
+  }
+
+  function calendar(command: CalendarCommand) {
+    setPaletteOpen(false);
+    navigateTab(router, "/calendar");
+    useUIStore.getState().sendCalendarCommand(command);
   }
 
   function createNew() {
@@ -95,37 +109,11 @@ function CommandPaletteDialog() {
     setPaletteOpen(false);
   }
 
+  /** A result opens in the inspector beside whatever you were looking at —
+   *  filters, hidden completions and the current page all stay as they were. */
   function openItem(item: Item) {
-    const ui = useUIStore.getState();
-    // You asked for this item by name, so a class filter that hides it is lifted.
-    if (ui.categoryFilter?.length && item.categoryId && !ui.categoryFilter.includes(item.categoryId)) {
-      ui.clearCategoryFilter();
-    }
-    const hidden =
-      useDatebookStore.getState().settings.hideCompleted &&
-      item.type !== "event" &&
-      item.status === "done";
-    if (!hidden) {
-      setFocusedItemId(item.id);
-      // A card that never mounts would otherwise hold the request and spring
-      // open on some unrelated visit later.
-      window.setTimeout(() => {
-        if (useUIStore.getState().focusedItemId === item.id) setFocusedItemId(null);
-      }, 2500);
-    }
     setPaletteOpen(false);
-    const at = new Date(item.at);
-    if (isOverdue(item)) {
-      router.push("/agenda");
-      return;
-    }
-    // Today lists events and open work; finished work is found on the calendar.
-    if (isToday(at) && (item.type === "event" || item.status !== "done")) {
-      router.push("/today");
-      return;
-    }
-    setCalendarFocusDate(dayKey(at));
-    router.push("/calendar");
+    openInspector(item.id);
   }
 
   return (
@@ -201,19 +189,32 @@ function CommandPaletteDialog() {
 
         <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
           <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
-            <Plus className="h-4 w-4" strokeWidth={1.75} /> New item
+            <Plus className="h-4 w-4" strokeWidth={1.75} /> New item <Hint>N</Hint>
           </Command.Item>
         </Command.Group>
 
         <Command.Group heading="Navigate" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
           <Command.Item onSelect={() => go("/today")} className="cmdk-row min-h-11">
-            <Sun className="h-4 w-4" strokeWidth={1.75} /> Today
+            <Sun className="h-4 w-4" strokeWidth={1.75} /> Today <Hint>1</Hint>
           </Command.Item>
           <Command.Item onSelect={() => go("/calendar")} className="cmdk-row min-h-11">
-            <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Calendar
+            <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Calendar <Hint>2</Hint>
           </Command.Item>
           <Command.Item onSelect={() => go("/agenda")} className="cmdk-row min-h-11">
-            <ListChecks className="h-4 w-4" strokeWidth={1.75} /> Agenda
+            <ListChecks className="h-4 w-4" strokeWidth={1.75} /> Agenda <Hint>3</Hint>
+          </Command.Item>
+          <Command.Item
+            onSelect={() => calendar({ kind: "jump" })}
+            value="jump to date go to date month year"
+            className="cmdk-row min-h-11"
+          >
+            <CalendarSearch className="h-4 w-4" strokeWidth={1.75} /> Jump to a date… <Hint>D</Hint>
+          </Command.Item>
+          <Command.Item onSelect={() => calendar({ kind: "mode", mode: "month" })} value="month view calendar" className="cmdk-row min-h-11">
+            <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Month view <Hint>M</Hint>
+          </Command.Item>
+          <Command.Item onSelect={() => calendar({ kind: "mode", mode: "week" })} value="week view calendar" className="cmdk-row min-h-11">
+            <CalendarRange className="h-4 w-4" strokeWidth={1.75} /> Week view <Hint>W</Hint>
           </Command.Item>
           <Command.Item
             onSelect={() => go("/schedule")}
@@ -226,7 +227,17 @@ function CommandPaletteDialog() {
 
         <Command.Group heading="Actions" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
           <Command.Item onSelect={() => ask()} className="cmdk-row min-h-11">
-            <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask assistant
+            <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask assistant <Hint>A</Hint>
+          </Command.Item>
+          <Command.Item
+            onSelect={() => {
+              setPaletteOpen(false);
+              useUIStore.getState().setShortcutsOpen(true);
+            }}
+            value="keyboard shortcuts help hotkeys"
+            className="cmdk-row min-h-11"
+          >
+            <Keyboard className="h-4 w-4" strokeWidth={1.75} /> Keyboard shortcuts <Hint>?</Hint>
           </Command.Item>
           <Command.Item onSelect={() => go("/settings#import")} className="cmdk-row min-h-11">
             <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
@@ -234,6 +245,26 @@ function CommandPaletteDialog() {
           <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
             <Settings className="h-4 w-4" strokeWidth={1.75} /> Settings
           </Command.Item>
+        </Command.Group>
+
+        <Command.Group heading="Views" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+          {views.map((view) => {
+            const active = view.id === activeViewId;
+            return (
+              <Command.Item
+                key={view.id}
+                value={`view ${view.name}`}
+                onSelect={() => {
+                  applyView(active ? null : view);
+                  setPaletteOpen(false);
+                }}
+                className="cmdk-row min-h-11"
+              >
+                <Bookmark className="h-4 w-4 shrink-0" strokeWidth={1.75} fill={active ? "currentColor" : "none"} />
+                <span className="truncate">{active ? `Turn off “${view.name}”` : view.name}</span>
+              </Command.Item>
+            );
+          })}
         </Command.Group>
 
         {sortedItems.length > 0 && (
@@ -249,8 +280,11 @@ function CommandPaletteDialog() {
                 >
                   <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                   <span className="truncate">{item.title}</span>
+                  <span className="ml-auto shrink-0 pl-2 text-[11.5px] normal-case tracking-normal text-ink-faint">
+                    {format(new Date(item.at), "MMM d")}
+                  </span>
                   {category && (
-                    <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} />
                   )}
                 </Command.Item>
               );
@@ -271,12 +305,28 @@ function CommandPaletteDialog() {
           <Kbd>↵</Kbd>
           to select
         </span>
+        <span className="flex items-center gap-1.5">
+          <Kbd>?</Kbd>
+          shortcuts
+        </span>
         <span className="ml-auto flex items-center gap-1.5">
+          <Kbd>{mod}</Kbd>
+          <Kbd>K</Kbd>
+          or
           <Kbd>esc</Kbd>
           to close
         </span>
       </div>
     </Command.Dialog>
+  );
+}
+
+/** A shortcut hint on the right of a command row. */
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="ml-auto inline-flex min-w-[1.5em] items-center justify-center rounded border border-line bg-surface-sunken px-1.5 py-0.5 font-sans text-[10.5px] font-medium normal-case leading-none tracking-normal text-ink-faint">
+      {children}
+    </kbd>
   );
 }
 

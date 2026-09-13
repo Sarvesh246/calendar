@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, ExternalLink, MapPin, Repeat, Shapes, Tag, Trash2, Type, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, Copy, ExternalLink, MapPin, Repeat, Shapes, Tag, Timer, Trash2, Type, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
+import { useUIStore } from "@/lib/ui-store";
 import {
   datetimeLocalToIso,
   formatTime,
@@ -18,6 +20,8 @@ import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus, ItemType, Reminder, RepeatFreq } from "@/lib/types";
 import { repeatLabel } from "@/lib/repeat";
 import { formatOffsetLabel } from "@/lib/reminder-defaults";
+import { duplicateItem } from "@/lib/item-actions";
+import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sessions";
 import { WeekdayChips } from "@/components/weekday-chips";
 
 function linkLabel(url: string): string {
@@ -66,6 +70,7 @@ export function ItemEditor({
   clock24h,
   StatusSegmented,
   onCollapse,
+  variant = "inline",
 }: {
   item: Item;
   category: Category | undefined;
@@ -77,6 +82,12 @@ export function ItemEditor({
   }) => React.ReactNode;
   /** Close the card this editor is expanded inside. */
   onCollapse?: () => void;
+  /**
+   * `inline` sits inside an expanded card. `inspector` is the shared detail
+   * panel: the four things you change most — title, date, class, status — sit
+   * at the top, and notes and the rarer options follow below.
+   */
+  variant?: "inline" | "inspector";
 }) {
   const updateItem = useDatebookStore((s) => s.updateItem);
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
@@ -88,6 +99,7 @@ export function ItemEditor({
   const [location, setLocation] = useState(item.location ?? "");
   const [description, setDescription] = useState(item.description ?? "");
   const [customOffset, setCustomOffset] = useState("30");
+  const inspector = variant === "inspector";
 
   // Re-seed a draft only when its own field changes underneath it (a sync, an
   // undo), so a remote edit to the notes can't wipe a title you're mid-typing.
@@ -145,303 +157,421 @@ export function ItemEditor({
     patch({ reminders: next.length ? next : undefined });
   };
 
-  return (
-    <div
-      className="mt-3 flex flex-col gap-3 border-t border-line pt-3"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      {item.sourceId && (
-        <p className="text-[11.5px] leading-snug text-ink-faint">
-          Imported item. Your edits to a field are kept when the feed re-syncs.
-        </p>
-      )}
+  const commitTitle = () => {
+    const next = title.trim();
+    if (next && next !== item.title) patch({ title: next });
+    else setTitle(item.title);
+  };
 
-      <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
+  const importedNote = item.sourceId && (
+    <p className="text-[11.5px] leading-snug text-ink-faint">
+      Imported item. Your edits to a field are kept when the feed re-syncs.
+    </p>
+  );
+
+  const titleBlock = inspector ? (
+    <input
+      id="inspector-title"
+      value={title}
+      onChange={(e) => setTitle(e.target.value)}
+      onBlur={commitTitle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      aria-label="Title"
+      className="-mx-2 w-[calc(100%+1rem)] rounded-md border border-transparent bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-line focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+    />
+  ) : (
+    <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={commitTitle}
+        className={FIELD}
+      />
+    </DetailRow>
+  );
+
+  const classBlock = (
+    <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Class">
+      <select
+        value={item.categoryId ?? ""}
+        onChange={(e) => patch({ categoryId: e.target.value })}
+        className={FIELD}
+      >
+        {/* An item with no class (or one whose class was deleted) must have a
+            matching option, or the select silently displays the first class
+            while the item is still filed under nothing. */}
+        {!category && <option value="">No class</option>}
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+        {category && !categories.some((c) => c.id === category.id) && (
+          <option value={category.id}>{category.name}</option>
+        )}
+      </select>
+    </DetailRow>
+  );
+
+  const whenBlock = (
+    <DetailRow icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />} label={isEvent ? "When" : "Due"}>
+      <p className="mb-1.5 text-ink-faint">
+        {Number.isNaN(start.getTime()) ? "" : start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+        <span> · </span>
+        {timeLabel}
+      </p>
+      <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
+      {item.allDay ? (
         <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => {
-            const next = title.trim();
-            if (next && next !== item.title) patch({ title: next });
-            else setTitle(item.title);
+          type="date"
+          value={toDateInputValue(item.at)}
+          onChange={(e) => {
+            if (!e.target.value) return;
+            moveStart(new Date(`${e.target.value}T12:00:00`).toISOString());
           }}
+          aria-label={isEvent ? "Date" : "Due date"}
           className={FIELD}
         />
-      </DetailRow>
-
-      <DetailRow icon={<Tag className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Class">
-        <select
-          value={item.categoryId ?? ""}
-          onChange={(e) => patch({ categoryId: e.target.value })}
-          className={FIELD}
-        >
-          {/* An item with no class (or one whose class was deleted) must have a
-              matching option, or the select silently displays the first class
-              while the item is still filed under nothing. */}
-          {!category && <option value="">No class</option>}
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-          {category && !categories.some((c) => c.id === category.id) && (
-            <option value={category.id}>{category.name}</option>
-          )}
-        </select>
-      </DetailRow>
-
-      <DetailRow icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />} label={isEvent ? "When" : "Due"}>
-        <p className="mb-1.5 text-ink-faint">
-          {Number.isNaN(start.getTime()) ? "" : start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-          <span> · </span>
-          {timeLabel}
-        </p>
-        <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
-        {item.allDay ? (
-          <input
-            type="date"
-            value={toDateInputValue(item.at)}
-            onChange={(e) => {
-              if (!e.target.value) return;
-              moveStart(new Date(`${e.target.value}T12:00:00`).toISOString());
-            }}
-            aria-label={isEvent ? "Date" : "Due date"}
-            className={FIELD}
-          />
-        ) : (
-          <div className="flex flex-col gap-1.5">
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <label className="flex items-center gap-2">
+            {isEvent && <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Starts</span>}
+            <input
+              type="datetime-local"
+              value={toDatetimeLocalValue(item.at)}
+              onChange={(e) => {
+                const iso = datetimeLocalToIso(e.target.value);
+                if (iso) moveStart(iso);
+              }}
+              aria-label={isEvent ? "Starts" : "Due"}
+              className={cn(FIELD, "mt-0")}
+            />
+          </label>
+          {isEvent && (
             <label className="flex items-center gap-2">
-              {isEvent && <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Starts</span>}
+              <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Ends</span>
               <input
                 type="datetime-local"
-                value={toDatetimeLocalValue(item.at)}
+                value={item.endAt ? toDatetimeLocalValue(item.endAt) : ""}
+                min={toDatetimeLocalValue(item.at)}
                 onChange={(e) => {
+                  if (!e.target.value) {
+                    patch({ endAt: undefined });
+                    return;
+                  }
                   const iso = datetimeLocalToIso(e.target.value);
-                  if (iso) moveStart(iso);
+                  // An end before the start isn't a time, it's a typo — keep
+                  // the last good value rather than store a negative length.
+                  if (iso && new Date(iso) > start) patch({ endAt: iso });
                 }}
-                aria-label={isEvent ? "Starts" : "Due"}
+                aria-label="Ends"
                 className={cn(FIELD, "mt-0")}
               />
             </label>
-            {isEvent && (
-              <label className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Ends</span>
-                <input
-                  type="datetime-local"
-                  value={item.endAt ? toDatetimeLocalValue(item.endAt) : ""}
-                  min={toDatetimeLocalValue(item.at)}
-                  onChange={(e) => {
-                    if (!e.target.value) {
-                      patch({ endAt: undefined });
-                      return;
-                    }
-                    const iso = datetimeLocalToIso(e.target.value);
-                    // An end before the start isn't a time, it's a typo — keep
-                    // the last good value rather than store a negative length.
-                    if (iso && new Date(iso) > start) patch({ endAt: iso });
-                  }}
-                  aria-label="Ends"
-                  className={cn(FIELD, "mt-0")}
-                />
-              </label>
-            )}
-          </div>
-        )}
-      </DetailRow>
-
-      <DetailRow icon={<Shapes className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Type">
-        <select
-          value={item.type}
-          onChange={(e) => {
-            const type = e.target.value as ItemType;
-            patch(type === "event" ? { type, status: undefined } : { type, status: item.status ?? "todo" });
-          }}
-          className={FIELD}
-        >
-          <option value="event">Event</option>
-          <option value="assignment">Assignment</option>
-          <option value="task">Task</option>
-        </select>
-      </DetailRow>
-
-      <DetailRow icon={<MapPin className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Location">
-        <input
-          value={location}
-          placeholder="Optional"
-          onChange={(e) => setLocation(e.target.value)}
-          onBlur={() => {
-            const next = location.trim() || undefined;
-            if (next !== item.location) patch({ location: next });
-          }}
-          className={FIELD}
-        />
-      </DetailRow>
-
-      {!isEvent && (
-        <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
-          <StatusSegmented
-            value={item.status ?? "todo"}
-            layoutScope={item.id}
-            onChange={(status) => setItemStatus(item.id, status)}
-          />
-          {isOverdue(item) && item.status !== "done" && <p className="mt-1.5 text-warn">Overdue</p>}
-        </DetailRow>
-      )}
-
-      <DetailRow icon={<Bell className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Reminders">
-        <div className="flex flex-col gap-1">
-          {reminderPresets.map((rp) => {
-            const active = (item.reminders ?? []).some((r) => r.offsetMinutes === rp.offsetMinutes);
-            return (
-              <button
-                key={rp.id}
-                type="button"
-                onClick={() => {
-                  haptic("light");
-                  toggleReminder(rp);
-                }}
-                aria-pressed={active}
-                className={cn(
-                  "flex min-h-9 items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-left text-[12.5px]",
-                  "transition-[background-color,border-color,color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-                  active
-                    ? "border-accent/40 bg-accent-soft text-ink"
-                    : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
-                )}
-              >
-                {rp.label}
-                <motion.span
-                  aria-hidden
-                  initial={false}
-                  animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
-                  transition={motionTokens.springSnappy}
-                  className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"
-                >
-                  <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
-                </motion.span>
-              </button>
-            );
-          })}
-          {customReminders.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => {
-                haptic("light");
-                const next = (item.reminders ?? []).filter((x) => x.id !== r.id);
-                patch({ reminders: next.length ? next : undefined });
-              }}
-              aria-label={`Remove ${r.label}`}
-              className="flex min-h-9 items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent-soft px-2.5 py-1.5 text-left text-[12.5px] text-ink transition-[border-color] duration-[var(--motion-standard)] hover:border-accent"
-            >
-              {r.label}
-              <X className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
-            </button>
-          ))}
-          <div className="mt-1 flex items-center gap-1.5">
-            <input
-              type="number"
-              min={1}
-              value={customOffset}
-              onChange={(e) => setCustomOffset(e.target.value)}
-              className={cn(FIELD, "mt-0 w-20")}
-              aria-label="Custom reminder minutes"
-            />
-            <span className="text-[12px] text-ink-faint">min before</span>
-            <button
-              type="button"
-              onClick={() => {
-                const n = parseInt(customOffset, 10);
-                if (!Number.isFinite(n) || n < 1) return;
-                const current = item.reminders ?? [];
-                if (current.some((r) => r.offsetMinutes === n)) return;
-                patch({
-                  reminders: [
-                    ...current,
-                    { id: nanoid(), itemId: item.id, offsetMinutes: n, label: formatOffsetLabel(n) },
-                  ],
-                });
-                haptic("light");
-              }}
-              className="rounded-md border border-line px-2 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink"
-            >
-              Add
-            </button>
-          </div>
+          )}
         </div>
-      </DetailRow>
-
-      {!item.sourceId && (
-        <DetailRow icon={<Repeat className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Repeat">
-          <select
-            value={item.repeat?.freq ?? ""}
-            onChange={(e) => {
-              const v = e.target.value as RepeatFreq | "";
-              if (!v) setItemRepeat(item.id, undefined);
-              else {
-                setItemRepeat(item.id, {
-                  freq: v,
-                  ...(v === "weekly" ? { byDay: [new Date(item.at).getDay()] } : {}),
-                });
-              }
-            }}
-            className={FIELD}
-          >
-            <option value="">Does not repeat</option>
-            <option value="daily">Every day</option>
-            <option value="weekly">Every week</option>
-            <option value="monthly">Every month</option>
-          </select>
-          {item.repeat?.freq === "weekly" && (
-            <div className="mt-2">
-              <WeekdayChips
-                value={
-                  item.repeat.byDay?.length
-                    ? item.repeat.byDay
-                    : [new Date(item.at).getDay()]
-                }
-                onChange={(days) => {
-                  if (days.length === 0) return;
-                  setItemRepeat(item.id, { ...item.repeat!, freq: "weekly", byDay: days });
-                }}
-              />
-            </div>
-          )}
-          {item.repeat && (
-            <p className="mt-1 text-[11.5px] text-ink-faint">{repeatLabel(item.repeat)}</p>
-          )}
-        </DetailRow>
       )}
+    </DetailRow>
+  );
 
-      <DetailRow icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Details">
-        <textarea
-          value={description}
-          rows={3}
-          placeholder="Notes"
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={() => {
-            const next = description.trim() || undefined;
-            if (next !== item.description) patch({ description: next });
-          }}
-          className={cn(FIELD, "resize-y")}
-        />
-      </DetailRow>
+  const typeBlock = (
+    <DetailRow icon={<Shapes className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Type">
+      <select
+        value={item.type}
+        onChange={(e) => {
+          const type = e.target.value as ItemType;
+          patch(type === "event" ? { type, status: undefined } : { type, status: item.status ?? "todo" });
+        }}
+        className={FIELD}
+      >
+        <option value="event">Event</option>
+        <option value="assignment">Assignment</option>
+        <option value="task">Task</option>
+      </select>
+    </DetailRow>
+  );
 
-      {item.url && (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md border border-line px-3 py-2 text-[12.5px] font-medium text-accent transition-colors hover:border-accent"
-        >
-          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-          {linkLabel(item.url)}
-        </a>
+  const locationBlock = (
+    <DetailRow icon={<MapPin className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Location">
+      <input
+        value={location}
+        placeholder="Optional"
+        onChange={(e) => setLocation(e.target.value)}
+        onBlur={() => {
+          const next = location.trim() || undefined;
+          if (next !== item.location) patch({ location: next });
+        }}
+        className={FIELD}
+      />
+    </DetailRow>
+  );
+
+  const statusBlock = !isEvent && (
+    <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
+      <StatusSegmented
+        value={item.status ?? "todo"}
+        layoutScope={`${variant}-${item.id}`}
+        onChange={(status) => setItemStatus(item.id, status)}
+      />
+      {isOverdue(item) && item.status !== "done" && <p className="mt-1.5 text-warn">Overdue</p>}
+    </DetailRow>
+  );
+
+  const remindersBlock = (
+    <DetailRow icon={<Bell className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Reminders">
+      <div className="flex flex-col gap-1">
+        {reminderPresets.map((rp) => {
+          const active = (item.reminders ?? []).some((r) => r.offsetMinutes === rp.offsetMinutes);
+          return (
+            <button
+              key={rp.id}
+              type="button"
+              onClick={() => {
+                haptic("light");
+                toggleReminder(rp);
+              }}
+              aria-pressed={active}
+              className={cn(
+                "flex min-h-9 items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-left text-[12.5px]",
+                "transition-[background-color,border-color,color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+                active
+                  ? "border-accent/40 bg-accent-soft text-ink"
+                  : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
+              )}
+            >
+              {rp.label}
+              <motion.span
+                aria-hidden
+                initial={false}
+                animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
+                transition={motionTokens.springSnappy}
+                className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+              >
+                <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
+              </motion.span>
+            </button>
+          );
+        })}
+        {customReminders.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => {
+              haptic("light");
+              const next = (item.reminders ?? []).filter((x) => x.id !== r.id);
+              patch({ reminders: next.length ? next : undefined });
+            }}
+            aria-label={`Remove ${r.label}`}
+            className="flex min-h-9 items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent-soft px-2.5 py-1.5 text-left text-[12.5px] text-ink transition-[border-color] duration-[var(--motion-standard)] hover:border-accent"
+          >
+            {r.label}
+            <X className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
+          </button>
+        ))}
+        <div className="mt-1 flex items-center gap-1.5">
+          <input
+            type="number"
+            min={1}
+            value={customOffset}
+            onChange={(e) => setCustomOffset(e.target.value)}
+            className={cn(FIELD, "mt-0 w-20")}
+            aria-label="Custom reminder minutes"
+          />
+          <span className="text-[12px] text-ink-faint">min before</span>
+          <button
+            type="button"
+            onClick={() => {
+              const n = parseInt(customOffset, 10);
+              if (!Number.isFinite(n) || n < 1) return;
+              const current = item.reminders ?? [];
+              if (current.some((r) => r.offsetMinutes === n)) return;
+              patch({
+                reminders: [
+                  ...current,
+                  { id: nanoid(), itemId: item.id, offsetMinutes: n, label: formatOffsetLabel(n) },
+                ],
+              });
+              haptic("light");
+            }}
+            className="rounded-md border border-line px-2 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </DetailRow>
+  );
+
+  const repeatBlock = !item.sourceId && (
+    <DetailRow icon={<Repeat className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Repeat">
+      <select
+        value={item.repeat?.freq ?? ""}
+        onChange={(e) => {
+          const v = e.target.value as RepeatFreq | "";
+          if (!v) setItemRepeat(item.id, undefined);
+          else {
+            setItemRepeat(item.id, {
+              freq: v,
+              ...(v === "weekly" ? { byDay: [new Date(item.at).getDay()] } : {}),
+            });
+          }
+        }}
+        className={FIELD}
+      >
+        <option value="">Does not repeat</option>
+        <option value="daily">Every day</option>
+        <option value="weekly">Every week</option>
+        <option value="monthly">Every month</option>
+      </select>
+      {item.repeat?.freq === "weekly" && (
+        <div className="mt-2">
+          <WeekdayChips
+            value={
+              item.repeat.byDay?.length
+                ? item.repeat.byDay
+                : [new Date(item.at).getDay()]
+            }
+            onChange={(days) => {
+              if (days.length === 0) return;
+              setItemRepeat(item.id, { ...item.repeat!, freq: "weekly", byDay: days });
+            }}
+          />
+        </div>
+      )}
+      {item.repeat && (
+        <p className="mt-1 text-[11.5px] text-ink-faint">{repeatLabel(item.repeat)}</p>
+      )}
+    </DetailRow>
+  );
+
+  const detailsBlock = (
+    <DetailRow icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />} label={inspector ? "Notes" : "Details"}>
+      <textarea
+        value={description}
+        rows={inspector ? 4 : 3}
+        placeholder="Notes"
+        onChange={(e) => setDescription(e.target.value)}
+        onBlur={() => {
+          const next = description.trim() || undefined;
+          if (next !== item.description) patch({ description: next });
+        }}
+        className={cn(FIELD, "resize-y")}
+      />
+    </DetailRow>
+  );
+
+  const linkBlock = item.url && (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md border border-line px-3 py-2 text-[12.5px] font-medium text-accent transition-colors hover:border-accent"
+    >
+      <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+      {linkLabel(item.url)}
+    </a>
+  );
+
+  const workBlock = <WorkLinks item={item} clock24h={clock24h} />;
+
+  return (
+    <div
+      className={cn("flex flex-col gap-3", !inspector && "mt-3 border-t border-line pt-3")}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {inspector ? (
+        <>
+          {titleBlock}
+          {importedNote}
+          {whenBlock}
+          {classBlock}
+          {statusBlock}
+          {workBlock}
+          <p className="mt-2 border-t border-line pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+            More
+          </p>
+          {detailsBlock}
+          {locationBlock}
+          {typeBlock}
+          {remindersBlock}
+          {repeatBlock}
+          {linkBlock}
+        </>
+      ) : (
+        <>
+          {importedNote}
+          {titleBlock}
+          {classBlock}
+          {whenBlock}
+          {typeBlock}
+          {locationBlock}
+          {statusBlock}
+          {workBlock}
+          {remindersBlock}
+          {repeatBlock}
+          {detailsBlock}
+          {linkBlock}
+        </>
       )}
 
       <ItemActions item={item} onCollapse={onCollapse} />
     </div>
+  );
+}
+
+/**
+ * The thread between a deadline and the time set aside for it: a session
+ * links back to its assignment, an assignment lists its sessions.
+ */
+function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
+  const items = useDatebookStore((s) => s.items);
+  const openInspector = useUIStore((s) => s.openInspector);
+  const target = item.workFor ? items.find((i) => i.id === item.workFor) : undefined;
+  const sessions = useMemo(
+    () => (item.type !== "event" ? workSessionsFor(items, item.id) : []),
+    [items, item.id, item.type]
+  );
+  const linkClass =
+    "flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-line px-2.5 py-1.5 text-left text-[12.5px] text-ink transition-colors hover:border-line-strong hover:bg-surface-sunken/60";
+
+  if (item.workFor) {
+    return (
+      <DetailRow icon={<Timer className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Planned work for">
+        {target ? (
+          <button type="button" className={linkClass} onClick={() => openInspector(target.id)}>
+            <span className="min-w-0 truncate font-medium">{target.title}</span>
+            <span className="shrink-0 text-ink-faint">
+              Due {format(new Date(target.at), "EEE, MMM d")}
+            </span>
+          </button>
+        ) : (
+          <p className="text-ink-faint">The item this time was set aside for is no longer on your calendar.</p>
+        )}
+      </DetailRow>
+    );
+  }
+  if (!sessions.length) return null;
+  return (
+    <DetailRow
+      icon={<Timer className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      label={`Planned time · ${formatDuration(plannedMinutes(sessions))}`}
+    >
+      <div className="flex flex-col gap-1">
+        {sessions.slice(0, 4).map((s) => (
+          <button key={s.id} type="button" className={linkClass} onClick={() => openInspector(s.id)}>
+            <span>{format(new Date(s.at), "EEE, MMM d")}</span>
+            <span className="shrink-0 tabular-nums text-ink-faint">
+              {formatTime(s.at, clock24h)}
+              {s.endAt ? ` – ${formatTime(s.endAt, clock24h)}` : ""}
+            </span>
+          </button>
+        ))}
+        {sessions.length > 4 && <p className="text-[11.5px] text-ink-faint">and {sessions.length - 4} more</p>}
+      </div>
+    </DetailRow>
   );
 }
 
@@ -551,6 +681,17 @@ function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
             Delete
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              duplicateItem(item);
+            }}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
+          >
+            <Copy className="h-3.5 w-3.5" strokeWidth={1.9} />
+            Duplicate
           </button>
           {onCollapse && (
             <button

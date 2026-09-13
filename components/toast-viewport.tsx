@@ -15,7 +15,7 @@ export function ToastViewport() {
       <div className="viewport-pinned-top pointer-events-none fixed inset-x-3 top-[calc(var(--mobile-header-height)+0.35rem)] z-[60] flex flex-col items-center gap-2 md:inset-x-auto md:left-[calc(220px+1.75rem)] md:right-6 md:top-[4.85rem]">
         <SyncNoticeToasts />
       </div>
-      <div className="viewport-pinned-bottom pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] z-[80] flex flex-col items-center gap-2 px-4 md:bottom-6">
+      <div className="viewport-pinned-bottom pointer-events-none fixed inset-x-0 bottom-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] z-[80] flex flex-col items-center gap-2 px-4 transition-[bottom] duration-[var(--motion-standard)] md:bottom-[var(--toast-lift,1.5rem)]">
         <UndoToast />
         <MobileActionUndo />
       </div>

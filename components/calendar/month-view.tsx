@@ -11,6 +11,9 @@ import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsO
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
+import { beginCalendarDrag, useCalendarDrag } from "@/lib/calendar-drag";
+import { dayLabelFor, rescheduleToDay } from "@/lib/item-actions";
+import { itemMenuProps } from "@/lib/item-menu";
 
 const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -63,6 +66,41 @@ function DayCellChips({
   onMeasure?: (height: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const draggingId = useCalendarDrag((s) => s.sourceId);
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  // Carry a chip to another day. A native listener, because the month's
+  // swipe recognizer also listens natively on an ancestor — stopping the
+  // press here is the only way to keep a drag from turning the month.
+  // Touch keeps swiping; chips only drag with a mouse or pen.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const key = dayKey(date);
+    const onDown = (ev: PointerEvent) => {
+      if (ev.button !== 0 || ev.pointerType === "touch") return;
+      const chip = (ev.target as HTMLElement).closest<HTMLElement>("[data-chip-id]");
+      const item = chip && itemsRef.current.find((i) => i.id === chip.dataset.chipId);
+      if (!item) return;
+      ev.stopPropagation();
+      beginCalendarDrag(ev, {
+        accept: ["day"],
+        sourceId: item.id,
+        resolve: (t) =>
+          t.kind === "day"
+            ? { label: t.dayKey === key ? "Keep on this day" : `${item.type === "event" ? "Move to" : "Due"} ${dayLabelFor(t.dayKey)}` }
+            : null,
+        onDrop: (t) => {
+          if (t.kind === "day") rescheduleToDay(item, t.dayKey, key);
+        },
+      });
+    };
+    el.addEventListener("pointerdown", onDown);
+    return () => el.removeEventListener("pointerdown", onDown);
+  }, [date]);
 
   useEffect(() => {
     const el = ref.current;
@@ -96,11 +134,14 @@ function DayCellChips({
           <span
             key={item.id}
             title={item.title}
+            data-chip-id={item.id}
+            {...itemMenuProps(item.id, dayKey(date))}
             className={cn(
-              "cal-chip shrink-0 truncate rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px]",
+              "cal-chip shrink-0 cursor-grab truncate rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px] transition-opacity duration-[var(--motion-micro)]",
               task && "cal-chip-task",
               done && "opacity-45",
-              isOverdue(item) && "cal-chip-overdue"
+              isOverdue(item) && "cal-chip-overdue",
+              draggingId === item.id && "opacity-30"
             )}
             style={{ "--cat": color } as React.CSSProperties}
           >
@@ -216,6 +257,7 @@ function MonthGridPanel({
         return (
           <button
             key={`${anchor.toISOString()}-${date.toISOString()}`}
+            data-drop-day={dayKey(date)}
             onClick={() => {
               haptic("light");
               onSelectDate(date);

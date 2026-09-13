@@ -50,7 +50,7 @@ export function safeCategoryColor(v: unknown): string {
 // it, retry, and keep syncing everything else rather than wedging the queue.
 // The column starts flowing again on its own once the migration is run.
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
-  items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at"],
+  items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at", "work_for"],
   import_sources: ["last_error"],
   user_settings: [
     "hide_completed",
@@ -158,6 +158,7 @@ export function toItemRow(i: Item, userId: string): Row {
     source_uid: i.sourceUid ?? null,
     repeat: i.repeat ?? null,
     repeat_id: i.repeatId ?? null,
+    work_for: i.workFor ?? null,
     // The time of the edit itself, not of the upload. Merges compare these to
     // decide which device's version of a row survives.
     updated_at: i.updatedAt ?? i.createdAt,
@@ -188,6 +189,7 @@ export function rowToItem(r: Row): Item {
       : {}),
     ...(r.repeat && typeof r.repeat === "object" ? { repeat: r.repeat as Item["repeat"] } : {}),
     ...(r.repeat_id ? { repeatId: r.repeat_id as string } : {}),
+    ...(typeof r.work_for === "string" && r.work_for ? { workFor: r.work_for } : {}),
     ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }

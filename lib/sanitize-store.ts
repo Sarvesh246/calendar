@@ -171,6 +171,7 @@ export function sanitizeItems(items: Item[] | undefined): Item[] {
     else delete next.status;
     if (reminders?.length) next.reminders = reminders;
     else delete next.reminders;
+    if (typeof i.workFor !== "string" || !i.workFor) delete next.workFor;
     for (const key of ["completedAt", "statusAt", "updatedAt"] as const) {
       const v = isoOrUndefined(i[key]);
       if (v) next[key] = v;

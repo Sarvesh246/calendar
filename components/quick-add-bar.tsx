@@ -37,7 +37,14 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
   const setDateKey = useUIStore((s) => s.setQuickAddDateKey);
   const timeHint = useUIStore((s) => s.quickAddTime);
   const setTimeHint = useUIStore((s) => s.setQuickAddTime);
+  const durationHint = useUIStore((s) => s.quickAddDurationMin);
   const askAI = useUIStore((s) => s.askAI);
+
+  /** A span swept out on the week grid sizes an event the text didn't. */
+  const withDuration = (r: ParsedQuickAdd): ParsedQuickAdd =>
+    durationHint && r.type === "event" && !r.allDay && !r.endAt
+      ? { ...r, endAt: new Date(r.at.getTime() + durationHint * 60_000) }
+      : r;
   const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
 
   const [text, setText] = useState("");
@@ -89,7 +96,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       ...(anchor ? { anchor } : {}),
       ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
     });
-    setParsed(result);
+    setParsed(withDuration(result));
     setPhase("preview");
   }
 
@@ -134,7 +141,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       ...(anchor ? { anchor } : {}),
       ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
     });
-    setParsed(result);
+    setParsed(withDuration(result));
     setPhase("preview");
   }
 
@@ -159,6 +166,19 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     setTimeHint(null);
     closeQuickAdd();
   }
+
+  // " · 2:00 PM–3:30 PM" when the add came from a spot (or sweep) on the week.
+  const hintStart =
+    dateKey && timeHint
+      ? new Date(`${dateKey}T${String(timeHint.hour).padStart(2, "0")}:${String(timeHint.minute).padStart(2, "0")}:00`)
+      : null;
+  const hintTimeLabel = hintStart
+    ? ` · ${formatTime(hintStart.toISOString(), clock24h)}${
+        durationHint
+          ? `–${formatTime(new Date(hintStart.getTime() + durationHint * 60_000).toISOString(), clock24h)}`
+          : ""
+      }`
+    : "";
 
   const ready = Boolean(text.trim()) && phase === "idle";
   const category = categories.find((c) => c.id === parsed?.categoryId);
@@ -228,7 +248,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             autoCorrect="off"
             placeholder={
               dateKey
-                ? `Add to ${format(new Date(`${dateKey}T12:00:00`), "EEE, MMM d")}…`
+                ? `Add to ${format(new Date(`${dateKey}T12:00:00`), "EEE, MMM d")}${hintTimeLabel}…`
                 : "Assignment, class, or task…"
             }
             className="min-w-0 flex-1 bg-transparent text-[16px] md:text-[14px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"

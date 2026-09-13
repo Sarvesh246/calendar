@@ -5,7 +5,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Search, Sparkles } from "lucide-react";
+import { Keyboard, Plus, Search, Sparkles } from "lucide-react";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
@@ -23,7 +23,15 @@ import { useResolvedPathname } from "@/lib/tab-nav";
 import { TabPageHost } from "@/components/tab-page-host";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { useWorkspacePrefs } from "@/lib/workspace-prefs";
+import { KeyboardShortcuts, Kbd, useModKeyLabel } from "./keyboard-shortcuts";
+import { ItemContextMenu } from "./item-context-menu";
+import { DragOverlay } from "./drag-overlay";
 
+const ItemInspector = dynamic(
+  () => import("./item-inspector").then((m) => ({ default: m.ItemInspector })),
+  { ssr: false }
+);
 const CommandPalette = dynamic(
   () => import("./command-palette").then((m) => ({ default: m.CommandPalette })),
   { ssr: false }
@@ -67,6 +75,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useDialogFocus(composerRef, floatingAdd && !desktop);
   useLockBodyScroll(floatingAdd && !desktop);
   useKeyboardInset();
+  const setShortcutsOpen = useUIStore((s) => s.setShortcutsOpen);
+  const modKey = useModKeyLabel();
+
+  // Device layout prefs load after mount so the server render and the first
+  // client render agree.
+  useEffect(() => {
+    void useWorkspacePrefs.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     closeQuickAdd();
@@ -126,13 +142,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                   Ask
                 </Button>
+                {/* Where there's room, search looks like a field with its
+                    shortcut on it — an icon alone never taught anyone ⌘K. */}
+                <button
+                  type="button"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  aria-label="Search"
+                  aria-keyshortcuts="Control+K Meta+K"
+                  className="hidden h-9 w-52 items-center gap-2 rounded-md border border-line bg-surface pl-2.5 pr-1.5 text-[13px] text-ink-faint transition-colors duration-[var(--motion-standard)] hover:border-line-strong hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-64"
+                >
+                  <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                  <span className="flex-1 text-left">Search…</span>
+                  <Kbd>{modKey} K</Kbd>
+                </button>
                 <Button
                   variant="secondary"
                   size="icon"
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
+                  className="lg:hidden"
                 >
                   <Search className="h-4 w-4" strokeWidth={1.9} />
+                </Button>
+                <Button
+                  variant="tertiary"
+                  size="iconSm"
+                  onClick={() => setShortcutsOpen(true)}
+                  aria-label="Keyboard shortcuts"
+                  title="Keyboard shortcuts (?)"
+                  className="hidden lg:inline-flex"
+                >
+                  <Keyboard className="h-4 w-4" strokeWidth={1.9} />
                 </Button>
                 {!onSettings && !onToday && (
                   <Button variant="primary" size="sm" onClick={openAdd}>
@@ -214,6 +254,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
       <FocusedItemRelay />
+      <KeyboardShortcuts />
+      <ItemContextMenu />
+      <ItemInspector />
+      <DragOverlay />
       <ClassScheduleSheet />
       <FilterSheet />
       <CommandPalette />

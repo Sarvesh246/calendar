@@ -63,6 +63,10 @@ export interface Item {
   repeat?: RepeatRule;
   /** Shared id for every instance in a user-created series. */
   repeatId?: string;
+  /** Set on a planned work session: the id of the assignment/task this time is
+   *  blocked out for. The session is its own event, so planning time never
+   *  moves the deadline it serves. */
+  workFor?: string;
   /** Set when the item came from an imported calendar feed (see ImportSource.id). */
   sourceId?: string;
   /** The feed's own UID for this event — used to match on re-sync instead of duplicating. */

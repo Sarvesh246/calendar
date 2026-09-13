@@ -1,15 +1,12 @@
 "use client";
 
-import { create } from "zustand";
 import { addDays, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
+import { offerUndo, useActionUndo } from "@/lib/action-undo";
 import type { Item, ItemStatus } from "@/lib/types";
 
-type UndoAction = { label: string; undo: () => void; stamp: number };
-export const useMobileUndo = create<{ action: UndoAction | null; set: (action: UndoAction | null) => void }>(set => ({ action: null, set: action => set({ action }) }));
-function offerUndo(label: string, undo: () => void) {
-  useMobileUndo.getState().set({ label, undo, stamp: Date.now() });
-}
+/** One undo slot for the whole app; kept under its old name for callers. */
+export const useMobileUndo = useActionUndo;
 export function changeMobileStatus(item: Item, status: ItemStatus) {
   const store = useDatebookStore.getState();
   if ((item.status ?? "todo") === status) return;

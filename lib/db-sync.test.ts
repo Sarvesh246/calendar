@@ -77,6 +77,14 @@ describe("toItemRow", () => {
     expect(bare).toEqual(full);
   });
 
+  it("carries a work session's link both ways", () => {
+    expect(Object.keys(toItemRow(item({ workFor: "essay" }), USER)).sort()).toEqual(
+      Object.keys(toItemRow(item(), USER)).sort()
+    );
+    expect(toItemRow(item(), USER).work_for).toBeNull();
+    expect(toItemRow(item({ workFor: "essay" }), USER).work_for).toBe("essay");
+  });
+
   it("nulls a cleared link or repeat rule so the cloud copy clears too", () => {
     const row = toItemRow(item(), USER);
     expect(row.url).toBeNull();

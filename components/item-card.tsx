@@ -6,9 +6,12 @@ import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-she
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, MapPin } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
+import { useUIStore } from "@/lib/ui-store";
 import { registerItemExpander } from "@/lib/item-focus";
+import { dayKey } from "@/lib/date-utils";
+import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
 import {
   eventRemainingLabel,
   formatTime,
@@ -152,7 +155,7 @@ function CompleteButton({
   );
 }
 
-function StatusSegmented({
+export function StatusSegmented({
   value,
   onChange,
   layoutScope,
@@ -297,6 +300,53 @@ function useCompleteStyle(done: boolean) {
   return styled;
 }
 
+/**
+ * Hover (or keyboard focus) reveals the same few actions the right-click menu
+ * leads with: open the inspector, reschedule, and everything else.
+ */
+function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
+  const openInspector = useUIStore((s) => s.openInspector);
+  const key = day ? dayKey(day) : undefined;
+  const btn =
+    "flex h-7 w-7 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <div
+      className={cn(
+        "card-quick-actions pointer-events-none absolute right-6 top-1/2 z-[2] hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 opacity-0 shadow-[0_4px_12px_-6px_rgb(0_0_0/0.25)] md:flex",
+        "transition-opacity duration-[var(--motion-micro)]",
+        "group-hover/card:pointer-events-auto group-hover/card:opacity-100 group-focus-within/card:pointer-events-auto group-focus-within/card:opacity-100"
+      )}
+      onClick={stop}
+      onKeyDown={stop}
+    >
+      <button type="button" className={btn} aria-label="Open details" title="Open details" onClick={() => openInspector(item.id)}>
+        <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.9} />
+      </button>
+      <button
+        type="button"
+        className={btn}
+        aria-label="Reschedule"
+        title="Reschedule"
+        aria-haspopup="menu"
+        onClick={(e) => openItemMenuAt(e.currentTarget, item.id, { dayKey: key, section: "reschedule" })}
+      >
+        <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.9} />
+      </button>
+      <button
+        type="button"
+        className={btn}
+        aria-label="More actions"
+        title="More actions"
+        aria-haspopup="menu"
+        onClick={(e) => openItemMenuAt(e.currentTarget, item.id, { dayKey: key })}
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
+      </button>
+    </div>
+  );
+}
+
 function ExpandChevron({ expanded }: { expanded: boolean }) {
   return (
     <motion.span
@@ -342,7 +392,7 @@ function CardFrame({
         <div
           {...rest}
           className={cn(
-            "item-card press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
+            "item-card group/card press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
             dimmed && "opacity-[0.62]",
             rest.className
@@ -404,14 +454,17 @@ function EventCard({
       tabIndex={0}
       aria-expanded={expanded}
       onClick={toggle}
-      onKeyDown={keyToggle}
+      onKeyDown={(e) => {
+        if (!handleItemMenuKey(e, item.id, day ? dayKey(day) : undefined)) keyToggle(e);
+      }}
+      {...itemMenuProps(item.id, day ? dayKey(day) : undefined)}
       className={cn(
         "cat-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         expanded && "border-line-strong"
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="relative flex items-center gap-3">
         <div className="flex w-[74px] shrink-0 flex-col leading-tight">
           <span
             className={cn(
@@ -471,6 +524,7 @@ function EventCard({
             <Check className="h-3 w-3 text-[var(--accent-ink)]" strokeWidth={3.25} />
           </span>
         )}
+        <CardQuickActions item={item} day={day} />
         <ExpandChevron expanded={expanded} />
       </div>
 
@@ -534,7 +588,10 @@ function AssignmentCard({
         if (dx < 0) setActions("reschedule"); else changeMobileStatus(item, status === "doing" ? "done" : "doing");
       }}
       onClick={() => { if (!swiped.current) toggle(); }}
-      onKeyDown={keyToggle}
+      onKeyDown={(e) => {
+        if (!handleItemMenuKey(e, item.id)) keyToggle(e);
+      }}
+      {...itemMenuProps(item.id)}
       className={cn(
         "bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
@@ -543,7 +600,7 @@ function AssignmentCard({
         status === "doing" && !done && "bg-accent-soft/30"
       )}
     >
-      <div className="flex items-center gap-1">
+      <div className="relative flex items-center gap-1">
         <CompleteButton status={status} color={color} onToggle={() => mobile ? changeMobileStatus(item, done ? "todo" : "done") : toggleItemDone(item.id)} />
 
         {mobile && <button aria-label="Task status and actions" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-soft" onClick={e => { e.stopPropagation(); setActions("status"); }} onKeyDown={e => e.stopPropagation()}><ChevronDown className="h-4 w-4" /></button>}
@@ -589,6 +646,7 @@ function AssignmentCard({
             )}
           />
         )}
+        <CardQuickActions item={item} />
         <ExpandChevron expanded={expanded} />
       </div>
 
