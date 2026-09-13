@@ -370,9 +370,17 @@
   /* Air between the tab pill and the home indicator / screen edge. Keeps the
      bar from sitting flush on the bottom. Added on top of --safe-bottom. */
   --tab-bar-rest: 0.75rem;
-  /* Space reserved so titles clear the floating glass cluster. The page
+  /* Geometry of the floating glass header cluster (components/mobile-header-actions.tsx).
+     Kept here so the space a page reserves for it can never drift from where
+     the cluster actually sits. */
+  --mobile-header-top: 1.375rem;
+  --mobile-header-cluster: 3rem; /* 44px button + 2 × 2px padding */
+  /* Space reserved so titles — and any right-aligned header control, like
+     Agenda's Schedule button — clear the floating cluster entirely. The page
      itself stays continuous — no opaque header strip. */
-  --mobile-header-height: calc(env(safe-area-inset-top) + 4.125rem);
+  --mobile-header-height: calc(
+    env(safe-area-inset-top) + var(--mobile-header-top) + var(--mobile-header-cluster) + 0.75rem
+  );
   --page-gap: 2rem;
   --card-pad-y: 0.75rem;
   --card-pad-x: 1rem;
@@ -1244,9 +1252,14 @@ html[data-first-load="1"] .page-shell > * > * {
 }
 
 @media (max-width: 767px) {
+  /* The sheet is measured off the *visual* viewport so the keyboard never
+     buries it — but the visual viewport starts at the top of the screen, so
+     capping it at the full height put the title and close button underneath
+     the status bar / notch, where iOS eats the taps. Leave the status bar and
+     a real iOS-sized gap above the card. */
   .mobile-action-sheet {
     bottom: max(0px, calc(100% - var(--visible-height, 100dvh) - var(--viewport-pan, 0px)));
-    max-height: calc(var(--visible-height, 100dvh) - 1rem);
+    max-height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top) - 2rem);
   }
   .mobile-action-sheet input, .mobile-action-sheet textarea, .mobile-action-sheet select { font-size: 16px; }
 }
