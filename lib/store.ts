@@ -20,6 +20,7 @@ import {
   describeError,
   diffCollection,
   fetchAllForUser,
+  isRlsViolation,
   pushAllToCloud,
   pushChanges,
   rowToCategory,
@@ -445,7 +446,7 @@ export const useDatebookStore = create<DatebookState>()(
         const existing = state.importSources.find((s) => s.url === url);
         const sourceId = existing?.id ?? nanoid();
 
-        const { newCategories, drafts } = buildImportPlan(feed, categories, sourceId);
+        const { newCategories, drafts } = buildImportPlan(feed, categories, sourceId, !existing);
         const incoming = new Map(drafts.map((d) => [d.sourceUid, d]));
 
         let added = 0;
@@ -1746,6 +1747,22 @@ async function flush() {
   } catch (err) {
     requeue(batch);
     console.error("[datebook] cloud sync failed:", err);
+    // A 42501 here means the write reached Postgres as the anon role, not this
+    // user — activeUserId has drifted from the session backing it (an access
+    // token that expired on a long-backgrounded tab, or a sign-out/sign-in
+    // race). Retrying the identical write would just fail the same way
+    // forever, so resync to whatever the browser's actual session says instead
+    // of surfacing a raw RLS error the user can't act on.
+    if (isRlsViolation(err) && supabase) {
+      const { data } = await supabase.auth.getSession();
+      const liveUserId = data.session?.user.id ?? null;
+      if (liveUserId && liveUserId !== activeUserId) {
+        activeUserId = liveUserId;
+      } else if (!liveUserId) {
+        await useDatebookStore.getState().disconnectCloud();
+        return;
+      }
+    }
     useDatebookStore.setState({ syncStatus: "error", cloudError: describeError(err) });
   } finally {
     flushing = false;
