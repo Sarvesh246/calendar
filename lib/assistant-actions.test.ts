@@ -122,5 +122,7 @@ describe("isPureQuestion", () => {
   it("detects questions vs mutations", () => {
     expect(isPureQuestion("what's due friday?")).toBe(true);
     expect(isPureQuestion("move the essay to sunday")).toBe(false);
+    expect(isPureQuestion("can you put my Hullabaloo meeting at 5:30")).toBe(false);
+    expect(isPureQuestion("I have a meeting at 5:30 at PLNK, ping me the day before")).toBe(false);
   });
 });

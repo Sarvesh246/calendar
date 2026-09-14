@@ -328,11 +328,17 @@ export function shouldAskAssistant(text: string): boolean {
 /** Long or multi-part creates the local parser shouldn't silently guess at. */
 export function looksLikeRichCreate(text: string): boolean {
   const t = text.trim();
-  if (!/\b(add|create|schedule|set up|book|put|new)\b/i.test(t)) return false;
-  const reminderHits = t.match(/\bremind(?:er|ers| me)\b/gi)?.length ?? 0;
+  const reminderHits = t.match(
+    /\b(?:remind(?:er|ers| me)|ping me|nudge me|don'?t forget)\b/gi
+  )?.length ?? 0;
   const hasLocation = /\bat the\b|\bin the\b|\blocation\b|\bby the\b/i.test(t);
+  const hasTime = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bat\s+\d{1,2}(?::\d{2})?\b|\b\d{1,2}:\d{2}\b/i.test(t);
   const multiReminder = reminderHits >= 2 || /\ba reminder\b.+\ba reminder\b/is.test(t);
-  return multiReminder || (reminderHits >= 1 && hasLocation) || (hasLocation && t.length >= 80);
+  return (
+    multiReminder ||
+    (reminderHits >= 1 && (hasLocation || hasTime)) ||
+    (hasLocation && hasTime && t.length >= 50)
+  );
 }
 
 /**

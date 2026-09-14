@@ -208,4 +208,12 @@ describe("assistant handoff", () => {
     expect(shouldHandOffToAssistant("add gym at 6pm tomorrow")).toBe(false);
     expect(shouldHandOffToAssistant("what's due friday?")).toBe(true);
   });
+
+  it("does not require add/create keywords", () => {
+    const casual =
+      "Hullabaloo U at 5:30 at the PLNK building, ping me the day before and a couple hours before";
+    expect(looksLikeRichCreate(casual)).toBe(true);
+    expect(shouldHandOffToAssistant(casual)).toBe(true);
+    expect(shouldHandOffToAssistant("can you put my meeting at 5:30 at the library")).toBe(true);
+  });
 });

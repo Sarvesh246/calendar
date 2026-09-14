@@ -68,11 +68,11 @@ export function isPureQuestion(message: string): boolean {
   const t = message.trim().toLowerCase();
   if (!t) return false;
   const mutation =
-    /\b(add|create|schedule|new|set up|book|block off|remind me to|move|reschedule|push|bump|shift|rename|retitle|change|mark|complete|finish|check off|reopen|delete|remove|cancel|clear)\b/;
+    /\b(add|create|schedule|new|set up|setup|book|block off|put|make|pencil|write down|don't forget|dont forget|ping me|nudge|notify me|alert me|remind me|i need|i have a|on my calendar|onto my calendar|move|reschedule|push|bump|shift|rename|retitle|change|mark|complete|finish|check off|reopen|delete|remove|cancel|clear)\b/;
   if (mutation.test(t)) return false;
   return (
     t.endsWith("?") ||
-    /^(what|when|where|which|who|why|how|do i|did i|have i|am i|is there|are there|will i|can you|could you|should i|show me|list|tell me)\b/.test(
+    /^(what|when|where|which|who|why|how|do i|did i|have i|am i|is there|are there|will i|can you|could you|would you|should i|show me|list|tell me)\b/.test(
       t
     )
   );
