@@ -59,4 +59,26 @@ describe("parseQuickAdd", () => {
     expect(r.endAt?.getHours()).toBe(10);
     expect(r.endAt?.getMinutes()).toBe(50);
   });
+
+  it("reads a spoken meeting with two reminders, a time, and a place", () => {
+    const sentence =
+      "add an event with a reminder for a day before and a reminder for a couple hours before to do my Hullabaloo U meeting at 5:30 at the PLNK Building First floor by the starbucks?";
+    const r = parseQuickAdd(sentence, cats);
+    expect(r.type).toBe("event");
+    expect(r.title).toBe("Hullabaloo U meeting");
+    expect(r.at.getHours()).toBe(17);
+    expect(r.at.getMinutes()).toBe(30);
+    expect(r.location).toMatch(/PLNK Building/i);
+    expect(r.location).toMatch(/starbucks/i);
+    expect(r.reminders?.map((x) => x.offsetMinutes).sort((a, b) => a - b)).toEqual([120, 1440]);
+  });
+
+  it("treats 1–6 without am/pm as afternoon", () => {
+    expect(parseQuickAdd("coffee at 5:30", cats).at.getHours()).toBe(17);
+    expect(parseQuickAdd("standup at 9:00", cats).at.getHours()).toBe(9);
+  });
+
+  it("still honors an explicit morning", () => {
+    expect(parseQuickAdd("coffee at 5:30am", cats).at.getHours()).toBe(5);
+  });
 });

@@ -3,13 +3,13 @@
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Bell, Plus, Tag, X } from "lucide-react";
+import { ArrowUp, Bell, MapPin, Plus, Tag, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
 import { looksLikeBulkPaste, parseBulk, toNewItem, type BulkDraft } from "@/lib/bulk-parse";
 import { BulkAddPreview } from "@/components/bulk-add-preview";
-import { shouldAskAssistant } from "@/lib/ai-assistant";
+import { shouldAskAssistant, shouldHandOffToAssistant } from "@/lib/ai-assistant";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
@@ -209,6 +209,12 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     const trimmed = text.trim();
     if (!trimmed || phase !== "idle") return;
     if (tryBulk(rawRef.current || trimmed)) return;
+    if (shouldHandOffToAssistant(trimmed)) {
+      haptic("light");
+      askAI(trimmed);
+      reset();
+      return;
+    }
     if (shouldAskAssistant(trimmed)) {
       setPhase("ask");
       return;
@@ -255,8 +261,18 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
     const endAt = source.endAt ? onDay(source.endAt, at) : undefined;
 
     const minutes = fields.reminderMinutes.value;
-    const reminders =
-      minutes === null
+    const typedMany =
+      fields.reminderMinutes.source === "typed" &&
+      overrides.reminderMinutes === undefined &&
+      (source.reminders?.length ?? 0) > 1;
+    const reminders = typedMany
+      ? source.reminders!.map((r) => ({
+          id: nanoid(),
+          itemId: "",
+          offsetMinutes: r.offsetMinutes,
+          label: r.label,
+        }))
+      : minutes === null
         ? undefined
         : [
             {
@@ -279,6 +295,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
       ...(endAt ? { endAt: endAt.toISOString() } : {}),
       ...(source.allDay ? { allDay: true } : {}),
       ...(source.repeat ? { repeat: source.repeat } : {}),
+      ...(source.location ? { location: source.location } : {}),
       status: source.type === "event" ? undefined : "todo",
       reminders,
     });
@@ -482,6 +499,9 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
           onChange={(patch) => setOverrides((o) => ({ ...o, ...patch }))}
           categories={categories}
           now={now}
+          reminderCount={
+            overrides.reminderMinutes === undefined ? liveParse?.reminders?.length ?? 1 : 1
+          }
         />
       )}
 
@@ -494,7 +514,11 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
             transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
             className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-lg border border-line bg-surface p-4"
           >
-            <p className="text-[13px] text-ink-soft">This looks like a question, not something to add.</p>
+            <p className="text-[13px] text-ink-soft">
+              {/\b(add|create|schedule|set up|book)\b/i.test(text)
+                ? "This looks like something the assistant should add — it can pick up the time, place, and reminders."
+                : "This looks like a question, not something to add."}
+            </p>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
               <Button variant="tertiary" size="sm" onClick={() => reset({ keepDraft: true })}>
                 Cancel
@@ -558,6 +582,12 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
                 <span className="flex items-center gap-1 rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
                   <Bell className="h-3 w-3" strokeWidth={1.75} />
                   {parsed.reminderLabel}
+                </span>
+              )}
+              {parsed.location && (
+                <span className="flex items-center gap-1 rounded-full bg-surface-sunken px-2.5 py-1 text-[12px] text-ink-soft">
+                  <MapPin className="h-3 w-3" strokeWidth={1.75} />
+                  {parsed.location}
                 </span>
               )}
               {parsed.repeat && (

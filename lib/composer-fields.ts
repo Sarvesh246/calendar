@@ -177,6 +177,7 @@ export const REMINDER_CHOICES: { minutes: number; label: string }[] = [
   { minutes: 10, label: "10 min before" },
   { minutes: 30, label: "30 min before" },
   { minutes: 60, label: "1 hour before" },
+  { minutes: 120, label: "2 hours before" },
   { minutes: 1440, label: "1 day before" },
   { minutes: 2880, label: "2 days before" },
 ];

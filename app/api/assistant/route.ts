@@ -58,12 +58,25 @@ const RESPONSE_SCHEMA = {
           repeatFreq: { type: "STRING", enum: ["daily", "weekly", "monthly"] },
           repeatDays: { type: "ARRAY", items: { type: "NUMBER" } },
           until: { type: "STRING" },
+          reminders: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                offsetMinutes: { type: "NUMBER" },
+                label: { type: "STRING" },
+              },
+              required: ["offsetMinutes"],
+              propertyOrdering: ["offsetMinutes", "label"],
+            },
+          },
         },
         required: ["kind", "summary"],
         propertyOrdering: [
           "kind", "summary", "itemId", "title", "itemType", "at", "endAt",
           "allDay", "location", "description", "categoryId", "status", "clearEndAt",
           "clearLocation", "clearDescription", "repeatFreq", "repeatDays", "until",
+          "reminders",
         ],
       },
     },
@@ -141,14 +154,15 @@ STATUS & DUE SEMANTICS — follow strictly:
 YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when the user clearly asks you to.
 1. ANSWER a question (this is the common case — a chatbot about their calendar). Triggers: "what/when/where/how many/how much/do I have/is there/am I free/show me/list/tell me/which/what's it for/what class…". Answer precisely from the DIGEST and ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Use the DIGEST for counts and date-bounded lists. If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.
 2. CHANGE the calendar. Triggers: "add/create/schedule/put/new/set up/block off/remind me to/move/reschedule/push/bump/rename/retitle/change/mark/complete/finish/check off/reopen/delete/remove/cancel/clear…". Return one action per change in "actions". Never claim it's done — the user taps to confirm each action in the UI. Still write a short natural "reply" describing what you're proposing.
-A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action).
+A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action). Several changes in one message (add this, move that, complete the other) → several actions, one per change — up to 8. Carry every detail the user named onto the matching action (time, place, every reminder). Do not drop a reminder or location to "keep it simple".
 
 ACTION RULES:
-- create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit). Choose itemType by meaning. If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date). Weekly class meetings ("MWF 10–10:50", "TTh 2pm", "lecture Mon/Wed/Fri") are events: set repeatFreq "weekly" and repeatDays as 0=Sunday … 6=Saturday (MWF = [1,3,5], TTh = [2,4]). Set at/endAt on the next occurrence of those days. Optional until (ISO) for the last meeting of the term.
-- update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay" as needed. Send "location"/"description" ONLY when giving a new value; to remove one entirely set "clearLocation": true / "clearDescription": true. Never send an empty string for a field you don't want changed.
+- create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit), "reminders". Choose itemType by meaning. Title is the short name of the thing ("Hullabaloo U meeting"), never the whole instruction ("add an event with a reminder…"). If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date). Spoken clock times without am/pm: 1–6 → afternoon (5:30 → 17:30), 7–11 → morning, 12 → noon. A second "at the …" / "in the …" after a time is a LOCATION, not another time. Weekly class meetings ("MWF 10–10:50", "TTh 2pm", "lecture Mon/Wed/Fri") are events: set repeatFreq "weekly" and repeatDays as 0=Sunday … 6=Saturday (MWF = [1,3,5], TTh = [2,4]). Set at/endAt on the next occurrence of those days. Optional until (ISO) for the last meeting of the term.
+- reminders (create and update): array of {offsetMinutes, label?}. The user may ask for several. "a day before" / "the day before" = 1440; "a couple of hours" / "a few hours" = 120; "an hour before" = 60; "10 minutes before" = 10. If they named reminders, set this field to ALL of them. Omit the field entirely to use the app's default reminder. Send [] only when they explicitly want no reminder. Never silently keep only one of several.
+- update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay"/"reminders" as needed. Send "location"/"description" ONLY when giving a new value; to remove one entirely set "clearLocation": true / "clearDescription": true. Never send an empty string for a field you don't want changed.
 - delete: set "itemId".
 - If the user's target is ambiguous (multiple plausible items) or missing, return NO actions and ask a short clarifying question in "reply".
-- "summary" (required on every action) is one plain sentence for a confirmation card, e.g. 'Move "Bio lab report" to Fri Aug 29, 11:59 PM' or 'Add event "Dentist" on Wed Sep 3, 2:00–3:00 PM'.
+- "summary" (required on every action) is one plain sentence for a confirmation card, naming time, place, and reminders when the user gave them, e.g. 'Add event "Hullabaloo U meeting" today 5:30 PM at PLNK Building · 1 day before and 2 hours before' or 'Move "Bio lab report" to Fri Aug 29, 11:59 PM'.
 - Resolve all relative dates ("tomorrow", "next Friday", "in 2 weeks", "the 14th") against the current date above.
 
 "suggestions": optionally 2-3 very short follow-up prompts the user might tap next. Make them specific to THIS conversation, not generic.

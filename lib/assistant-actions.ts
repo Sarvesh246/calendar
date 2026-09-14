@@ -1,6 +1,8 @@
-import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule } from "./types";
+import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule, Reminder } from "./types";
 import { wallTimeInZoneToIso } from "./date-utils";
 import { zonedDateKey } from "./ai-assistant";
+import { nanoid } from "./nanoid";
+import { formatOffsetLabel } from "./reminder-defaults";
 
 export interface SlimItem {
   id: string;
@@ -53,6 +55,8 @@ interface RawAction {
   /** 0 = Sunday … 6 = Saturday. Weekly class meetings. */
   repeatDays?: number[];
   until?: string;
+  /** Minutes before the start/due. Omitted = app default; [] = none. */
+  reminders?: { offsetMinutes?: number; label?: string }[];
 }
 
 export type AssistantAction =
@@ -146,6 +150,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       if (type !== "event") draft.status = a.status ?? "todo";
       const repeat = parseRepeat(a, at);
       if (repeat) draft.repeat = repeat;
+      const reminders = parseActionReminders(a.reminders);
+      if (reminders !== undefined) draft.reminders = reminders;
       out.push({ kind: "create", summary: summary || `Add “${title}”`, draft });
       continue;
     }
@@ -200,6 +206,9 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       )
         patch.type = a.itemType;
 
+      const reminders = parseActionReminders(a.reminders);
+      if (reminders !== undefined) patch.reminders = reminders.map((r) => ({ ...r, itemId: target.id }));
+
       if (Object.keys(patch).length === 0) continue;
       out.push({
         kind: "update",
@@ -211,4 +220,37 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
     }
   }
   return out.slice(0, 8);
+}
+
+const MAX_REMINDER_OFFSET = 14 * 24 * 60;
+
+/** `undefined` = caller should use app defaults; `[]` = explicitly none. */
+export function parseActionReminders(raw: unknown): Reminder[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  if (raw.length === 0) return [];
+  const out: Reminder[] = [];
+  const seen = new Set<number>();
+  for (const entry of raw.slice(0, 4)) {
+    const mins =
+      typeof entry === "number"
+        ? entry
+        : entry && typeof entry === "object" && "offsetMinutes" in entry
+          ? Number((entry as { offsetMinutes: unknown }).offsetMinutes)
+          : NaN;
+    if (!Number.isFinite(mins)) continue;
+    const offsetMinutes = Math.round(mins);
+    if (offsetMinutes < 1 || offsetMinutes > MAX_REMINDER_OFFSET) continue;
+    if (seen.has(offsetMinutes)) continue;
+    seen.add(offsetMinutes);
+    const label =
+      entry &&
+      typeof entry === "object" &&
+      "label" in entry &&
+      typeof (entry as { label: unknown }).label === "string" &&
+      (entry as { label: string }).label.trim()
+        ? (entry as { label: string }).label.trim()
+        : formatOffsetLabel(offsetMinutes);
+    out.push({ id: nanoid(), itemId: "", offsetMinutes, label });
+  }
+  return out.length ? out : undefined;
 }
