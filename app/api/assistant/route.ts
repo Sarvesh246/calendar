@@ -7,6 +7,8 @@ import {
   clientKey,
   durableHourlyLimit,
   getRequestUser,
+  guestBucketKey,
+  ipCeiling,
   rateLimit,
   sameOrigin,
   tooMany,
@@ -195,11 +197,14 @@ export async function POST(request: Request) {
 
   const user = await getRequestUser(request);
   const ip = clientKey(request);
-  const limitKey = user ? `assistant:user:${user.id}` : `assistant:ip:${ip}`;
-  const hourly = user ? 60 : 20;
+  const limitKey = user
+    ? `assistant:user:${user.id}`
+    : `assistant:ip:${guestBucketKey(request, ip)}`;
+  const hourly = user ? 60 : 24;
   if (
     !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
     !rateLimit(`${limitKey}:burst`, 8, 60_000) ||
+    (!user && !ipCeiling("assistant", ip, 150, 60 * 60 * 1000)) ||
     !(await durableHourlyLimit(limitKey, hourly))
   ) {
     return tooMany();

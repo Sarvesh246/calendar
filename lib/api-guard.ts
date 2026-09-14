@@ -21,20 +21,51 @@ export const MAX_ASSISTANT_ITEMS = 600;
 export const MAX_ASSISTANT_BODY = 400_000;
 /** Per signed-in user, not global — a class can import the same week in parallel. */
 export const SYLLABUS_HOURLY_AUTH = 30;
-/** Per anonymous IP only (campus NAT). Signed-in users never share this bucket. */
-export const SYLLABUS_HOURLY_ANON = 20;
-/** Per-user (or per-IP if anonymous) per minute. Must absorb Gemini retries + a tap-again. */
+/** Per anonymous guest (see `guestBucketKey`), not per IP — a whole dorm or
+ *  lecture hall's worth of first-time, not-yet-signed-in students setting up
+ *  in the same sitting no longer share one bucket. */
+export const SYLLABUS_HOURLY_ANON = 24;
+/** Backstop shared by every guest bucket on one IP; see `ipCeiling`. */
+export const SYLLABUS_IP_CEILING = 150;
+/** Per-user (or per-guest if anonymous) per minute. Must absorb Gemini retries + a tap-again. */
 export const SYLLABUS_BURST = 8;
 
-/** Rate-limit bucket: one key per user, or per IP when nobody is signed in. */
-export function syllabusLimitKey(user: { id: string } | null, ip: string): string {
-  return user ? `syllabus:user:${user.id}` : `syllabus:ip:${ip}`;
+/** Rate-limit bucket: one key per user, or per guest (see `guestBucketKey`) when nobody is signed in. */
+export function syllabusLimitKey(user: { id: string } | null, ipOrGuestKey: string): string {
+  return user ? `syllabus:user:${user.id}` : `syllabus:ip:${ipOrGuestKey}`;
 }
 
 export function clientKey(request: Request): string {
   const fwd = request.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]?.trim() || "unknown";
   return request.headers.get("x-real-ip") || "local";
+}
+
+const CLIENT_ID_RE = /^[0-9a-zA-Z-]{8,64}$/;
+
+/**
+ * Bucket key for an unauthenticated caller: the client's own random id
+ * (see `lib/client-id.ts`) folded in with its IP when present and
+ * well-formed, so distinct guests sharing one address — a dorm, a lecture
+ * hall's WiFi during syllabus week — get separate quotas instead of being
+ * merged into whichever one of them hit the limit first. Falls back to the
+ * bare IP for an older client or a missing/malformed header, same as before
+ * this existed.
+ */
+export function guestBucketKey(request: Request, ip: string): string {
+  const clientId = request.headers.get("x-client-id");
+  return clientId && CLIENT_ID_RE.test(clientId) ? `${ip}:${clientId}` : ip;
+}
+
+/**
+ * A coarse, generous ceiling shared by every guest bucket on one IP — the
+ * backstop `guestBucketKey` needs once per-guest keying is in play: without
+ * it, a single anonymous abuser could dodge their limit forever by minting a
+ * fresh client id per request. Set well above what any real shared network
+ * of individually-limited guests would hit together.
+ */
+export function ipCeiling(prefix: string, ip: string, max: number, windowMs: number): boolean {
+  return rateLimit(`${prefix}:ipcap:${ip}`, max, windowMs);
 }
 
 /** True when the request looks like it came from this app (not a random curl). */
@@ -98,9 +129,20 @@ export async function getRequestUser(request: Request): Promise<{ id: string } |
   const supabase = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return null;
-  return { id: data.user.id };
+  // A signed-in user who loses this lookup falls back to the shared-IP guest
+  // bucket for the whole request — on a campus network that means sharing a
+  // quota with everyone else on the WiFi. Retry once on a network-level
+  // failure (a fetch that throws) before accepting that fallback; an explicit
+  // error response (an actually invalid or expired token) means retrying
+  // can't help, so don't loop on that.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const { data, error } = await supabase.auth.getUser(token);
+      return !error && data.user ? { id: data.user.id } : null;
+    } catch {
+      if (attempt > 0) return null;
+    }
+  }
 }
 
 export function tooMany() {
