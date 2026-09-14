@@ -27,9 +27,10 @@ export function BootSplash() {
   const hydrated = useSyncExternalStore(subscribeHydration, persistHydrated, () => false);
   const reduced = prefersReducedMotion();
   const [phase, setPhase] = useState<"cover" | "out" | "gone">("cover");
-  const started = useRef(typeof performance === "undefined" ? 0 : performance.now());
+  const started = useRef<number | null>(null);
 
   useEffect(() => {
+    started.current ??= performance.now();
     if (!hydrated || phase !== "cover") return;
     const wait = Math.max(0, MIN_MS - (performance.now() - started.current));
     const t = window.setTimeout(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { Check, RotateCcw } from "lucide-react";
 import { useEffect } from "react";
 import { DismissibleSnack, SnackDismissButton } from "@/components/dismissible-snack";
