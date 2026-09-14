@@ -466,8 +466,13 @@ export function weekWorkload(items: Item[], from = new Date(), weekStartsOn: 0 |
 /** Sort key for month-grid chips. Pass a shared `now` — never `new Date()` in a comparator. */
 export function chipRank(item: Item, day: Date, now: Date) {
   if (isOverdue(item)) return 0;
-  if (item.type !== "event" && item.status === "done") return 2;
-  if (isEventEnded(item, now, day)) return 2;
+  if (item.type !== "event" && item.status === "done") return 3;
+  if (isEventEnded(item, now, day)) return 3;
+  // Weekly class meetings fill the cell first and push one-off events into
+  // "+n". One-offs are the thing you need the grid to remind you about.
+  if (item.type === "event" && (isClassScheduleItem(item) || item.repeat?.freq === "weekly")) {
+    return 2;
+  }
   return 1;
 }
 

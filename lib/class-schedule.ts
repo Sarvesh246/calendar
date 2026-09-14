@@ -470,6 +470,71 @@ export function isClassMeeting(item: Item, categoryName?: string): boolean {
   return CLASS_TITLE.test(item.title);
 }
 
+/**
+ * Class times you added and a Canvas/Google lecture for the same slot are two
+ * real items. On the calendar they read as the same class twice, with two
+ * names. Keep one: the feed copy when the schedule title is just the class
+ * name, otherwise the one you named.
+ */
+export function collapseDuplicateClassMeetings(
+  items: Item[],
+  categoryName: (id?: string) => string | undefined
+): Item[] {
+  const meetings = items.filter((i) => isClassMeeting(i, categoryName(i.categoryId)));
+  if (meetings.length < 2) return items;
+
+  const hide = new Set<string>();
+  for (let i = 0; i < meetings.length; i++) {
+    for (let j = i + 1; j < meetings.length; j++) {
+      const a = meetings[i];
+      const b = meetings[j];
+      if (hide.has(a.id) || hide.has(b.id)) continue;
+      if (!sameClassSlot(a, b)) continue;
+      const keep = preferClassMeeting(a, b, categoryName);
+      hide.add(keep.id === a.id ? b.id : a.id);
+    }
+  }
+  if (!hide.size) return items;
+  return items.filter((i) => !hide.has(i.id));
+}
+
+function sameClassSlot(a: Item, b: Item): boolean {
+  if (a.categoryId !== b.categoryId) return false;
+  const a0 = +new Date(a.at);
+  const b0 = +new Date(b.at);
+  if (!Number.isFinite(a0) || !Number.isFinite(b0)) return false;
+  const ad = new Date(a0);
+  const bd = new Date(b0);
+  if (
+    ad.getFullYear() !== bd.getFullYear() ||
+    ad.getMonth() !== bd.getMonth() ||
+    ad.getDate() !== bd.getDate()
+  ) {
+    return false;
+  }
+  const a1 = a.endAt ? +new Date(a.endAt) : a0 + 50 * 60_000;
+  const b1 = b.endAt ? +new Date(b.endAt) : b0 + 50 * 60_000;
+  return a0 < b1 && b0 < a1;
+}
+
+function preferClassMeeting(
+  a: Item,
+  b: Item,
+  categoryName: (id?: string) => string | undefined
+): Item {
+  const aSched = isClassScheduleItem(a);
+  const bSched = isClassScheduleItem(b);
+  if (aSched !== bSched) {
+    const scheduled = aSched ? a : b;
+    const imported = aSched ? b : a;
+    const cat = categoryName(scheduled.categoryId)?.trim().toLowerCase() ?? "";
+    const title = scheduled.title.trim().toLowerCase();
+    if (!cat || title === cat || title.startsWith(cat)) return imported;
+    return scheduled;
+  }
+  return a.title.length >= b.title.length ? a : b;
+}
+
 /** User-created weekly class meetings for a category, grouped by series. */
 export function savedClassMeetings(items: Item[], categoryId: string): SavedClassMeeting[] {
   const series = new Map<string, Item[]>();

@@ -28,10 +28,9 @@ export function FilterSummaryBar() {
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
-  const clearCategoryFilter = useUIStore((s) => s.clearCategoryFilter);
+  const clearAllFilters = useUIStore((s) => s.clearAllFilters);
   const setFilterOpen = useUIStore((s) => s.setFilterOpen);
   const activeViewId = useUIStore((s) => s.activeViewId);
-  const applyView = useUIStore((s) => s.applyView);
   const views = useAllViews();
 
   // A saved view is a filter like any other — arguably the strongest one, since
@@ -84,11 +83,7 @@ export function FilterSummaryBar() {
               type="button"
               onClick={() => {
                 haptic("light");
-                // The view goes first: it is what set the classes, so clearing
-                // those alone would leave its status/kind/range rules in force
-                // and the list still mysteriously short.
-                if (activeViewId) applyView(null);
-                clearCategoryFilter();
+                clearAllFilters();
                 if (hideCompleted) {
                   startTransition(() => updateSettings({ hideCompleted: false }));
                 }

@@ -28,6 +28,7 @@ import { searchItems } from "@/lib/search";
 import { navigateTab } from "@/lib/tab-nav";
 import { useAllViews } from "@/components/saved-views";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
+import { useModKeyLabel } from "@/components/keyboard-shortcuts";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -142,7 +143,7 @@ function CommandPaletteDialog() {
       className="flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface"
       style={{ maxHeight: "calc(var(--visible-height, 100dvh) - 1.5rem)" }}
     >
-      <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3">
+      <div className="focus-within-ring mx-3 mt-3 flex shrink-0 items-center gap-2.5 rounded-lg border border-line px-3 py-2.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent">
         <Command.Input
           autoFocus
           value={query}

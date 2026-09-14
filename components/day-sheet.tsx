@@ -2,6 +2,7 @@
 
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
@@ -12,10 +13,10 @@ import { ItemCard } from "@/components/item-card";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
-import { SHEET_DRAG, shouldDismissSheet, shouldExpandSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { shouldDismissSheet, shouldExpandSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
 import { Scrim } from "@/components/ui/scrim";
 import { SheetHandle } from "@/components/sheet-handle";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 import type { FilterBreakdown } from "@/lib/filters";
@@ -34,7 +35,7 @@ type Detent = "compact" | "full";
 /** Compact stops well short of the month grid; full is for reading a long day. */
 const DETENT_HEIGHT: Record<Detent, string> = {
   compact: "min(46dvh, 420px)",
-  full: "min(88dvh, 780px)",
+  full: "min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 0.5rem))",
 };
 
 function useBelowLg() {
@@ -106,7 +107,8 @@ export function DaySheet({
   const setExpanded = (value: boolean) => setDetent(value ? "full" : "compact");
   const listRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-  useSheetOverscroll(listRef, dragControls, visible);
+  const reduced = prefersReducedMotion();
+  useSheetOverscroll(listRef, dragControls, visible, detent === "compact");
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
 
@@ -142,7 +144,7 @@ export function DaySheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, onClose]);
 
-  if (!visible) return null;
+  if (!visible || typeof document === "undefined") return null;
 
   const close = () => {
     if (closeGuard.current) return;
@@ -150,8 +152,8 @@ export function DaySheet({
     onClose();
   };
 
-  return (
-    <div className="viewport-pinned-overlay fixed inset-0 z-50 lg:hidden">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] lg:hidden">
       {/* Dimmed in proportion to how much the sheet is covering. At the compact
           detent the month has to stay legible — it is the thing you are
           stepping through days *against*. */}
@@ -170,7 +172,7 @@ export function DaySheet({
         dragListener={false}
         dragControls={dragControls}
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.04, bottom: 0.72 }}
+        dragElastic={{ top: expanded ? 0.04 : 0.55, bottom: 0.72 }}
         dragTransition={{ bounceStiffness: 380, bounceDamping: 34 }}
         onDragStart={() => setDragging(true)}
         onDragEnd={(_, info) => {
@@ -188,12 +190,12 @@ export function DaySheet({
             else close();
           }
         }}
-        className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-50 flex max-h-[min(92dvh,calc(100dvh-2.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
+        className="mobile-action-sheet absolute inset-x-0 bottom-0 z-[60] flex max-h-[min(92dvh,calc(100dvh-0.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
         style={{
-          paddingBottom: "var(--safe-bottom)",
+          paddingBottom: "max(0.75rem, var(--safe-bottom))",
           minHeight: !phone ? "min(72dvh, 640px)" : undefined,
           height: !phone ? undefined : DETENT_HEIGHT[detent],
-          transition: dragging ? "none" : "height var(--motion-emphasis) var(--ease-standard)",
+          transition: dragging || reduced ? "none" : "height var(--motion-emphasis) var(--ease-standard)",
         }}
       >
         <div
@@ -286,7 +288,7 @@ export function DaySheet({
             </div>
           </div>
         </div>
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-6 pt-0 [-webkit-overflow-scrolling:touch]">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-8 pt-0 [-webkit-overflow-scrolling:touch]">
           {onAdd && (
             <button
               type="button"
@@ -303,6 +305,7 @@ export function DaySheet({
               total={breakdown?.total ?? 0}
               hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
               hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+              hiddenByView={breakdown?.hiddenByView ?? 0}
               canAdd={Boolean(onAdd)}
               onAdd={onAdd}
             />
@@ -320,8 +323,21 @@ export function DaySheet({
               ))}
             </div>
           )}
+          {phone && detent === "compact" && items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                setDetent("full");
+              }}
+              className="mt-3 mb-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13px] font-medium text-accent"
+            >
+              Show more
+            </button>
+          )}
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

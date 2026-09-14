@@ -16,7 +16,7 @@ import { Reveal } from "@/components/ui/reveal";
 import { motion as motionTokens } from "@/lib/motion";
 
 const recentKey = "datebook-recent-searches";
-const field = "min-h-11 min-w-0 rounded-lg border border-line bg-surface-sunken px-2 text-[13px]";
+const field = "focus-within-ring min-h-11 min-w-0 rounded-lg border border-line bg-surface-sunken px-2 text-[13px] focus-within:border-accent";
 export function MobileSearch({ onClose }: { onClose: () => void }) {
   const items = useDatebookStore(s => s.items);
   const categories = useDatebookStore(s => s.categories);

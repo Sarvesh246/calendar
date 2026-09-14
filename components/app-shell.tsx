@@ -153,7 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
                   aria-keyshortcuts="Control+K Meta+K"
-                  className="hidden h-9 w-52 items-center gap-2 rounded-md border border-line bg-surface pl-2.5 pr-1.5 text-[13px] text-ink-faint transition-colors duration-[var(--motion-standard)] hover:border-line-strong hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-64"
+                  className="hidden h-9 w-52 items-center gap-2 rounded-lg border border-line bg-surface pl-2.5 pr-1.5 text-[13px] text-ink-faint transition-colors duration-[var(--motion-standard)] hover:border-line-strong hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-64"
                 >
                   <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="flex-1 text-left">Search…</span>

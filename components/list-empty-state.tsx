@@ -21,6 +21,7 @@ export function ListEmptyState({
   total,
   hiddenByCategory,
   hiddenByCompletion,
+  hiddenByView,
   canAdd = false,
   onAdd,
   compact,
@@ -30,9 +31,7 @@ export function ListEmptyState({
   compact?: boolean;
   className?: string;
 }) {
-  const clearCategoryFilter = useUIStore((s) => s.clearCategoryFilter);
-  const applyView = useUIStore((s) => s.applyView);
-  const activeViewId = useUIStore((s) => s.activeViewId);
+  const clearAllFilters = useUIStore((s) => s.clearAllFilters);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
 
   const copy = describeEmptyState({
@@ -40,6 +39,7 @@ export function ListEmptyState({
     total,
     hiddenByCategory,
     hiddenByCompletion,
+    hiddenByView,
     canAdd: canAdd && Boolean(onAdd),
   });
 
@@ -59,8 +59,7 @@ export function ListEmptyState({
               // Every filter, because the message just counted them all.
               // Clearing one and leaving the list still empty is worse than
               // not offering a way out at all.
-              if (activeViewId) applyView(null);
-              clearCategoryFilter();
+              clearAllFilters();
               startTransition(() => updateSettings({ hideCompleted: false }));
             }}
           >

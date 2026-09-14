@@ -55,7 +55,8 @@ export function DayAgenda({
           scope={format(date, "MMM d")}
           total={breakdown?.total ?? 0}
           hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
-          hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+              hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+              hiddenByView={breakdown?.hiddenByView ?? 0}
           canAdd={Boolean(onAdd)}
           onAdd={onAdd}
           compact

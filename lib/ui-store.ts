@@ -63,6 +63,8 @@ interface UIState {
   setQuickAddPrefill: (text: string | null) => void;
   toggleCategoryFilter: (id: string) => void;
   clearCategoryFilter: () => void;
+  /** View, classes, and leftover view rules — not "hide completed". */
+  clearAllFilters: () => void;
   setFocusedItemId: (id: string | null) => void;
   setQuickAddDateKey: (key: string | null) => void;
   setQuickAddTime: (time: { hour: number; minute: number } | null) => void;
@@ -111,7 +113,11 @@ const closedPrimarySurfaces = {
  * Deferring here lets the sidebar/filter controls respond first.
  */
 export function useDeferredCategoryFilter() {
-  return useDeferredValue(useUIStore((s) => s.categoryFilter));
+  const live = useUIStore((s) => s.categoryFilter);
+  const deferred = useDeferredValue(live);
+  // Turning a filter *off* has to be immediate. Deferring a leftover selection
+  // after Clear is how the empty state kept saying things were filtered out.
+  return live == null || live.length === 0 ? live : deferred;
 }
 
 let commandNonce = 0;
@@ -167,7 +173,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         return { categoryFilter: next.length === 0 ? null : next };
       })
     ),
-  clearCategoryFilter: () => startTransition(() => set({ categoryFilter: null })),
+  clearCategoryFilter: () => set({ categoryFilter: null }),
+  clearAllFilters: () => set({ activeViewId: null, viewFilter: null, categoryFilter: null }),
   setFocusedItemId: (id) => set({ focusedItemId: id }),
   setQuickAddDateKey: (key) => set({ quickAddDateKey: key }),
   setQuickAddTime: (time) => set({ quickAddTime: time }),
@@ -176,10 +183,13 @@ export const useUIStore = create<UIState>((set, get) => ({
   openClassSchedule: (categoryId) =>
     set({ ...closedPrimarySurfaces, classScheduleOpen: true, classScheduleCategoryId: categoryId ?? null, ...closedAdd }),
   closeClassSchedule: () => set({ classScheduleOpen: false, classScheduleCategoryId: null }),
-  applyView: (view) =>
+  applyView: (view) => {
+    if (!view) {
+      set({ activeViewId: null, viewFilter: null, categoryFilter: null });
+      return;
+    }
     startTransition(() =>
       set(() => {
-        if (!view) return { activeViewId: null, viewFilter: null, categoryFilter: null };
         const filter: ViewFilter = {
           ...(view.statuses?.length ? { statuses: view.statuses } : {}),
           ...(view.kinds?.length ? { kinds: view.kinds } : {}),
@@ -193,7 +203,8 @@ export const useUIStore = create<UIState>((set, get) => ({
           categoryFilter: view.categoryIds?.length ? [...view.categoryIds] : null,
         };
       })
-    ),
+    );
+  },
   openInspector: (id) => set({ inspectorItemId: id, contextMenu: null }),
   closeInspector: () => set({ inspectorItemId: null }),
   openContextMenu: (request) => set({ contextMenu: request }),
