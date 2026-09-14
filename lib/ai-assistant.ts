@@ -333,7 +333,7 @@ export function looksLikeRichCreate(text: string): boolean {
   )?.length ?? 0;
   const hasLocation = /\bat the\b|\bin the\b|\blocation\b|\bby the\b/i.test(t);
   const hasTime = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bat\s+\d{1,2}(?::\d{2})?\b|\b\d{1,2}:\d{2}\b/i.test(t);
-  const multiReminder = reminderHits >= 2 || /\ba reminder\b.+\ba reminder\b/is.test(t);
+  const multiReminder = reminderHits >= 2 || /\ba reminder\b[\s\S]+\ba reminder\b/i.test(t);
   return (
     multiReminder ||
     (reminderHits >= 1 && (hasLocation || hasTime)) ||
