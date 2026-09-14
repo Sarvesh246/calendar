@@ -314,9 +314,9 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
   return (
     <div
       className={cn(
-        "card-quick-actions pointer-events-none absolute right-6 top-1/2 z-[2] hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 opacity-0 shadow-[0_4px_12px_-6px_rgb(0_0_0/0.25)] md:flex",
-        "transition-opacity duration-[var(--motion-micro)]",
-        "group-hover/card:pointer-events-auto group-hover/card:opacity-100 group-focus-within/card:pointer-events-auto group-focus-within/card:opacity-100"
+        "card-quick-actions hidden shrink-0 items-center gap-0.5 rounded-lg border border-line/80 bg-surface-sunken/80 p-0.5 md:flex",
+        "opacity-55 transition-opacity duration-[var(--motion-micro)]",
+        "group-hover/card:opacity-100 group-focus-within/card:opacity-100"
       )}
       onClick={stop}
       onKeyDown={stop}
@@ -490,7 +490,7 @@ function EventCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 w-fit max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
@@ -616,7 +616,7 @@ function AssignmentCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 w-fit max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}

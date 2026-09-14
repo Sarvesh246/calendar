@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, isSameDay, isToday } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { groupItemsByDay, dayKey, dayLabel, formatTime, isEventEnded } from "@/lib/date-utils";
+import { groupItemsByDay, dayKey, dayLabel, formatTime, isEventEnded, rankDayItems } from "@/lib/date-utils";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
@@ -145,11 +145,15 @@ export function WeekView({
           <div className="py-1.5 text-right text-[10px] text-ink-faint" />
           {days.map((day) => {
             const key = dayKey(day);
-            const dayAssignments = (byDay.get(key) ?? NO_ITEMS).filter((i) => i.type !== "event" || i.allDay);
-            const visible = dayAssignments.slice(0, 2);
+            const dayAssignments = rankDayItems(
+              (byDay.get(key) ?? NO_ITEMS).filter((i) => i.type !== "event" || i.allDay),
+              day,
+              new Date()
+            );
+            const visible = dayAssignments.slice(0, 3);
             const overflow = dayAssignments.length - visible.length;
             const hiddenTitles = dayAssignments
-              .slice(2)
+              .slice(3)
               .map((i) => i.title)
               .join(", ");
             return (

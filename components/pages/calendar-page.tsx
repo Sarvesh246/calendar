@@ -12,6 +12,7 @@ import { patchViewState, readViewState } from "@/lib/view-state";
 import { useWorkspacePrefs, type CalendarMode } from "@/lib/workspace-prefs";
 import { useAssistantDockable, DOCK_MEDIA_QUERY } from "@/lib/assistant-dock";
 import { dayKey, itemsOnDay, weekDays } from "@/lib/date-utils";
+import { collapseDuplicateClassMeetings } from "@/lib/class-schedule";
 import { MonthView } from "@/components/calendar/month-view";
 import { WeekView } from "@/components/calendar/week-view";
 import { DateJump, type JumpGranularity } from "@/components/calendar/date-jump";
@@ -71,6 +72,7 @@ const gridVariants = {
 export default function CalendarPage() {
   const items = useFilteredItems();
   const allItems = useDatebookStore((s) => s.items);
+  const categories = useDatebookStore((s) => s.categories);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const mobileDayDetails = useDatebookStore((s) => s.settings.mobileDayDetails);
   const shortScreen = useMediaQuery("(max-height: 540px)");
@@ -158,7 +160,11 @@ export default function CalendarPage() {
   }, [aiDrawerOpen, dockable, setPaneTab, setPaneCollapsed]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
-  const selectedItems = useMemo(() => itemsOnDay(items, selectedDate), [items, selectedDate]);
+  const calendarItems = useMemo(() => {
+    const names = new Map(categories.map((c) => [c.id, c.name]));
+    return collapseDuplicateClassMeetings(items, (id) => (id ? names.get(id) : undefined));
+  }, [items, categories]);
+  const selectedItems = useMemo(() => itemsOnDay(calendarItems, selectedDate), [calendarItems, selectedDate]);
 
   // Counted against the *unfiltered* day, so an empty panel can say whether the
   // day is free, finished, or filtered — and offer the matching way out.
@@ -380,7 +386,7 @@ export default function CalendarPage() {
             <div className="absolute inset-0 flex min-h-0 flex-col">
               <MonthView
                 anchor={anchor}
-                items={items}
+                items={calendarItems}
                 selectedDate={selectedDate}
                 onSelectDate={selectDate}
                 onSwipeMonth={(dir) => step(dir, true)}
@@ -400,7 +406,7 @@ export default function CalendarPage() {
               >
                 <WeekView
                   days={days}
-                  items={items}
+                  items={calendarItems}
                   onSelectDate={selectDate}
                   onSelectItem={(item, day) => {
                     // The day list is where a tapped block opens inline; when

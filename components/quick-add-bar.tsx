@@ -473,7 +473,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
           disabled={!ready}
           aria-label="Add"
           className={cn(
-            "press-none flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+            "press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full md:h-9 md:w-9",
             "transition-[background-color,color] duration-[var(--motion-standard)]",
             ready
               ? "bg-accent text-accent-ink hover:opacity-90"

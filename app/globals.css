@@ -1546,7 +1546,11 @@ html.calendar-dragging * {
   }
   .mobile-quick-add > div > input { font-size: 16px; }
   .mobile-quick-add > div:not(:first-child) { position: static; margin-top: 8px; max-height: none; }
-  .mobile-quick-add button { min-height: 44px; }
+  .mobile-quick-add button:not(.rounded-full) { min-height: 44px; }
+  .mobile-quick-add button.rounded-full {
+    min-height: 0;
+    aspect-ratio: 1;
+  }
 }
 
 @media (max-width: 767px) {

@@ -312,10 +312,8 @@ export function AssistantConversation({
           // the button you need to finish with.
           data-field-group=""
           className={cn(
-            "flex items-center gap-2",
-            docked
-              ? "rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5"
-              : "md:rounded-xl md:border md:border-line md:bg-surface-sunken/70 md:px-3 md:py-2"
+            "focus-within-ring flex items-center gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
+            !docked && "md:px-3 md:py-2"
           )}
         >
           <input
@@ -336,10 +334,8 @@ export function AssistantConversation({
             placeholder="Ask or tell me to change something…"
             enterKeyHint="send"
             className={cn(
-              "min-w-0 flex-1 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none",
-              docked
-                ? "min-h-9 bg-transparent px-1"
-                : "min-h-11 rounded-lg bg-surface-sunken px-3 py-2 md:min-h-10 md:rounded-none md:bg-transparent md:px-1 md:text-[14px]"
+              "min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none",
+              docked ? "min-h-9 px-1" : "min-h-11 px-1 md:min-h-10 md:text-[14px]"
             )}
           />
           <button

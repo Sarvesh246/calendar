@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classCountdownLabel,
+  chipRank,
   eventRemainingLabel,
   formatDaySummary,
   formatRemainingLabel,
@@ -17,6 +18,7 @@ import {
   nextOpenAssignment,
   openItemsOnDay,
   openWorkDueOnDay,
+  rankDayItems,
   wallTimeInZoneToIso,
   weekWorkload,
   weekWorkloadFromByDay,
@@ -500,5 +502,30 @@ describe("formatDaySummary with filters", () => {
 
   it("ignores the hidden count once anything is actually showing", () => {
     expect(formatDaySummary(2, 1, 0, 5)).toBe("2 events · 1 due");
+  });
+});
+
+describe("chipRank", () => {
+  it("puts a one-off event ahead of a weekly class meeting", () => {
+    const day = new Date(2026, 8, 14, 12, 0);
+    const now = day;
+    const meeting = base({
+      id: "class",
+      type: "event",
+      title: "POLS 207",
+      at: new Date(2026, 8, 14, 10, 20).toISOString(),
+      endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+      repeat: { freq: "weekly", byDay: [1, 3, 5] },
+      repeatId: "s1",
+    });
+    const oneOff = base({
+      id: "club",
+      type: "event",
+      title: "Club meeting",
+      at: new Date(2026, 8, 14, 18, 0).toISOString(),
+      endAt: new Date(2026, 8, 14, 19, 0).toISOString(),
+    });
+    expect(chipRank(oneOff, day, now)).toBeLessThan(chipRank(meeting, day, now));
+    expect(rankDayItems([meeting, oneOff], day, now).map((i) => i.id)).toEqual(["club", "class"]);
   });
 });

@@ -11,6 +11,7 @@ import {
   soonestOnDays,
   isClassScheduleItem,
   isClassMeeting,
+  collapseDuplicateClassMeetings,
 } from "./class-schedule";
 import type { Item } from "./types";
 
@@ -221,5 +222,46 @@ describe("savedClassMeetings", () => {
         "POLS 207"
       )
     ).toBe(false);
+  });
+
+  it("hides a class-name schedule copy next to an imported lecture", () => {
+    const schedule = item({
+      id: "sched",
+      title: "POLS 207",
+      at: new Date(2026, 8, 14, 10, 20).toISOString(),
+      endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+    });
+    const feed = item({
+      id: "feed",
+      title: "Lecture",
+      sourceId: "canvas",
+      sourceUid: "lec-1",
+      repeat: undefined,
+      repeatId: undefined,
+      at: new Date(2026, 8, 14, 10, 20).toISOString(),
+      endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+    });
+    const names = (id: string) => (id === "pols" ? "POLS 207" : undefined);
+    expect(collapseDuplicateClassMeetings([schedule, feed], names).map((i) => i.id)).toEqual(["feed"]);
+  });
+
+  it("keeps a named work session when the feed lecture overlaps", () => {
+    const named = item({
+      id: "named",
+      title: "Lab recitation",
+      at: new Date(2026, 8, 14, 10, 20).toISOString(),
+      endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+    });
+    const feed = item({
+      id: "feed",
+      title: "Lecture",
+      sourceId: "canvas",
+      repeat: undefined,
+      repeatId: undefined,
+      at: new Date(2026, 8, 14, 10, 20).toISOString(),
+      endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+    });
+    const names = (id: string) => (id === "pols" ? "POLS 207" : undefined);
+    expect(collapseDuplicateClassMeetings([named, feed], names).map((i) => i.id)).toEqual(["named"]);
   });
 });

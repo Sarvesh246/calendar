@@ -7,6 +7,13 @@ import { applyItemFilters, filterBreakdown, type FilterBreakdown } from "./filte
 import { useNow } from "./use-now";
 import { useCompletionLinger } from "./use-completion-linger";
 import type { Item } from "./types";
+import type { ViewFilter } from "./views";
+
+function useLiveViewFilter(): ViewFilter | null {
+  const live = useUIStore((s) => s.viewFilter);
+  const deferred = useDeferredValue(live);
+  return live == null ? live : deferred;
+}
 
 /**
  * Items as every main view should see them: class filter, "hide completed",
@@ -18,7 +25,7 @@ export function useFilteredItems(): Item[] {
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const categoryFilter = useDeferredCategoryFilter();
-  const viewFilter = useDeferredValue(useUIStore((s) => s.viewFilter));
+  const viewFilter = useLiveViewFilter();
   const now = useNow();
   // Only a time-bound view needs to re-run as the clock moves.
   const range = viewFilter?.range ?? "any";
@@ -57,7 +64,7 @@ export function useFilterBreakdown(items: Item[]): FilterBreakdown {
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const categoryFilter = useDeferredCategoryFilter();
-  const viewFilter = useDeferredValue(useUIStore((s) => s.viewFilter));
+  const viewFilter = useLiveViewFilter();
   return useMemo(
     () =>
       filterBreakdown(items, {

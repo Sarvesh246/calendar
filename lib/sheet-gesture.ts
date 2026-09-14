@@ -40,6 +40,7 @@ export function useSheetOverscroll(
   scrollRef: RefObject<HTMLElement | null>,
   dragControls: DragControls,
   enabled = true,
+  expandUp = false,
 ) {
   useEffect(() => {
     const el = scrollRef.current;
@@ -55,7 +56,7 @@ export function useSheetOverscroll(
         origin = null;
         return;
       }
-      if (el.scrollTop > 1) {
+      if (!expandUp && el.scrollTop > 1) {
         origin = null;
         return;
       }
@@ -69,6 +70,12 @@ export function useSheetOverscroll(
       const dy = e.clientY - origin.clientY;
       const dx = e.clientX - origin.clientX;
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.1) {
+        origin = null;
+        return;
+      }
+      if (expandUp && el.scrollTop <= 1 && dy < -10) {
+        claimed = true;
+        dragControls.start(origin);
         origin = null;
         return;
       }
@@ -98,7 +105,7 @@ export function useSheetOverscroll(
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [dragControls, enabled, scrollRef]);
+  }, [dragControls, enabled, expandUp, scrollRef]);
 }
 
 /** Start a sheet drag unless the press landed on a control. */

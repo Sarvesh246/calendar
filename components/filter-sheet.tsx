@@ -178,10 +178,13 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             <p className="mb-2 text-[15px] font-semibold text-ink">Classes</p>
             <div className="flex flex-col gap-1">
               <FilterRow
-                selected={!filter}
+                selected={!filter && !activeViewId}
                 onSelect={() => {
                   haptic("light");
-                  clear();
+                  // A saved view set the classes *and* status/kind/range. Clearing
+                  // classes alone would leave those rules quietly in force.
+                  if (activeViewId) applyView(null);
+                  else clear();
                   onClose();
                 }}
               >
@@ -227,7 +230,6 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                     // clearing the classes alone would leave its status, kind
                     // and range filters quietly in force.
                     applyView(null);
-                    clear();
                     startTransition(() => updateSettings({ hideCompleted: false }));
                     onClose();
                   }}
