@@ -241,7 +241,7 @@ describe("savedClassMeetings", () => {
       at: new Date(2026, 8, 14, 10, 20).toISOString(),
       endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
     });
-    const names = (id: string) => (id === "pols" ? "POLS 207" : undefined);
+    const names = (id?: string) => (id === "pols" ? "POLS 207" : undefined);
     expect(collapseDuplicateClassMeetings([schedule, feed], names).map((i) => i.id)).toEqual(["feed"]);
   });
 
@@ -261,7 +261,7 @@ describe("savedClassMeetings", () => {
       at: new Date(2026, 8, 14, 10, 20).toISOString(),
       endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
     });
-    const names = (id: string) => (id === "pols" ? "POLS 207" : undefined);
+    const names = (id?: string) => (id === "pols" ? "POLS 207" : undefined);
     expect(collapseDuplicateClassMeetings([named, feed], names).map((i) => i.id)).toEqual(["named"]);
   });
 });
