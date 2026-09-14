@@ -15,6 +15,7 @@ import {
 } from "date-fns";
 import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
+import { nanoid } from "./nanoid";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -307,6 +308,9 @@ const COMMAND_VERBS =
 const QUESTION_OPENERS =
   /^(what|whats|when|whens|where|wheres|which|who|why|how|do i|did i|have i|am i|are there|is there|will i|can you|could you|should i|show me|list|tell me|remind me what|how many|how much|when'?s)\b/i;
 
+const CREATE_VERBS =
+  /^(add|create|schedule|new|set up|book|block off|remind me to|put)\b/i;
+
 /**
  * Decide whether text typed into the quick-add bar is really a question or a
  * change request (→ hand to the assistant) rather than a new item to create.
@@ -317,6 +321,32 @@ export function shouldAskAssistant(text: string): boolean {
   if (t.endsWith("?")) return true;
   if (QUESTION_OPENERS.test(t)) return true;
   if (COMMAND_VERBS.test(t)) return true;
+  if (looksLikeRichCreate(t)) return true;
+  return false;
+}
+
+/** Long or multi-part creates the local parser shouldn't silently guess at. */
+export function looksLikeRichCreate(text: string): boolean {
+  const t = text.trim();
+  if (!/\b(add|create|schedule|set up|book|put|new)\b/i.test(t)) return false;
+  const reminderHits = t.match(/\bremind(?:er|ers| me)\b/gi)?.length ?? 0;
+  const hasLocation = /\bat the\b|\bin the\b|\blocation\b|\bby the\b/i.test(t);
+  const multiReminder = reminderHits >= 2 || /\ba reminder\b.+\ba reminder\b/is.test(t);
+  return multiReminder || (reminderHits >= 1 && hasLocation) || (hasLocation && t.length >= 80);
+}
+
+/**
+ * Skip the "is this a question?" card and send the sentence to the assistant.
+ * True questions, calendar edits, and rich creates all belong there.
+ */
+export function shouldHandOffToAssistant(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (COMMAND_VERBS.test(t)) return true;
+  if (QUESTION_OPENERS.test(t)) return true;
+  if (looksLikeRichCreate(t)) return true;
+  if (t.endsWith("?") && (CREATE_VERBS.test(t) || /\b(add|create|schedule|what|when|where|how)\b/i.test(t)))
+    return true;
   return false;
 }
 
@@ -372,10 +402,10 @@ export async function askAssistant(
     clearTimeout(timer);
   }
 
-  // A local guess at a *change* is risky (it could create a junk item), so only
-  // fall back to the offline heuristic for questions. For change requests, be
-  // honest and let the user retry.
-  if (COMMAND_VERBS.test(message.trim()) || /^(add|create|schedule|new|set up|book|block off|remind me to)\b/i.test(message.trim())) {
+  // A local guess at move/delete/rename is risky (wrong target), so only fall
+  // back to the offline heuristic for questions and for add/create (the parser
+  // can build a draft the user still has to confirm).
+  if (COMMAND_VERBS.test(message.trim())) {
     return {
       text: "I couldn't reach the assistant just now. Tap retry, or add it straight from the quick-add bar.",
       degraded: true,
@@ -503,25 +533,39 @@ export function localAnswer(query: string, ctx: Ctx, now = new Date()): Assistan
   }
 
   // add / create / schedule
-  const add = raw.match(/^(?:add|create|new|schedule|put|set up|book|block off|remind me to)\s+(.+)/i);
+  const add = raw.match(/^(?:add|create|new|schedule|put|set up|book|block off|remind me to)\s+/i);
   if (add) {
-    const parsed = parseQuickAdd(add[1], ctx.categories);
+    const parsed = parseQuickAdd(raw, ctx.categories);
     const cat = ctx.categories.find((c) => c.id === parsed.categoryId);
+    const reminders = parsed.reminders?.map((r) => ({
+      id: nanoid(),
+      itemId: "",
+      offsetMinutes: r.offsetMinutes,
+      label: r.label,
+    }));
     const draft: Omit<Item, "id" | "createdAt"> = {
       title: parsed.title,
       type: parsed.type,
       categoryId: parsed.categoryId ?? ctx.categories[0]?.id ?? "",
       at: parsed.at.toISOString(),
+      ...(parsed.endAt ? { endAt: parsed.endAt.toISOString() } : {}),
+      ...(parsed.allDay ? { allDay: true } : {}),
+      ...(parsed.location ? { location: parsed.location } : {}),
+      ...(reminders?.length ? { reminders } : {}),
       ...(parsed.type !== "event" ? { status: "todo" as ItemStatus } : {}),
     };
+    const whenStr = `${format(parsed.at, "EEE, MMM d")}${
+      parsed.confidence.date ? ` at ${fmtTime(parsed.at.toISOString())}` : ""
+    }`;
+    const extras = [parsed.location, parsed.reminderLabel].filter(Boolean).join(" · ");
     return {
-      text: `Add ${parsed.type} “${parsed.title}” on ${format(parsed.at, "EEE, MMM d")}${
-        parsed.confidence.date ? ` at ${fmtTime(parsed.at.toISOString())}` : ""
-      }${cat ? ` · ${cat.name}` : ""}?`,
+      text: `Add ${parsed.type} “${parsed.title}” on ${whenStr}${cat ? ` · ${cat.name}` : ""}${
+        extras ? ` · ${extras}` : ""
+      }?`,
       actions: [
         {
           kind: "create",
-          summary: `Add “${parsed.title}” — ${format(parsed.at, "EEE, MMM d")}`,
+          summary: `Add “${parsed.title}” — ${whenStr}${extras ? ` · ${extras}` : ""}`,
           draft,
         },
       ],

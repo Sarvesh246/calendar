@@ -27,7 +27,7 @@ import type { Item } from "@/lib/types";
 import { searchItems } from "@/lib/search";
 import { navigateTab } from "@/lib/tab-nav";
 import { useAllViews } from "@/components/saved-views";
-import { useModKeyLabel } from "@/components/keyboard-shortcuts";
+import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -167,7 +167,9 @@ function CommandPaletteDialog() {
             className="cmdk-row min-h-11 w-full text-left"
           >
             <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
-            <span className="truncate">Ask the assistant about this</span>
+            {looksLikeRichCreate(query) || shouldAskAssistant(query)
+              ? "Ask the assistant to handle this"
+              : "Ask the assistant about this"}
           </button>
         </Command.Empty>
 
@@ -182,7 +184,11 @@ function CommandPaletteDialog() {
               className="cmdk-row min-h-11"
             >
               <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-              <span className="truncate">Ask: &ldquo;{query.trim()}&rdquo;</span>
+              <span className="truncate">
+                {looksLikeRichCreate(query)
+                  ? `Add with assistant: “${query.trim()}”`
+                  : `Ask: “${query.trim()}”`}
+              </span>
             </Command.Item>
           </Command.Group>
         )}

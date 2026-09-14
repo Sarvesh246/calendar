@@ -194,9 +194,15 @@ export function AssistantConversation({
 
               {m.actions?.map((action, ai) => {
                 const state = m.resolved?.[ai];
+                const facts = actionFacts(action);
                 return (
                   <div key={ai} className={cn("rounded-lg border border-line bg-surface-sunken p-2.5", !docked && "md:rounded-xl md:p-3")}>
                     <p className={cn("text-[12px] text-ink-soft", !docked && "md:text-[13px]")}>{action.summary}</p>
+                    {facts && (
+                      <p className={cn("mt-0.5 text-[11px] text-ink-faint", !docked && "md:text-[12px]")}>
+                        {facts}
+                      </p>
+                    )}
                     {state === "applied" ? (
                       <motion.p
                         initial={{ opacity: 0, scale: 0.9 }}
@@ -372,4 +378,18 @@ function actionVerb(a: AssistantAction): string {
   if (p.title) return "Rename";
   if (p.categoryId) return "Recategorize";
   return "Update";
+}
+
+function actionFacts(a: AssistantAction): string | null {
+  const bits: string[] = [];
+  if (a.kind === "create") {
+    if (a.draft.location) bits.push(a.draft.location);
+    const labels = a.draft.reminders?.map((r) => r.label).filter(Boolean);
+    if (labels?.length) bits.push(labels.join(", "));
+  } else if (a.kind === "update") {
+    if (a.patch.location) bits.push(a.patch.location);
+    const labels = a.patch.reminders?.map((r) => r.label).filter(Boolean);
+    if (labels?.length) bits.push(labels.join(", "));
+  }
+  return bits.length ? bits.join(" · ") : null;
 }

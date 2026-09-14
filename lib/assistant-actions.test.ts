@@ -48,6 +48,50 @@ describe("normalizeActions", () => {
     expect(out[0].kind === "update" && out[0].patch.location).toBeUndefined();
   });
 
+  it("copies several reminders onto a create and leaves omitted as default", () => {
+    const withBoth = normalizeActions(
+      [
+        {
+          kind: "create",
+          summary: "Add Hullabaloo U meeting",
+          title: "Hullabaloo U meeting",
+          itemType: "event",
+          at: "2026-09-13T17:30:00.000Z",
+          location: "PLNK Building First floor by the starbucks",
+          reminders: [{ offsetMinutes: 1440 }, { offsetMinutes: 120, label: "2 hours before" }],
+        },
+      ],
+      body
+    );
+    expect(withBoth).toHaveLength(1);
+    expect(withBoth[0].kind === "create" && withBoth[0].draft.location).toMatch(/PLNK/);
+    expect(
+      withBoth[0].kind === "create" &&
+        withBoth[0].draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b)
+    ).toEqual([120, 1440]);
+
+    const omitted = normalizeActions(
+      [{ kind: "create", summary: "Add gym", title: "Gym", itemType: "event", at: "2026-09-13T18:00:00.000Z" }],
+      body
+    );
+    expect(omitted[0].kind === "create" && omitted[0].draft.reminders).toBeUndefined();
+
+    const none = normalizeActions(
+      [
+        {
+          kind: "create",
+          summary: "Add gym",
+          title: "Gym",
+          itemType: "event",
+          at: "2026-09-13T18:00:00.000Z",
+          reminders: [],
+        },
+      ],
+      body
+    );
+    expect(none[0].kind === "create" && none[0].draft.reminders).toEqual([]);
+  });
+
   it("attaches a weekly class-meeting repeat on create", () => {
     const out = normalizeActions(
       [

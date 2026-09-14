@@ -38,12 +38,14 @@ export function ComposerChips({
   onChange,
   categories,
   now,
+  reminderCount = 1,
 }: {
   resolved: ResolvedComposer;
   overrides: ComposerOverrides;
   onChange: (patch: ComposerOverrides) => void;
   categories: Category[];
   now: Date;
+  reminderCount?: number;
 }) {
   const [open, setOpen] = useState<"day" | "class" | "reminder" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -221,7 +223,11 @@ export function ComposerChips({
 
         <Chip
           icon={<Bell className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
-          label={reminderChipLabel(resolved.reminderMinutes.value)}
+          label={
+            reminderCount > 1
+              ? `${reminderCount} reminders`
+              : reminderChipLabel(resolved.reminderMinutes.value)
+          }
           detail="Reminder"
           specific={resolved.reminderMinutes.value !== null}
           open={open === "reminder"}

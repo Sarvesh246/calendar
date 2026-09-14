@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildAssistantDigest,
   localAnswer,
+  looksLikeRichCreate,
   selectAssistantItems,
+  shouldHandOffToAssistant,
   toAssistantSlimItem,
 } from "./ai-assistant";
 import type { Item } from "./types";
@@ -169,5 +171,41 @@ describe("localAnswer due by Sunday", () => {
       now
     );
     expect(res.text.toLowerCase()).toMatch(/nothing/);
+  });
+});
+
+describe("localAnswer create", () => {
+  it("keeps the place and both reminders from a spoken add", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 8, 13, 12));
+      const res = localAnswer(
+        "add an event with a reminder for a day before and a reminder for a couple hours before to do my Hullabaloo U meeting at 5:30 at the PLNK Building First floor by the starbucks?",
+        { items: [], categories: cat, clock24h: false }
+      );
+      expect(res.actions).toHaveLength(1);
+      const a = res.actions![0];
+      expect(a.kind).toBe("create");
+      if (a.kind !== "create") return;
+      expect(a.draft.title).toBe("Hullabaloo U meeting");
+      expect(a.draft.type).toBe("event");
+      expect(a.draft.location).toMatch(/PLNK/i);
+      expect(new Date(a.draft.at).getHours()).toBe(17);
+      expect(a.draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b)).toEqual([120, 1440]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("assistant handoff", () => {
+  const hullabaloo =
+    "add an event with a reminder for a day before and a reminder for a couple hours before to do my Hullabaloo U meeting at 5:30 at the PLNK Building First floor by the starbucks?";
+
+  it("sends a rich create straight to the assistant", () => {
+    expect(looksLikeRichCreate(hullabaloo)).toBe(true);
+    expect(shouldHandOffToAssistant(hullabaloo)).toBe(true);
+    expect(shouldHandOffToAssistant("add gym at 6pm tomorrow")).toBe(false);
+    expect(shouldHandOffToAssistant("what's due friday?")).toBe(true);
   });
 });

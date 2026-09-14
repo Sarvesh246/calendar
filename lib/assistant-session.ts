@@ -153,7 +153,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       const store = useDatebookStore.getState();
       if (action.kind === "create") {
         let draft = action.draft;
-        if (!draft.reminders?.length) {
+        if (draft.reminders === undefined) {
           const defaults = remindersFromPresetIds(store.settings.defaultReminderPresetIds, store.reminderPresets);
           if (defaults.length) draft = { ...draft, reminders: defaults };
         }
