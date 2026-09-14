@@ -215,7 +215,7 @@ export function parseQuickAdd(
   text = loc.rest;
   const location = loc.location;
 
-  let title = cleanTitle(text);
+  const title = cleanTitle(text);
 
   return {
     title: title.length > 0 ? capitalize(title) : "Untitled",
