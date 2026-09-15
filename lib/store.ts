@@ -49,6 +49,7 @@ import {
   collapseBySourceUid,
   dedupeCategories,
   mergeCalendars,
+  preserveClassTitle,
   type CalendarSnapshot,
 } from "./merge-calendars";
 import {
@@ -362,9 +363,11 @@ export const useDatebookStore = create<DatebookState>()(
             if (rewritten) importSources = mapped;
           }
         }
+        const stamp = nowIso();
+        noteLocalWrite(id, stamp);
         set({
           categories: get().categories.map((c) =>
-            c.id === id ? { ...c, ...next, updatedAt: nowIso() } : c
+            c.id === id ? { ...c, ...next, updatedAt: stamp } : c
           ),
           importSources,
         });
@@ -2073,6 +2076,16 @@ function applyRealtime(
           const prev = current[idx] as { id: string; updatedAt?: string; createdAt?: string };
           const mine = time(prev.updatedAt ?? prev.createdAt);
           const theirs = time(stamped.updatedAt ?? stamped.createdAt);
+          // Same as items: a mapper-normalized echo of our own upsert must
+          // not snap a class name (or Class Title) back while Settings still
+          // has the field focused — and `set_updated_at` can stamp `now()` a
+          // beat later than the client, which used to look like a newer remote.
+          if (
+            isOwnWriteEcho(stamped.updatedAt, lastLocalUpdatedAt(model.id)) ||
+            (key === "categories" && editedHereRecently(model.id))
+          ) {
+            return;
+          }
           if (mine > theirs && JSON.stringify(prev) !== JSON.stringify(model)) {
             // This device holds the newer edit. Keep it *and* push it so the
             // other side catches up, instead of silently dropping the remote
@@ -2082,7 +2095,11 @@ function applyRealtime(
             scheduleFlush();
             return;
           }
-          nextArr = current.map((x, i) => (i === idx ? model : x));
+          const applied =
+            key === "categories"
+              ? preserveClassTitle(model as Category, prev as Category)
+              : model;
+          nextArr = current.map((x, i) => (i === idx ? applied : x));
         } else {
           nextArr = [...current, model];
         }

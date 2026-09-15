@@ -70,8 +70,6 @@ export default function SettingsPage() {
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categories = useDatebookStore((s) => s.categories);
   const addCategory = useDatebookStore((s) => s.addCategory);
-  const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
   const addReminderPreset = useDatebookStore((s) => s.addReminderPreset);
   const updateReminderPreset = useDatebookStore((s) => s.updateReminderPreset);
@@ -373,77 +371,13 @@ export default function SettingsPage() {
         <SyllabusImportProvider>
         <div className="flex flex-col gap-2">
           {categories.map((cat) => (
-            <div
+            <CategoryEditor
               key={cat.id}
-              className="flex flex-col gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={cat.color}
-                  onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                  className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-                  aria-label={`${cat.name} color`}
-                />
-                <input
-                  value={cat.name}
-                  onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                  // A category with no name is a blank row here, a blank chip on
-                  // every card, and a NOT NULL column in the cloud. The field
-                  // stays clearable while you retype it; leaving it empty is what
-                  // gets repaired.
-                  onBlur={(e) => {
-                    const name = e.target.value.trim();
-                    if (name !== cat.name) updateCategory(cat.id, { name: name || "Uncategorized" });
-                  }}
-                  aria-label={`${cat.name} name`}
-                  className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
-                />
-                {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
-                <button
-                  type="button"
-                  onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-                  className="text-[12px] font-medium text-ink-faint hover:text-ink"
-                >
-                  {cat.archived ? "Restore" : "Archive"}
-                </button>
-                {categories.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
-                    aria-expanded={confirmDeleteId === cat.id}
-                    className="text-[12px] font-medium text-warn"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-              <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
-                <span className="shrink-0">Class Title</span>
-                <input
-                  value={cat.classTitle ?? ""}
-                  onChange={(e) => updateCategory(cat.id, { classTitle: e.target.value })}
-                  onBlur={(e) => updateCategory(cat.id, { classTitle: e.target.value.trim() || undefined })}
-                  placeholder={cat.name}
-                  aria-label={`${cat.name} Class Title`}
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
-                />
-              </label>
-              {confirmDeleteId === cat.id && (
-                <CategoryDeleteConfirm
-                  category={cat}
-                  categories={categories}
-                  onConfirm={() => {
-                    haptic("warn");
-                    deleteCategory(cat.id);
-                    setConfirmDeleteId(null);
-                  }}
-                  onCancel={() => setConfirmDeleteId(null)}
-                />
-              )}
-              <CategorySyllabusControl category={cat} />
-              <CategoryClassTimesControl category={cat} />
-            </div>
+              category={cat}
+              categories={categories}
+              confirmDeleteId={confirmDeleteId}
+              onConfirmDeleteId={setConfirmDeleteId}
+            />
           ))}
         </div>
         <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
@@ -684,6 +618,148 @@ function SettingsCard({
     >
       {children}
     </section>
+  );
+}
+
+function CategoryEditor({
+  category: cat,
+  categories,
+  confirmDeleteId,
+  onConfirmDeleteId,
+}: {
+  category: Category;
+  categories: Category[];
+  confirmDeleteId: string | null;
+  onConfirmDeleteId: (id: string | null) => void;
+}) {
+  const updateCategory = useDatebookStore((s) => s.updateCategory);
+  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
+  const [name, setName] = useState(cat.name);
+  const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
+  const nameFocus = useRef(false);
+  const titleFocus = useRef(false);
+
+  useEffect(() => {
+    if (!nameFocus.current) setName(cat.name);
+  }, [cat.name]);
+  useEffect(() => {
+    if (!titleFocus.current) setClassTitle(cat.classTitle ?? "");
+  }, [cat.classTitle]);
+
+  function commitName(raw = name) {
+    const next = raw.trim() || "Uncategorized";
+    setName(next);
+    if (next !== cat.name) updateCategory(cat.id, { name: next });
+  }
+
+  function commitClassTitle(raw = classTitle) {
+    const next = raw.trim();
+    setClassTitle(next);
+    if (next !== (cat.classTitle ?? "")) {
+      updateCategory(cat.id, { classTitle: next || undefined });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <input
+          type="color"
+          value={cat.color}
+          onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
+          className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+          aria-label={`${cat.name} color`}
+        />
+        <input
+          type="text"
+          enterKeyHint="done"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          value={name}
+          onFocus={() => {
+            nameFocus.current = true;
+          }}
+          onChange={(e) => {
+            const v = e.target.value;
+            setName(v);
+            updateCategory(cat.id, { name: v });
+          }}
+          onBlur={() => {
+            nameFocus.current = false;
+            commitName();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }}
+          aria-label={`${cat.name} name`}
+          className="min-h-11 min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
+        />
+        {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
+        <button
+          type="button"
+          onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+          className="text-[12px] font-medium text-ink-faint hover:text-ink"
+        >
+          {cat.archived ? "Restore" : "Archive"}
+        </button>
+        {categories.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
+            aria-expanded={confirmDeleteId === cat.id}
+            className="text-[12px] font-medium text-warn"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+      <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
+        <span className="shrink-0">Class Title</span>
+        <input
+          type="text"
+          enterKeyHint="done"
+          autoComplete="off"
+          value={classTitle}
+          onFocus={() => {
+            titleFocus.current = true;
+          }}
+          onChange={(e) => {
+            const v = e.target.value;
+            setClassTitle(v);
+            updateCategory(cat.id, { classTitle: v });
+          }}
+          onBlur={() => {
+            titleFocus.current = false;
+            commitClassTitle();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }}
+          placeholder={name.trim() || cat.name}
+          aria-label={`${cat.name} Class Title`}
+          className="min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+        />
+      </label>
+      {confirmDeleteId === cat.id && (
+        <CategoryDeleteConfirm
+          category={cat}
+          categories={categories}
+          onConfirm={() => {
+            haptic("warn");
+            deleteCategory(cat.id);
+            onConfirmDeleteId(null);
+          }}
+          onCancel={() => onConfirmDeleteId(null)}
+        />
+      )}
+      <CategorySyllabusControl category={cat} />
+      <CategoryClassTimesControl category={cat} />
+    </div>
   );
 }
 

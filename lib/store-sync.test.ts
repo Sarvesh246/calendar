@@ -54,6 +54,19 @@ function localSnapshot(): CalendarSnapshot {
 
 beforeEach(reset);
 
+describe("category edits", () => {
+  it("stamps a rename and keeps the new course name", () => {
+    store().updateCategory("cat-1", { name: "ENGL 101" });
+    expect(store().categories[0]).toMatchObject({ id: "cat-1", name: "ENGL 101" });
+    expect(store().categories[0].updatedAt).toBeTruthy();
+  });
+
+  it("stores a Class Title without replacing the course name", () => {
+    store().updateCategory("cat-1", { classTitle: "Writing Lab" });
+    expect(store().categories[0]).toMatchObject({ name: "Personal", classTitle: "Writing Lab" });
+  });
+});
+
 describe("edit timestamps", () => {
   it("stamps a new item and moves the stamp on every edit", async () => {
     const item = addTask("Lab report");
