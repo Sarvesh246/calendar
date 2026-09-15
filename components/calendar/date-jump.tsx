@@ -31,6 +31,18 @@ export function DateJump({
   children: React.ReactNode;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [present, setPresent] = useState(false);
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPresent(true);
+      return;
+    }
+    // A timer also finishes when the tab host is hidden and no animation frame
+    // arrives. Reopening cancels the pending removal and reverses the motion.
+    const timer = window.setTimeout(() => setPresent(false), motionTokens.exit * 1000 + 30);
+    return () => window.clearTimeout(timer);
+  }, [open]);
   return (
     <div className="relative shrink-0 self-start sm:self-auto">
       <button
@@ -52,12 +64,9 @@ export function DateJump({
           strokeWidth={2}
         />
       </button>
-      {/* Enters with a spring but leaves at once. This lives inside the tab
-          host, and an exit animation that starts while the tab is hidden never
-          finishes — leaving an invisible panel whose listeners close the next
-          one. Unmounting on close makes that impossible. */}
-      {open && (
+      {(open || present) && (
         <JumpPanel
+          active={open}
           anchor={anchor}
           triggerRef={triggerRef}
           onClose={(restoreFocus) => {
@@ -72,11 +81,13 @@ export function DateJump({
 }
 
 function JumpPanel({
+  active,
   anchor,
   triggerRef,
   onClose,
   onJump,
 }: {
+  active: boolean;
   anchor: Date;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   onClose: (restoreFocus: boolean) => void;
@@ -92,10 +103,12 @@ function JumpPanel({
   // Focus straight after commit, not on the next frame: a frame never comes
   // while the window is in the background.
   useEffect(() => {
+    if (!active) return;
     inputRef.current?.focus({ preventScroll: true });
-  }, []);
+  }, [active]);
 
   useEffect(() => {
+    if (!active) return;
     const onDown = (e: PointerEvent) => {
       const node = e.target as Node;
       if (ref.current?.contains(node) || triggerRef.current?.contains(node)) return;
@@ -115,7 +128,7 @@ function JumpPanel({
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose, triggerRef]);
+  }, [active, onClose, triggerRef]);
 
   function go(date: Date, granularity: JumpGranularity) {
     onJump(date, granularity);
@@ -127,11 +140,12 @@ function JumpPanel({
       ref={ref}
       role="dialog"
       aria-label="Jump to a date"
+      aria-hidden={!active}
       data-no-shortcuts
       initial={{ opacity: 0, scale: 0.96, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={motionTokens.springSnappy}
-      style={{ transformOrigin: "top left" }}
+      animate={active ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
+      transition={active ? motionTokens.springSnappy : { duration: motionTokens.exit, ease: motionTokens.easeIn }}
+      style={{ transformOrigin: "top left", pointerEvents: active ? "auto" : "none" }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.preventDefault();

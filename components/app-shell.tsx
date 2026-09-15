@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, Plus, Search, Sparkles } from "lucide-react";
 import { Scrim } from "@/components/ui/scrim";
@@ -74,10 +74,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onTab = isTabRoute(pathname);
   const desktop = useMediaQuery("(min-width: 768px)");
   const floatingAdd = quickAddOpen && !(onToday && desktop);
+  const [addPresent, setAddPresent] = useState(false);
+  useEffect(() => {
+    if (floatingAdd) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAddPresent(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setAddPresent(false), motionTokens.exit * 1000 + 30);
+    return () => window.clearTimeout(timer);
+  }, [floatingAdd]);
 
   const composerRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(composerRef, floatingAdd && !desktop);
-  useLockBodyScroll(floatingAdd && !desktop);
+  useDialogFocus(composerRef, (floatingAdd || addPresent) && !desktop);
+  useLockBodyScroll((floatingAdd || addPresent) && !desktop);
   useKeyboardInset();
   const setShortcutsOpen = useUIStore((s) => s.setShortcutsOpen);
   const modKey = useModKeyLabel();
