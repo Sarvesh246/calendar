@@ -15,12 +15,8 @@ export function AccountSection() {
   if (!configured) {
     return (
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        Cloud sync isn&apos;t set up yet. Add your Supabase project&apos;s{" "}
-        <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-        <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>{" "}
-        to <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">.env.local</code> and run the SQL in{" "}
-        <code className="rounded bg-surface-sunken px-1 py-0.5 text-[12px]">supabase/migrations</code>. Until then your
-        data stays on this device.
+        Cloud sync isn&apos;t set up on this build. Your calendar stays on this device until an
+        administrator configures sync.
       </p>
     );
   }

@@ -2,15 +2,15 @@
 
 import { Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FilterButton } from "@/components/filter-sheet";
 import { MobileMoreMenu } from "@/components/mobile-more-menu";
 import { useUIStore } from "@/lib/ui-store";
 
 /** Floating top-right glass controls. The page stays continuous; content
  *  scrolls under this cluster. No full-width header strip.
  *
- *  Cluster is always Assistant · Search · More — including on Settings /
- *  Schedule, so Filters, Schedule, and Settings stay one tap away from every
- *  phone route. */
+ *  Cluster is always Assistant · Search · Filters · More — including on
+ *  Settings / Schedule, so Filters and rooms stay one tap from every phone route. */
 export function MobileHeaderActions(_props: { pathname: string }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
@@ -40,6 +40,7 @@ export function MobileHeaderActions(_props: { pathname: string }) {
             >
               <Search className="h-4 w-4" strokeWidth={1.9} />
             </Button>
+            <FilterButton className="h-11 w-11 rounded-full border-0 bg-transparent shadow-none hover:bg-surface-sunken" />
             <MobileMoreMenu />
           </div>
         </div>

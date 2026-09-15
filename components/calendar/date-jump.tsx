@@ -55,6 +55,7 @@ export function DateJump({
         className="group -mx-1.5 flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-left transition-colors duration-[var(--motion-standard)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {children}
+        <span className="hidden text-[12px] font-medium text-ink-faint sm:inline">Jump</span>
         <ChevronDown
           aria-hidden
           className={cn(

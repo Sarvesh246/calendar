@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert, Minimize2 } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion } from "@/lib/motion";
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
@@ -34,15 +34,15 @@ import { OverlapNotices } from "@/components/overlap-notice";
 import { FocusView } from "@/components/focus-view";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
-import { ViewMenu } from "@/components/view-menu";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
 /** From here up Today splits into a main column and a supporting one. */
 const WIDE_QUERY = "(min-width: 1280px)";
-const DEADLINE_DAYS = 7;
-const DEADLINE_ROWS = 6;
+const COMING_UP_DAYS = 7;
+const COMING_UP_ROWS = 8;
 
 export default function TodayPage() {
   const focusMode = useUIStore((s) => s.focusMode);
@@ -50,13 +50,14 @@ export default function TodayPage() {
   return <TodayDashboard />;
 }
 
-/** Open work due after today and within the next week, soonest first. */
-function upcomingDeadlines(items: Item[], day: Date): Item[] {
+/** Open work and events after today within the coming week, soonest first. */
+function comingUpItems(items: Item[], day: Date): Item[] {
   const from = addDays(startOfDay(day), 1).getTime();
-  const to = addDays(startOfDay(day), DEADLINE_DAYS + 1).getTime();
+  const to = addDays(startOfDay(day), COMING_UP_DAYS + 1).getTime();
   return items
     .filter((i) => {
-      if (i.type === "event" || i.status === "done" || i.workFor) return false;
+      if (i.workFor) return false;
+      if (i.type !== "event" && i.status === "done") return false;
       const t = new Date(i.at).getTime();
       return t >= from && t < to;
     })
@@ -74,6 +75,7 @@ function TodayDashboard() {
   const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const chrome = useItemCardChrome();
   const categoriesById = useCategoriesById();
+  const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   const now = useNow();
   const todayKey = dayKey(now);
@@ -81,8 +83,7 @@ function TodayDashboard() {
 
   const dk = dayKey(day);
   const today = useMemo(() => itemsOnDay(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
-  const tomorrow = useMemo(() => itemsOnDay(items, addDays(day, 1)), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
-  const deadlines = useMemo(() => upcomingDeadlines(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const comingUp = useMemo(() => comingUpItems(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const greeting = timeOfDayGreeting(now);
 
   const overdue = useMemo(() => leftoverOverdue(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -122,8 +123,19 @@ function TodayDashboard() {
           )}
         </p>
       </div>
-      {/* Phone Focus lives in More; desktop keeps a Focus-only overflow. */}
-      <ViewMenu showFocus />
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          haptic("light");
+          toggleFocusMode();
+        }}
+        aria-label="Focus"
+        className="shrink-0"
+      >
+        <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+        Focus
+      </Button>
     </header>
   );
 
@@ -219,63 +231,40 @@ function TodayDashboard() {
     </section>
   );
 
-  const deadlinesSection = (
+  const comingUpSection = (
     <section>
-      <SectionLabel>Due in the next week{deadlines.length ? ` · ${deadlines.length}` : ""}</SectionLabel>
-      {deadlines.length === 0 ? (
-        <p className="rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft">
-          Nothing due in the next {DEADLINE_DAYS} days.
-        </p>
-      ) : (
-        <div className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
-          {deadlines.slice(0, DEADLINE_ROWS).map((item) => (
-            <CompactRow
-              key={item.id}
-              item={item}
-              category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-              trailing={`${format(new Date(item.at), "EEE")}${item.allDay ? "" : ` ${formatTime(item.at, clock24h)}`}`}
-            />
-          ))}
-          {deadlines.length > DEADLINE_ROWS && (
-            <Link
-              href="/agenda"
-              className="border-t border-line px-4 py-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
-            >
-              And {deadlines.length - DEADLINE_ROWS} more on the agenda
-            </Link>
-          )}
-        </div>
-      )}
-    </section>
-  );
-
-  const tomorrowSection = (
-    <section>
-      <SectionLabel>Tomorrow</SectionLabel>
-      {tomorrow.length === 0 ? (
+      <SectionLabel>Coming up{comingUp.length ? ` · ${comingUp.length}` : ""}</SectionLabel>
+      {comingUp.length === 0 ? (
         <Link
           href="/agenda"
           className="press-none flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft transition-colors hover:border-line-strong hover:bg-surface-sunken/50"
         >
-          <span>{format(addDays(day, 1), "EEEE, MMMM d")}</span>
-          <span className="font-medium text-ink">Nothing yet · Open agenda</span>
+          <span>Nothing in the next {COMING_UP_DAYS} days</span>
+          <span className="font-medium text-ink">Open agenda</span>
         </Link>
       ) : (
         <div className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
-          {tomorrow.slice(0, 4).map((item) => (
-            <CompactRow
-              key={item.id}
-              item={item}
-              category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-              trailing={item.allDay ? "All day" : formatTime(item.at, clock24h)}
-            />
-          ))}
+          {comingUp.slice(0, COMING_UP_ROWS).map((item) => {
+            const at = new Date(item.at);
+            const isTomorrow = dayKey(at) === dayKey(addDays(day, 1));
+            const dayLabel = isTomorrow
+              ? "Tomorrow"
+              : format(at, "EEE");
+            return (
+              <CompactRow
+                key={item.id}
+                item={item}
+                category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                trailing={`${dayLabel}${item.allDay ? "" : ` ${formatTime(item.at, clock24h)}`}`}
+              />
+            );
+          })}
           <Link
             href="/agenda"
             className="border-t border-line px-4 py-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
           >
-            {tomorrow.length > 4
-              ? `And ${tomorrow.length - 4} more on the agenda`
+            {comingUp.length > COMING_UP_ROWS
+              ? `And ${comingUp.length - COMING_UP_ROWS} more on the agenda`
               : "Open agenda"}
           </Link>
         </div>
@@ -300,8 +289,7 @@ function TodayDashboard() {
             className="sticky top-4 flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-6 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
           >
             {happening}
-            {deadlinesSection}
-            {tomorrowSection}
+            {comingUpSection}
           </aside>
         </div>
       </div>
@@ -319,7 +307,7 @@ function TodayDashboard() {
       {attentionStrip}
       {todaySection}
       {overdueSection}
-      {tomorrowSection}
+      {comingUpSection}
     </div>
   );
 }

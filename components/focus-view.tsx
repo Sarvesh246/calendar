@@ -7,16 +7,13 @@ import { Check, X } from "lucide-react";
 import { useDatebookStore, useCategory } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { eventRemainingLabel, focusQueue, formatTime, relativeDueLabel } from "@/lib/date-utils";
-import { applyItemFilters } from "@/lib/filters";
+import { useFilteredItems } from "@/lib/use-filtered-items";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 
 export function FocusView() {
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
-  const items = applyItemFilters(useDatebookStore((s) => s.items), {
-    categoryFilter: useUIStore((s) => s.categoryFilter),
-    hideCompleted: useDatebookStore((s) => s.settings.hideCompleted),
-  });
+  const items = useFilteredItems();
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);

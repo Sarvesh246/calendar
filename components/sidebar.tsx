@@ -146,7 +146,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
               <SidebarViews />
               <div className="mt-6 flex items-center justify-between px-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                  Categories
+                  Classes
                 </p>
                 {filterCount > 0 && (
                   <button
