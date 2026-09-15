@@ -384,14 +384,15 @@ export default function SettingsPage() {
               <ReminderPresetRow
                 key={rp.id}
                 preset={rp}
-                active={settings.defaultReminderPresetIds.includes(rp.id)}
+                active={(settings.defaultReminderPresetIds ?? []).includes(rp.id)}
                 onToggle={() => {
-                  const active = settings.defaultReminderPresetIds.includes(rp.id);
+                  const selected = settings.defaultReminderPresetIds ?? [];
+                  const active = selected.includes(rp.id);
                   haptic("light");
                   updateSettings({
                     defaultReminderPresetIds: active
-                      ? settings.defaultReminderPresetIds.filter((id) => id !== rp.id)
-                      : [...settings.defaultReminderPresetIds, rp.id],
+                      ? selected.filter((id) => id !== rp.id)
+                      : [...selected, rp.id],
                   });
                 }}
                 onEdit={() => setEditingReminderId(rp.id)}
@@ -831,6 +832,9 @@ function CollapsibleCard({
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
   const reduced = prefersReducedMotion();
 
+  // CSS grid rows, not Framer `height: "auto"`. Everyday (and Reminders) nest
+  // `layoutId` pills inside this body — measuring auto-height while those
+  // layout projections run looped updates and threw React #185 on Settings.
   return (
     <section id={id} className={cn("overflow-hidden rounded-lg border border-line/80 bg-surface", ANCHOR_OFFSET)}>
       <button
@@ -850,22 +854,22 @@ function CollapsibleCard({
         </motion.span>
       </button>
 
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="body"
-            initial={reduced ? false : { height: 0 }}
-            animate={{ height: "auto" }}
-            exit={reduced ? { height: 0, transition: { duration: 0 } } : { height: 0 }}
-            transition={reduced ? { duration: 0 } : motionTokens.springLayout}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
-              {children}
-            </div>
-          </motion.div>
+      <div
+        className={cn(
+          "grid",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
         )}
-      </AnimatePresence>
+        // Closed sections stay in the tree (so open/close doesn't remount
+        // import controls) but must not take focus.
+        inert={open ? undefined : true}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+            {children}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -895,23 +899,29 @@ function subscribeSections(onChange: () => void) {
   return () => sectionListeners.delete(onChange);
 }
 
+function seedSectionOpen(key: string, defaultOpen: boolean): boolean {
+  const cached = sectionOpen.get(key);
+  if (cached !== undefined) return cached;
+  let value = defaultOpen;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null) value = stored === "1";
+  } catch {
+    /* storage disabled */
+  }
+  sectionOpen.set(key, value);
+  return value;
+}
+
 function useSectionOpen(storageKey: string, defaultOpen: boolean): [boolean, () => void] {
   const key = sectionKey(storageKey);
+  // Seed before subscribe so getSnapshot stays pure (no Map writes while React
+  // is comparing snapshots — that path can thrash into max update depth).
+  if (typeof window !== "undefined") seedSectionOpen(key, defaultOpen);
+
   const open = useSyncExternalStore(
     subscribeSections,
-    () => {
-      const cached = sectionOpen.get(key);
-      if (cached !== undefined) return cached;
-      let value = defaultOpen;
-      try {
-        const stored = localStorage.getItem(key);
-        if (stored !== null) value = stored === "1";
-      } catch {
-        /* storage disabled */
-      }
-      sectionOpen.set(key, value);
-      return value;
-    },
+    () => sectionOpen.get(key) ?? defaultOpen,
     () => defaultOpen
   );
 
@@ -1258,11 +1268,9 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const [seenValue, setSeenValue] = useState(value);
-  if (value !== seenValue) {
-    setSeenValue(value);
+  useEffect(() => {
     setDraft(value);
-  }
+  }, [value]);
 
   function emit(raw: string) {
     const next = normalizeThemeHex(raw);
