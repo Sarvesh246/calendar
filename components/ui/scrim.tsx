@@ -33,6 +33,7 @@ export function Scrim({
   amount = 1,
   tone = "default",
   pace = "emphasis",
+  exitDuration = motionTokens.exit,
   className,
 }: {
   onClick?: () => void;
@@ -44,6 +45,8 @@ export function Scrim({
   amount?: number;
   tone?: "default" | "light";
   pace?: "emphasis" | "snap";
+  /** Match the panel's departure so the veil never lingers or clears early. */
+  exitDuration?: number;
   className?: string;
 }) {
   const reduced = prefersReducedMotion();
@@ -58,7 +61,7 @@ export function Scrim({
     animate: { opacity: 1 },
     exit: {
       opacity: 0,
-      transition: { duration: motionTokens.standard, ease: motionTokens.easeInOut },
+      transition: { duration: reduced ? motionTokens.micro : exitDuration, ease: motionTokens.easeInOut },
     },
     transition: reduced
       ? { duration: motionTokens.micro }
@@ -68,6 +71,9 @@ export function Scrim({
     style: treatment,
     className: cn(
       tone === "light" ? "overlay-scrim-light" : "overlay-scrim",
+      // A labelled scrim is a full-viewport button. The global pressed-button
+      // scale would expose a strip of the live page around all four edges.
+      label && "press-none",
       "absolute inset-0",
       className
     ),

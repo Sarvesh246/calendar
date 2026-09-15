@@ -29,6 +29,7 @@ import { navigateTab } from "@/lib/tab-nav";
 import { useAllViews } from "@/components/saved-views";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 import { useModKeyLabel } from "@/components/keyboard-shortcuts";
+import { motion as motionTokens } from "@/lib/motion";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -42,6 +43,19 @@ export function CommandPalette() {
   const mobile = useMediaQuery("(max-width: 767px)");
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const [desktopPresent, setDesktopPresent] = useState(false);
+
+  // Radix only gets to run its closed-state keyframes while the controlled
+  // dialog is still mounted. Keep it (and its scroll lock) for that exit.
+  useEffect(() => {
+    if (open && !mobile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDesktopPresent(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setDesktopPresent(false), motionTokens.exit * 1000 + 30);
+    return () => window.clearTimeout(timer);
+  }, [open, mobile]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -54,11 +68,11 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
 
-  if (!open) return null;
-  return mobile ? <MobileSearch onClose={() => setOpen(false)} /> : <CommandPaletteDialog />;
+  if (mobile) return open ? <MobileSearch onClose={() => setOpen(false)} /> : null;
+  return open || desktopPresent ? <CommandPaletteDialog active={open} /> : null;
 }
 
-function CommandPaletteDialog() {
+function CommandPaletteDialog({ active }: { active: boolean }) {
   const router = useRouter();
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
@@ -119,7 +133,7 @@ function CommandPaletteDialog() {
 
   return (
     <Command.Dialog
-      open
+      open={active}
       onOpenChange={setPaletteOpen}
       label="Command palette"
       // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see

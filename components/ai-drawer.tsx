@@ -36,7 +36,7 @@ export function AIDrawer() {
     return () => clearTimeout(t);
   }, [open]);
 
-  useLockBodyScroll(present && open);
+  useLockBodyScroll(present);
 
   useEffect(() => {
     if (!open) return;

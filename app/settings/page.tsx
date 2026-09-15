@@ -28,7 +28,7 @@ import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
 import { cn } from "@/lib/utils";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
 import { useUIStore } from "@/lib/ui-store";
 import {
@@ -65,6 +65,7 @@ function downloadFile(name: string, blob: Blob) {
 }
 
 export default function SettingsPage() {
+  const reducedMotion = prefersReducedMotion();
   const settings = useDatebookStore((s) => s.settings);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categories = useDatebookStore((s) => s.categories);
@@ -345,13 +346,10 @@ export default function SettingsPage() {
           {settings.preset === "custom" && (
             <motion.div
               key="custom-editor"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{
-                height: motionTokens.springLayout,
-                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-              }}
+              initial={reducedMotion ? false : { height: 0 }}
+              animate={{ height: "auto" }}
+              exit={reducedMotion ? { height: 0, transition: { duration: 0 } } : { height: 0 }}
+              transition={reducedMotion ? { duration: 0 } : motionTokens.springLayout}
               className="overflow-hidden"
             >
               <div className="pt-3.5">
@@ -738,6 +736,7 @@ function CollapsibleCard({
   defaultOpen?: boolean;
 }) {
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
+  const reduced = prefersReducedMotion();
 
   return (
     <section id={id} className={cn("overflow-hidden rounded-lg border border-line/80 bg-surface", ANCHOR_OFFSET)}>
@@ -745,7 +744,7 @@ function CollapsibleCard({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="group flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
+        className="press-none group flex w-full items-start justify-between gap-3 p-4 text-left transition-colors duration-[var(--motion-micro)] active:bg-surface-sunken sm:p-5"
       >
         <CardHeading title={title} sub={sub} subMinLines={2} />
         <motion.span
@@ -762,13 +761,10 @@ function CollapsibleCard({
         {open && (
           <motion.div
             key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{
-              height: motionTokens.springLayout,
-              opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-            }}
+            initial={reduced ? false : { height: 0 }}
+            animate={{ height: "auto" }}
+            exit={reduced ? { height: 0, transition: { duration: 0 } } : { height: 0 }}
+            transition={reduced ? { duration: 0 } : motionTokens.springLayout}
             className="overflow-hidden"
           >
             <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">

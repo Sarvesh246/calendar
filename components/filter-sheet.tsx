@@ -66,7 +66,6 @@ export function FilterButton({ className }: { className?: string }) {
 export function FilterSheet() {
   const open = useUIStore((s) => s.filterOpen);
   const setOpen = useUIStore((s) => s.setFilterOpen);
-  useLockBodyScroll(open);
 
   return (
     <AnimatePresence>
@@ -80,6 +79,10 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
+  // AnimatePresence keeps this body mounted through its exit. Keep the lock
+  // until the scrim and panel are both gone, so fixed chrome cannot repaint
+  // while the sheet is sliding away.
+  useLockBodyScroll(true);
   useDialogFocus(panelRef, true);
   useSheetOverscroll(scrollRef, dragControls);
   const categories = useDatebookStore((s) => s.categories);

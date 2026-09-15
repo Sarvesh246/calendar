@@ -535,6 +535,13 @@ html.scroll-locked body {
   }
 }
 
+/* The stable gutter is outside the fixed containing block in Chromium. A
+   full-screen scrim laid out with inset-0 alone leaves that narrow strip of
+   the live page exposed at the right edge while a menu is open. */
+.fixed.inset-0 {
+  width: 100vw;
+}
+
 /* Keep the app's own fixed chrome welded to the device window while the
    on-screen keyboard is up.
 
@@ -974,25 +981,29 @@ a,
 [role="button"],
 summary,
 label {
-  transition-property: transform, color, background-color, border-color, opacity, box-shadow;
+  /* Independent scale composes with Framer's transform and Tailwind's translate.
+     Transitioning transform globally made animated controls trail their own
+     spring one frame at a time. */
+  transition-property: scale, color, background-color, border-color, opacity, box-shadow;
   transition-duration: var(--motion-micro);
   transition-timing-function: var(--ease-standard);
 }
 
 /* Release is the half you actually watch, so let it ease back a touch slower
    than it went down. */
-button:not(:disabled):active,
-a:not([aria-disabled="true"]):active,
-[role="button"]:not([aria-disabled="true"]):active,
+button:not(:disabled):not(.press-none):not(.press-surface):not([role="menuitem"]):active,
+a:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
+[role="button"]:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 summary:active {
-  transform: scale(0.97);
+  scale: 0.97;
   transition-duration: 80ms;
 }
 
 button.press-none:active,
 a.press-none:active,
-[role="button"].press-none:active {
-  transform: none;
+[role="button"].press-none:active,
+[role="menuitem"]:active {
+  scale: 1;
 }
 
 /* Fields ease into focus too. Without this the accent ring and the border
@@ -1526,6 +1537,7 @@ html.calendar-dragging * {
   a:not([aria-disabled="true"]):active,
   [role="button"]:not([aria-disabled="true"]):active,
   summary:active {
+    scale: 1;
     transform: none;
   }
 

@@ -8,6 +8,8 @@ import { useUIStore } from "@/lib/ui-store";
 import { useResolvedPathname, navigateTab } from "@/lib/tab-nav";
 import { undoLatest } from "@/lib/action-undo";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
+import { Scrim } from "@/components/ui/scrim";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 
@@ -152,6 +154,7 @@ function ShortcutSheet() {
   const mod = useModKeyLabel();
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, true);
+  useLockBodyScroll(true);
 
   // Esc closes the sheet wherever focus is — including before focus has
   // moved into it.
@@ -167,16 +170,7 @@ function ShortcutSheet() {
 
   return (
     <div className="viewport-pinned-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.button
-        type="button"
-        aria-label="Close keyboard shortcuts"
-        initial={{ opacity: 0.78 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        className="overlay-scrim-light absolute inset-0"
-        onClick={() => setOpen(false)}
-      />
+      <Scrim label="Close keyboard shortcuts" tone="light" onClick={() => setOpen(false)} />
       <motion.div
         ref={ref}
         role="dialog"

@@ -62,7 +62,7 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
 
   return (
     <div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
-      <Scrim onClick={close} />
+      <Scrim onClick={close} exitDuration={0.26} />
       <motion.div
         ref={ref}
         role="dialog"
