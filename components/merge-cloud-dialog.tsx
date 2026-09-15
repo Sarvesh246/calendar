@@ -19,7 +19,7 @@ export function MergeCloudDialog() {
       {offer && (
         <div className="fixed inset-0 z-[60]">
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 0.78 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={{ duration: motionTokens.standard }}

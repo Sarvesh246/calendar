@@ -120,7 +120,7 @@ function InspectorPanel({ item }: { item: Item }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
       transition={motionTokens.spring}
-      className="fixed bottom-4 right-4 top-4 z-[44] flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)] outline-none"
+      className="fixed bottom-4 right-4 top-4 z-[42] flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)] outline-none"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5">
         <span

@@ -551,7 +551,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
           setMenu(null);
         }
       }}
-      className="fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-16px_rgb(0_0_0/0.4)]"
+      className="fixed bottom-6 left-1/2 z-[43] flex -translate-x-1/2 items-center gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-16px_rgb(0_0_0/0.4)]"
     >
       <button type="button" onClick={onClear} aria-label="Clear selection" title="Clear selection (Esc)" className={cn(barButton, "w-8 justify-center px-0")}>
         <X className="h-4 w-4" strokeWidth={2} />

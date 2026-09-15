@@ -170,7 +170,7 @@ function ShortcutSheet() {
       <motion.button
         type="button"
         aria-label="Close keyboard shortcuts"
-        initial={{ opacity: 0 }}
+        initial={{ opacity: 0.78 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
