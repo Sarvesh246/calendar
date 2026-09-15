@@ -15,6 +15,7 @@ import {
 } from "./syllabus-import";
 import { collapseCrossSourceDuplicates, isSyllabusSource, syllabusSourceUrl } from "./syllabus-match";
 import { mergeImportedItem, importedFieldsChanged } from "./source-snapshot";
+import { isStatusOnlyItemsChange } from "./save-status";
 import { supabase } from "./supabase/client";
 import {
   describeError,
@@ -1821,6 +1822,14 @@ useDatebookStore.subscribe((state, prev) => {
   // `setState` calls; neither is an edit.
   if (!useDatebookStore.persist.hasHydrated()) return;
   if (state.items === prev.items && state.categories === prev.categories) return;
+  // Completing / starting / reopening already gets a dedicated snackbar. Counting
+  // those as "content edits" made the Saved pill stack on top of Completed.
+  if (
+    state.categories === prev.categories &&
+    isStatusOnlyItemsChange(prev.items, state.items)
+  ) {
+    return;
+  }
   localWrites += 1;
   for (const listener of localWriteListeners) listener();
 });

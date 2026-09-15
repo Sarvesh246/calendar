@@ -147,10 +147,13 @@ export default function SettingsPage() {
         </p>
       </header>
 
-      {/* Most-changed preferences — always visible */}
-      <SettingsCard>
-        <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
-        <div className="mt-4 flex flex-col gap-5">
+      <CollapsibleCard
+        title="Everyday preferences"
+        sub="What you see first and how the calendar feels day to day."
+        storageKey="everyday"
+        defaultOpen
+      >
+        <div className="flex flex-col gap-5">
           <SettingBlock label="Open Datebook to">
             <Segmented
               segmentId="landing-view"
@@ -212,7 +215,7 @@ export default function SettingsPage() {
             </SettingBlock>
           </div>
         </div>
-      </SettingsCard>
+      </CollapsibleCard>
 
       {/* Phone stack: Account → Classes → Import → Meetings → Reminders → Look.
           Desktop grid keeps columns independent. */}
@@ -306,8 +309,8 @@ export default function SettingsPage() {
             <Subheading title="Attach per class" />
             <div className="mt-2 flex flex-col gap-2">
               {categories.filter((c) => !c.archived).map((cat) => (
-                <div key={cat.id} className="rounded-xl border border-line/80 px-3 py-2">
-                  <p className="mb-1.5 text-[13px] font-medium text-ink">{cat.name}</p>
+                <div key={cat.id} className="min-w-0 rounded-xl border border-line/80 px-3 py-2">
+                  <p className="mb-1.5 truncate text-[13px] font-medium text-ink">{cat.name}</p>
                   <CategorySyllabusControl category={cat} />
                 </div>
               ))}
@@ -501,12 +504,13 @@ export default function SettingsPage() {
           </div>
       </div>
 
-      <SettingsCard>
-        <CardHeading
-          title="Backup & export"
-          sub="Download a full copy or an .ics, or restore from a file."
-        />
-        <div className="mt-4 flex flex-wrap gap-2">
+      <CollapsibleCard
+        title="Backup & export"
+        sub="Download a full copy or an .ics, or restore from a file."
+        storageKey="backup"
+        defaultOpen={false}
+      >
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -576,7 +580,7 @@ export default function SettingsPage() {
             Terms of use
           </a>
         </p>
-      </SettingsCard>
+      </CollapsibleCard>
 
       <SettingsCard variant="danger">
         <CardHeading
@@ -665,8 +669,8 @@ function CategoryEditor({
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
-      <div className="flex items-center gap-3">
+    <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <input
           type="color"
           value={cat.color}
@@ -699,13 +703,13 @@ function CategoryEditor({
             (e.currentTarget as HTMLInputElement).blur();
           }}
           aria-label={`${cat.name} name`}
-          className="min-h-11 min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
+          className="min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none"
         />
-        {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
+        {cat.archived && <span className="shrink-0 text-[11px] text-ink-faint">Archived</span>}
         <button
           type="button"
           onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-          className="text-[12px] font-medium text-ink-faint hover:text-ink"
+          className="shrink-0 text-[12px] font-medium text-ink-faint hover:text-ink"
         >
           {cat.archived ? "Restore" : "Archive"}
         </button>
@@ -714,7 +718,7 @@ function CategoryEditor({
             type="button"
             onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
             aria-expanded={confirmDeleteId === cat.id}
-            className="text-[12px] font-medium text-warn"
+            className="shrink-0 text-[12px] font-medium text-warn"
           >
             Delete
           </button>

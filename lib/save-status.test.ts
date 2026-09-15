@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { describeSaveStatus } from "./save-status";
+import { describeSaveStatus, isStatusOnlyItemsChange } from "./save-status";
+import type { Item } from "./types";
 
 const cloud = { mode: "cloud" as const, online: true, queued: 0, syncStatus: "synced" as const };
+
+function item(partial: Partial<Item> & Pick<Item, "id">): Item {
+  return {
+    title: "HW",
+    type: "assignment",
+    categoryId: "c1",
+    at: "2026-09-15T12:00:00.000Z",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    status: "todo",
+    ...partial,
+  };
+}
 
 describe("describeSaveStatus", () => {
   it("reassures a signed-out user that the device has it", () => {
@@ -61,5 +75,33 @@ describe("describeSaveStatus", () => {
     const v = describeSaveStatus({ ...cloud, syncStatus: "syncing", queued: 2 });
     expect(v.title).toBe("Saving…");
     expect(v.transient).toBe(true);
+  });
+});
+
+describe("isStatusOnlyItemsChange", () => {
+  it("treats a complete flip as status-only", () => {
+    const before = [item({ id: "a", status: "todo" })];
+    const after = [
+      item({
+        id: "a",
+        status: "done",
+        completedAt: "2026-09-15T18:00:00.000Z",
+        statusAt: "2026-09-15T18:00:00.000Z",
+        updatedAt: "2026-09-15T18:00:00.000Z",
+      }),
+    ];
+    expect(isStatusOnlyItemsChange(before, after)).toBe(true);
+  });
+
+  it("rejects a title edit even when status also moves", () => {
+    const before = [item({ id: "a", status: "todo", title: "Old" })];
+    const after = [item({ id: "a", status: "done", title: "New", updatedAt: "2026-09-15T18:00:00.000Z" })];
+    expect(isStatusOnlyItemsChange(before, after)).toBe(false);
+  });
+
+  it("rejects adds and deletes", () => {
+    const before = [item({ id: "a" })];
+    expect(isStatusOnlyItemsChange(before, [...before, item({ id: "b" })])).toBe(false);
+    expect(isStatusOnlyItemsChange(before, [])).toBe(false);
   });
 });
