@@ -52,4 +52,12 @@ describe("parseViewState", () => {
     expect(parseViewState(JSON.stringify({ scroll: {}, categoryFilter: ["a", 2] })).categoryFilter)
       .toEqual(["a"]);
   });
+
+  it("keeps a valid last tab and drops anything else", () => {
+    expect(parseViewState(JSON.stringify({ scroll: {}, lastTab: "/agenda" })).lastTab).toBe(
+      "/agenda"
+    );
+    expect(parseViewState(JSON.stringify({ scroll: {}, lastTab: "/settings" })).lastTab).toBeUndefined();
+    expect(parseViewState(JSON.stringify({ scroll: {}, lastTab: 3 })).lastTab).toBeUndefined();
+  });
 });

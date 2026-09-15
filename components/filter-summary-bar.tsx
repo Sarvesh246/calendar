@@ -13,15 +13,16 @@ import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 /**
  * The filter you forgot you set.
  *
- * Until now the only sign that a class filter was on was an 8px dot in the
- * corner of the filter button, and "hide completed" had no sign at all — it
- * lives three taps deep in a menu. Both silently delete things from every
- * screen at once, which is how "my assignment disappeared" happens.
+ * Until now the only sign that a class filter was on was an 8px dot on More,
+ * and "hide completed" had no sign at all — it lives in the Filter sheet (and
+ * as a Settings preference). Both silently delete things from every screen at
+ * once, which is how "my assignment disappeared" happens.
  *
  * So: a compact line that names what is on ("2 classes · Incomplete") and can
  * turn it off in one tap, on every tab, whenever a filter is active — and
  * nothing at all when none is. Phones only; the desktop sidebar already shows
- * the selected classes as a list you can't miss.
+ * the selected classes as a list you can't miss. Tapping the line opens the
+ * same Filter sheet as More → Filters.
  */
 export function FilterSummaryBar() {
   const categories = useDatebookStore((s) => s.categories);

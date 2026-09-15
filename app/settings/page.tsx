@@ -27,6 +27,7 @@ import { CategoryClassTimesControl, ClassTimesRoster } from "@/components/catego
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
+import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
@@ -140,7 +141,8 @@ export default function SettingsPage() {
     // section tiles share a row baseline instead of drifting out of line.
     <div className="mx-auto w-full max-w-[1120px] pb-4">
       <div className="flex flex-col gap-5">
-      <header className="pt-1">
+      <MobileRoomHeader title="Settings" />
+      <header className="hidden pt-1 md:block">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
