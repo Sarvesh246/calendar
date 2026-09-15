@@ -34,7 +34,7 @@ const AssistantConversation = dynamic(
 
 const TABS: { id: PaneTab; label: string; Icon: typeof CalendarDays }[] = [
   { id: "day", label: "Day", Icon: CalendarDays },
-  { id: "plan", label: "Plan", Icon: ListTodo },
+  { id: "plan", label: "To place", Icon: ListTodo },
   { id: "assistant", label: "Assistant", Icon: Sparkles },
 ];
 

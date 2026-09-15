@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
+import Link from "next/link";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { paintAppearance } from "@/components/theme-provider";
@@ -23,7 +24,6 @@ import {
 } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
 import { NotificationToggle } from "@/components/notification-toggle";
-import { CategoryClassTimesControl, ClassTimesRoster } from "@/components/category-class-times";
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
@@ -31,7 +31,6 @@ import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
-import { useUIStore } from "@/lib/ui-store";
 import {
   CLASS_REMINDER_OPTIONS,
   classReminderLabel,
@@ -49,7 +48,7 @@ import type {
 
 /** `/settings#…` targets: which collapsible section to open, and what to scroll to. */
 const DEEP_LINKS: Record<string, { section: string; anchor: string }> = {
-  import: { section: "calendar", anchor: "import" },
+  import: { section: "import", anchor: "import" },
   reminders: { section: "reminders", anchor: "reminders" },
 };
 
@@ -77,7 +76,6 @@ export default function SettingsPage() {
   const deleteReminderPreset = useDatebookStore((s) => s.deleteReminderPreset);
   const replaceFromBackup = useDatebookStore((s) => s.replaceFromBackup);
   const resetAllData = useDatebookStore((s) => s.resetAllData);
-  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#007AFF");
@@ -153,7 +151,7 @@ export default function SettingsPage() {
       <SettingsCard>
         <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
         <div className="mt-4 flex flex-col gap-5">
-          <SettingBlock label="Open Datebook to" hint="The first screen when you launch the app.">
+          <SettingBlock label="Open Datebook to">
             <Segmented
               segmentId="landing-view"
               value={settings.landingView}
@@ -166,22 +164,7 @@ export default function SettingsPage() {
             />
           </SettingBlock>
 
-          <SettingBlock
-            label="When you tap a day on mobile"
-            hint="Choose how the day's schedule appears on your phone."
-          >
-            <Segmented
-              segmentId="mobile-day-details"
-              value={settings.mobileDayDetails}
-              options={[
-                { value: "sheet", label: "Slide-up panel" },
-                { value: "inline", label: "List below calendar" },
-              ]}
-              onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
-            />
-          </SettingBlock>
-
-          <SettingBlock label="Calendar density" hint="How much fits on screen at once.">
+          <SettingBlock label="Calendar density">
             <Segmented
               segmentId="density"
               value={settings.density}
@@ -196,11 +179,43 @@ export default function SettingsPage() {
               }}
             />
           </SettingBlock>
+
+          <SettingBlock label="Week starts on">
+            <Segmented
+              segmentId="week-starts"
+              value={String(settings.weekStartsOn)}
+              options={[
+                { value: "0", label: "Sunday" },
+                { value: "1", label: "Monday" },
+              ]}
+              onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
+            />
+          </SettingBlock>
+
+          <ToggleRow
+            label="24-hour clock"
+            checked={settings.clock24h}
+            onChange={(v) => updateSettings({ clock24h: v })}
+          />
+
+          <div className="md:hidden">
+            <SettingBlock label="When you tap a day on mobile">
+              <Segmented
+                segmentId="mobile-day-details"
+                value={settings.mobileDayDetails}
+                options={[
+                  { value: "sheet", label: "Slide-up panel" },
+                  { value: "inline", label: "List below calendar" },
+                ]}
+                onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
+              />
+            </SettingBlock>
+          </div>
         </div>
       </SettingsCard>
 
-      {/* One grid so desktop rows line up. `order` keeps the phone stack
-          Account → Calendar → Reminders → Display → Appearance → Install. */}
+      {/* Phone stack: Account → Classes → Import → Meetings → Reminders → Look.
+          Desktop grid keeps columns independent. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <div className="order-1 min-w-0">
       <CollapsibleCard
@@ -210,9 +225,118 @@ export default function SettingsPage() {
         defaultOpen
       >
         <AccountSection />
+        <Divider />
+        <Subheading title="Install app" />
+        <p className="mb-2 text-[13px] text-ink-soft">Add Datebook to your home screen for offline use.</p>
+        <PwaInstallButton />
+      </CollapsibleCard>
+          </div>
+          <div className="order-2 min-w-0">
+      <CollapsibleCard
+        title="Classes"
+        sub="Name, color, and optional meeting name for each class."
+        storageKey="classes"
+        defaultOpen
+      >
+        <div className="flex flex-col gap-2">
+          {categories.map((cat) => (
+            <CategoryEditor
+              key={cat.id}
+              category={cat}
+              categories={categories}
+              confirmDeleteId={confirmDeleteId}
+              onConfirmDeleteId={setConfirmDeleteId}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
+          <input
+            type="color"
+            value={newCategoryColor}
+            onChange={(e) => setNewCategoryColor(e.target.value)}
+            className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+            aria-label="New class color"
+          />
+          <input
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !newCategoryName.trim()) return;
+              e.preventDefault();
+              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
+              setNewCategoryName("");
+            }}
+            placeholder="New class"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
+          />
+          <button
+            disabled={!newCategoryName.trim()}
+            onClick={() => {
+              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
+              setNewCategoryName("");
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+            aria-label="Add class"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
       </CollapsibleCard>
           </div>
           <div className="order-3 min-w-0">
+      <CollapsibleCard
+        id="import"
+        title="Import"
+        sub="Pull due dates from a calendar feed or a syllabus PDF."
+        storageKey="import"
+        defaultOpen
+      >
+        <SyllabusImportProvider>
+        <Subheading title="Calendar link" />
+        <ImportCalendar />
+
+        <Divider />
+
+        <Subheading title="Syllabus PDF" />
+        <ImportSyllabus />
+
+        {categories.filter((c) => !c.archived).length > 0 && (
+          <>
+            <Divider />
+            <Subheading title="Attach per class" />
+            <div className="mt-2 flex flex-col gap-2">
+              {categories.filter((c) => !c.archived).map((cat) => (
+                <div key={cat.id} className="rounded-xl border border-line/80 px-3 py-2">
+                  <p className="mb-1.5 text-[13px] font-medium text-ink">{cat.name}</p>
+                  <CategorySyllabusControl category={cat} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        </SyllabusImportProvider>
+      </CollapsibleCard>
+          </div>
+          <div className="order-4 min-w-0">
+      <CollapsibleCard
+        title="Weekly meetings"
+        sub="Lectures and labs live on Schedule, not here."
+        storageKey="meetings"
+        defaultOpen
+      >
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Add or edit weekly class times from the Schedule page.
+        </p>
+        <Link
+          href="/schedule"
+          className="mt-3 flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
+          Edit on Schedule
+        </Link>
+      </CollapsibleCard>
+          </div>
+          <div className="order-5 min-w-0">
       <CollapsibleCard
         id="reminders"
         title="Reminders"
@@ -224,8 +348,7 @@ export default function SettingsPage() {
         <div className="mt-3">
           <Subheading title="Class heads-up" />
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
-            How early a class alert lands — and when Today starts counting the class down. Applies
-            to every weekly class on your schedule.
+            {classReminderLabel(settings.classReminderMinutes)} — also sets when Today starts the countdown.
           </p>
         </div>
         <ClassReminderPicker
@@ -237,10 +360,9 @@ export default function SettingsPage() {
         />
         <Divider />
         <div className="mt-2">
-          <Subheading title="Default reminders" />
+          <Subheading title="Defaults for new items" />
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
-            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap a reminder to use
-            it by default, or swipe it — left to delete, right to rename.
+            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap to use by default.
           </p>
         </div>
         <div className="mt-2 flex flex-col gap-1.5">
@@ -315,11 +437,11 @@ export default function SettingsPage() {
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-5 min-w-0">
+          <div className="order-6 min-w-0">
       <CollapsibleCard
-        title="Appearance"
-        sub="Optional color themes. Minimal is the default look."
-        storageKey="appearance"
+        title="Look"
+        sub="Themes and what shows on cards."
+        storageKey="look"
         defaultOpen={false}
       >
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -361,157 +483,28 @@ export default function SettingsPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </CollapsibleCard>
-          </div>
-          <div className="order-2 min-w-0">
-      <CollapsibleCard
-        title="Calendar & categories"
-        sub="Organize items by color and pull in events from other calendars."
-        storageKey="calendar"
-        defaultOpen
-      >
-        <SyllabusImportProvider>
-        <div className="flex flex-col gap-2">
-          {categories.map((cat) => (
-            <CategoryEditor
-              key={cat.id}
-              category={cat}
-              categories={categories}
-              confirmDeleteId={confirmDeleteId}
-              onConfirmDeleteId={setConfirmDeleteId}
-            />
-          ))}
-        </div>
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
-          <input
-            type="color"
-            value={newCategoryColor}
-            onChange={(e) => setNewCategoryColor(e.target.value)}
-            className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-            aria-label="New category color"
-          />
-          <input
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || !newCategoryName.trim()) return;
-              e.preventDefault();
-              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
-              setNewCategoryName("");
-            }}
-            placeholder="New category"
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
-          />
-          <button
-            disabled={!newCategoryName.trim()}
-            onClick={() => {
-              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
-              setNewCategoryName("");
-            }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
-            aria-label="Add category"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        </div>
 
         <Divider />
-
-        <Subheading title="Class times" />
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Weekly lectures and labs. Paste something like “ENGL 101 MWF 10:00–10:50”, or two times: “MATH MW 4:15–5:00 TTh 5:30–6:45”.
-        </p>
-        <button
-          type="button"
-          onClick={() => openClassSchedule()}
-          className="mt-2 flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
-        >
-          <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
-          Add class times
-        </button>
-        <ClassTimesRoster />
-
-        <Divider />
-
-        <div id="import" className={ANCHOR_OFFSET}>
-          <Subheading title="Import a calendar link" />
-        </div>
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions. Re-sync any time for updates.
-        </p>
-        <ImportCalendar />
-
-        <Divider />
-
-        <Subheading title="Import a syllabus PDF" />
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Attach a syllabus. Datebook reads due dates and skips anything already on that class&apos;s calendar.
-        </p>
-        <ImportSyllabus />
-        </SyllabusImportProvider>
-      </CollapsibleCard>
-          </div>
-          <div className="order-4 min-w-0">
-      <CollapsibleCard
-        title="Display options"
-        sub="Clock, week layout, and what shows on cards."
-        storageKey="display"
-        defaultOpen={false}
-      >
         <div className="flex flex-col gap-4">
-          <SettingBlock label="Week starts on">
-            <Segmented
-              segmentId="week-starts"
-              value={String(settings.weekStartsOn)}
-              options={[
-                { value: "0", label: "Sunday" },
-                { value: "1", label: "Monday" },
-              ]}
-              onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
-            />
-          </SettingBlock>
-
-          <ToggleRow
-            label="24-hour clock"
-            checked={settings.clock24h}
-            onChange={(v) => updateSettings({ clock24h: v })}
-          />
           <ToggleRow
             label="Show location on events"
             checked={settings.showLocation}
             onChange={(v) => updateSettings({ showLocation: v })}
           />
           <ToggleRow
-            label="Category color dots"
+            label="Class color dots"
             checked={settings.showCategoryDot}
             onChange={(v) => updateSettings({ showCategoryDot: v })}
-          />
-          <ToggleRow
-            label="Hide completed items"
-            checked={settings.hideCompleted}
-            onChange={(v) => updateSettings({ hideCompleted: v })}
           />
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-6 min-w-0">
-      <CollapsibleCard
-        title="Install app"
-        sub="Add Datebook to your home screen for offline use."
-        storageKey="install"
-        defaultOpen={false}
-      >
-        <PwaInstallButton />
-      </CollapsibleCard>
-          </div>
       </div>
 
-      {/* Everything that takes your data off (or wipes it from) this device —
-          always expanded, pinned to bottom */}
-      <SettingsCard variant="danger">
+      <SettingsCard>
         <CardHeading
           title="Backup & export"
-          sub="Download a full copy of your data or an .ics for other calendar apps, restore from a file, or wipe this device clean."
+          sub="Download a full copy or an .ics, or restore from a file."
         />
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -573,6 +566,24 @@ export default function SettingsPage() {
               }}
             />
           </label>
+        </div>
+        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
+          <a href="/privacy" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Privacy policy
+          </a>
+          {" · "}
+          <a href="/terms" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Terms of use
+          </a>
+        </p>
+      </SettingsCard>
+
+      <SettingsCard variant="danger">
+        <CardHeading
+          title="Reset calendar data"
+          sub="Delete all items and imported feeds on this device. This cannot be undone."
+        />
+        <div className="mt-4">
           <button
             type="button"
             onClick={() => {
@@ -584,15 +595,6 @@ export default function SettingsPage() {
             Reset calendar data
           </button>
         </div>
-        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
-          <a href="/privacy" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
-            Privacy policy
-          </a>
-          {" · "}
-          <a href="/terms" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
-            Terms of use
-          </a>
-        </p>
       </SettingsCard>
       </div>
     </div>
@@ -719,7 +721,7 @@ function CategoryEditor({
         )}
       </div>
       <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
-        <span className="shrink-0">Class Title</span>
+        <span className="shrink-0">Meeting name</span>
         <input
           type="text"
           enterKeyHint="done"
@@ -743,7 +745,7 @@ function CategoryEditor({
             (e.currentTarget as HTMLInputElement).blur();
           }}
           placeholder={name.trim() || cat.name}
-          aria-label={`${cat.name} Class Title`}
+          aria-label={`${cat.name} meeting name`}
           className="min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
       </label>
@@ -759,8 +761,6 @@ function CategoryEditor({
           onCancel={() => onConfirmDeleteId(null)}
         />
       )}
-      <CategorySyllabusControl category={cat} />
-      <CategoryClassTimesControl category={cat} />
     </div>
   );
 }
@@ -1388,11 +1388,8 @@ function CustomThemeEditor({
 const REMINDER_REVEAL = 76;
 
 /**
- * A settings row that both taps (toggle default) and swipes (iOS-style,
- * left reveals delete, right reveals edit) — the two gestures don't fight
- * because toggling rides Framer's `onTap`, which only fires when the pointer
- * never crossed its own drag threshold, rather than a native `onClick` that
- * would also fire after a real drag.
+ * A settings row that taps to toggle default, with always-visible Edit /
+ * Delete. On touch, swipe still reveals the same actions as a shortcut.
  */
 function ReminderPresetRow({
   preset,
@@ -1417,7 +1414,7 @@ function ReminderPresetRow({
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      <div className="absolute inset-0 flex items-stretch justify-between" aria-hidden={open === "none"}>
+      <div className="absolute inset-0 flex items-stretch justify-between md:hidden" aria-hidden={open === "none"}>
         <button
           type="button"
           tabIndex={open === "edit" ? 0 : -1}
@@ -1454,22 +1451,47 @@ function ReminderPresetRow({
           else if (info.offset.x >= REMINDER_REVEAL / 2) snapTo(REMINDER_REVEAL, "edit");
           else snapTo(0, "none");
         }}
-        onTap={() => {
-          if (open !== "none") {
-            snapTo(0, "none");
-            return;
-          }
-          onToggle();
-        }}
         className={cn(
-          "relative z-[1] flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-3 text-left text-[14px] transition-colors",
+          "relative z-[1] flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[14px] transition-colors",
           active
             ? "border-accent/40 bg-accent-soft text-ink"
             : "border-line/80 bg-surface text-ink-soft hover:border-line-strong"
         )}
       >
-        {preset.label}
-        {active && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.5} />}
+        <button
+          type="button"
+          onClick={() => {
+            if (open !== "none") {
+              snapTo(0, "none");
+              return;
+            }
+            onToggle();
+          }}
+          className="flex min-h-9 min-w-0 flex-1 items-center justify-between gap-2 text-left"
+        >
+          <span className="truncate">{preset.label}</span>
+          {active && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.5} />}
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            aria-label={`Edit ${preset.label}`}
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-warn hover:bg-warn-soft"
+            aria-label={`Delete ${preset.label}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Delete
+          </button>
+        </div>
       </motion.div>
     </div>
   );

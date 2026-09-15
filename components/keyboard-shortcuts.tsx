@@ -44,12 +44,13 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["1"], label: "Today" },
         { keys: ["2"], label: "Calendar" },
         { keys: ["3"], label: "Agenda" },
+        { keys: ["4"], label: "Schedule" },
       ],
     },
     {
       title: "Calendar",
       items: [
-        { keys: ["T"], label: "Jump to today" },
+        { keys: ["T"], label: "Today page; on Calendar, jump to today" },
         { keys: ["M"], label: "Month view" },
         { keys: ["W"], label: "Week view" },
         { keys: ["←", "→"], label: "Previous / next" },
@@ -124,6 +125,7 @@ export function KeyboardShortcuts() {
       else if (key === "1") navigateTab(router, "/today");
       else if (key === "2") navigateTab(router, "/calendar");
       else if (key === "3") navigateTab(router, "/agenda");
+      else if (key === "4") navigateTab(router, "/schedule");
       else if (key === "t") {
         if (onCalendar) ui.sendCalendarCommand({ kind: "today" });
         else navigateTab(router, "/today");

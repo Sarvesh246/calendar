@@ -20,9 +20,8 @@ import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
  *
  * So: a compact line that names what is on ("2 classes · Incomplete") and can
  * turn it off in one tap, on every tab, whenever a filter is active — and
- * nothing at all when none is. Phones only; the desktop sidebar already shows
- * the selected classes as a list you can't miss. Tapping the line opens the
- * same Filter sheet as More → Filters.
+ * nothing at all when none is. Shown on phones and desktop (a collapsed rail
+ * can hide the sidebar Classes/Views). Tapping the line opens the Filter sheet.
  */
 export function FilterSummaryBar() {
   const categories = useDatebookStore((s) => s.categories);
@@ -59,7 +58,7 @@ export function FilterSummaryBar() {
           animate={reduced ? { opacity: 1 } : { height: "auto", opacity: 1 }}
           exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
           transition={reduced ? motionTokens.tweenStandard : motionTokens.springLayout}
-          className="shrink-0 overflow-hidden md:hidden"
+          className="shrink-0 overflow-hidden"
         >
           <div className="mb-2.5 flex items-center gap-2 rounded-full border border-accent/35 bg-accent-soft px-1 py-1">
             <button

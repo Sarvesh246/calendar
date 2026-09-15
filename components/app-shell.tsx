@@ -15,6 +15,7 @@ import { DeferredFeedSync } from "./deferred-feed-sync";
 import { ToastViewport } from "./toast-viewport";
 import { MobileHeaderActions } from "./mobile-header-actions";
 import { FilterSummaryBar } from "./filter-summary-bar";
+import { FilterButton } from "./filter-sheet";
 import { ViewStateSync } from "./view-state-sync";
 import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
@@ -156,6 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                   Ask
                 </Button>
+                <FilterButton className="hidden md:inline-flex" />
                 {/* Where there's room, search looks like a field with its
                     shortcut on it — an icon alone never taught anyone ⌘K. */}
                 <button

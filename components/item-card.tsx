@@ -7,7 +7,7 @@ import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import { MobileQuickActions } from "@/components/mobile-quick-actions";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen, Play, Square } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { classMeetingTitle } from "@/lib/class-schedule";
@@ -309,6 +309,9 @@ function useCompleteStyle(done: boolean) {
 function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
   const openInspector = useUIStore((s) => s.openInspector);
   const key = day ? dayKey(day) : undefined;
+  const status = item.status ?? "todo";
+  const canStart = item.type !== "event" && status !== "done";
+  const doing = status === "doing";
   const btn =
     "flex h-7 w-7 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -322,6 +325,21 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
       onClick={stop}
       onKeyDown={stop}
     >
+      {canStart && (
+        <button
+          type="button"
+          className={btn}
+          aria-label={doing ? "Stop" : "Start"}
+          title={doing ? "Stop" : "Start"}
+          onClick={() => changeMobileStatus(item, doing ? "todo" : "doing")}
+        >
+          {doing ? (
+            <Square className="h-3.5 w-3.5" strokeWidth={1.9} />
+          ) : (
+            <Play className="h-3.5 w-3.5" strokeWidth={1.9} />
+          )}
+        </button>
+      )}
       <button type="button" className={btn} aria-label="Open details" title="Open details" onClick={() => openInspector(item.id)}>
         <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.9} />
       </button>

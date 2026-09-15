@@ -120,7 +120,7 @@ function toggleIn<T>(list: T[], value: T): T[] {
 }
 
 /** Save what you're looking at (or a new combination) as a named view. */
-function ViewEditor({ onDone }: { onDone: () => void }) {
+export function ViewEditor({ onDone }: { onDone: () => void }) {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const current = useUIStore((s) => s.viewFilter);
   const applyView = useUIStore((s) => s.applyView);
