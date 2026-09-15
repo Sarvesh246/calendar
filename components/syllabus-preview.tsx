@@ -40,6 +40,9 @@ export function SyllabusPreview({
   matches,
   decisions,
   clock24h,
+  categories,
+  selectedCategoryId,
+  onClassChange,
   onToggle,
   onCancel,
   onConfirm,
@@ -49,6 +52,10 @@ export function SyllabusPreview({
   matches: SyllabusMatch[];
   decisions: SyllabusRowDecision[];
   clock24h: boolean;
+  /** When set, the preview can re-target which class receives the import. */
+  categories?: { id: string; name: string }[];
+  selectedCategoryId?: string;
+  onClassChange?: (categoryId: string) => void;
   onToggle: (index: number) => void;
   onCancel: () => void;
   onConfirm: () => void;
@@ -57,7 +64,10 @@ export function SyllabusPreview({
   const addCount = matches.reduce((n, m, i) => {
     return n + (syllabusRowAddsItem(decisions[i] ?? "skip", m.verdict) ? 1 : 0);
   }, 0);
-  const canApply = addCount > 0 || decisions.some((d) => d === "link");
+  const needsClass = Boolean(onClassChange && categories && categories.length > 0);
+  const classPicked = Boolean(selectedCategoryId);
+  const canApply =
+    (addCount > 0 || decisions.some((d) => d === "link")) && (!needsClass || classPicked);
 
   const summary = [
     `${newCount} new`,
@@ -85,10 +95,31 @@ export function SyllabusPreview({
       style={{ transformOrigin: "top center" }}
       className="flex max-h-[min(60dvh,28rem)] flex-col overflow-hidden rounded-lg border border-line bg-surface"
     >
-      <div className="flex shrink-0 flex-col gap-0.5 border-b border-line/60 px-4 py-3">
-        <p className="truncate text-[13.5px] font-semibold text-ink">{classLabel}</p>
+      <div className="flex shrink-0 flex-col gap-1.5 border-b border-line/60 px-4 py-3">
+        {needsClass && onClassChange && categories ? (
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
+              Class
+            </span>
+            <select
+              value={selectedCategoryId ?? ""}
+              onChange={(e) => onClassChange(e.target.value)}
+              aria-label="Class for this syllabus"
+              className="min-h-10 w-full min-w-0 truncate rounded-md border border-line bg-surface-sunken/40 px-2.5 text-[13.5px] font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <option value="">Choose a class…</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="truncate text-[13.5px] font-semibold text-ink">{classLabel}</p>
+        )}
         <p className="text-[12px] text-ink-faint">{summary}</p>
-        {warning && <p className="pt-1 text-[12.5px] leading-snug text-warn">{warning}</p>}
+        {warning && <p className="pt-0.5 text-[12.5px] leading-snug text-warn">{warning}</p>}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2">
