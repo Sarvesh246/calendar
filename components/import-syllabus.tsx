@@ -254,7 +254,11 @@ export function ImportSyllabus() {
     cancelPreview,
     confirmPreview,
   } = useSyllabusImport();
-  const categories = useDatebookStore((s) => s.categories.filter((c) => !c.archived));
+  const allCategories = useDatebookStore((s) => s.categories);
+  const categories = useMemo(
+    () => allCategories.filter((c) => !c.archived),
+    [allCategories]
+  );
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -265,11 +269,12 @@ export function ImportSyllabus() {
   const showStatus =
     mine && (status.kind === "error" || status.kind === "success") && !showPreview;
   const classReady = Boolean(classId) || categories.length === 0;
+  const onlyClassId = categories.length === 1 ? categories[0].id : "";
 
   useEffect(() => {
-    if (classId && categories.some((c) => c.id === classId)) return;
-    if (categories.length === 1) setClassId(categories[0].id);
-  }, [categories, classId]);
+    if (!onlyClassId) return;
+    setClassId((current) => (current === onlyClassId ? current : onlyClassId));
+  }, [onlyClassId]);
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];
