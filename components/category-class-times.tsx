@@ -58,7 +58,7 @@ export function CategoryClassTimesControl({ category }: { category: Category }) 
       {meetings.map((meeting) => (
         <SavedMeetingRow
           key={meeting.repeatId}
-          meeting={meeting}
+          meeting={{ ...meeting, title: category.classTitle?.trim() || meeting.title }}
           clock24h={clock24h}
           color={category.color}
         />
@@ -99,7 +99,7 @@ export function ClassTimesRoster() {
           {meetings.map((meeting) => (
             <SavedMeetingRow
               key={meeting.repeatId}
-              meeting={meeting}
+              meeting={{ ...meeting, title: cat.classTitle?.trim() || meeting.title }}
               clock24h={clock24h}
               color={cat.color}
             />

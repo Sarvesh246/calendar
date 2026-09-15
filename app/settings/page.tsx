@@ -418,6 +418,17 @@ export default function SettingsPage() {
                   </button>
                 )}
               </div>
+              <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
+                <span className="shrink-0">Class Title</span>
+                <input
+                  value={cat.classTitle ?? ""}
+                  onChange={(e) => updateCategory(cat.id, { classTitle: e.target.value })}
+                  onBlur={(e) => updateCategory(cat.id, { classTitle: e.target.value.trim() || undefined })}
+                  placeholder={cat.name}
+                  aria-label={`${cat.name} Class Title`}
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+                />
+              </label>
               {confirmDeleteId === cat.id && (
                 <CategoryDeleteConfirm
                   category={cat}

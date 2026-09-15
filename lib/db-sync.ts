@@ -50,6 +50,7 @@ export function safeCategoryColor(v: unknown): string {
 // it, retry, and keep syncing everything else rather than wedging the queue.
 // The column starts flowing again on its own once the migration is run.
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
+  categories: ["class_title"],
   items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at", "work_for"],
   import_sources: ["last_error"],
   user_settings: [
@@ -61,6 +62,7 @@ const STRIPPABLE_COLS: Record<string, readonly string[]> = {
   ],
 };
 const stripped: Record<string, Set<string>> = {
+  categories: new Set(),
   items: new Set(),
   import_sources: new Set(),
   user_settings: new Set(),
@@ -107,6 +109,7 @@ export function toCategoryRow(c: Category, userId: string): Row {
     id: c.id,
     user_id: userId,
     name: safeCategoryName(c.name),
+    class_title: c.classTitle?.trim() || null,
     color: safeCategoryColor(c.color),
     archived: c.archived ?? false,
     source_id: c.sourceId ?? null,
@@ -117,6 +120,7 @@ export function rowToCategory(r: Row): Category {
   return {
     id: r.id as string,
     name: safeCategoryName(r.name),
+    ...(typeof r.class_title === "string" && r.class_title.trim() ? { classTitle: r.class_title.trim() } : {}),
     color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),

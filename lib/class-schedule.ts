@@ -470,6 +470,13 @@ export function isClassMeeting(item: Item, categoryName?: string): boolean {
   return CLASS_TITLE.test(item.title);
 }
 
+/** A course nickname changes the visible meeting label without rewriting feed items. */
+export function classMeetingTitle(item: Item, category?: Pick<Category, "name" | "classTitle">): string {
+  return category?.classTitle?.trim() && isClassMeeting(item, category.name)
+    ? category.classTitle.trim()
+    : item.title;
+}
+
 /**
  * Class times you added and a Canvas/Google lecture for the same slot are two
  * real items. On the calendar they read as the same class twice, with two

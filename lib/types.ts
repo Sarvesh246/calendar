@@ -15,6 +15,8 @@ export interface RepeatRule {
 export interface Category {
   id: string;
   name: string;
+  /** Optional name shown for this course's class meetings; the course name stays intact. */
+  classTitle?: string;
   color: string; // base hex, e.g. "#007AFF"
   icon?: string;
   archived?: boolean;

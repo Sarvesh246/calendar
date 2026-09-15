@@ -43,13 +43,18 @@ describe("toCategoryRow", () => {
   });
 
   it("keeps good values, trimming the name", () => {
-    const row = toCategoryRow({ id: "c1", name: " ENGL 101 ", color: "#007AFF" }, USER);
+    const row = toCategoryRow({ id: "c1", name: " ENGL 101 ", classTitle: " Writing Lab ", color: "#007AFF" }, USER);
     expect(row.name).toBe("ENGL 101");
+    expect(row.class_title).toBe("Writing Lab");
     expect(row.color).toBe("#007AFF");
   });
 });
 
 describe("rowToCategory", () => {
+  it("restores a display title without replacing the course name", () => {
+    const cat = rowToCategory({ id: "c1", name: "ENGL 101", class_title: "Writing Lab", color: "#007AFF" });
+    expect(cat).toMatchObject({ name: "ENGL 101", classTitle: "Writing Lab" });
+  });
   it("substitutes a fallback for a null colour rather than propagating it", () => {
     const cat = rowToCategory({ id: "c1", name: null, color: null });
     expect(cat.name).toBe("Uncategorized");
