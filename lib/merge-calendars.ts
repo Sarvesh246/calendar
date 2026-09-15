@@ -275,6 +275,21 @@ function newer<T extends Stamped>(local: T, cloud: T): T {
   return local;
 }
 
+/**
+ * `classTitle` is optional and may not round-trip (a project that hasn't run
+ * the column migration strips it on write). Last-write-wins of the whole row
+ * would then wipe a nickname the user just set. Keep it from the other copy.
+ */
+export function preserveClassTitle(winner: Category, other?: Category): Category {
+  if (winner.classTitle?.trim() || !other?.classTitle?.trim()) return winner;
+  return { ...winner, classTitle: other.classTitle };
+}
+
+function pickCategoryRow(local: Category, cloud: Category): Category {
+  const winner = newer(local, cloud) as Category;
+  return preserveClassTitle(winner, winner === local ? cloud : local);
+}
+
 function reconcile<T extends Stamped>(
   kind: EntityKind,
   local: T[],
@@ -285,7 +300,12 @@ function reconcile<T extends Stamped>(
   for (const row of cloud) byId.set(row.id, row);
   for (const row of local) {
     const existing = byId.get(row.id);
-    byId.set(row.id, existing ? newer(row, existing) : row);
+    const picked = !existing
+      ? row
+      : kind === "category"
+        ? (pickCategoryRow(row as Category, existing as Category) as T)
+        : newer(row, existing);
+    byId.set(row.id, picked);
   }
   return [...byId.values()].filter((row) => !isDeleted(tombstones, kind, row));
 }

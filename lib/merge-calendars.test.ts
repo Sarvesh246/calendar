@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { dedupeCategories, mergeCalendars, type CalendarSnapshot } from "./merge-calendars";
+import {
+  dedupeCategories,
+  mergeCalendars,
+  preserveClassTitle,
+  type CalendarSnapshot,
+} from "./merge-calendars";
 import { tombKey } from "./tombstones";
 import type { Item, UserSettings } from "./types";
 
@@ -376,5 +381,45 @@ describe("dedupeCategories", () => {
     expect(merged.categories).toHaveLength(1);
     expect(merged.categories[0].id).toBe("orig");
     expect(merged.items[0].categoryId).toBe("orig");
+  });
+});
+
+describe("preserveClassTitle", () => {
+  it("keeps a nickname the winning row lost", () => {
+    const kept = preserveClassTitle(
+      { id: "c1", name: "ENGL 101", color: "#007AFF", updatedAt: LATE },
+      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF", updatedAt: EARLY }
+    );
+    expect(kept.classTitle).toBe("Writing Lab");
+  });
+
+  it("does not restore a nickname the winner already has", () => {
+    const kept = preserveClassTitle(
+      { id: "c1", name: "ENGL 101", classTitle: "Seminar", color: "#007AFF" },
+      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF" }
+    );
+    expect(kept.classTitle).toBe("Seminar");
+  });
+});
+
+describe("mergeCalendars class titles", () => {
+  it("keeps a local Class Title when a newer cloud row omitted it", () => {
+    const merged = mergeCalendars(
+      snap({
+        categories: [
+          {
+            id: "c1",
+            name: "ENGL 101",
+            classTitle: "Writing Lab",
+            color: "#007AFF",
+            updatedAt: EARLY,
+          },
+        ],
+      }),
+      snap({
+        categories: [{ id: "c1", name: "ENGL 101", color: "#007AFF", updatedAt: LATE }],
+      })
+    );
+    expect(merged.categories[0]).toMatchObject({ name: "ENGL 101", classTitle: "Writing Lab" });
   });
 });
