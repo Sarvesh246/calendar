@@ -34,7 +34,7 @@ export function mergeCalendars(
   tombstones: TombstoneMap = {}
 ): CalendarSnapshot {
   const { categories: deduped, remap } = dedupeCategories(
-    reconcile("category", local.categories, cloud.categories, tombstones)
+    reconcileCategories(local.categories, cloud.categories, tombstones)
   );
   const sources = dedupeByUrl(
     reconcile("import_source", local.importSources, cloud.importSources, tombstones)
@@ -286,8 +286,22 @@ export function preserveClassTitle(winner: Category, other?: Category): Category
 }
 
 function pickCategoryRow(local: Category, cloud: Category): Category {
-  const winner = newer(local, cloud) as Category;
+  const winner = newer(local, cloud);
   return preserveClassTitle(winner, winner === local ? cloud : local);
+}
+
+function reconcileCategories(
+  local: Category[],
+  cloud: Category[],
+  tombstones: TombstoneMap
+): Category[] {
+  const byId = new Map<string, Category>();
+  for (const row of cloud) byId.set(row.id, row);
+  for (const row of local) {
+    const existing = byId.get(row.id);
+    byId.set(row.id, existing ? pickCategoryRow(row, existing) : row);
+  }
+  return [...byId.values()].filter((row) => !isDeleted(tombstones, "category", row));
 }
 
 function reconcile<T extends Stamped>(
@@ -300,12 +314,7 @@ function reconcile<T extends Stamped>(
   for (const row of cloud) byId.set(row.id, row);
   for (const row of local) {
     const existing = byId.get(row.id);
-    const picked = !existing
-      ? row
-      : kind === "category"
-        ? (pickCategoryRow(row as Category, existing as Category) as T)
-        : newer(row, existing);
-    byId.set(row.id, picked);
+    byId.set(row.id, existing ? newer(row, existing) : row);
   }
   return [...byId.values()].filter((row) => !isDeleted(tombstones, kind, row));
 }
