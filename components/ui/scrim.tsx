@@ -22,9 +22,9 @@ const DIM = { default: 0.34, light: 0.26 } as const;
  * and lets the compositor reuse one blurred layer instead of rasterizing a new
  * blur radius on every frame.
  *
- * `snap` is for overlays that appear over live text (the + composer). A 340ms
- * fade left a frame of un-blurred type flashing through; starting already
- * partly opaque and arriving in a tenth of a second hides that.
+ * Start every full scrim partly visible. Starting at zero briefly exposes live
+ * text while the panel is already on screen, especially on a busy compositor.
+ * `snap` gets to full strength faster for the + composer.
  */
 export function Scrim({
   onClick,
@@ -54,7 +54,7 @@ export function Scrim({
   const snap = pace === "snap" && !reduced;
 
   const props = {
-    initial: { opacity: snap ? 0.78 : 0 },
+    initial: { opacity: 0.78 },
     animate: { opacity: 1 },
     exit: {
       opacity: 0,

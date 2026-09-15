@@ -1164,7 +1164,7 @@ html[data-first-load="1"] .page-shell > * > * {
   to { opacity: 0; translate: 18px 0; }
 }
 @keyframes overlay-in {
-  from { opacity: 0; }
+  from { opacity: 0.78; }
 }
 @keyframes overlay-out {
   to { opacity: 0; }
@@ -1204,9 +1204,6 @@ html[data-first-load="1"] .page-shell > * > * {
   }
   .assistant-panel.is-closed {
     animation: drawer-out 160ms ease-in forwards;
-  }
-  .assistant-overlay {
-    background: color-mix(in srgb, var(--ink) 14%, transparent);
   }
 }
 

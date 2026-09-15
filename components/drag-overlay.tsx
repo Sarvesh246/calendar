@@ -14,7 +14,7 @@ export function DragOverlay() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed left-0 top-0 z-[90] whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-[12px] font-medium tabular-nums text-surface shadow-[0_8px_24px_-8px_rgb(0_0_0/0.35)]"
+      className="pointer-events-none fixed left-0 top-0 z-[47] whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-[12px] font-medium tabular-nums text-surface shadow-[0_8px_24px_-8px_rgb(0_0_0/0.35)]"
       style={{
         transform: flip
           ? `translate3d(calc(${x - 14}px - 100%), ${y + 16}px, 0)`

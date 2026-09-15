@@ -62,7 +62,7 @@ export function FocusView() {
       <button
         onClick={toggleFocusMode}
         aria-label="Exit focus"
-        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[41] flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
       >
         <X className="h-4 w-4" strokeWidth={2} />
         Exit focus
