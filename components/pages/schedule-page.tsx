@@ -29,6 +29,7 @@ export default function SchedulePage() {
   const categoryFilter = useDeferredCategoryFilter();
   const openClassSchedule = useUIStore((s) => s.openClassSchedule);
   const categoriesById = useCategoriesById();
+  const categories = useDatebookStore((s) => s.categories);
 
   const items = useMemo(
     () => applyCategoryFilter(allItems, categoryFilter),
@@ -40,8 +41,8 @@ export default function SchedulePage() {
   const [today] = useState(() => new Date().getDay());
 
   const schedule = useMemo(
-    () => buildWeeklySchedule(items, new Date(), weekStartsOn),
-    [items, weekStartsOn]
+    () => buildWeeklySchedule(items, new Date(), weekStartsOn, categories),
+    [items, weekStartsOn, categories]
   );
 
   const colorOf = (categoryId?: string) =>

@@ -1,5 +1,6 @@
 import { addDays, startOfDay, startOfWeek } from "date-fns";
-import type { Item } from "./types";
+import type { Category, Item } from "./types";
+import { classMeetingTitle, isGenericCategoryName } from "./class-schedule";
 
 /**
  * Your week, as a repeating shape rather than a list of dates.
@@ -54,6 +55,7 @@ interface Draft {
   endMin: number;
   recurring: boolean;
   weekKeys: Set<string>;
+  lastSeen: number;
 }
 
 function minutesOfDay(date: Date): number {
@@ -68,11 +70,13 @@ function weekKey(date: Date): string {
 export function buildWeeklySchedule(
   items: Item[],
   now: Date = new Date(),
-  weekStartsOn: 0 | 1 = 0
+  weekStartsOn: 0 | 1 = 0,
+  categories: Category[] = []
 ): WeeklySchedule {
   const from = +startOfDay(addDays(now, -7 * SCAN_WEEKS_BACK));
   const to = +startOfDay(addDays(now, 7 * SCAN_WEEKS_FORWARD));
   const drafts = new Map<string, Draft>();
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
 
   for (const item of items) {
     if (item.type !== "event" || item.allDay) continue;
@@ -80,7 +84,8 @@ export function buildWeeklySchedule(
     const startedAt = +start;
     if (!Number.isFinite(startedAt) || startedAt < from || startedAt > to) continue;
 
-    const title = item.title.trim();
+    const category = categoryById.get(item.categoryId);
+    const title = classMeetingTitle(item, category).trim();
     if (!title) continue;
 
     const startMin = minutesOfDay(start);
@@ -94,12 +99,19 @@ export function buildWeeklySchedule(
         : Math.min(MINUTES_IN_DAY, startMin + DEFAULT_BLOCK_MINUTES);
 
     const day = start.getDay();
-    const key = `${title.toLowerCase()}|${day}|${startMin}|${endMin}`;
+    // Title is presentation, not identity. Renamed occurrences and imported
+    // copies of the same course slot must contribute only one weekly block.
+    const courseKey = category && !isGenericCategoryName(category.name) ? category.id : title.toLowerCase();
+    const key = `${courseKey}|${day}|${startMin}|${endMin}`;
     const existing = drafts.get(key);
     if (existing) {
       existing.weekKeys.add(weekKey(start));
       existing.recurring ||= item.repeat?.freq === "weekly";
       existing.location ??= item.location?.trim() || undefined;
+      if (startedAt >= existing.lastSeen) {
+        existing.title = title;
+        existing.lastSeen = startedAt;
+      }
       continue;
     }
     drafts.set(key, {
@@ -111,6 +123,7 @@ export function buildWeeklySchedule(
       endMin,
       recurring: item.repeat?.freq === "weekly",
       weekKeys: new Set([weekKey(start)]),
+      lastSeen: startedAt,
     });
   }
 

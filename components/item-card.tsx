@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { classMeetingTitle } from "@/lib/class-schedule";
 import { registerItemExpander } from "@/lib/item-focus";
 import { dayKey } from "@/lib/date-utils";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
@@ -447,6 +448,7 @@ function EventCard({
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
   const { remaining, ended } = useEventPhase(item, day);
   const showCompleteStyle = useCompleteStyle(ended);
+  const displayTitle = classMeetingTitle(item, category);
 
   return (
     <CardFrame
@@ -459,7 +461,7 @@ function EventCard({
       // name from everything inside it — which, now that the card carries its
       // own action buttons, meant a screen reader announced "Physics Lecture
       // Start working on this Reschedule" as the name of one control.
-      aria-label={`${item.title}${ended ? ", ended" : ""}. Show details`}
+      aria-label={`${displayTitle}${ended ? ", ended" : ""}. Show details`}
       onClick={toggle}
       onKeyDown={(e) => {
         if (!handleItemMenuKey(e, item.id, day ? dayKey(day) : undefined)) keyToggle(e);
@@ -495,7 +497,7 @@ function EventCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {item.title}
+            {displayTitle}
             <motion.span
               aria-hidden
               initial={false}

@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useCategoriesById } from "@/lib/card-chrome";
+import { classMeetingTitle } from "@/lib/class-schedule";
 import { dayKey, formatTime, isOverdue, toDateInputValue } from "@/lib/date-utils";
 import { dayDelta, shiftedByDays } from "@/lib/calendar-drag-math";
 import { applyBatchPatch, setStatusWithUndo, STATUS_LABEL } from "@/lib/item-actions";
@@ -179,6 +180,7 @@ function AgendaRow({
   const at = new Date(item.at);
   const menuDay = sectionDay ?? dayKey(at);
   const Glyph = item.type === "event" ? Clock : item.type === "assignment" ? FileText : ListTodo;
+  const displayTitle = classMeetingTitle(item, category);
 
   return (
     <div
@@ -199,7 +201,7 @@ function AgendaRow({
         <SelectBox
           checked={selected}
           visible={selecting}
-          label={`Select ${item.title}`}
+          label={`Select ${displayTitle}`}
           onToggle={(range) => onToggle(item.id, range)}
         />
       </div>
@@ -216,7 +218,7 @@ function AgendaRow({
               status === "done" && work ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
             )}
           >
-            {item.title}
+            {displayTitle}
           </button>
           <p className="truncate text-[11.5px] text-ink-faint lg:hidden">{category?.name ?? "No class"}</p>
         </div>
