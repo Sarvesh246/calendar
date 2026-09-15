@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
-import { CalendarClock, LayoutList, Rows3 } from "lucide-react";
+import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
@@ -29,8 +29,6 @@ import type { AgendaStickySection } from "@/lib/agenda-sticky";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
-import { ViewMenu } from "@/components/view-menu";
-import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -230,18 +228,6 @@ export default function AgendaPage() {
               );
             })}
           </div>
-          {/* Agenda answers "what's next"; the timetable answers "what does a
-              week look like". They belong within reach of each other. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => router.push("/schedule")}
-            aria-label="Open the full weekly schedule"
-          >
-            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
-            Schedule
-          </Button>
-          <ViewMenu />
         </div>
       </header>
 

@@ -2,10 +2,13 @@
 
 import { useEffect } from "react";
 import { useUIStore } from "@/lib/ui-store";
+import { isTabRoute } from "@/lib/tab-routes";
+import { useResolvedPathname } from "@/lib/tab-nav";
 import { flushViewState, patchViewState, readViewState } from "@/lib/view-state";
 
 /**
- * Keeps the class filter alive across a reload or a trip through Settings.
+ * Keeps the class filter alive across a reload or a trip through Settings, and
+ * remembers the last main tab so Settings/Schedule Done can return there.
  *
  * Filters lived in a plain Zustand store, so they survived tab switches (the
  * pages stay mounted) and nothing else. Coming back from Settings with a filter
@@ -21,6 +24,14 @@ import { flushViewState, patchViewState, readViewState } from "@/lib/view-state"
  * React streamed.
  */
 export function ViewStateSync() {
+  const pathname = useResolvedPathname();
+
+  useEffect(() => {
+    if (isTabRoute(pathname)) {
+      patchViewState({ lastTab: pathname });
+    }
+  }, [pathname]);
+
   useEffect(() => {
     const remembered = readViewState().categoryFilter;
     if (remembered && remembered.length > 0) {

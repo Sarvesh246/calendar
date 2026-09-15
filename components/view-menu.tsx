@@ -1,21 +1,23 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarClock, Check, Minimize2, MoreHorizontal, Settings } from "lucide-react";
-import { useDatebookStore } from "@/lib/store";
+import { Minimize2, MoreHorizontal } from "lucide-react";
 import { useUIStore } from "@/lib/ui-store";
 import { motion as motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+/**
+ * Desktop Today overflow — Focus only.
+ *
+ * Phone Settings / Schedule / Filters / Focus live in the global More menu
+ * (`MobileMoreMenu`). Hide completed is toggled in the Filter sheet (and as a
+ * durable preference in Settings), not here.
+ */
 export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
-  const updateSettings = useDatebookStore((s) => s.updateSettings);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   useEffect(() => {
@@ -34,21 +36,19 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
     };
   }, [open]);
 
+  if (!showFocus) return null;
+
   return (
-    <div ref={root} className="relative">
+    <div ref={root} className="relative hidden md:block">
       <Button
         variant="tertiary"
         size="iconSm"
-        className="max-md:h-11 max-md:w-11"
         aria-label="View options"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         <MoreHorizontal className="h-4 w-4" strokeWidth={1.9} />
       </Button>
-      {/* This popped open and shut with no transition at all — the sharpest
-          menu in the app. It now scales in from its anchor corner on the same
-          snappy spring as every other small popover. */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -64,47 +64,17 @@ export function ViewMenu({ showFocus = false }: { showFocus?: boolean }) {
             style={{ transformOrigin: "top right" }}
             className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[200px] rounded-xl border border-line bg-surface p-1"
           >
-            <button type="button" className="press-none flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] active:bg-surface-sunken md:hidden" onClick={() => { setOpen(false); router.push("/settings"); }}><Settings className="h-3.5 w-3.5 text-ink-faint" />Settings</button>
-            {/* The whole week, on the page you were already on — the timetable
-                is rarely the thing you open the app for, but it should never be
-                something you have to go hunting for either. */}
             <button
               type="button"
               onClick={() => {
+                toggleFocusMode();
                 setOpen(false);
-                router.push("/schedule");
               }}
-              className="press-none flex min-h-10 max-md:min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken active:bg-surface-sunken"
+              className="press-none flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken"
             >
-              <CalendarClock className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
-              Full schedule
+              <Minimize2 className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
+              Focus
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                startTransition(() => {
-                  updateSettings({ hideCompleted: !hideCompleted });
-                });
-              }}
-              className="press-none flex min-h-10 max-md:min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken active:bg-surface-sunken"
-            >
-              Hide completed
-              {hideCompleted && <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />}
-            </button>
-            {showFocus && (
-              <button
-                type="button"
-                onClick={() => {
-                  toggleFocusMode();
-                  setOpen(false);
-                }}
-                className="press-none flex min-h-10 max-md:min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-ink transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken active:bg-surface-sunken"
-              >
-                <Minimize2 className="h-3.5 w-3.5 text-ink-faint" strokeWidth={1.9} />
-                Focus
-              </button>
-            )}
           </motion.div>
         )}
       </AnimatePresence>

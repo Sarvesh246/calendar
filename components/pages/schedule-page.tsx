@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { PhoneSchedule } from "@/components/schedule/phone-schedule";
+import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
 
 /** Vertical scale of the timetable. One minute ≈ one pixel reads at a glance
@@ -65,7 +66,8 @@ export default function SchedulePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <MobileRoomHeader title="Schedule" />
+      <header className="hidden flex-wrap items-start justify-between gap-3 md:flex">
         <div className="min-w-0">
           <h1 className="text-[26px] font-semibold tracking-tight text-ink">Schedule</h1>
           <p className="mt-1 max-w-[52ch] text-[13px] text-ink-soft">
@@ -78,6 +80,13 @@ export default function SchedulePage() {
           Class times
         </Button>
       </header>
+      {/* Phone: Class times still reachable without the desk header. */}
+      <div className="flex justify-end md:hidden">
+        <Button variant="secondary" size="sm" onClick={() => openClassSchedule()}>
+          <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+          Class times
+        </Button>
+      </div>
 
       {empty ? (
         <EmptyState

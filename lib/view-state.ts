@@ -17,6 +17,8 @@
  * from an older build all degrade to "no memory", never to a crash.
  */
 
+import { isTabRoute, type TabRoute } from "./tab-routes";
+
 const KEY = "datebook-view-state";
 
 export interface ViewState {
@@ -30,6 +32,8 @@ export interface ViewState {
   scheduleDay?: number;
   /** Class ids the filter was narrowed to. */
   categoryFilter?: string[] | null;
+  /** Last main tab visited — Settings/Schedule Done returns here. */
+  lastTab?: TabRoute;
 }
 
 const EMPTY: ViewState = { scroll: {} };
@@ -73,6 +77,9 @@ export function parseViewState(raw: string | null): ViewState {
     next.categoryFilter = ids.length > 0 ? ids : null;
   } else if (value.categoryFilter === null) {
     next.categoryFilter = null;
+  }
+  if (typeof value.lastTab === "string" && isTabRoute(value.lastTab)) {
+    next.lastTab = value.lastTab;
   }
   return next;
 }

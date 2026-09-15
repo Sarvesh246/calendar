@@ -48,7 +48,7 @@ export function OnboardingCard() {
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-3 flex flex-col gap-2">
             <Link
               href="/settings#import"
               className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink"
@@ -56,21 +56,23 @@ export function OnboardingCard() {
               <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
               Import a calendar
             </Link>
-            <Link
-              href="/settings#reminders"
-              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink"
-            >
-              <Bell className="h-3.5 w-3.5" strokeWidth={2} />
-              Enable reminders
-            </Link>
-            {configured && user === null && (
-              <GoogleSignInButton
-                idleIcon={<Cloud className="h-3.5 w-3.5" strokeWidth={2} />}
-                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-1 pt-0.5">
+              <Link
+                href="/settings#reminders"
+                className="flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-ink-soft hover:text-ink"
               >
-                Sign in
-              </GoogleSignInButton>
-            )}
+                <Bell className="h-3.5 w-3.5" strokeWidth={2} />
+                Enable reminders
+              </Link>
+              {configured && user === null && (
+                <GoogleSignInButton
+                  idleIcon={<Cloud className="h-3.5 w-3.5" strokeWidth={2} />}
+                  className="flex min-h-11 items-center justify-center gap-1.5 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+                >
+                  Sign in
+                </GoogleSignInButton>
+              )}
+            </div>
           </div>
         </motion.div>
       )}

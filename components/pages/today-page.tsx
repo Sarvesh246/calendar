@@ -122,6 +122,7 @@ function TodayDashboard() {
           )}
         </p>
       </div>
+      {/* Phone Focus lives in More; desktop keeps a Focus-only overflow. */}
       <ViewMenu showFocus />
     </header>
   );
