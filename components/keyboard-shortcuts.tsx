@@ -12,6 +12,7 @@ import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { Scrim } from "@/components/ui/scrim";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import { toggleFocusRoom } from "@/lib/focus-session-store";
 
 function isMac() {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
@@ -35,6 +36,7 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["N"], label: "New item" },
         { keys: ["A"], label: "Ask the assistant" },
         { keys: [mod, "Z"], label: "Undo last change" },
+        { keys: ["F"], label: "Focus room" },
         { keys: ["?"], label: "Keyboard shortcuts" },
       ],
     },
@@ -64,6 +66,15 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["Right-click"], label: "Item actions" },
         { keys: ["Shift", "F10"], label: "Item actions (keyboard)" },
         { keys: ["Drag"], label: "Move, resize, or create on the week" },
+      ],
+    },
+    {
+      title: "Focus room",
+      items: [
+        { keys: ["Esc"], label: "Leave the room (session keeps running)" },
+        { keys: ["Space"], label: "Start or pause" },
+        { keys: ["C"], label: "Mark complete" },
+        { keys: ["S"], label: "Search the queue" },
       ],
     },
   ];
@@ -110,10 +121,20 @@ export function KeyboardShortcuts() {
         if (!onCalendar) navigateTab(router, "/calendar");
       };
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+      if (ui.focusMode) {
+        if (e.key === "?") ui.setShortcutsOpen(true);
+        else if (!e.shiftKey && key === "f") toggleFocusRoom(router);
+        else return;
+        e.preventDefault();
+        return;
+      }
+
       let handled = true;
 
       if (e.key === "?") ui.setShortcutsOpen(true);
       else if (e.shiftKey) handled = false;
+      else if (key === "f") toggleFocusRoom(router);
       else if (key === "/") ui.setCommandPaletteOpen(true);
       else if (key === "n" || key === "c") {
         if (pathRef.current === "/settings") handled = false;

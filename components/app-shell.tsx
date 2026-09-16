@@ -6,6 +6,8 @@ import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, Plus, Search, Sparkles } from "lucide-react";
+import { FocusView } from "./focus-view";
+import { FocusSessionChip, FocusSessionHydrator } from "./focus-session-chip";
 import { Scrim } from "@/components/ui/scrim";
 import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
@@ -145,6 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               <div className="ml-auto flex items-center gap-2">
+                <FocusSessionChip />
                 {/* The assistant used to be reachable only from inside the
                     command palette, which meant you had to already know it
                     existed. It sits in the toolbar now, labelled. */}
@@ -206,16 +209,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             something below the fold of a scrolled list. */}
         {!focusMode && <FilterSummaryBar />}
 
-        <div
-          hidden={!onTab}
-          className={cn(
-            onTab && "flex min-h-0 flex-1 flex-col",
-            onCalendar && "overflow-hidden"
-          )}
-        >
-          <TabPageHost pathname={pathname} />
-        </div>
-        {!onTab && children}
+        {focusMode ? (
+          <FocusView />
+        ) : (
+          <>
+            <div
+              hidden={!onTab}
+              className={cn(
+                onTab && "flex min-h-0 flex-1 flex-col",
+                onCalendar && "overflow-hidden"
+              )}
+            >
+              <TabPageHost pathname={pathname} />
+            </div>
+            {!onTab && children}
+          </>
+        )}
       </main>
 
       <ViewStateSync />
@@ -262,6 +271,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </motion.div>
         )}
       </AnimatePresence>
+      <FocusSessionHydrator />
       <FocusedItemRelay />
       <KeyboardShortcuts />
       <ItemContextMenu />
