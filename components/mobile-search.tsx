@@ -132,7 +132,7 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
             </div>
           </Reveal>
           <p className="py-4 text-center text-[13px] text-ink-soft">
-            Type to search your calendar.
+            Find an assignment, event, or class — or Ask Datebook from the top bar.
           </p>
         </div>
       )}

@@ -20,8 +20,17 @@ export function resolveRoomExit(): TabRoute {
  * Phone-only exit chrome for Settings / Schedule — explicit Done so leaving a
  * "room" does not depend on guessing the tab bar (whose pill may still sit on
  * Today while you are elsewhere).
+ *
+ * Optional `trailing` sits opposite Done (replacing the invisible balance spacer)
+ * for a primary room action such as Class times on Schedule.
  */
-export function MobileRoomHeader({ title }: { title: string }) {
+export function MobileRoomHeader({
+  title,
+  trailing,
+}: {
+  title: string;
+  trailing?: React.ReactNode;
+}) {
   const router = useRouter();
 
   return (
@@ -39,10 +48,14 @@ export function MobileRoomHeader({ title }: { title: string }) {
       <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold tracking-tight text-ink">
         {title}
       </h1>
-      {/* Balance the Done control so the title stays visually centered. */}
-      <span className="pointer-events-none min-h-11 min-w-11 opacity-0" aria-hidden>
-        Done
-      </span>
+      {trailing ? (
+        <div className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">{trailing}</div>
+      ) : (
+        /* Balance the Done control so the title stays visually centered. */
+        <span className="pointer-events-none min-h-11 min-w-11 opacity-0" aria-hidden>
+          Done
+        </span>
+      )}
     </header>
   );
 }

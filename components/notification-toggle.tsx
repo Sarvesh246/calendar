@@ -103,14 +103,14 @@ export function NotificationToggle() {
           <Check className="mt-0.5 h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
           <span>
             {closedAppOn
-              ? "Notifications on. Reminders fire while Datebook is open, and as push alerts on this signed-in browser when it’s closed."
+              ? "Reminders on — including closed-app push on this signed-in browser."
               : hasVapid
-                ? "Notifications on. Reminders fire while Datebook is open and catch up when you return."
-                : "Notifications on. Reminders fire while Datebook is open and catch up when you return. Closed-app alerts need push keys on the server."}
+                ? "Reminders on while Datebook is open; they catch up when you return."
+                : "Reminders on while Datebook is open. Closed-app push needs server keys."}
             {iosNeedsHomeScreen && closedAppOn
-              ? " On iPhone, add Datebook to the Home Screen so those closed-app alerts can arrive."
+              ? " Add to Home Screen for closed-app alerts on iPhone."
               : iosNeedsHomeScreen && hasVapid
-                ? " On iPhone, add Datebook to the Home Screen, then sign in, so closed-app alerts can arrive."
+                ? " Add to Home Screen, then sign in, for closed-app alerts on iPhone."
                 : null}
           </span>
         </p>

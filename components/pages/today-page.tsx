@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { TriangleAlert, Minimize2 } from "lucide-react";
+import { Bell, CalendarClock, Link2, Minimize2, TriangleAlert } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion } from "@/lib/motion";
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
@@ -38,6 +38,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
+import { isClassMeeting } from "@/lib/class-schedule";
+import { notificationPermission } from "@/lib/reminders";
+import { useHasMounted } from "@/lib/use-has-mounted";
 
 /** From here up Today splits into a main column and a supporting one. */
 const WIDE_QUERY = "(min-width: 1280px)";
@@ -131,10 +134,10 @@ function TodayDashboard() {
           toggleFocusMode();
         }}
         aria-label="Focus"
-        className="shrink-0"
+        className="shrink-0 gap-1.5"
       >
         <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-        Focus
+        <span className="hidden min-[400px]:inline">Focus</span>
       </Button>
     </header>
   );
@@ -148,16 +151,19 @@ function TodayDashboard() {
     />
   );
 
+  // When nothing is live, Today’s list leads; Happening Now (upcoming) follows.
+  const liveNow = useMemo(
+    () => happeningNowStack(items, now, categories, classCountdownWindowMs(classReminderMinutes)),
+    [items, now, categories, classReminderMinutes]
+  );
+  const hasLive = liveNow.happening.length > 0 || liveNow.startingSoon.length > 0;
+
   /**
    * What needs attention, in one line, above the day.
    *
-   * The overdue list used to sit between "happening now" and today's schedule,
-   * which meant three late assignments pushed the thing you actually opened the
-   * app for below the fold. But hiding the backlog entirely is worse — it is the
-   * one thing that genuinely needs you.
-   *
-   * So the backlog gets a line here and its cards further down: you see that it
-   * exists, and how stale it is, without it taking the day's place.
+   * On phone the overdue *cards* stay behind Review — the strip names the
+   * backlog without pushing today's schedule below the fold. Desktop still
+   * shows the cards up front.
    */
   const attentionStrip = mobile && overdue.length > 0 && (
     <button
@@ -165,9 +171,12 @@ function TodayDashboard() {
       onClick={() => {
         haptic("light");
         setReviewOverdue(true);
-        document
-          .getElementById("today-overdue")
-          ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+        // Next paint hosts #today-overdue; scroll after Review reveals it.
+        requestAnimationFrame(() => {
+          document
+            .getElementById("today-overdue")
+            ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+        });
       }}
       className="press-none flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-warn/40 bg-warn-soft px-3 text-left"
     >
@@ -176,18 +185,29 @@ function TodayDashboard() {
         {overdue.length} overdue
         <span className="font-normal opacity-80"> · {overdueAgeLabel(overdue, now)}</span>
       </span>
-      <span className="shrink-0 text-[12.5px] font-semibold text-warn">Review</span>
+      <span className="shrink-0 text-[12.5px] font-semibold text-warn">
+        {reviewOverdue ? "Hide" : "Review"}
+      </span>
     </button>
   );
 
-  const overdueSection = overdue.length > 0 && (
+  const overdueSection = overdue.length > 0 && (!mobile || reviewOverdue) && (
     <section id="today-overdue" className="scroll-mt-[calc(var(--mobile-header-height)+0.75rem)]">
-      <div className="flex items-center justify-between"><SectionLabel>Overdue · {overdue.length}</SectionLabel>
-        {mobile && overdue.length > 3 && <button className="min-h-11 px-2 text-[13px] font-medium text-accent" aria-expanded={reviewOverdue} onClick={() => setReviewOverdue(!reviewOverdue)}>{reviewOverdue ? "Show less" : `Review all ${overdue.length}`}</button>}
+      <div className="flex items-center justify-between">
+        <SectionLabel>Overdue · {overdue.length}</SectionLabel>
+        {mobile && (
+          <button
+            type="button"
+            className="min-h-11 px-2 text-[13px] font-medium text-accent"
+            onClick={() => setReviewOverdue(false)}
+          >
+            Hide
+          </button>
+        )}
       </div>
       <div className="flex flex-col gap-2">
         <AnimatePresence initial={false}>
-          {(mobile && !reviewOverdue ? overdue.slice(0, 3) : overdue).map((item) => (
+          {overdue.map((item) => (
             <ItemCard
               key={item.id}
               item={item}
@@ -204,13 +224,16 @@ function TodayDashboard() {
     <section>
       <SectionLabel>Today</SectionLabel>
       {todayList.length === 0 ? (
-        <ListEmptyState
-          scope="today"
-          total={todayBreakdown.total}
-          hiddenByCategory={todayBreakdown.hiddenByCategory}
-          hiddenByCompletion={todayBreakdown.hiddenByCompletion}
-          hiddenByView={todayBreakdown.hiddenByView}
-        />
+        <>
+          <ListEmptyState
+            scope="today"
+            total={todayBreakdown.total}
+            hiddenByCategory={todayBreakdown.hiddenByCategory}
+            hiddenByCompletion={todayBreakdown.hiddenByCompletion}
+            hiddenByView={todayBreakdown.hiddenByView}
+          />
+          <PostOnboardingImportTip empty={todayBreakdown.total === 0} />
+        </>
       ) : (
         <div className="flex flex-col gap-2">
           {/* Two classes at the same hour read as "first this, then that" in a
@@ -301,12 +324,13 @@ function TodayDashboard() {
       <OnboardingCard />
       <FeedHealthBanner />
       {header}
-      {happening}
-      {/* Now, then what needs attention in one line, then the day itself. The
-          backlog's own cards come after the day, not in front of it. */}
       {attentionStrip}
-      {todaySection}
+      {/* Live class first when something is happening; otherwise the day list
+          leads so “nothing live” doesn’t bury Today under an upcoming card. */}
+      {hasLive ? happening : todaySection}
+      {hasLive ? todaySection : happening}
       {overdueSection}
+      <TodayNextStepTips />
       {comingUpSection}
     </div>
   );
@@ -381,6 +405,74 @@ function HappeningNowSection({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="mb-2 text-[12px] font-medium text-ink-faint">{children}</p>;
+}
+
+/** After dismissing onboarding with an empty calendar, point at Import once. */
+function PostOnboardingImportTip({ empty }: { empty: boolean }) {
+  const mounted = useHasMounted();
+  const dismissed = useDatebookStore((s) => s.settings.onboardingDismissed);
+  const itemCount = useDatebookStore((s) => s.items.length);
+  const sourceCount = useDatebookStore((s) => s.importSources.length);
+  if (!mounted || !dismissed || !empty || itemCount > 0 || sourceCount > 0) return null;
+  return (
+    <Link
+      href="/settings#import"
+      className="mt-2 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-dashed border-line px-3 text-[13px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+        <span className="min-w-0 truncate">Import a calendar to fill Today</span>
+      </span>
+      <span className="shrink-0 font-medium text-accent">Import</span>
+    </Link>
+  );
+}
+
+/**
+ * Lightweight chips when the calendar already has work but weekly meetings
+ * and/or reminders are still missing — not a second onboarding card.
+ */
+function TodayNextStepTips() {
+  const mounted = useHasMounted();
+  const items = useDatebookStore((s) => s.items);
+  const categories = useDatebookStore((s) => s.categories);
+  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
+  const nameOf = (id?: string) => (id ? categories.find((c) => c.id === id)?.name : undefined);
+  const hasMeetings = items.some((i) => isClassMeeting(i, nameOf(i.categoryId)));
+  const remindersOff =
+    mounted &&
+    notificationPermission() !== "granted" &&
+    notificationPermission() !== "unsupported";
+
+  if (!mounted || items.length === 0) return null;
+  if (hasMeetings && !remindersOff) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {!hasMeetings && (
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            openClassSchedule();
+          }}
+          className="press-none flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.9} />
+          Add class times
+        </button>
+      )}
+      {remindersOff && (
+        <Link
+          href="/settings#reminders"
+          className="press-none flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <Bell className="h-3.5 w-3.5" strokeWidth={1.9} />
+          Turn on reminders
+        </Link>
+      )}
+    </div>
+  );
 }
 
 /** One line per item; opens the shared inspector, right-click for actions. */
