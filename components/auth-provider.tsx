@@ -117,10 +117,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!supabase) throw new Error("Cloud sync isn't configured.");
       setSigningIn(true);
       try {
+        // The iOS wrapper (Calendar-ios) opens Google sign-in in the system
+        // browser, not the embedded WebView, and needs the custom scheme back.
+        const inNativeWrapper =
+          typeof window !== "undefined" && Boolean((window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView);
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: window.location.origin,
+            redirectTo: inNativeWrapper ? "datebook://auth-callback" : window.location.origin,
             queryParams: { prompt: "select_account" },
           },
         });
