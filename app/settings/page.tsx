@@ -137,7 +137,7 @@ export default function SettingsPage() {
   return (
     // Full-width intro, then a two-column grid on desktop so collapsed
     // section tiles share a row baseline instead of drifting out of line.
-    <div className="mx-auto w-full max-w-[1120px] pb-4">
+    <div className="mx-auto h-auto min-h-0 w-full max-w-[1120px] pb-4">
       <div className="flex flex-col gap-5">
       <MobileRoomHeader title="Settings" />
       <header className="hidden pt-1 md:block">
@@ -831,7 +831,16 @@ function CollapsibleCard({
   // `layoutId` pills inside this body — measuring auto-height while those
   // layout projections run looped updates and threw React #185 on Settings.
   return (
-    <section id={id} className={cn("overflow-hidden rounded-lg border border-line/80 bg-surface", ANCHOR_OFFSET)}>
+    <section
+      id={id}
+      className={cn(
+        // `self-start` + content-sized height so `grid-rows-[1fr]` (the
+        // open accordion track) cannot resolve against a stretched
+        // min-height ancestor and pad a blank region under the card.
+        "h-auto min-h-0 w-full self-start overflow-hidden rounded-lg border border-line/80 bg-surface",
+        ANCHOR_OFFSET
+      )}
+    >
       <button
         type="button"
         onClick={toggle}
@@ -851,7 +860,7 @@ function CollapsibleCard({
 
       <div
         className={cn(
-          "grid",
+          "grid h-max content-start",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
           !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
         )}
