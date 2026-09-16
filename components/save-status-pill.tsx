@@ -38,6 +38,10 @@ export function SaveStatusPill() {
 
   const view = describeSaveStatus({ mode, syncStatus, online, queued, error: cloudError });
   const [visible, setVisible] = useState(false);
+  // Mirrors `visible` for the effect: a status flip (Saved → Saving… → Saved)
+  // remounts the effect and used to clear the dismiss timer, then bail because
+  // we'd already "reassured" — leaving the pill stuck until you swipe it away.
+  const visibleRef = useRef(false);
 
   // Only speak for writes the user made. The store's own startup churn
   // (hydration, the first cloud reconcile) must not put a status on screen.
@@ -58,17 +62,30 @@ export function SaveStatusPill() {
   // and shows every time.
   const reassured = useRef(false);
 
+  function hide() {
+    visibleRef.current = false;
+    setVisible(false);
+  }
+
   useEffect(() => {
     if (writes === 0) return;
-    if (transient) {
-      if (reassured.current) return;
-      reassured.current = true;
+
+    if (!transient) {
+      // Queued / offline / error — stay up until the state resolves (or dismiss).
+      visibleRef.current = true;
+      setVisible(true);
+      return;
     }
-    // Showing is the effect: it is driven by writes landing and by the sync
-    // state changing underneath, neither of which is a render-time value.
+
+    // Transient: say it once per session. While that first message is still
+    // on screen, status-key changes must restart the dismiss timer — not
+    // abandon it.
+    if (reassured.current && !visibleRef.current) return;
+
+    reassured.current = true;
+    visibleRef.current = true;
     setVisible(true);
-    if (!transient) return;
-    const t = setTimeout(() => setVisible(false), TRANSIENT_MS);
+    const t = setTimeout(hide, TRANSIENT_MS);
     return () => clearTimeout(t);
   }, [key, writes, transient]);
 
@@ -120,7 +137,7 @@ export function SaveStatusPill() {
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0.06, bottom: 0.7 }}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 28 || info.velocity.y > 420) setVisible(false);
+              if (info.offset.y > 28 || info.velocity.y > 420) hide();
             }}
             className={cn(
               "sync-notice-card pointer-events-auto flex max-w-full touch-none items-center gap-2 px-3 py-2",
@@ -138,7 +155,7 @@ export function SaveStatusPill() {
               <button
                 type="button"
                 onClick={() => {
-                  setVisible(false);
+                  hide();
                   void retrySync();
                 }}
                 className="press-none ml-1 flex h-9 shrink-0 items-center gap-1 rounded-full bg-accent px-3 text-[12.5px] font-semibold text-accent-ink"
@@ -153,7 +170,7 @@ export function SaveStatusPill() {
             {!current.retry && (
               <button
                 type="button"
-                onClick={() => setVisible(false)}
+                onClick={hide}
                 aria-label="Dismiss"
                 className="press-none ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-faint active:bg-surface-sunken"
               >
