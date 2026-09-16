@@ -119,8 +119,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // The iOS wrapper (Calendar-ios) opens Google sign-in in the system
         // browser, not the embedded WebView, and needs the custom scheme back.
-        const inNativeWrapper =
-          typeof window !== "undefined" && Boolean((window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView);
+        // Detected via a marker the wrapper appends to its WebView's user
+        // agent (applicationNameForUserAgent) rather than the WebView bridge
+        // object, which wasn't reliably present when this handler ran.
+        const inNativeWrapper = typeof navigator !== "undefined" && navigator.userAgent.includes("DatebookNativeApp");
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
