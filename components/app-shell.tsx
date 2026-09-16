@@ -73,6 +73,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useResolvedPathname();
   const onCalendar = pathname === "/calendar";
   const onSettings = pathname === "/settings";
+  const onSchedule = pathname === "/schedule";
+  const onRoom = onSettings || onSchedule;
   const onToday = pathname === "/today";
   const onTab = isTabRoute(pathname);
   const desktop = useMediaQuery("(min-width: 768px)");
@@ -116,7 +118,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         "mx-auto flex w-full max-w-[1800px] gap-5",
         onCalendar ? "px-2 md:px-6" : "px-4 md:px-6",
         // Keep the calendar in the viewport; only its day lists scroll.
-        onCalendar ? "h-dvh overflow-hidden" : "min-h-dvh",
+        // Settings/Schedule are content-sized: min-h-dvh + the tab-bar
+        // padding below let an open 1fr accordion resolve against the
+        // leftover floor and grow a huge empty region under the last card.
+        onCalendar ? "h-dvh overflow-hidden" : onRoom ? "min-h-0" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(var(--safe-bottom)+1.25rem)]"
           : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"

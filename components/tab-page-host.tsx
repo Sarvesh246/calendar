@@ -17,6 +17,7 @@ import { isTabRoute, TAB_ROUTES, type TabRoute } from "@/lib/tab-routes";
 import { flushViewState, recallScroll, rememberScroll } from "@/lib/view-state";
 import { useTabPageSwipe } from "@/lib/use-tab-page-swipe";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { usePageEnter } from "@/lib/page-enter";
 
 const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
   "/today": () => import("@/components/pages/today-page"),
@@ -97,13 +98,17 @@ export function TabPageHost({ pathname }: { pathname: string }) {
   useTabScrollMemory(active);
   const phone = useMediaQuery("(max-width: 767px)");
   const hostRef = useRef<HTMLDivElement>(null);
+  const enterRef = usePageEnter(active, Boolean(active));
   const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
   return (
     <div
-      ref={hostRef}
+      ref={(node) => {
+        hostRef.current = node;
+        enterRef.current = node;
+      }}
       className={cn(
         "relative min-w-0 touch-pan-y",
         active === "/calendar" && "flex min-h-0 flex-1 flex-col",

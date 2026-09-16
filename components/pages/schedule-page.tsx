@@ -66,7 +66,7 @@ export default function SchedulePage() {
   const empty = schedule.blocks.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
+    <div className="mx-auto flex h-auto min-h-0 w-full max-w-[1120px] flex-col gap-5">
       <MobileRoomHeader
         title="Schedule"
         trailing={

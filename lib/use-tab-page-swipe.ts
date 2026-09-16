@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion } from "@/lib/motion";
+import { skipNextPageEnter } from "@/lib/page-enter";
 import { navigateTab } from "@/lib/tab-nav";
 import { TAB_ROUTES, type TabRoute } from "@/lib/tab-routes";
 import {
@@ -150,6 +151,7 @@ export function useTabPageSwipe(
 
       swallowClick();
       haptic("light");
+      skipNextPageEnter();
       if (reduced) {
         x.set(0);
         peekX.set(0);
