@@ -6,10 +6,12 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
+import dynamic from "next/dynamic";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
-import { ItemCard } from "@/components/item-card";
+import { ItemCard, StatusSegmented } from "@/components/item-card";
+import { MobileTaskActions } from "@/components/mobile-item-sheet";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
@@ -22,6 +24,11 @@ import type { Item } from "@/lib/types";
 import type { FilterBreakdown } from "@/lib/filters";
 import type { OverlapGroup } from "@/lib/overlap";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+
+const ItemEditor = dynamic(
+  () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
+  { ssr: false }
+);
 
 /** The heading travels the way the day did — the only cue that says which. */
 const headingVariants = {
@@ -107,10 +114,13 @@ export function DaySheet({
   const setExpanded = (value: boolean) => setDetent(value ? "full" : "compact");
   const listRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState(false);
   const reduced = prefersReducedMotion();
   useSheetOverscroll(listRef, dragControls, visible, detent === "compact");
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
+  const activeItem = activeItemId ? items.find((i) => i.id === activeItemId) : undefined;
 
   /**
    * Which way the day last moved, so the heading can travel that way.
@@ -133,6 +143,8 @@ export function DaySheet({
   useEffect(() => {
     closeGuard.current = false;
     listRef.current?.scrollTo(0, 0);
+    setActiveItemId(null);
+    setEditingItem(false);
   }, [date]);
 
   useEffect(() => {
@@ -206,7 +218,7 @@ export function DaySheet({
           <div className="flex w-full items-center justify-between gap-2 px-3 pb-2 pt-3">
             {/* Previous sits on the left of the title it changes, next on the
                 right, so the control and the direction agree. */}
-            {phone && onStep ? (
+            {phone && onStep && !activeItem ? (
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -216,30 +228,47 @@ export function DaySheet({
               >
                 <ChevronLeft className="h-5 w-5" strokeWidth={2} />
               </button>
+            ) : phone && activeItem ? (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  haptic("light");
+                  setEditingItem(false);
+                  setActiveItemId(null);
+                }}
+                aria-label="Back to day"
+                className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+              </button>
             ) : null}
 
             <div className="min-w-0 flex-1 overflow-hidden">
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
-                  key={dayKeyValue}
+                  key={activeItem ? activeItem.id : dayKeyValue}
                   custom={direction}
                   variants={headingVariants}
                   initial="enter"
                   animate="center"
                   exit="exit"
                   transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-                  className={cn(phone && onStep ? "text-center" : "text-left")}
+                  className={cn(phone && (onStep || activeItem) ? "text-center" : "text-left")}
                 >
                   <p id={headingId} className="truncate text-[16px] font-semibold text-ink">
-                    {label}
+                    {activeItem ? activeItem.title : label}
                   </p>
-                  <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">{subtitle}</p>
+                  <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+                    {activeItem ? (activeItem.type === "event" ? "Event" : "Assignment") : subtitle}
+                  </p>
                 </motion.div>
               </AnimatePresence>
             </div>
 
             <div className="flex shrink-0 items-center" onPointerDown={e => e.stopPropagation()}>
-              {phone && onStep && (
+              {phone && onStep && !activeItem && (
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
@@ -250,10 +279,23 @@ export function DaySheet({
                   <ChevronRight className="h-5 w-5" strokeWidth={2} />
                 </button>
               )}
-              {/* Changing detent was a drag and nothing else — unreachable by
-                  keyboard, by switch control, and by anyone who can't make a
-                  precise vertical gesture. Both directions, always. */}
-              {phone && (
+              {phone && onAdd && !activeItem && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    haptic("light");
+                    onAdd();
+                  }}
+                  aria-label="Add to this day"
+                  className="press-none flex h-11 w-11 items-center justify-center rounded-full text-accent active:bg-accent-soft"
+                >
+                  <Plus className="h-5 w-5" strokeWidth={2} />
+                </button>
+              )}
+              {/* Detent toggle stays one control; day stepping and Add lead. */}
+              {phone && !activeItem && (
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
@@ -264,12 +306,12 @@ export function DaySheet({
                   }}
                   aria-label={expanded ? "Shrink this day" : "Expand this day"}
                   aria-expanded={expanded}
-                  className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
+                  className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-faint active:bg-surface-sunken"
                 >
                   {expanded ? (
-                    <ChevronDown className="h-5 w-5" strokeWidth={2} />
+                    <ChevronDown className="h-4 w-4" strokeWidth={2} />
                   ) : (
-                    <ChevronUp className="h-5 w-5" strokeWidth={2} />
+                    <ChevronUp className="h-4 w-4" strokeWidth={2} />
                   )}
                 </button>
               )}
@@ -289,51 +331,85 @@ export function DaySheet({
           </div>
         </div>
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-8 pt-0 [-webkit-overflow-scrolling:touch]">
-          {onAdd && (
-            <button
-              type="button"
-              onClick={onAdd}
-              className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft transition-colors active:border-accent active:bg-accent-soft active:text-accent"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              Add to this day
-            </button>
-          )}
-          {items.length === 0 ? (
-            <ListEmptyState
-              scope={format(date, "MMM d")}
-              total={breakdown?.total ?? 0}
-              hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
-              hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
-              hiddenByView={breakdown?.hiddenByView ?? 0}
-              canAdd={Boolean(onAdd)}
-              onAdd={onAdd}
-            />
-          ) : (
-            <div className="flex flex-col gap-2">
-              <OverlapNotices groups={overlaps} />
-              {items.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  category={item.categoryId ? categories.get(item.categoryId) : undefined}
-                  day={date}
-                  {...chrome}
+          {activeItem ? (
+            editingItem || activeItem.type === "event" ? (
+              <div className="pt-1">
+                <p className="mb-2 text-[12px] text-ink-soft">Changes save as you edit.</p>
+                <ItemEditor
+                  item={activeItem}
+                  category={activeItem.categoryId ? categories.get(activeItem.categoryId) : undefined}
+                  clock24h={chrome.clock24h}
+                  StatusSegmented={StatusSegmented}
+                  onCollapse={() => {
+                    setEditingItem(false);
+                    setActiveItemId(null);
+                  }}
                 />
-              ))}
-            </div>
-          )}
-          {phone && detent === "compact" && items.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                haptic("light");
-                setDetent("full");
-              }}
-              className="mt-3 mb-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13px] font-medium text-accent"
-            >
-              Show more
-            </button>
+              </div>
+            ) : (
+              <MobileTaskActions
+                item={activeItem}
+                embedded
+                hintSwipe={false}
+                onClose={() => setActiveItemId(null)}
+                onEdit={() => setEditingItem(true)}
+              />
+            )
+          ) : (
+            <>
+              {onAdd && !phone && (
+                <button
+                  type="button"
+                  onClick={onAdd}
+                  className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft transition-colors active:border-accent active:bg-accent-soft active:text-accent"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  Add to this day
+                </button>
+              )}
+              {items.length === 0 ? (
+                <ListEmptyState
+                  scope={format(date, "MMM d")}
+                  total={breakdown?.total ?? 0}
+                  hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
+                  hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
+                  hiddenByView={breakdown?.hiddenByView ?? 0}
+                  canAdd={Boolean(onAdd)}
+                  onAdd={onAdd}
+                />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <OverlapNotices groups={overlaps} />
+                  {items.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      category={item.categoryId ? categories.get(item.categoryId) : undefined}
+                      day={date}
+                      showQuickActions={false}
+                      onMobileOpen={(opened) => {
+                        setEditingItem(false);
+                        setActiveItemId(opened.id);
+                        if (detent === "compact") setDetent("full");
+                      }}
+                      {...chrome}
+                    />
+                  ))}
+                </div>
+              )}
+              {phone && detent === "compact" && items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setDetent("full");
+                  }}
+                  className="mt-3 mb-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13px] font-medium text-accent"
+                >
+                  Show more
+                </button>
+              )}
+            </>
           )}
         </div>
       </motion.div>

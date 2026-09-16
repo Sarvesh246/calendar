@@ -231,32 +231,37 @@ export default function AgendaPage() {
         </div>
       </header>
 
-      <div className="flex gap-1">
-        {heat.map((d) => (
-          <button
-            key={d.date.toISOString()}
-            type="button"
-            onClick={() => {
-              setCalendarFocusDate(dayKey(d.date));
-              router.push("/calendar");
-            }}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
-            title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
-          >
-            <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
-              {format(d.date, "EEEEE")}
-            </span>
-            <span
-              className={cn(
-                "h-1.5 w-full rounded-full",
-                d.intensity === 0 && "bg-surface-sunken",
-                d.intensity === 1 && "bg-good",
-                d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
-                d.intensity >= 4 && "bg-warn"
-              )}
-            />
-          </button>
-        ))}
+      <div>
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+          This week
+        </p>
+        <div className="flex gap-1">
+          {heat.map((d) => (
+            <button
+              key={d.date.toISOString()}
+              type="button"
+              onClick={() => {
+                setCalendarFocusDate(dayKey(d.date));
+                router.push("/calendar");
+              }}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
+              title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
+            >
+              <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
+                {format(d.date, "EEEEE")}
+              </span>
+              <span
+                className={cn(
+                  "h-1.5 w-full rounded-full",
+                  d.intensity === 0 && "bg-surface-sunken",
+                  d.intensity === 1 && "bg-good",
+                  d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
+                  d.intensity >= 4 && "bg-warn"
+                )}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {isEmpty && (
@@ -316,6 +321,7 @@ export default function AgendaPage() {
                           key={item.id}
                           item={item}
                           category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          showQuickActions={false}
                           {...chrome}
                         />
                       ))}
@@ -351,7 +357,8 @@ export default function AgendaPage() {
                             item={item}
                             category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
                             day={group.date}
-                            {...chrome}
+                            showQuickActions={false}
+                          {...chrome}
                           />
                         ))}
                       </AnimatePresence>
@@ -378,6 +385,7 @@ export default function AgendaPage() {
                           key={item.id}
                           item={item}
                           category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          showQuickActions={false}
                           {...chrome}
                         />
                       ))}

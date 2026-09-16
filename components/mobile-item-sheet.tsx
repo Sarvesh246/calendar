@@ -139,11 +139,17 @@ export function MobileTaskActions({
   onClose,
   onEdit,
   initialReschedule = false,
+  hintSwipe = true,
+  embedded = false,
 }: {
   item: Item;
   onClose: () => void;
   onEdit: () => void;
   initialReschedule?: boolean;
+  /** When Start/Reschedule buttons are on the card, don't advertise swipe. */
+  hintSwipe?: boolean;
+  /** Render inside DaySheet (or similar) instead of nesting another portal sheet. */
+  embedded?: boolean;
 }) {
   const [open, setOpen] = useState(initialReschedule);
   const status = item.status ?? "todo";
@@ -153,8 +159,8 @@ export function MobileTaskActions({
     onClose();
   };
 
-  return (
-    <MobileItemSheet title={item.title} onClose={onClose}>
+  const body = (
+    <>
       <p className="mb-3 text-[12px] text-ink-soft">
         {isEvent ? "Starts" : "Due"}: {format(new Date(item.at), "EEE, MMM d · p")}
       </p>
@@ -182,9 +188,11 @@ export function MobileTaskActions({
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-ink-faint">
-            Swipe right to start or complete, left to reschedule — or use the buttons on the card.
-          </p>
+          {hintSwipe && (
+            <p className="mt-2 text-[11px] text-ink-faint">
+              Or use the Start and Reschedule buttons on the card.
+            </p>
+          )}
         </>
       )}
 
@@ -231,6 +239,13 @@ export function MobileTaskActions({
           />
         </div>
       </Reveal>
+    </>
+  );
+
+  if (embedded) return body;
+  return (
+    <MobileItemSheet title={item.title} onClose={onClose}>
+      {body}
     </MobileItemSheet>
   );
 }

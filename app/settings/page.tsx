@@ -230,17 +230,18 @@ export default function SettingsPage() {
         <AccountSection />
         <Divider />
         <Subheading title="Install app" />
-        <p className="mb-2 text-[13px] text-ink-soft">Add Datebook to your home screen for offline use.</p>
+        <p className="mb-2 text-[13px] text-ink-soft">Home screen shortcut for quicker access.</p>
         <PwaInstallButton />
       </CollapsibleCard>
           </div>
           <div className="order-2 min-w-0">
       <CollapsibleCard
         title="Classes"
-        sub="Name, color, and optional meeting name for each class."
+        sub="Name, color, meeting name, and optional syllabus per class."
         storageKey="classes"
-        defaultOpen
+        defaultOpen={false}
       >
+        <SyllabusImportProvider>
         <div className="flex flex-col gap-2">
           {categories.map((cat) => (
             <CategoryEditor
@@ -284,6 +285,7 @@ export default function SettingsPage() {
             <Plus className="h-4 w-4" strokeWidth={2.5} />
           </button>
         </div>
+        </SyllabusImportProvider>
       </CollapsibleCard>
           </div>
           <div className="order-3 min-w-0">
@@ -292,7 +294,7 @@ export default function SettingsPage() {
         title="Import"
         sub="Pull due dates from a calendar feed or a syllabus PDF."
         storageKey="import"
-        defaultOpen
+        defaultOpen={false}
       >
         <SyllabusImportProvider>
         <Subheading title="Calendar link" />
@@ -302,21 +304,9 @@ export default function SettingsPage() {
 
         <Subheading title="Syllabus PDF" />
         <ImportSyllabus />
-
-        {categories.filter((c) => !c.archived).length > 0 && (
-          <>
-            <Divider />
-            <Subheading title="Attach per class" />
-            <div className="mt-2 flex flex-col gap-2">
-              {categories.filter((c) => !c.archived).map((cat) => (
-                <div key={cat.id} className="min-w-0 rounded-xl border border-line/80 px-3 py-2">
-                  <p className="mb-1.5 truncate text-[13px] font-medium text-ink">{cat.name}</p>
-                  <CategorySyllabusControl category={cat} />
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        <p className="mt-2 text-[12.5px] text-ink-faint">
+          To attach a syllabus to a specific class, open that class under Classes.
+        </p>
         </SyllabusImportProvider>
       </CollapsibleCard>
           </div>
@@ -325,7 +315,7 @@ export default function SettingsPage() {
         title="Weekly meetings"
         sub="Lectures and labs live on Schedule, not here."
         storageKey="meetings"
-        defaultOpen
+        defaultOpen={false}
       >
         <p className="text-[13px] leading-relaxed text-ink-soft">
           Add or edit weekly class times from the Schedule page.
@@ -343,9 +333,9 @@ export default function SettingsPage() {
       <CollapsibleCard
         id="reminders"
         title="Reminders"
-        sub="Alerts while Datebook is open, closed-app push when you’re signed in, and default timing."
+        sub="In-app alerts, closed-app push when signed in, and default timing."
         storageKey="reminders"
-        defaultOpen
+        defaultOpen={false}
       >
         <NotificationToggle />
         <div className="mt-3">
@@ -754,6 +744,11 @@ function CategoryEditor({
           className="min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
       </label>
+      {!cat.archived && (
+        <div className="mt-1.5 border-t border-line/60 pt-2 pl-10">
+          <CategorySyllabusControl category={cat} />
+        </div>
+      )}
       {confirmDeleteId === cat.id && (
         <CategoryDeleteConfirm
           category={cat}

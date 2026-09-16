@@ -309,7 +309,6 @@ export default function CalendarPage() {
               onClick={() => step(-1)}
               aria-label={mode === "month" ? "Previous month" : "Previous week"}
               title="Previous (←)"
-              className="max-md:hidden"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -327,7 +326,6 @@ export default function CalendarPage() {
               onClick={() => step(1)}
               aria-label={mode === "month" ? "Next month" : "Next week"}
               title="Next (→)"
-              className="max-md:hidden"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
