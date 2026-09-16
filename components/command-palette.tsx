@@ -13,6 +13,7 @@ import {
   CalendarSearch,
   Keyboard,
   ListChecks,
+  Minimize2,
   Plus,
   Settings,
   Sparkles,
@@ -26,6 +27,7 @@ import { format, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
 import { searchItems } from "@/lib/search";
 import { navigateTab } from "@/lib/tab-nav";
+import { focusOnThis, openFocusRoom } from "@/lib/focus-session-store";
 import { useAllViews } from "@/components/saved-views";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 import { useModKeyLabel } from "@/components/keyboard-shortcuts";
@@ -210,6 +212,16 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
         )}
 
         <Command.Group heading="Go to" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+          <Command.Item
+            onSelect={() => {
+              openFocusRoom(undefined, router);
+              setPaletteOpen(false);
+            }}
+            value="focus room work session"
+            className="cmdk-row min-h-11"
+          >
+            <Minimize2 className="h-4 w-4" strokeWidth={1.75} /> Focus <Hint>F</Hint>
+          </Command.Item>
           <Command.Item onSelect={() => go("/today")} className="cmdk-row min-h-11">
             <Sun className="h-4 w-4" strokeWidth={1.75} /> Today <Hint>1</Hint>
           </Command.Item>
@@ -316,6 +328,28 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                     </Command.Item>
                   );
                 })}
+              </Command.Group>
+            )}
+
+            {visibleItems.some((i) => i.type !== "event" && i.status !== "done") && (
+              <Command.Group heading="Focus" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+                {visibleItems
+                  .filter((i) => i.type !== "event" && i.status !== "done")
+                  .slice(0, 8)
+                  .map((item) => (
+                    <Command.Item
+                      key={`focus-${item.id}`}
+                      value={`focus on this ${item.title}`}
+                      onSelect={() => {
+                        focusOnThis(item.id, router);
+                        setPaletteOpen(false);
+                      }}
+                      className="cmdk-row min-h-11"
+                    >
+                      <Minimize2 className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      <span className="truncate">Focus on this · {item.title}</span>
+                    </Command.Item>
+                  ))}
               </Command.Group>
             )}
           </>

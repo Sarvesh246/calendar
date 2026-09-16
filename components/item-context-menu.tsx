@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { addDays } from "date-fns";
 import {
@@ -12,6 +13,7 @@ import {
   ChevronRight,
   CircleDashed,
   Copy,
+  Minimize2,
   PanelRightOpen,
   PlayCircle,
   Trash2,
@@ -20,6 +22,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore, type ContextMenuRequest } from "@/lib/ui-store";
 import { dayKey } from "@/lib/date-utils";
 import { duplicateItem, rescheduleToDay, setStatusWithUndo } from "@/lib/item-actions";
+import { focusOnThis } from "@/lib/focus-session-store";
 import { takeMenuOpener } from "@/lib/item-menu";
 import { toDateInputValue } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
@@ -50,6 +53,7 @@ export function ItemContextMenu() {
 type Section = "main" | "reschedule" | "date";
 
 function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }) {
+  const router = useRouter();
   const close = useUIStore((s) => s.closeContextMenu);
   const openInspector = useUIStore((s) => s.openInspector);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
@@ -173,6 +177,11 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
           <MenuItem icon={PanelRightOpen} onSelect={() => run(() => openInspector(item.id))} hint="↵">
             Open details
           </MenuItem>
+          {work && status !== "done" && (
+            <MenuItem icon={Minimize2} onSelect={() => run(() => focusOnThis(item.id, router))}>
+              Focus on this
+            </MenuItem>
+          )}
           {work && (
             <>
               <Separator />

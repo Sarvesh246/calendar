@@ -57,6 +57,8 @@ interface UIState {
   askAI: (message: string) => void;
   consumeAIDrawerPendingMessage: () => string | null;
   toggleFocusMode: () => void;
+  enterFocus: () => void;
+  exitFocusRoom: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setQuickAddOpen: (open: boolean) => void;
   closeQuickAdd: () => void;
@@ -159,7 +161,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (msg !== null) set({ aiDrawerPendingMessage: null });
     return msg;
   },
-  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
+  enterFocus: () =>
+    set({ ...closedPrimarySurfaces, ...closedAdd, focusMode: true, inspectorItemId: null }),
+  exitFocusRoom: () => set({ focusMode: false }),
+  toggleFocusMode: () => {
+    const s = get();
+    if (s.focusMode) s.exitFocusRoom();
+    else s.enterFocus();
+  },
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setQuickAddOpen: (open) =>
     set(open ? { ...closedPrimarySurfaces, quickAddOpen: true } : closedAdd),

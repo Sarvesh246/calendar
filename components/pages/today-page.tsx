@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
@@ -31,7 +32,9 @@ import { UpNextStack } from "@/components/up-next-card";
 import { ItemCard } from "@/components/item-card";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
-import { FocusView } from "@/components/focus-view";
+import { FocusSessionChip } from "@/components/focus-session-chip";
+import { isSessionLive } from "@/lib/focus-session";
+import { openFocusRoom, useFocusSessionStore } from "@/lib/focus-session-store";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { Button } from "@/components/ui/button";
@@ -48,8 +51,6 @@ const COMING_UP_DAYS = 7;
 const COMING_UP_ROWS = 8;
 
 export default function TodayPage() {
-  const focusMode = useUIStore((s) => s.focusMode);
-  if (focusMode) return <FocusView />;
   return <TodayDashboard />;
 }
 
@@ -68,6 +69,7 @@ function comingUpItems(items: Item[], day: Date): Item[] {
 }
 
 function TodayDashboard() {
+  const router = useRouter();
   const mobile = useMediaQuery("(max-width: 767px)");
   const wide = useMediaQuery(WIDE_QUERY);
   const [reviewOverdue, setReviewOverdue] = useState(false);
@@ -78,7 +80,8 @@ function TodayDashboard() {
   const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const chrome = useItemCardChrome();
   const categoriesById = useCategoriesById();
-  const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
+  const session = useFocusSessionStore((s) => s.session);
+  const liveSession = isSessionLive(session);
 
   const now = useNow();
   const todayKey = dayKey(now);
@@ -126,19 +129,23 @@ function TodayDashboard() {
           )}
         </p>
       </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          haptic("light");
-          toggleFocusMode();
-        }}
-        aria-label="Focus"
-        className="shrink-0 gap-1.5"
-      >
-        <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-        <span className="hidden min-[400px]:inline">Focus</span>
-      </Button>
+      {liveSession ? (
+        <FocusSessionChip className="md:hidden" />
+      ) : (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            haptic("light");
+            openFocusRoom(undefined, router);
+          }}
+          aria-label="Focus"
+          className="shrink-0 gap-1.5"
+        >
+          <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+          <span className="hidden min-[400px]:inline">Focus</span>
+        </Button>
+      )}
     </header>
   );
 

@@ -63,4 +63,13 @@ describe("primary surfaces", () => {
     expect(state.classScheduleCategoryId).toBe("class-2");
     expect(surfaces.filter((key) => state[key])).toEqual(["classScheduleOpen"]);
   });
+
+  it("enterFocus opens the room and exitFocusRoom leaves the session flag off", () => {
+    useUIStore.getState().setFilterOpen(true);
+    useUIStore.getState().enterFocus();
+    expect(useUIStore.getState().focusMode).toBe(true);
+    expect(useUIStore.getState().filterOpen).toBe(false);
+    useUIStore.getState().exitFocusRoom();
+    expect(useUIStore.getState().focusMode).toBe(false);
+  });
 });

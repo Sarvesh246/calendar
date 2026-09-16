@@ -16,7 +16,7 @@
 
 const PREFIX = "datebook-draft:";
 
-export type DraftKey = "quick-add" | "quick-add-fields" | "assistant" | `item:${string}`;
+export type DraftKey = "quick-add" | "quick-add-fields" | "assistant" | "focus-session" | `item:${string}`;
 
 function storage(): Storage | null {
   try {
