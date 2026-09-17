@@ -5,7 +5,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { createDebouncedStorage } from "./debounced-storage";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { nanoid } from "./nanoid";
-import { defaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
+import { createDefaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
 import { buildImportPlan, feedLabel, isHttpFeedUrl, normalizeFeedUrl, type FetchedCalendar } from "./calendar-import";
 import {
   applySyllabusImportToSnapshot,
@@ -180,6 +180,15 @@ export interface DeletedBatch {
 const SAMPLE_ITEM_IDS = new Set(Array.from({ length: 12 }, (_, i) => `item-${i + 1}`));
 const SAMPLE_CATEGORY_IDS = new Set(["cat-cs", "cat-bio", "cat-club"]);
 
+// The old hardcoded default-category ids (see lib/mock-data.ts) — every fresh
+// install used to seed these exact two ids, so any account past the first to
+// ever sync them collided on Supabase's global `categories.id` primary key
+// and got a row-level-security error trying to upsert a row it didn't own.
+const LEGACY_DEFAULT_CATEGORY_IDS = new Set([
+  "f39a9750-ce6d-4039-a792-45680017f5f0",
+  "1d3d851d-36c9-4570-896a-7b7de6875f27",
+]);
+
 const defaultSettings: UserSettings = {
   preset: "minimal",
   landingView: "today",
@@ -199,7 +208,7 @@ const GUEST_BACKUP_KEY = "datebook-store.guest";
 export const useDatebookStore = create<DatebookState>()(
   persist(
     (set, get) => ({
-      categories: defaultCategories,
+      categories: createDefaultCategories(),
       items: defaultItems,
       reminderPresets: defaultReminderPresets,
       settings: defaultSettings,
@@ -709,7 +718,7 @@ export const useDatebookStore = create<DatebookState>()(
         const s = get();
         set({
           items: [],
-          categories: [...defaultCategories],
+          categories: createDefaultCategories(),
           reminderPresets: [...defaultReminderPresets],
           importSources: [],
           lastDeleted: null,
@@ -722,7 +731,7 @@ export const useDatebookStore = create<DatebookState>()(
 
       replaceFromBackup: (backup) => {
         const prev = get();
-        const categories = backup.categories?.length ? backup.categories : [...defaultCategories];
+        const categories = backup.categories?.length ? backup.categories : createDefaultCategories();
         const importSources = backup.importSources ?? [];
         const gone = <T extends { id: string }>(before: T[], after: T[]) => {
           const kept = new Set(after.map((x) => x.id));
@@ -803,7 +812,7 @@ export const useDatebookStore = create<DatebookState>()(
             applyingRemote = true;
             set({
               items: [],
-              categories: [...defaultCategories],
+              categories: createDefaultCategories(),
               reminderPresets: [...defaultReminderPresets],
               importSources: [],
               deletions: {},
@@ -1029,7 +1038,7 @@ export const useDatebookStore = create<DatebookState>()(
 
         let next = {
           items: [] as Item[],
-          categories: [...defaultCategories],
+          categories: createDefaultCategories(),
           reminderPresets: [...defaultReminderPresets],
           importSources: [] as ImportSource[],
           settings: defaultSettings as UserSettings,
@@ -1042,7 +1051,7 @@ export const useDatebookStore = create<DatebookState>()(
             const s = (JSON.parse(guest).state ?? {}) as Partial<DatebookState>;
             next = {
               items: s.items ?? [],
-              categories: s.categories ?? [...defaultCategories],
+              categories: s.categories ?? createDefaultCategories(),
               reminderPresets: s.reminderPresets ?? [...defaultReminderPresets],
               importSources: s.importSources ?? [],
               settings: s.settings ?? defaultSettings,
@@ -1180,7 +1189,7 @@ export const useDatebookStore = create<DatebookState>()(
     }),
     {
       name: "datebook-store",
-      version: 7,
+      version: 8,
       storage: createJSONStorage(() => createDebouncedStorage(250)),
       partialize: (s) => ({
         categories: s.categories,
@@ -1199,7 +1208,7 @@ export const useDatebookStore = create<DatebookState>()(
         if (state && version < 1) {
           state.items = (state.items ?? []).filter((i) => !SAMPLE_ITEM_IDS.has(i.id));
           state.categories = (state.categories ?? []).filter((c) => !SAMPLE_CATEGORY_IDS.has(c.id));
-          if (state.categories.length === 0) state.categories = defaultCategories;
+          if (state.categories.length === 0) state.categories = createDefaultCategories();
         }
         if (state?.settings && state.settings.hideCompleted === undefined) {
           state.settings = { ...state.settings, hideCompleted: false };
@@ -1250,6 +1259,26 @@ export const useDatebookStore = create<DatebookState>()(
           state.items = (state.items ?? []).map((i) =>
             i.updatedAt ? i : { ...i, updatedAt: i.createdAt }
           );
+        }
+        if (state && version < 8 && state.categories?.some((c) => LEGACY_DEFAULT_CATEGORY_IDS.has(c.id))) {
+          // One-time escape from the old fixed default-category ids: mint each
+          // a fresh one and carry every item's reference along with it. Safe
+          // whether or not this device happens to be the account that already
+          // owns that row in Supabase — worst case it leaves one unused row
+          // behind up there; best case it's the fix for a sync that's been
+          // failing outright.
+          const remap = new Map<string, string>();
+          state.categories = state.categories.map((c) => {
+            if (!LEGACY_DEFAULT_CATEGORY_IDS.has(c.id)) return c;
+            const id = nanoid();
+            remap.set(c.id, id);
+            return { ...c, id };
+          });
+          if (remap.size > 0) {
+            state.items = (state.items ?? []).map((i) =>
+              remap.has(i.categoryId) ? { ...i, categoryId: remap.get(i.categoryId)! } : i
+            );
+          }
         }
         return state as DatebookState;
       },
