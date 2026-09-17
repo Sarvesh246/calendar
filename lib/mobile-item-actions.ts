@@ -3,6 +3,7 @@
 import { addDays, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { offerUndo, useActionUndo } from "@/lib/action-undo";
+import { haptic } from "@/lib/haptic";
 import type { Item, ItemStatus } from "@/lib/types";
 
 /** One undo slot for the whole app; kept under its old name for callers. */
@@ -26,11 +27,13 @@ export function mobileReschedule(item: Item, date: string, planWork: boolean) {
   const store = useDatebookStore.getState();
   const at = rescheduledDate(item.at, date);
   if (planWork) {
+    haptic("light");
     const planned = store.addItem({ title: `Work on: ${item.title}`, categoryId: item.categoryId, type: "task", status: "todo", at, allDay: true,
       description: `Work session for ${item.title}. Original deadline: ${format(new Date(item.at), "PPP p")}.`, url: item.url });
     offerUndo("Work planned · deadline unchanged", () => { const previousDelete = useDatebookStore.getState().lastDeleted; useDatebookStore.getState().deleteItem(planned.id); useDatebookStore.setState({ lastDeleted: previousDelete }); });
     return;
   }
+  haptic("warn");
   const endAt = item.endAt ? new Date(new Date(item.endAt).getTime() + new Date(at).getTime() - new Date(item.at).getTime()).toISOString() : undefined;
   store.updateItem(item.id, { at, ...(endAt ? { endAt } : {}) });
   offerUndo("Rescheduled", () => useDatebookStore.getState().updateItem(item.id, { at: item.at, endAt: item.endAt }));

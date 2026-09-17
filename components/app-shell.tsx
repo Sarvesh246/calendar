@@ -112,6 +112,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setQuickAddOpen(true);
   }
 
+  const enterFocus = useUIStore((s) => s.enterFocus);
+  // Home Screen Quick Actions (Calendar-ios) deep-link with `?intent=…`
+  // instead of a native bridge round-trip — "Today" needs nothing here since
+  // the wrapper just loads /today directly. Read once into a ref (a pure,
+  // side-effect-free read is safe during render) rather than re-reading the
+  // URL from the effect body: dev Strict Mode replays effects (close-quick-add
+  // then this one) twice in a row, and by the second pass the URL has already
+  // been stripped — re-reading it there would silently drop the intent.
+  const intentRef = useRef<string | null | undefined>(undefined);
+  if (intentRef.current === undefined) {
+    intentRef.current = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("intent");
+  }
+  useEffect(() => {
+    const intent = intentRef.current;
+    if (!intent) return;
+    if (intent === "compose") openAdd();
+    else if (intent === "focus") enterFocus();
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("intent")) return;
+    params.delete("intent");
+    const rest = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div
       className={cn(
