@@ -1,11 +1,21 @@
+import { nanoid } from "./nanoid";
 import type { Category, Item, ReminderPreset } from "./types";
 
-// UUIDs (not "cat-personal" slugs) so these rows are valid in the Postgres
-// `uuid` id column when synced to Supabase.
-export const defaultCategories: Category[] = [
-  { id: "f39a9750-ce6d-4039-a792-45680017f5f0", name: "Personal", color: "#3DBE8B" },
-  { id: "1d3d851d-36c9-4570-896a-7b7de6875f27", name: "Work", color: "#007AFF" },
-];
+/**
+ * A fresh pair of ids every call, not fixed constants — `categories.id` is
+ * a single global primary key in Supabase (not scoped per user_id like
+ * reminder_presets is), so two accounts that both got the same hardcoded
+ * default id used to race to "own" that row: whichever account synced
+ * first claimed it, and every other account's upsert of its own untouched
+ * default category then hit row-level security ("new row violates row
+ * level security (USING expression)") trying to update a row it didn't own.
+ */
+export function createDefaultCategories(): Category[] {
+  return [
+    { id: nanoid(), name: "Personal", color: "#3DBE8B" },
+    { id: nanoid(), name: "Work", color: "#007AFF" },
+  ];
+}
 
 export const defaultReminderPresets: ReminderPreset[] = [
   { id: "rp-15m", label: "15 minutes before", offsetMinutes: 15 },
