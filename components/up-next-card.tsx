@@ -186,8 +186,13 @@ export function UpNextStack({
                 dragElastic={0.18}
                 dragMomentum={false}
                 onDragEnd={(_, info) => {
-                  if (info.offset.x < -48 || info.velocity.x < -380) go(1);
-                  else if (info.offset.x > 48 || info.velocity.x > 380) go(-1);
+                  if (info.offset.x < -48 || info.velocity.x < -380) {
+                    haptic("selection");
+                    go(1);
+                  } else if (info.offset.x > 48 || info.velocity.x > 380) {
+                    haptic("selection");
+                    go(-1);
+                  }
                 }}
                 initial={reduce ? false : { opacity: 0, x: 22 }}
                 animate={{ opacity: 1, x: 0 }}

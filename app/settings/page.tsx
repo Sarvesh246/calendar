@@ -23,6 +23,7 @@ import {
   SyllabusImportProvider,
 } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
+import { AppLockSection } from "@/components/app-lock-section";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
@@ -228,6 +229,7 @@ export default function SettingsPage() {
         defaultOpen
       >
         <AccountSection />
+        <AppLockSection />
         <Divider />
         <Subheading title="Install app" />
         <p className="mb-2 text-[13px] text-ink-soft">Home screen shortcut for quicker access.</p>
