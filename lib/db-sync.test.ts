@@ -182,6 +182,7 @@ describe("toSettingsRow", () => {
       hideCompleted: true,
       defaultReminderPresetIds: [],
       classReminderMinutes: 30,
+      appleCalendarSync: true,
       mobileDayDetails: "inline",
       customTheme: { background: "#112233", surface: "#ffffff", accent: "#ff5500" },
     };
@@ -191,6 +192,7 @@ describe("toSettingsRow", () => {
     const row = toSettingsRow(local, USER);
     for (const col of [
       "class_reminder_minutes",
+      "apple_calendar_sync",
       "mobile_day_details",
       "hide_completed",
       "custom_theme",
@@ -199,6 +201,7 @@ describe("toSettingsRow", () => {
     }
     const echoed = rowToSettings(row, local);
     expect(echoed.classReminderMinutes).toBe(30);
+    expect(echoed.appleCalendarSync).toBe(true);
     expect(echoed.mobileDayDetails).toBe("inline");
     expect(echoed.hideCompleted).toBe(true);
     expect(echoed.customTheme).toEqual(local.customTheme);

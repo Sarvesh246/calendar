@@ -26,11 +26,21 @@ export interface Category {
   updatedAt?: string;
 }
 
+export interface ReminderPlace {
+  name: string;
+  lat: number;
+  lng: number;
+  /** Geofence radius. Defaults to 150m. */
+  radiusMeters?: number;
+}
+
 export interface Reminder {
   id: string;
   itemId: string;
   offsetMinutes: number; // minutes before startAt/dueAt
   label: string; // e.g. "1 day before"
+  /** Arrive-here reminder (native iOS). Time reminders ignore this. */
+  place?: ReminderPlace;
 }
 
 /** Last imported values for a feed item — used so a re-sync keeps local edits. */
@@ -133,6 +143,8 @@ export interface UserSettings {
   /** How many minutes before a class starts the countdown card appears and the
    *  reminder notification fires. `0` turns both off. */
   classReminderMinutes: number;
+  /** IPA: upsert Datebook items into the on-device Apple Calendar. */
+  appleCalendarSync?: boolean;
   /** Mobile calendar: pop-up panel vs list below the month grid. */
   mobileDayDetails: MobileDayDetails;
   /** Hide the first-run empty-state card. */

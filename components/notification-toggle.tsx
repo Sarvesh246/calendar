@@ -11,6 +11,7 @@ import {
   requestNotificationPermission,
 } from "@/lib/reminders";
 import { subscribePush, vapidPublicKey } from "@/lib/push-client";
+import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 
 function isStandaloneWindow(): boolean {
   if (typeof window === "undefined") return false;
@@ -33,18 +34,25 @@ function isIosDevice(): boolean {
 
 export function NotificationToggle() {
   const mounted = useHasMounted();
+  const native = mounted && isNativeWrapper();
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [busy, setBusy] = useState(false);
   const [swReady, setSwReady] = useState<boolean | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushReady, setPushReady] = useState<boolean | null>(null);
+  const [nativeGranted, setNativeGranted] = useState(false);
+
+  useNativeMessage("nativeNotificationState", (payload) => {
+    const state = payload as { granted?: boolean } | null;
+    if (state?.granted) setNativeGranted(true);
+  });
 
   const current = mounted ? notificationPermission() : "default";
   const state = permission === "default" ? current : permission;
   const hasVapid = Boolean(vapidPublicKey());
 
   useEffect(() => {
-    if (!mounted || notificationPermission() !== "granted" || !hasVapid) return;
+    if (!mounted || native || notificationPermission() !== "granted" || !hasVapid) return;
     let cancelled = false;
     void subscribePush().then((result) => {
       if (cancelled) return;
@@ -54,11 +62,16 @@ export function NotificationToggle() {
     return () => {
       cancelled = true;
     };
-  }, [mounted, hasVapid]);
+  }, [mounted, hasVapid, native]);
 
   async function enable() {
     setBusy(true);
     setPushError(null);
+    if (native) {
+      postToNative("requestNativeNotifications");
+      setBusy(false);
+      return;
+    }
     const result = await requestNotificationPermission();
     setPermission(result);
     if (result === "granted") {
@@ -82,6 +95,27 @@ export function NotificationToggle() {
         className="h-[44px] animate-pulse rounded-lg border border-line bg-surface-sunken"
         aria-hidden
       />
+    );
+  }
+
+  if (native) {
+    if (nativeGranted) {
+      return (
+        <p className="flex items-start gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
+          <span>Reminders use iPhone notifications — they fire on time even when Datebook is closed. Complete or snooze from the banner.</span>
+        </p>
+      );
+    }
+    return (
+      <button
+        onClick={enable}
+        disabled={busy}
+        className="flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2.5 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        <Bell className="h-4 w-4 shrink-0" strokeWidth={2} />
+        {busy ? "Waiting…" : "Allow iPhone notifications"}
+      </button>
     );
   }
 

@@ -59,6 +59,7 @@ const STRIPPABLE_COLS: Record<string, readonly string[]> = {
     "mobile_day_details",
     "custom_theme",
     "class_reminder_minutes",
+    "apple_calendar_sync",
   ],
 };
 const stripped: Record<string, Set<string>> = {
@@ -263,6 +264,7 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     class_reminder_minutes: normalizeClassReminderMinutes(s.classReminderMinutes),
+    apple_calendar_sync: s.appleCalendarSync ?? false,
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
     custom_theme: s.customTheme ?? null,
@@ -302,6 +304,11 @@ export function rowToSettings(r: Row, local?: UserSettings): UserSettings {
       "class_reminder_minutes",
       normalizeClassReminderMinutes(r.class_reminder_minutes),
       local?.classReminderMinutes
+    ),
+    appleCalendarSync: carried(
+      "apple_calendar_sync",
+      Boolean(r.apple_calendar_sync),
+      local?.appleCalendarSync
     ),
     mobileDayDetails: carried(
       "mobile_day_details",

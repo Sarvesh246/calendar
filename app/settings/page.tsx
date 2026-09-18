@@ -24,6 +24,7 @@ import {
 } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
 import { AppLockSection } from "@/components/app-lock-section";
+import { NativeIosSection } from "@/components/native-ios-section";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
@@ -231,6 +232,7 @@ export default function SettingsPage() {
       >
         <AccountSection />
         <AppLockSection />
+        <NativeIosSection />
         <Divider />
         <Subheading title="Install app" />
         <p className="mb-2 text-[13px] text-ink-soft">Home screen shortcut for quicker access.</p>
@@ -336,7 +338,7 @@ export default function SettingsPage() {
       <CollapsibleCard
         id="reminders"
         title="Reminders"
-        sub="In-app alerts, closed-app push when signed in, and default timing."
+        sub="Alerts on this device, class heads-up, and default timing."
         storageKey="reminders"
         defaultOpen={false}
       >
