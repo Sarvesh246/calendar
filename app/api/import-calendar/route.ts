@@ -3,6 +3,8 @@ import {
   clientKey,
   durableHourlyLimit,
   getRequestUser,
+  guestBucketKey,
+  ipCeiling,
   rateLimit,
   sameOrigin,
   tooMany,
@@ -99,7 +101,10 @@ export async function POST(request: Request) {
   const cacheKey = start.toString();
   const user = await getRequestUser(request);
   const ip = clientKey(request);
-  const limitKey = user ? `import:user:${user.id}` : `import:ip:${ip}`;
+  // Anonymous callers are keyed per-browser (see `guestBucketKey`), not per
+  // IP, so a dorm or lecture hall full of students setting up for the first
+  // time — before any of them have signed in — don't share one quota.
+  const limitKey = user ? `import:user:${user.id}` : `import:ip:${guestBucketKey(request, ip)}`;
 
   // Served before any quota is touched: a cache hit costs nothing upstream, so
   // charging for it is what turned "several devices, one feed" into a 429.
@@ -108,10 +113,11 @@ export async function POST(request: Request) {
 
   // A crude guard against a client hammering uncached URLs. The hourly caps
   // below now only ever count real upstream fetches.
-  const hourly = user ? 60 : 12;
+  const hourly = user ? 60 : 20;
   if (
     !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
     !rateLimit(`${limitKey}:burst`, 6, 60_000) ||
+    (!user && !ipCeiling("import", ip, 200, 60 * 60 * 1000)) ||
     !(await durableHourlyLimit(limitKey, hourly))
   ) {
     // Prefer a slightly stale copy over an error — the caller can't tell the

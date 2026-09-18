@@ -359,6 +359,18 @@ function isMissingTable(error: unknown): boolean {
   return e.code === "PGRST205" || e.code === "42P01";
 }
 
+/** Postgres 42501: the write was evaluated against `auth.uid()` and rejected —
+ *  almost always because the request reached PostgREST without the session it
+ *  was stamped for (an access token that expired on a backgrounded tab, or a
+ *  sign-out/sign-in race), not because the row itself is wrong. Retrying the
+ *  identical write only repeats the failure; the caller should re-check the
+ *  live session instead. */
+export function isRlsViolation(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  return e.code === "42501" || /row-level security/i.test(e.message ?? "");
+}
+
 /** False once we've learned this project has no `deletions` table, so callers
  *  can skip work that would only fail (e.g. a realtime binding to it). */
 export function deletionsSupported(): boolean {

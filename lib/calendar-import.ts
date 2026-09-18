@@ -1,3 +1,4 @@
+import { isSameDay } from "date-fns";
 import { nanoid } from "./nanoid";
 import { parseIcs, type IcsEvent } from "./ics";
 import { snapshotFrom } from "./source-snapshot";
@@ -108,15 +109,34 @@ function detectType(ev: IcsEvent): ItemType {
   return "event";
 }
 
+/** Matches `isOverdueAt`'s notion of "already past" (lib/date-utils.ts), so a
+ *  first-sync assignment is only assumed done under the same rule that would
+ *  otherwise flag it overdue. */
+function isPastDue(at: string, allDay: boolean | undefined, now: Date): boolean {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return false;
+  if (allDay) return !isSameDay(date, now) && date.getTime() < now.getTime();
+  return date.getTime() < now.getTime();
+}
+
 /**
  * Turn fetched feed events into store-ready drafts, resolving each event's
  * category from its course name (reusing an existing category when the name
  * matches, otherwise creating one with the next palette color).
+ *
+ * `isFirstSync` is true only the first time a given feed URL is imported (no
+ * prior `ImportSource` row for it). A brand-new account connecting Canvas
+ * mid-semester otherwise gets every already-past assignment created as
+ * `"todo"` and instantly flagged overdue — assume those are done instead and
+ * only surface work that's actually still ahead. Later re-syncs of the same
+ * feed keep the normal behaviour so a newly-added past-due item still shows up.
  */
 export function buildImportPlan(
   { calendarName, events }: FetchedCalendar,
   existingCategories: Category[],
-  sourceId: string
+  sourceId: string,
+  isFirstSync = false,
+  now: Date = new Date()
 ): ImportPlan {
   const newCategories: Category[] = [];
   const fallbackName = (calendarName ?? "").trim() || "Imported";
@@ -172,9 +192,13 @@ export function buildImportPlan(
       ...(ev.allDay ? { allDay: true } : {}),
       ...(type !== "event"
         ? {
-            status: (ev.todoStatus && /^COMPLETED$/i.test(ev.todoStatus) ? "done" : "todo") as
-              | "todo"
-              | "done",
+            status: (
+              ev.todoStatus && /^COMPLETED$/i.test(ev.todoStatus)
+                ? "done"
+                : isFirstSync && isPastDue(ev.start, ev.allDay, now)
+                  ? "done"
+                  : "todo"
+            ) as "todo" | "done",
           }
         : {}),
     };
