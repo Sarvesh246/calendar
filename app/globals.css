@@ -370,6 +370,10 @@
   /* Air between the tab pill and the home indicator / screen edge. Keeps the
      bar from sitting flush on the bottom. Added on top of --safe-bottom. */
   --tab-bar-rest: 0.75rem;
+  /* Extra page padding so content clears the floating dock. Rooms use this
+     instead of the 5.75rem tab-bar reservation, which was padding a second
+     empty runway under Settings. */
+  --dock-clearance: calc(var(--tab-bar-rest) + 4.25rem);
   /* Geometry of the floating glass header cluster (components/mobile-header-actions.tsx).
      Kept here so the space a page reserves for it can never drift from where
      the cluster actually sits. */
@@ -734,6 +738,13 @@ button, a, [role="button"], summary, input, textarea, select, label {
 .native-ios .focus-exit-button,
 .native-ios .focus-end-button {
   display: none !important;
+}
+
+/* Native chrome overlays the WebView. Don't also reserve the PWA tab-bar
+   footprint — that double-count is the extra Settings scroll. The stacked
+   Liquid Glass dock (Add above the 3-tab tray) still needs clearance. */
+.native-ios {
+  --dock-clearance: 8.25rem;
 }
 
 /* Content remains a calm solid layer. These are the few transient WebView

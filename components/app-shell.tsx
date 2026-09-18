@@ -176,7 +176,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onCalendar ? "h-dvh overflow-hidden" : onRoom ? "min-h-0" : "min-h-dvh",
         focusMode
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(var(--safe-bottom)+1.25rem)]"
-          : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
+          : onRoom
+            ? "pb-[calc(var(--safe-bottom)+var(--dock-clearance))] md:min-h-0 md:pt-4 md:pb-6"
+            : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
       )}
     >
       {!focusMode && <Sidebar pathname={pathname} />}
