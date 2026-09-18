@@ -31,6 +31,7 @@ import { PwaInstallButton } from "@/components/pwa-install";
 import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { CategoryClassTimesControl } from "@/components/category-class-times";
 import { haptic } from "@/lib/haptic";
 import {
   CLASS_REMINDER_OPTIONS,
@@ -315,12 +316,12 @@ export default function SettingsPage() {
           <div className="order-4 min-w-0">
       <CollapsibleCard
         title="Weekly meetings"
-        sub="Lectures and labs live on Schedule, not here."
+        sub="Lectures and labs — open a class to edit the times already on it."
         storageKey="meetings"
         defaultOpen={false}
       >
         <p className="text-[13px] leading-relaxed text-ink-soft">
-          Add or edit weekly class times from the Schedule page.
+          Weekly meetings are edited per class. Open a class above, or edit them on Schedule.
         </p>
         <Link
           href="/schedule"
@@ -639,6 +640,12 @@ function CategoryEditor({
   const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
   const nameFocus = useRef(false);
   const titleFocus = useRef(false);
+  const nameRef = useRef(name);
+  const titleRef = useRef(classTitle);
+  const catRef = useRef(cat);
+  nameRef.current = name;
+  titleRef.current = classTitle;
+  catRef.current = cat;
 
   useEffect(() => {
     if (!nameFocus.current) setName(cat.name);
@@ -647,19 +654,40 @@ function CategoryEditor({
     if (!titleFocus.current) setClassTitle(cat.classTitle ?? "");
   }, [cat.classTitle]);
 
-  function commitName(raw = name) {
+  function commitName(raw = nameRef.current) {
+    const current = catRef.current;
     const next = raw.trim() || "Uncategorized";
     setName(next);
-    if (next !== cat.name) updateCategory(cat.id, { name: next });
+    if (next !== current.name) updateCategory(current.id, { name: next });
   }
 
-  function commitClassTitle(raw = classTitle) {
+  function commitClassTitle(raw = titleRef.current) {
+    const current = catRef.current;
     const next = raw.trim();
     setClassTitle(next);
-    if (next !== (cat.classTitle ?? "")) {
-      updateCategory(cat.id, { classTitle: next || undefined });
+    if (next !== (current.classTitle ?? "")) {
+      updateCategory(current.id, { classTitle: next || undefined });
     }
   }
+
+  function saveClassFields() {
+    commitName();
+    commitClassTitle();
+  }
+
+  useEffect(
+    () => () => {
+      commitName();
+      commitClassTitle();
+    },
+    // Persist the last draft if the row unmounts without a blur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const classDirty =
+    (name.trim() || "Uncategorized") !== cat.name ||
+    classTitle.trim() !== (cat.classTitle ?? "");
 
   return (
     <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
@@ -681,11 +709,7 @@ function CategoryEditor({
           onFocus={() => {
             nameFocus.current = true;
           }}
-          onChange={(e) => {
-            const v = e.target.value;
-            setName(v);
-            updateCategory(cat.id, { name: v });
-          }}
+          onChange={(e) => setName(e.target.value)}
           onBlur={() => {
             nameFocus.current = false;
             commitName();
@@ -698,6 +722,17 @@ function CategoryEditor({
           aria-label={`${cat.name} name`}
           className="min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none"
         />
+        <button
+          type="button"
+          onClick={() => {
+            saveClassFields();
+            haptic("success");
+          }}
+          disabled={!classDirty}
+          className="shrink-0 text-[12px] font-medium text-accent disabled:text-ink-faint disabled:opacity-40"
+        >
+          Save
+        </button>
         {cat.archived && <span className="shrink-0 text-[11px] text-ink-faint">Archived</span>}
         <button
           type="button"
@@ -727,11 +762,7 @@ function CategoryEditor({
           onFocus={() => {
             titleFocus.current = true;
           }}
-          onChange={(e) => {
-            const v = e.target.value;
-            setClassTitle(v);
-            updateCategory(cat.id, { classTitle: v });
-          }}
+          onChange={(e) => setClassTitle(e.target.value)}
           onBlur={() => {
             titleFocus.current = false;
             commitClassTitle();
@@ -748,7 +779,10 @@ function CategoryEditor({
       </label>
       {!cat.archived && (
         <div className="mt-1.5 border-t border-line/60 pt-2 pl-10">
-          <CategorySyllabusControl category={cat} />
+          <CategoryClassTimesControl category={cat} />
+          <div className="mt-1">
+            <CategorySyllabusControl category={cat} />
+          </div>
         </div>
       )}
       {confirmDeleteId === cat.id && (
@@ -863,7 +897,9 @@ function CollapsibleCard({
       <div
         className={cn(
           "grid h-max content-start",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          // `1fr` in an auto-height grid still expands to leftover min-height
+          // on iOS WebKit. `max-content` keeps the open track content-sized.
+          open ? "grid-rows-[minmax(0,max-content)]" : "grid-rows-[0fr]",
           !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
         )}
         // Closed sections stay in the tree (so open/close doesn't remount

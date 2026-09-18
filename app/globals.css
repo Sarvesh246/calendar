@@ -1054,11 +1054,9 @@ select {
 @keyframes route-enter {
   from {
     opacity: 0;
-    translate: 0 6px;
   }
   to {
     opacity: 1;
-    translate: 0 0;
   }
 }
 
@@ -1066,20 +1064,20 @@ select {
   /* Deliberately quicker than `--motion-standard`. A route change is not an
      element arriving on a page you are already looking at — you are waiting for
      it, and the reveal is time added to a navigation that already cost you a
-     router commit. */
-  animation: route-enter 140ms var(--ease-standard) both;
+     router commit. Opacity only: a 6px `translate` on the page box made a
+     containing block on iOS, so overflow-hidden children (calendar, rooms)
+     clipped and the document grew by the leftover offset. */
+  animation: route-enter 140ms var(--ease-standard);
 }
 
-/* Tab host: same softness, no `both` (so a restarted spam-tap cannot sit on
-   the from-keyframe) and no stagger. Calendar overflow stays hidden. */
+/* Tab page: same softness, no `both` (so a restarted spam-tap cannot sit on
+   the from-keyframe), no translate. Calendar overflow stays hidden. */
 @keyframes tab-page-enter {
   from {
     opacity: 0;
-    translate: 0 6px;
   }
   to {
     opacity: 1;
-    translate: 0 0;
   }
 }
 
@@ -1108,7 +1106,15 @@ body {
 
 .page-shell > * > * {
   animation: content-rise 150ms var(--ease-standard) both;
-  backface-visibility: hidden;
+}
+
+/* iOS: `both` can leave a delayed section at opacity 0 if the animation is
+   paused (backgrounded WKWebView, hidden tab host). Phone rooms skip the
+   stagger so Settings/Schedule paint complete on the first frame. */
+@media (max-width: 767px) {
+  .page-shell > * > * {
+    animation: none;
+  }
 }
 /* Skip the stagger on the very first paint — it made cold starts feel blank. */
 html[data-first-load="1"] .page-shell > * > * {

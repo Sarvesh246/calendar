@@ -100,15 +100,13 @@ export function TabPageHost({ pathname }: { pathname: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const enterRef = usePageEnter(active, Boolean(active));
   const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
+  const pageLive = swipe.dragging || swipe.offsetting;
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
   return (
     <div
-      ref={(node) => {
-        hostRef.current = node;
-        enterRef.current = node;
-      }}
+      ref={hostRef}
       className={cn(
         "relative min-w-0 touch-pan-y",
         active === "/calendar" && "flex min-h-0 flex-1 flex-col",
@@ -123,12 +121,13 @@ export function TabPageHost({ pathname }: { pathname: string }) {
         return (
           <Activity key={href} mode={isActive || isPeek ? "visible" : "hidden"}>
           <motion.div
+            ref={isActive ? enterRef : undefined}
             className={cn(
               href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
               isPeek && "pointer-events-none absolute inset-0 overflow-auto overscroll-contain"
             )}
             style={
-              isActive
+              isActive && pageLive
                 ? { x: swipe.x, willChange: "transform" }
                 : isPeek
                   ? { x: swipe.peekX, willChange: "transform" }

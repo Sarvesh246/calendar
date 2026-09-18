@@ -388,7 +388,33 @@ export interface SavedClassMeeting {
   endHour?: number;
   endMinute?: number;
   title: string;
+  location?: string;
+  until?: string;
   count: number;
+}
+
+export function daysEqual(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((d, i) => d === b[i]);
+}
+
+/** Whether an editor draft matches a stored weekly meeting's day/time slot. */
+export function savedMeetingSlotEqual(
+  saved: SavedClassMeeting,
+  next: {
+    days: number[];
+    hour: number;
+    minute: number;
+    endHour: number;
+    endMinute: number;
+  }
+): boolean {
+  return (
+    daysEqual(saved.days, next.days) &&
+    saved.hour === next.hour &&
+    saved.minute === next.minute &&
+    (saved.endHour ?? next.endHour) === next.endHour &&
+    (saved.endMinute ?? next.endMinute) === next.endMinute
+  );
 }
 
 export function formatClock(hour: number, minute: number, clock24h = false): string {
@@ -576,6 +602,8 @@ export function savedClassMeetings(items: Item[], categoryId: string): SavedClas
       meeting.endHour = end.getHours();
       meeting.endMinute = end.getMinutes();
     }
+    if (first.location?.trim()) meeting.location = first.location.trim();
+    if (first.repeat?.until) meeting.until = first.repeat.until;
     meetings.push(meeting);
   }
 
