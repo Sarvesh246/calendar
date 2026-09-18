@@ -20,10 +20,12 @@ function SavedMeetingRow({
   meeting,
   clock24h,
   color,
+  onEdit,
 }: {
   meeting: SavedClassMeeting;
   clock24h: boolean;
   color?: string;
+  onEdit: () => void;
 }) {
   const summary = formatMeetingSummary(meeting, clock24h);
   return (
@@ -34,6 +36,13 @@ function SavedMeetingRow({
         style={color ? { color } : undefined}
       />
       <p className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{summary}</p>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="shrink-0 text-[12px] font-medium text-ink-soft hover:text-ink"
+      >
+        Edit
+      </button>
       <button
         type="button"
         aria-label={`Remove ${summary}`}
@@ -61,6 +70,10 @@ export function CategoryClassTimesControl({ category }: { category: Category }) 
           meeting={{ ...meeting, title: category.classTitle?.trim() || meeting.title }}
           clock24h={clock24h}
           color={category.color}
+          onEdit={() => {
+            haptic("light");
+            openClassSchedule(category.id);
+          }}
         />
       ))}
       <button
@@ -72,7 +85,7 @@ export function CategoryClassTimesControl({ category }: { category: Category }) 
         className="flex min-h-11 items-center gap-2 rounded-lg px-0.5 text-left text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken/50 hover:text-ink"
       >
         <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-        {saved ? "Add another time" : "Class times"}
+        {saved ? "Edit class times" : "Add class times"}
       </button>
     </div>
   );
@@ -82,6 +95,7 @@ export function ClassTimesRoster() {
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
+  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
   const rows = categories
     .filter((c) => !c.archived)
     .map((cat) => ({ cat, meetings: savedClassMeetings(items, cat.id) }))
@@ -102,6 +116,10 @@ export function ClassTimesRoster() {
               meeting={{ ...meeting, title: cat.classTitle?.trim() || meeting.title }}
               clock24h={clock24h}
               color={cat.color}
+              onEdit={() => {
+                haptic("light");
+                openClassSchedule(cat.id);
+              }}
             />
           ))}
         </li>

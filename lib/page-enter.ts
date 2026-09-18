@@ -24,7 +24,7 @@ export function takeSkipPageEnter() {
  * the same ~140ms fade — nothing queues, nothing crossfades.
  */
 export function usePageEnter(key: string | null, enabled = true) {
-  const ref = useRef<HTMLElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const seen = useRef<string | null>(null);
 
   useLayoutEffect(() => {

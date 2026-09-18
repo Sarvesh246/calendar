@@ -33,6 +33,12 @@ export default function SchedulePage() {
   const categoriesById = useCategoriesById();
   const categories = useDatebookStore((s) => s.categories);
 
+  function openTimes() {
+    haptic("light");
+    const filtered = categoryFilter?.length === 1 ? categoryFilter[0] : undefined;
+    openClassSchedule(filtered);
+  }
+
   const items = useMemo(
     () => applyCategoryFilter(allItems, categoryFilter),
     [allItems, categoryFilter]
@@ -72,10 +78,7 @@ export default function SchedulePage() {
         trailing={
           <button
             type="button"
-            onClick={() => {
-              haptic("light");
-              openClassSchedule();
-            }}
+            onClick={openTimes}
             className="press-none flex min-h-11 items-center gap-1 rounded-lg px-2 text-[13px] font-semibold text-accent"
           >
             <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
@@ -91,7 +94,7 @@ export default function SchedulePage() {
             place.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => openClassSchedule()}>
+        <Button variant="secondary" size="sm" onClick={openTimes}>
           <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
           Class times
         </Button>
@@ -102,7 +105,7 @@ export default function SchedulePage() {
           title="No repeating schedule yet."
           sub="Add your class times — or import a calendar — and anything that lands on the same day each week will lay itself out here."
           action={
-            <Button variant="primary" size="sm" onClick={() => openClassSchedule()}>
+            <Button variant="primary" size="sm" onClick={openTimes}>
               Add class times
             </Button>
           }

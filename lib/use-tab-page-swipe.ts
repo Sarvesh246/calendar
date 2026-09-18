@@ -28,12 +28,15 @@ export function useTabPageSwipe(
   peekX: MotionValue<number>;
   peek: TabRoute | null;
   dragging: boolean;
+  /** True while a swipe transform is on the page — including the settle spring. */
+  offsetting: boolean;
 } {
   const router = useRouter();
   const x = useMotionValue(0);
   const peekX = useMotionValue(0);
   const [peek, setPeek] = useState<TabRoute | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [offsetting, setOffsetting] = useState(false);
   const axis = useRef<Axis>("undecided");
   const start = useRef({ x: 0, y: 0, t: 0 });
   const last = useRef({ x: 0, t: 0 });
@@ -86,6 +89,7 @@ export function useTabPageSwipe(
         if (adx > ady * 1.15) {
           axis.current = "x";
           setDragging(true);
+          setOffsetting(true);
           host.setPointerCapture?.(e.pointerId);
         } else {
           return;
@@ -141,9 +145,10 @@ export function useTabPageSwipe(
           x.set(0);
           peekX.set(0);
           setPeek(null);
+          setOffsetting(false);
           return;
         }
-        void animate(x, 0, spring);
+        void animate(x, 0, spring).then(() => setOffsetting(false));
         const home = dx >= 0 ? -width : width;
         void animate(peekX, home, spring).then(() => setPeek(null));
         return;
@@ -156,6 +161,7 @@ export function useTabPageSwipe(
         x.set(0);
         peekX.set(0);
         setPeek(null);
+        setOffsetting(false);
         navigateTab(router, to);
         return;
       }
@@ -163,7 +169,7 @@ export function useTabPageSwipe(
       navigateTab(router, to);
       x.set(remaining);
       setPeek(null);
-      void animate(x, 0, spring);
+      void animate(x, 0, spring).then(() => setOffsetting(false));
     };
 
     host.addEventListener("pointerdown", onDown);
@@ -183,5 +189,5 @@ export function useTabPageSwipe(
     };
   }, [active, enabled, hostRef, peekX, reduced, router, x]);
 
-  return { x, peekX, peek, dragging };
+  return { x, peekX, peek, dragging, offsetting };
 }
