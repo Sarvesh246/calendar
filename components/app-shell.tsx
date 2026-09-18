@@ -13,6 +13,7 @@ import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
 import { ReminderScheduler } from "./reminder-scheduler";
+import { NativeShellSync } from "./native-shell-sync";
 import { DeferredFeedSync } from "./deferred-feed-sync";
 import { ToastViewport } from "./toast-viewport";
 import { MobileHeaderActions } from "./mobile-header-actions";
@@ -22,6 +23,9 @@ import { ViewStateSync } from "./view-state-sync";
 import { StorageSync } from "./storage-sync";
 import { Button } from "./ui/button";
 import { useUIStore } from "@/lib/ui-store";
+import { useDatebookStore } from "@/lib/store";
+import { useFocusSessionStore } from "@/lib/focus-session-store";
+import { setStatusWithUndo } from "@/lib/item-actions";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { FocusedItemRelay } from "@/lib/item-focus";
 import { isTabRoute } from "@/lib/tab-routes";
@@ -121,17 +125,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // then this one) twice in a row, and by the second pass the URL has already
   // been stripped — re-reading it there would silently drop the intent.
   const intentRef = useRef<string | null | undefined>(undefined);
+  const intentItemRef = useRef<string | null>(null);
+  const intentPrefillRef = useRef<string | null>(null);
   if (intentRef.current === undefined) {
-    intentRef.current = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("intent");
+    if (typeof window === "undefined") {
+      intentRef.current = null;
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      intentRef.current = params.get("intent");
+      intentItemRef.current = params.get("item");
+      intentPrefillRef.current = params.get("prefill") ?? params.get("text");
+    }
   }
   useEffect(() => {
     const intent = intentRef.current;
     if (!intent) return;
-    if (intent === "compose") openAdd();
-    else if (intent === "focus") enterFocus();
+    const itemId = intentItemRef.current;
+    const store = useDatebookStore.getState();
+    if (intent === "compose" || intent === "add") {
+      if (intentPrefillRef.current) setQuickAddPrefill(intentPrefillRef.current);
+      else setQuickAddPrefill("");
+      setQuickAddOpen(true);
+    } else if (intent === "focus") {
+      if (itemId) useFocusSessionStore.getState().ensureSession(itemId);
+      enterFocus();
+    } else if (intent === "complete" && itemId) {
+      const item = store.items.find((i) => i.id === itemId);
+      if (item) setStatusWithUndo(item, "done");
+    } else if (intent === "snooze" && itemId) {
+      store.snoozeItem(itemId, 15);
+    } else if (intent === "item" && itemId) {
+      useUIStore.getState().openInspector(itemId);
+    }
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("intent")) return;
-    params.delete("intent");
+    for (const key of ["intent", "item", "prefill", "text", "snooze"]) params.delete(key);
     const rest = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,6 +339,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <CommandPalette />
       <AIDrawer />
       <ReminderScheduler />
+      <NativeShellSync />
       <ToastViewport />
       <DeferredFeedSync />
       <MergeCloudDialog />

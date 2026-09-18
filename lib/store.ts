@@ -200,6 +200,7 @@ const defaultSettings: UserSettings = {
   hideCompleted: false,
   defaultReminderPresetIds: ["rp-night"],
   classReminderMinutes: DEFAULT_CLASS_REMINDER_MINUTES,
+  appleCalendarSync: false,
   mobileDayDetails: "sheet",
 };
 

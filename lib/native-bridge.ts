@@ -19,7 +19,11 @@ declare global {
 
 /** Mirrors the marker Calendar-ios appends via `applicationNameForUserAgent`. */
 export function isNativeWrapper() {
-  return typeof navigator !== "undefined" && navigator.userAgent.includes("DatebookNativeApp");
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.userAgent === "string" &&
+    navigator.userAgent.includes("DatebookNativeApp")
+  );
 }
 
 export function postToNative(type: string, payload?: unknown) {
