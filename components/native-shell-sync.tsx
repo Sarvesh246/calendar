@@ -8,7 +8,8 @@ import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-br
 import { buildNativeSnapshot } from "@/lib/native-snapshot";
 import { setStatusWithUndo } from "@/lib/item-actions";
 import { useUIStore } from "@/lib/ui-store";
-import { useResolvedPathname } from "@/lib/tab-nav";
+import { isTabRoute } from "@/lib/tab-routes";
+import { navigateTab, useResolvedPathname } from "@/lib/tab-nav";
 
 /**
  * IPA only: keep the native shell's notification / widget / Live Activity /
@@ -82,6 +83,7 @@ export function NativeShellSync() {
         surface: css.getPropertyValue("--surface-elevated").trim() || "#ffffff",
         ink: css.getPropertyValue("--ink").trim() || "#1c1c1e",
         inkSoft: css.getPropertyValue("--ink-soft").trim() || "#636366",
+        inkFaint: css.getPropertyValue("--ink-faint").trim() || "#6d6d71",
         accent: css.getPropertyValue("--accent").trim() || "#007aff",
         accentInk: css.getPropertyValue("--accent-ink").trim() || "#ffffff",
       },
@@ -150,7 +152,8 @@ export function NativeShellSync() {
       useUIStore.getState().setQuickAddPrefill(msg.text ?? "");
       useUIStore.getState().setQuickAddOpen(true);
     } else if (msg.type === "navigate" && msg.url?.startsWith("/")) {
-      router.push(msg.url);
+      if (isTabRoute(msg.url)) navigateTab(router, msg.url);
+      else router.push(msg.url);
     } else if (msg.type === "ask") {
       useUIStore.getState().setAIDrawerOpen(true);
     } else if (msg.type === "search") {
