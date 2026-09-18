@@ -5,7 +5,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Keyboard, Plus, Search, Sparkles } from "lucide-react";
+import { Keyboard, Search, Sparkles } from "lucide-react";
 import { FocusView } from "./focus-view";
 import { FocusSessionChip, FocusSessionHydrator } from "./focus-session-chip";
 import { Scrim } from "@/components/ui/scrim";
@@ -82,7 +82,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onToday = pathname === "/today";
   const onTab = isTabRoute(pathname);
   const desktop = useMediaQuery("(min-width: 768px)");
-  const floatingAdd = quickAddOpen && !(onToday && desktop);
+  // Desktop always owns one persistent composer in the command bar. Opening
+  // Add from a calendar cell or shortcut focuses and prefills that composer;
+  // only phone layouts need the floating sheet.
+  const floatingAdd = quickAddOpen && !desktop;
   const [addPresent, setAddPresent] = useState(false);
   useEffect(() => {
     if (floatingAdd) {
@@ -110,11 +113,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     closeQuickAdd();
   }, [pathname, closeQuickAdd]);
-
-  function openAdd() {
-    setQuickAddPrefill("");
-    setQuickAddOpen(true);
-  }
 
   const enterFocus = useUIStore((s) => s.enterFocus);
   // Home Screen Quick Actions (Calendar-ios) deep-link with `?intent=…`
@@ -196,21 +194,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div
               aria-label="Workspace commands"
               className={cn(
-                "mb-3 hidden shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface p-1.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ink)_4%,transparent),0_8px_24px_color-mix(in_srgb,var(--ink)_3%,transparent)] md:flex",
-                !onToday && "md:self-end",
-                onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
-                onToday
-                  ? "md:static md:mx-0 md:mb-5 md:px-1.5"
-                  : "md:static md:mx-0 md:mb-4 md:px-0"
+                "mb-4 hidden w-full min-w-0 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface p-1.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ink)_4%,transparent),0_8px_24px_color-mix(in_srgb,var(--ink)_3%,transparent)] md:flex",
+                onToday && "md:mb-5"
               )}
             >
-              {onToday && desktop && (
+              {desktop && (
                 <div className="min-w-0 flex-1">
                   <QuickAddBar embedded toolbar />
                 </div>
               )}
-              {onToday && desktop && <div aria-hidden className="mx-1 h-6 w-px bg-line" />}
-              <div className="ml-auto flex items-center gap-1">
+              {desktop && <div aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-line lg:mx-1" />}
+              <div className="ml-auto flex shrink-0 items-center gap-0.5 lg:gap-1">
                 <FocusSessionChip />
                 {/* The assistant used to be reachable only from inside the
                     command palette, which meant you had to already know it
@@ -233,7 +227,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
                   aria-keyshortcuts="Control+K Meta+K"
-                  className="hidden h-10 w-48 items-center gap-2 rounded-lg bg-surface-sunken/70 pl-3 pr-2 text-[13px] text-ink-faint transition-[background-color,color,width] duration-[var(--motion-standard)] hover:bg-surface-sunken hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-60"
+                  className="hidden h-10 w-40 items-center gap-2 rounded-lg bg-surface-sunken/70 pl-3 pr-2 text-[13px] text-ink-faint transition-[background-color,color,width] duration-[var(--motion-standard)] hover:bg-surface-sunken hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-52 2xl:w-60"
                 >
                   <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="flex-1 text-left">Search…</span>
@@ -258,12 +252,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Keyboard className="h-4 w-4" strokeWidth={1.9} />
                 </Button>
-                {!onSettings && !onToday && (
-                  <Button variant="primary" size="sm" onClick={openAdd}>
-                    <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                    Add
-                  </Button>
-                )}
               </div>
             </div>
           </>
