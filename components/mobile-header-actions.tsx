@@ -27,7 +27,7 @@ export function MobileHeaderActions(_props: { pathname: string }) {
   const inRoom = onSettings || onSchedule;
 
   return (
-    <div className="viewport-pinned-top pointer-events-none fixed inset-x-0 top-0 z-30 md:hidden">
+    <div className="mobile-web-header-actions viewport-pinned-top pointer-events-none fixed inset-x-0 top-0 z-30 md:hidden">
       {/* Sits a little below the status bar / notch rather than tucked against
           it, so the cluster's blur never bleeds into the system chrome. */}
       <div className="pt-[calc(env(safe-area-inset-top)+var(--mobile-header-top))]">

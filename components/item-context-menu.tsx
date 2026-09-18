@@ -169,7 +169,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: pos.left, top: pos.top, transformOrigin: "top left" }}
-      className="fixed z-[43] w-[232px] rounded-xl border border-line bg-surface p-1 text-[13px] text-ink shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"
+      className="native-context-menu fixed z-[43] w-[232px] rounded-xl border border-line bg-surface p-1 text-[13px] text-ink shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"
     >
       {section === "main" && (
         <>

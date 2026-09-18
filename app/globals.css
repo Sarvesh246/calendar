@@ -725,6 +725,57 @@ button, a, [role="button"], summary, input, textarea, select, label {
   backdrop-filter: blur(18px) saturate(130%);
 }
 
+/* The IPA draws its persistent navigation and utility controls in the native
+   layer with UIVisualEffectView. Hide only the duplicate WebView chrome; the
+   PWA keeps the existing, performant CSS material above. The native wrapper
+   injects this class before first paint, and NativeShellSync reasserts it. */
+.native-ios .mobile-web-bottom-nav,
+.native-ios .mobile-web-header-actions,
+.native-ios .focus-exit-button,
+.native-ios .focus-end-button {
+  display: none !important;
+}
+
+/* Content remains a calm solid layer. These are the few transient WebView
+   controls that cannot move native without breaking sheet gestures, focus
+   trapping, or contextual positioning, so the IPA gives them a restrained
+   companion material instead of glassing every card. */
+.native-ios .native-glass-control {
+  background: color-mix(in srgb, var(--surface-elevated) 66%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--line-strong) 56%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 8px 22px -12px rgb(0 0 0 / 0.42);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.native-ios .native-sheet-header {
+  margin-inline: -0.25rem;
+  padding-inline: 0.25rem;
+  border-bottom: 0.5px solid color-mix(in srgb, var(--line) 58%, transparent);
+}
+
+.native-ios .native-context-menu {
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+  border-color: color-mix(in srgb, var(--line-strong) 62%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 20px 54px -18px rgb(0 0 0 / 0.52);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+.native-ios .focus-room {
+  padding-bottom: calc(var(--safe-bottom) + 4.75rem);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .native-ios .native-glass-control,
+  .native-ios .native-context-menu {
+    background: var(--surface-elevated);
+    backdrop-filter: none;
+  }
+}
+
 /* The global control rule uses `manipulation`, which includes horizontal pan.
    A swipe begins on a tab link, so the browser otherwise cancels the captured
    pointer as soon as it decides to own that horizontal gesture. Keep vertical

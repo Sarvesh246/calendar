@@ -262,7 +262,7 @@ function FocusRoom({
       animate={{ opacity: 1 }}
       transition={motionTokens.tweenStandard}
       className={cn(
-        "flex min-h-0 flex-1 flex-col",
+        "focus-room flex min-h-0 flex-1 flex-col",
         desktop ? "md:min-h-[70vh]" : "items-stretch"
       )}
     >
@@ -270,7 +270,7 @@ function FocusRoom({
         type="button"
         onClick={() => exitFocusRoom()}
         aria-label="Exit focus"
-        className="fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[41] flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        className="focus-exit-button fixed right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[41] flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
       >
         <X className="h-4 w-4" strokeWidth={2} />
         Exit
@@ -311,7 +311,7 @@ function FocusRoom({
               haptic("light");
               endSession();
             }}
-            className="text-[12.5px] font-medium text-ink-faint underline-offset-2 hover:text-ink-soft hover:underline"
+            className="focus-end-button text-[12.5px] font-medium text-ink-faint underline-offset-2 hover:text-ink-soft hover:underline"
           >
             End session
           </button>
