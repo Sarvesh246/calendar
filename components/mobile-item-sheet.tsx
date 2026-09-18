@@ -96,11 +96,11 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
       >
         <SheetHandle dragControls={dragControls} dragging={dragging} />
         <header
-          className="flex shrink-0 cursor-grab items-center justify-between gap-3 active:cursor-grabbing"
+          className="native-sheet-header flex shrink-0 cursor-grab items-center justify-between gap-3 active:cursor-grabbing"
           onPointerDown={(e) => startSheetDrag(dragControls, e)}
         >
           <h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2>
-          <button aria-label="Close item sheet" className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button>
+          <button aria-label="Close item sheet" className="native-glass-control press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button>
         </header>
         {/* `px-1 -mx-1` so a focus ring — which is drawn 2px *outside* the
             field — isn't shaved off by this scroll container's edges. A ring

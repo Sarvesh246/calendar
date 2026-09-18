@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDatebookStore } from "@/lib/store";
 import { useFocusSessionStore } from "@/lib/focus-session-store";
 import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 import { buildNativeSnapshot } from "@/lib/native-snapshot";
 import { setStatusWithUndo } from "@/lib/item-actions";
 import { useUIStore } from "@/lib/ui-store";
+import { useResolvedPathname } from "@/lib/tab-nav";
 
 /**
  * IPA only: keep the native shell's notification / widget / Live Activity /
@@ -14,6 +16,8 @@ import { useUIStore } from "@/lib/ui-store";
  */
 export function NativeShellSync() {
   const wrapped = isNativeWrapper();
+  const router = useRouter();
+  const pathname = useResolvedPathname();
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const importSources = useDatebookStore((s) => s.importSources);
@@ -21,12 +25,83 @@ export function NativeShellSync() {
   const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const appleCalendarSync = useDatebookStore((s) => s.settings.appleCalendarSync);
   const focus = useFocusSessionStore((s) => s.session);
+  const focusMode = useUIStore((s) => s.focusMode);
+  const quickAddOpen = useUIStore((s) => s.quickAddOpen);
+  const commandPaletteOpen = useUIStore((s) => s.commandPaletteOpen);
+  const filterOpen = useUIStore((s) => s.filterOpen);
+  const aiDrawerOpen = useUIStore((s) => s.aiDrawerOpen);
+  const classScheduleOpen = useUIStore((s) => s.classScheduleOpen);
+  const inspectorItemId = useUIStore((s) => s.inspectorItemId);
+  const contextMenu = useUIStore((s) => s.contextMenu);
+  const activeViewId = useUIStore((s) => s.activeViewId);
+  const categoryFilter = useUIStore((s) => s.categoryFilter);
+  const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const [domRevision, setDomRevision] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!wrapped) return;
     postToNative("requestNativeNotifications");
   }, [wrapped]);
+
+  // The class is also injected before the first WebView paint by Calendar-ios.
+  // Reassert it here for client navigations and watch the root because sheets,
+  // custom themes, and accessibility state all change there without touching
+  // React state in this component.
+  useEffect(() => {
+    if (!wrapped) return;
+    const root = document.documentElement;
+    root.classList.add("native-ios");
+    const observer = new MutationObserver(() => setDomRevision((value) => value + 1));
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "style"] });
+    return () => observer.disconnect();
+  }, [wrapped]);
+
+  useEffect(() => {
+    if (!wrapped) return;
+    const root = document.documentElement;
+    const css = getComputedStyle(root);
+    const modalOpen =
+      root.classList.contains("scroll-locked") ||
+      quickAddOpen ||
+      commandPaletteOpen ||
+      filterOpen ||
+      aiDrawerOpen ||
+      classScheduleOpen ||
+      Boolean(inspectorItemId) ||
+      Boolean(contextMenu);
+    postToNative("nativeChromeState", {
+      ready: true,
+      pathname,
+      focusMode,
+      obscured: modalOpen,
+      inRoom: pathname === "/settings" || pathname === "/schedule",
+      filtersActive: Boolean(activeViewId || categoryFilter?.length || hideCompleted),
+      appearance: css.colorScheme === "dark" ? "dark" : "light",
+      colors: {
+        surface: css.getPropertyValue("--surface-elevated").trim() || "#ffffff",
+        ink: css.getPropertyValue("--ink").trim() || "#1c1c1e",
+        inkSoft: css.getPropertyValue("--ink-soft").trim() || "#636366",
+        accent: css.getPropertyValue("--accent").trim() || "#007aff",
+        accentInk: css.getPropertyValue("--accent-ink").trim() || "#ffffff",
+      },
+    });
+  }, [
+    wrapped,
+    pathname,
+    focusMode,
+    quickAddOpen,
+    commandPaletteOpen,
+    filterOpen,
+    aiDrawerOpen,
+    classScheduleOpen,
+    inspectorItemId,
+    contextMenu,
+    activeViewId,
+    categoryFilter,
+    hideCompleted,
+    domRevision,
+  ]);
 
   useEffect(() => {
     if (!wrapped) return;
@@ -74,6 +149,22 @@ export function NativeShellSync() {
     } else if (msg.type === "compose") {
       useUIStore.getState().setQuickAddPrefill(msg.text ?? "");
       useUIStore.getState().setQuickAddOpen(true);
+    } else if (msg.type === "navigate" && msg.url?.startsWith("/")) {
+      router.push(msg.url);
+    } else if (msg.type === "ask") {
+      useUIStore.getState().setAIDrawerOpen(true);
+    } else if (msg.type === "search") {
+      useUIStore.getState().setCommandPaletteOpen(true);
+    } else if (msg.type === "filters") {
+      useUIStore.getState().setFilterOpen(true);
+    } else if (msg.type === "exitFocus") {
+      useUIStore.getState().exitFocusRoom();
+    } else if (msg.type === "pauseFocus") {
+      useFocusSessionStore.getState().pause();
+    } else if (msg.type === "resumeFocus") {
+      useFocusSessionStore.getState().resume();
+    } else if (msg.type === "endFocus") {
+      useFocusSessionStore.getState().endSession();
     }
   });
 
