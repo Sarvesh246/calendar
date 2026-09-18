@@ -53,6 +53,7 @@ export interface NativeLiveFocus {
   sessionElapsedMs: number;
   targetEndsAt: number | null;
   startedAt: number;
+  color: string;
 }
 
 export interface NativeSnapshot {
@@ -218,10 +219,11 @@ export function buildNativeSnapshot(opts: {
     .slice(0, 6)
     .map((i) => row(i, categories, i.allDay ? "All day" : timeLabel(i.at, clock24h)));
 
-  const liveNow = happeningNow(items, now, categories)[0];
+  const liveNow = happeningNow(items, now, categories).find((i) =>
+    isClassMeeting(i, catName(categories, i.categoryId))
+  );
   const soon = items.find((i) => isClassStartingSoon(i, now, windowMs));
-  const liveSrc =
-    liveNow && isClassMeeting(liveNow, catName(categories, liveNow.categoryId)) ? liveNow : soon;
+  const liveSrc = liveNow ?? soon;
   let liveClass: NativeLiveClass | null = null;
   if (liveSrc) {
     const start = new Date(liveSrc.at).getTime();
@@ -252,6 +254,7 @@ export function buildNativeSnapshot(opts: {
         sessionElapsedMs: sessionElapsedMs(focus, ms),
         targetEndsAt: focus.targetEndsAt,
         startedAt: seg?.startedAt ?? ms,
+        color: catColor(categories, item.categoryId),
       };
     }
   }

@@ -140,7 +140,7 @@ export default function SettingsPage() {
   return (
     // Full-width intro, then a two-column grid on desktop so collapsed
     // section tiles share a row baseline instead of drifting out of line.
-    <div className="mx-auto h-auto min-h-0 w-full max-w-[1120px] pb-4">
+    <div className="mx-auto h-auto min-h-0 w-full max-w-[1120px] pb-2">
       <div className="flex flex-col gap-5">
       <MobileRoomHeader title="Settings" />
       <header className="hidden pt-1 md:block">
