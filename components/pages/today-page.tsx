@@ -110,7 +110,7 @@ function TodayDashboard() {
   const overlaps = useMemo(() => findOverlapGroups(todayList, day), [todayList, day]);
 
   const header = (
-    <header className="flex items-start justify-between gap-3">
+    <header className="flex items-start justify-between gap-3 md:justify-start md:gap-5">
       <div>
         <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
         <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">
@@ -140,7 +140,7 @@ function TodayDashboard() {
             openFocusRoom(undefined, router);
           }}
           aria-label="Focus"
-          className="shrink-0 gap-1.5"
+          className="shrink-0 gap-1.5 md:mt-5"
         >
           <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
           <span className="hidden min-[400px]:inline">Focus</span>

@@ -194,18 +194,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <>
             <MobileHeaderActions pathname={pathname} />
             <div
+              aria-label="Workspace commands"
               className={cn(
-                "mb-3 hidden shrink-0 items-center gap-2 md:flex",
+                "mb-3 hidden shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface p-1.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ink)_4%,transparent),0_8px_24px_color-mix(in_srgb,var(--ink)_3%,transparent)] md:flex",
+                !onToday && "md:self-end",
                 onCalendar ? "-mx-2 px-2" : "-mx-4 px-4",
-                "md:static md:mx-0 md:mb-4 md:px-0"
+                onToday
+                  ? "md:static md:mx-0 md:mb-5 md:px-1.5"
+                  : "md:static md:mx-0 md:mb-4 md:px-0"
               )}
             >
               {onToday && desktop && (
                 <div className="min-w-0 flex-1">
-                  <QuickAddBar embedded />
+                  <QuickAddBar embedded toolbar />
                 </div>
               )}
-              <div className="ml-auto flex items-center gap-2">
+              {onToday && desktop && <div aria-hidden className="mx-1 h-6 w-px bg-line" />}
+              <div className="ml-auto flex items-center gap-1">
                 <FocusSessionChip />
                 {/* The assistant used to be reachable only from inside the
                     command palette, which meant you had to already know it
@@ -215,11 +220,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   size="sm"
                   onClick={() => setAIDrawerOpen(true)}
                   aria-label="Ask the assistant"
+                  className="h-10 rounded-lg border-0 bg-transparent px-3 hover:bg-surface-sunken"
                 >
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                   Ask
                 </Button>
-                <FilterButton className="hidden md:inline-flex" />
+                <FilterButton className="hidden h-10 w-10 rounded-lg border-0 bg-transparent shadow-none hover:bg-surface-sunken md:inline-flex" />
                 {/* Where there's room, search looks like a field with its
                     shortcut on it — an icon alone never taught anyone ⌘K. */}
                 <button
@@ -227,7 +233,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
                   aria-keyshortcuts="Control+K Meta+K"
-                  className="hidden h-9 w-52 items-center gap-2 rounded-lg border border-line bg-surface pl-2.5 pr-1.5 text-[13px] text-ink-faint transition-colors duration-[var(--motion-standard)] hover:border-line-strong hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-64"
+                  className="hidden h-10 w-48 items-center gap-2 rounded-lg bg-surface-sunken/70 pl-3 pr-2 text-[13px] text-ink-faint transition-[background-color,color,width] duration-[var(--motion-standard)] hover:bg-surface-sunken hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-60"
                 >
                   <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="flex-1 text-left">Search…</span>
@@ -238,7 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   size="icon"
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
-                  className="lg:hidden"
+                  className="h-10 w-10 rounded-lg border-0 bg-transparent lg:hidden"
                 >
                   <Search className="h-4 w-4" strokeWidth={1.9} />
                 </Button>
@@ -248,7 +254,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setShortcutsOpen(true)}
                   aria-label="Keyboard shortcuts"
                   title="Keyboard shortcuts (?)"
-                  className="hidden lg:inline-flex"
+                  className="hidden h-10 w-10 rounded-lg lg:inline-flex"
                 >
                   <Keyboard className="h-4 w-4" strokeWidth={1.9} />
                 </Button>
