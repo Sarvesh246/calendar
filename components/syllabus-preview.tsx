@@ -105,7 +105,7 @@ export function SyllabusPreview({
               value={selectedCategoryId ?? ""}
               onChange={(e) => onClassChange(e.target.value)}
               aria-label="Class for this syllabus"
-              className="min-h-10 w-full min-w-0 truncate rounded-md border border-line bg-surface-sunken/40 px-2.5 text-[13.5px] font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="field-control min-h-10 w-full min-w-0 truncate rounded-md border border-line bg-surface-sunken/40 px-2.5 text-[13.5px] font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <option value="">Choose a class…</option>
               {categories.map((cat) => (

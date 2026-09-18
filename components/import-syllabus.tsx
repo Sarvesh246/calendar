@@ -321,7 +321,7 @@ export function ImportSyllabus() {
             }}
             disabled={busy}
             aria-label="Class for this syllabus"
-            className="min-h-11 w-full min-w-0 truncate rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+            className="field-control min-h-11 w-full min-w-0 truncate rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
           >
             <option value="">Choose a class…</option>
             {categories.map((cat) => (

@@ -258,7 +258,7 @@ export default function SettingsPage() {
             />
           ))}
         </div>
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
+        <div className="field-shell mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
           <input
             type="color"
             value={newCategoryColor}
@@ -400,7 +400,7 @@ export default function SettingsPage() {
           )}
         </div>
 
-        <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
+        <div className="field-shell mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
           <input
             type="number"
             min={1}
@@ -722,7 +722,7 @@ function CategoryEditor({
             (e.currentTarget as HTMLInputElement).blur();
           }}
           aria-label={`${cat.name} name`}
-          className="min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none"
+          className="field-inline min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none md:px-2"
         />
         <button
           type="button"
@@ -776,7 +776,7 @@ function CategoryEditor({
           }}
           placeholder={name.trim() || cat.name}
           aria-label={`${cat.name} meeting name`}
-          className="min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+          className="field-inline min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none md:px-2"
         />
       </label>
       {!cat.archived && (
@@ -1330,7 +1330,7 @@ function ColorField({
   }
 
   return (
-    <label className="flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
+    <label className="field-shell flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
       <input
         type="color"
         value={normalizeThemeHex(value) ?? value}
@@ -1576,7 +1576,7 @@ function EditReminderRow({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={motionTokens.springSnappy}
-      className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2"
+      className="field-shell flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2"
     >
       <input
         autoFocus

@@ -891,6 +891,50 @@ button, a, [role="button"], summary, input, textarea, select, label {
   outline: none;
 }
 
+/* Desktop form refinement -------------------------------------------------
+ *
+ * A field's focus treatment belongs to its visible silhouette. Previously
+ * the global outline landed on the raw input node, so transparent inputs
+ * inside rounded rows drew a sharp inner rectangle. These two recipes keep
+ * one rounded, theme-aware halo around the thing that actually reads as the
+ * control: the field itself, or the composite shell that contains it. */
+@media (min-width: 768px) {
+  .field-control,
+  .field-inline,
+  .field-shell {
+    transition-property: border-color, background-color, box-shadow;
+    transition-duration: var(--motion-standard);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  .field-control:focus-visible,
+  .field-inline:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    background-color: var(--surface-elevated);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .field-inline {
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+  }
+
+  .field-inline:hover {
+    border-color: var(--line);
+  }
+
+  .field-shell:focus-within {
+    border-color: var(--accent);
+    background-color: var(--surface-elevated);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .field-shell :is(input, textarea, select):focus-visible {
+    outline: none;
+  }
+}
+
 /* Command palette (cmdk) rows */
 .cmdk-row {
   display: flex;

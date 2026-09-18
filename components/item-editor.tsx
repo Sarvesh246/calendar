@@ -56,7 +56,7 @@ function DetailRow({
 }
 
 const FIELD =
-  "mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
+  "field-control mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
   // A focus ring that grows rather than snapping on — `box-shadow` animates
   // where `border-width` does not, so the border colour and the ring move
   // together on one timing. (This used to end on a bare "focus:" — a class name
@@ -257,7 +257,7 @@ export function ItemEditor({
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
       aria-label="Title"
-      className="-mx-2 w-[calc(100%+1rem)] rounded-md border border-transparent bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-line focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+      className="field-inline -mx-2 w-[calc(100%+1rem)] bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink"
     />
   ) : (
     <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">

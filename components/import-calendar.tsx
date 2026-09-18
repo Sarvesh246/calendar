@@ -67,7 +67,7 @@ export function ImportCalendar() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 sm:flex-row sm:items-center">
+      <div className="field-shell flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 sm:flex-row sm:items-center">
         <Link2 className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
         <input
           value={url}
