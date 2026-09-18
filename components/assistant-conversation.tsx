@@ -312,7 +312,7 @@ export function AssistantConversation({
           // the button you need to finish with.
           data-field-group=""
           className={cn(
-            "focus-within-ring flex items-center gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
+            "field-shell focus-within-ring flex items-center gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
             !docked && "md:px-3 md:py-2"
           )}
         >

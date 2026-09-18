@@ -270,7 +270,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
             value={date}
             onChange={(e) => setDate(e.target.value)}
             aria-label="New date"
-            className="min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            className="field-control min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
           <button
             type="submit"

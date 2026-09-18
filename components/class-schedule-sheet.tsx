@@ -34,7 +34,7 @@ import type { Item } from "@/lib/types";
 export { WeekdayChips };
 
 const FIELD =
-  "w-full min-w-0 max-w-full rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
+  "field-control w-full min-w-0 max-w-full rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
 
 const DATE_FIELD = cn(
   FIELD,
