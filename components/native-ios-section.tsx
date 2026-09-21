@@ -110,7 +110,8 @@ export function NativeIosSection() {
               <Activity className="h-4 w-4 text-accent" aria-hidden />
               <p className="text-[14px] font-medium text-ink">Live Activity</p>
             </div>
-            <p className="mt-1 text-[12px] leading-relaxed text-ink-faint">
+            <p className="mt-1.5 text-[13px] font-medium text-ink">Show Datebook on Lock Screen</p>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-ink-faint">
               Keep your current schedule or focus session available on the Lock Screen.
             </p>
           </div>
