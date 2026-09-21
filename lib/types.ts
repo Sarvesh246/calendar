@@ -145,6 +145,10 @@ export interface UserSettings {
   classReminderMinutes: number;
   /** IPA: upsert Datebook items into the on-device Apple Calendar. */
   appleCalendarSync?: boolean;
+  /** IPA: maintain one day/focus Live Activity whenever ActivityKit permits. */
+  liveActivityEnabled?: boolean;
+  /** IPA: redact calendar and focus titles before they leave the web store. */
+  liveActivityPrivacy?: "show" | "hide";
   /** Mobile calendar: pop-up panel vs list below the month grid. */
   mobileDayDetails: MobileDayDetails;
   /** Hide the first-run empty-state card. */
