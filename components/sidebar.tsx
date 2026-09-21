@@ -27,7 +27,7 @@ import { SidebarViews } from "./saved-views";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
-import { navigateTab } from "@/lib/tab-nav";
+import { navigateTab, scrollActiveTabToTop } from "@/lib/tab-nav";
 import { commitTabFromGesture, pillSpringForVelocity } from "@/lib/tab-swipe";
 import { cn } from "@/lib/utils";
 
@@ -295,10 +295,17 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   }
 
   function navigateTo(index: number) {
-    if (index === currentIndex) return;
+    if (index === currentIndex) {
+      scrollTabToTop();
+      return;
+    }
     haptic("light");
     settlePillTo(index);
     navigateTab(router, NAV[index].href);
+  }
+
+  function scrollTabToTop() {
+    if (scrollActiveTabToTop()) haptic("light");
   }
 
   function openAdd() {
@@ -424,7 +431,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
       haptic("light");
       navigateTab(router, NAV[clamped].href);
     } else if (!didDrag.current) {
-      haptic("light");
+      scrollTabToTop();
     }
   }
 
@@ -444,7 +451,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // keyboard and dropping back a beat after it closes.
     // `--tab-bar-rest` is the extra lift above the home indicator / screen
     // edge so the pill is not flush with the bottom.
-    <div className="mobile-web-bottom-nav viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
+    <div className="mobile-web-bottom-nav viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 pl-3 pr-[18px] pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
       <div className="mx-auto flex h-[58px] max-w-md items-stretch gap-2.5">
         <nav
           aria-label="Primary"
@@ -494,6 +501,9 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                   if (index !== currentIndex) {
                     e.preventDefault();
                     navigateTo(index);
+                  } else {
+                    e.preventDefault();
+                    scrollTabToTop();
                   }
                 }}
                 className="press-none relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10.5px] font-medium tracking-[0.01em]"
