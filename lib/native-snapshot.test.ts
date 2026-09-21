@@ -151,4 +151,25 @@ describe("buildLiveActivitySnapshot", () => {
     expect(state.eligible).toBe(false);
     expect(state.eligibilityReason).toContain("turned off");
   });
+
+  it("rebuilds at day rollover instead of leaking yesterday's schedule", () => {
+    const yesterday = event({ at: new Date(2026, 8, 20, 23, 30).toISOString() });
+    const state = live([yesterday], new Date(2026, 8, 21, 0, 1));
+    expect(state.mode).toBe("allClear");
+    expect(state.totalItemCount).toBe(0);
+  });
+
+  it("reflects schedule changes deterministically", () => {
+    const now = new Date(2026, 8, 21, 15, 0);
+    const before = live([event()], now);
+    const after = live([event({ id: "replacement", title: "New room", at: at(15, 20) })], now);
+    expect(before.title).toBe("Linear Algebra Workshop");
+    expect(after.title).toBe("New room");
+    expect(after.startDate).toBe(new Date(at(15, 20)).getTime());
+  });
+
+  it("generates a URL-safe item deep link", () => {
+    const state = live([event({ id: "course/a b" })], new Date(2026, 8, 21, 15, 0));
+    expect(state.deepLink).toBe("datebook://open?intent=item&item=course%2Fa%20b");
+  });
 });
