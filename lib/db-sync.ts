@@ -60,6 +60,8 @@ const STRIPPABLE_COLS: Record<string, readonly string[]> = {
     "custom_theme",
     "class_reminder_minutes",
     "apple_calendar_sync",
+    "live_activity_enabled",
+    "live_activity_privacy",
   ],
 };
 const stripped: Record<string, Set<string>> = {
@@ -265,6 +267,8 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     class_reminder_minutes: normalizeClassReminderMinutes(s.classReminderMinutes),
     apple_calendar_sync: s.appleCalendarSync ?? false,
+    live_activity_enabled: s.liveActivityEnabled ?? true,
+    live_activity_privacy: s.liveActivityPrivacy === "hide" ? "hide" : "show",
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
     custom_theme: s.customTheme ?? null,
@@ -309,6 +313,16 @@ export function rowToSettings(r: Row, local?: UserSettings): UserSettings {
       "apple_calendar_sync",
       Boolean(r.apple_calendar_sync),
       local?.appleCalendarSync
+    ),
+    liveActivityEnabled: carried(
+      "live_activity_enabled",
+      r.live_activity_enabled === undefined ? true : Boolean(r.live_activity_enabled),
+      local?.liveActivityEnabled
+    ),
+    liveActivityPrivacy: carried(
+      "live_activity_privacy",
+      r.live_activity_privacy === "hide" ? "hide" : "show",
+      local?.liveActivityPrivacy
     ),
     mobileDayDetails: carried(
       "mobile_day_details",

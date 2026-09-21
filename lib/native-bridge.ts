@@ -30,8 +30,10 @@ export function postToNative(type: string, payload?: unknown) {
   if (typeof window === "undefined" || !window.ReactNativeWebView) return;
   try {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type, payload }));
-  } catch {
-    /* ignore */
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`Datebook native bridge failed to post ${type}`, error);
+    }
   }
 }
 

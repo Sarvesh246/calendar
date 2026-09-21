@@ -25,6 +25,8 @@ export function NativeShellSync() {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const classReminderMinutes = useDatebookStore((s) => s.settings.classReminderMinutes);
   const appleCalendarSync = useDatebookStore((s) => s.settings.appleCalendarSync);
+  const liveActivityEnabled = useDatebookStore((s) => s.settings.liveActivityEnabled);
+  const liveActivityPrivacy = useDatebookStore((s) => s.settings.liveActivityPrivacy);
   const focus = useFocusSessionStore((s) => s.session);
   const focusMode = useUIStore((s) => s.focusMode);
   const quickAddOpen = useUIStore((s) => s.quickAddOpen);
@@ -38,11 +40,33 @@ export function NativeShellSync() {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
   const [domRevision, setDomRevision] = useState(0);
+  const [timeRevision, setTimeRevision] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!wrapped) return;
     postToNative("requestNativeNotifications");
+  }, [wrapped]);
+
+  // Recompute date-driven native state at minute boundaries while the app is
+  // alive. This catches event transitions, midnight, and time-zone changes
+  // without sending second-by-second ActivityKit updates.
+  useEffect(() => {
+    if (!wrapped) return;
+    let zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tick = () => {
+      const nextZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (nextZone !== zone) zone = nextZone;
+      setTimeRevision((value) => value + 1);
+    };
+    const interval = window.setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("focus", tick);
+    };
   }, [wrapped]);
 
   // The class is also injected before the first WebView paint by Calendar-ios.
@@ -118,7 +142,13 @@ export function NativeShellSync() {
           clock24h,
           classReminderMinutes,
           appleCalendarSync,
+          liveActivityEnabled,
+          liveActivityPrivacy,
+          accentHex:
+            getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() ||
+            "#0A84FF",
           focus,
+          now: new Date(),
         })
       );
     }, 280);
@@ -133,7 +163,11 @@ export function NativeShellSync() {
     clock24h,
     classReminderMinutes,
     appleCalendarSync,
+    liveActivityEnabled,
+    liveActivityPrivacy,
     focus,
+    domRevision,
+    timeRevision,
   ]);
 
   useNativeMessage("nativeIntent", (payload) => {

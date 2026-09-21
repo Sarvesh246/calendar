@@ -201,6 +201,8 @@ const defaultSettings: UserSettings = {
   defaultReminderPresetIds: ["rp-night"],
   classReminderMinutes: DEFAULT_CLASS_REMINDER_MINUTES,
   appleCalendarSync: false,
+  liveActivityEnabled: true,
+  liveActivityPrivacy: "show",
   mobileDayDetails: "sheet",
 };
 

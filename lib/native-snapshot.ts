@@ -56,6 +56,32 @@ export interface NativeLiveFocus {
   color: string;
 }
 
+export type NativeLiveActivityMode = "day" | "upcoming" | "current" | "focus" | "allClear";
+
+/** Compact, privacy-filtered state sent to ActivityKit. Never include notes,
+ * attendee data, meeting URLs, or the full calendar in this object. */
+export interface NativeLiveActivitySnapshot {
+  enabled: boolean;
+  eligible: boolean;
+  eligibilityReason: string;
+  mode: NativeLiveActivityMode;
+  title: string;
+  subtitle?: string;
+  location?: string;
+  startDate?: number;
+  endDate?: number;
+  nextTitle?: string;
+  nextDate?: number;
+  remainingItemCount: number;
+  completedItemCount: number;
+  totalItemCount: number;
+  accentHex: string;
+  hidesPrivateDetails: boolean;
+  deepLink: string;
+  lastUpdated: number;
+  isRunning: boolean;
+}
+
 export interface NativeSnapshot {
   clock24h: boolean;
   badge: number;
@@ -66,6 +92,7 @@ export interface NativeSnapshot {
   classes: NativeWidgetRow[];
   liveClass: NativeLiveClass | null;
   liveFocus: NativeLiveFocus | null;
+  liveActivity: NativeLiveActivitySnapshot;
   spotlight: { id: string; title: string; subtitle: string; keywords: string[] }[];
   calendarEvents: {
     id: string;
@@ -159,6 +186,9 @@ export function buildNativeSnapshot(opts: {
   clock24h: boolean;
   classReminderMinutes?: number;
   appleCalendarSync?: boolean;
+  liveActivityEnabled?: boolean;
+  liveActivityPrivacy?: "show" | "hide";
+  accentHex?: string;
   focus: FocusSession | null;
   now?: Date;
 }): NativeSnapshot {
@@ -259,6 +289,16 @@ export function buildNativeSnapshot(opts: {
     }
   }
 
+  const liveActivity = buildLiveActivitySnapshot({
+    items,
+    categories,
+    focus: opts.focus,
+    enabled: opts.liveActivityEnabled !== false,
+    privacy: opts.liveActivityPrivacy === "hide" ? "hide" : "show",
+    accentHex: opts.accentHex ?? "#0A84FF",
+    now,
+  });
+
   const spotlight = items
     .filter((i) => i.status !== "done")
     .slice()
@@ -304,11 +344,143 @@ export function buildNativeSnapshot(opts: {
     classes,
     liveClass,
     liveFocus,
+    liveActivity,
     spotlight,
     calendarEvents,
     appleCalendarSync: Boolean(opts.appleCalendarSync),
     feeds: opts.importSources
       .filter((s) => s.url.startsWith("http"))
       .map((s) => ({ id: s.id, url: s.url, name: s.name })),
+  };
+}
+
+export function buildLiveActivitySnapshot(opts: {
+  items: Item[];
+  categories: Category[];
+  focus: FocusSession | null;
+  enabled: boolean;
+  privacy: "show" | "hide";
+  accentHex: string;
+  now: Date;
+}): NativeLiveActivitySnapshot {
+  const nowMs = opts.now.getTime();
+  const hidesPrivateDetails = opts.privacy === "hide";
+  const relevantToday = opts.items
+    .filter((item) => {
+      const at = new Date(item.at);
+      return (
+        at.getFullYear() === opts.now.getFullYear() &&
+        at.getMonth() === opts.now.getMonth() &&
+        at.getDate() === opts.now.getDate()
+      );
+    })
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const openToday = relevantToday.filter((item) => item.status !== "done");
+  const completedItemCount = relevantToday.filter((item) => item.status === "done").length;
+  const base = {
+    enabled: opts.enabled,
+    eligible: opts.enabled,
+    eligibilityReason: opts.enabled
+      ? "Datebook is enabled and a day overview is available."
+      : "Show Datebook on Lock Screen is turned off.",
+    remainingItemCount: openToday.length,
+    completedItemCount,
+    totalItemCount: relevantToday.length,
+    accentHex: opts.accentHex,
+    hidesPrivateDetails,
+    lastUpdated: nowMs,
+  };
+
+  const focus = opts.focus;
+  if (focus?.activeItemId) {
+    const item = opts.items.find((candidate) => candidate.id === focus.activeItemId);
+    const segment = activeSegment(focus);
+    if (item && (isRunning(focus) || itemElapsedMs(focus, item.id, nowMs) > 0)) {
+      const endDate = focus.targetEndsAt ?? undefined;
+      return {
+        ...base,
+        mode: "focus",
+        title: hidesPrivateDetails ? "Focus session" : item.title,
+        subtitle: isRunning(focus) ? "Focus in progress" : "Focus paused",
+        startDate: segment?.startedAt ?? nowMs,
+        endDate,
+        isRunning: isRunning(focus),
+        deepLink: "datebook://open?intent=focus",
+      };
+    }
+  }
+
+  const current = relevantToday.find((item) => {
+    if (item.status === "done" || item.type !== "event" || item.allDay) return false;
+    const start = new Date(item.at).getTime();
+    const end = item.endAt ? new Date(item.endAt).getTime() : start + 45 * 60_000;
+    return start <= nowMs && end > nowMs;
+  });
+  const future = openToday.find((item) => new Date(item.at).getTime() > nowMs);
+
+  if (current) {
+    const startDate = new Date(current.at).getTime();
+    const endDate = current.endAt
+      ? new Date(current.endAt).getTime()
+      : startDate + 45 * 60_000;
+    const next = openToday.find((item) => new Date(item.at).getTime() >= endDate);
+    return {
+      ...base,
+      mode: "current",
+      title: hidesPrivateDetails ? "Current event" : current.title,
+      subtitle: "Happening now",
+      ...(current.location && !hidesPrivateDetails ? { location: current.location } : {}),
+      startDate,
+      endDate,
+      ...(next
+        ? {
+            nextTitle: hidesPrivateDetails ? "Upcoming event" : next.title,
+            nextDate: new Date(next.at).getTime(),
+          }
+        : {}),
+      isRunning: true,
+      deepLink: `datebook://open?intent=item&item=${encodeURIComponent(current.id)}`,
+    };
+  }
+
+  if (future) {
+    const startDate = new Date(future.at).getTime();
+    const endDate = future.endAt ? new Date(future.endAt).getTime() : undefined;
+    return {
+      ...base,
+      mode: future.type === "event" ? "upcoming" : "day",
+      title: hidesPrivateDetails
+        ? future.type === "event"
+          ? "Upcoming event"
+          : "Upcoming item"
+        : future.title,
+      subtitle: future.type === "event" ? "Up next" : "Your day",
+      ...(future.location && !hidesPrivateDetails ? { location: future.location } : {}),
+      startDate,
+      endDate,
+      isRunning: false,
+      deepLink: `datebook://open?intent=item&item=${encodeURIComponent(future.id)}`,
+    };
+  }
+
+  const remaining = openToday[0];
+  if (remaining) {
+    return {
+      ...base,
+      mode: "day",
+      title: hidesPrivateDetails ? "Today’s item" : remaining.title,
+      subtitle: "Your day",
+      isRunning: false,
+      deepLink: "datebook://today",
+    };
+  }
+
+  return {
+    ...base,
+    mode: "allClear",
+    title: "Nothing else scheduled today",
+    subtitle: "All clear",
+    isRunning: false,
+    deepLink: "datebook://today",
   };
 }
