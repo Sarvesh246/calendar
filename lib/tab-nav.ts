@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { isTabRoute } from "./tab-routes";
+import { prefersReducedMotion } from "./motion";
 
 /**
  * The three tab routes render nothing on the server — `app/today/page.tsx` and
@@ -107,4 +108,17 @@ export function navigateTab(router: { push: (href: string) => void }, href: stri
   startTransition(() => {
     router.push(href);
   });
+}
+
+/**
+ * Re-tapping the already-active tab (Today/Calendar/Agenda) scrolls back to
+ * the top instead of doing nothing — mirrors the native iOS pattern. Shared
+ * by the web tab bar and the native chrome bridge (`native-shell-sync.tsx`)
+ * so both re-tap paths behave identically. Returns whether it actually
+ * scrolled, so callers can skip haptics/feedback on a no-op.
+ */
+export function scrollActiveTabToTop(): boolean {
+  if (typeof window === "undefined" || window.scrollY === 0) return false;
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  return true;
 }

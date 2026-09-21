@@ -9,7 +9,7 @@ import { buildNativeSnapshot } from "@/lib/native-snapshot";
 import { setStatusWithUndo } from "@/lib/item-actions";
 import { useUIStore } from "@/lib/ui-store";
 import { isTabRoute } from "@/lib/tab-routes";
-import { navigateTab, useResolvedPathname } from "@/lib/tab-nav";
+import { navigateTab, scrollActiveTabToTop, useResolvedPathname } from "@/lib/tab-nav";
 
 /**
  * IPA only: keep the native shell's notification / widget / Live Activity /
@@ -152,7 +152,8 @@ export function NativeShellSync() {
       useUIStore.getState().setQuickAddPrefill(msg.text ?? "");
       useUIStore.getState().setQuickAddOpen(true);
     } else if (msg.type === "navigate" && msg.url?.startsWith("/")) {
-      if (isTabRoute(msg.url)) navigateTab(router, msg.url);
+      if (isTabRoute(msg.url) && msg.url === pathname) scrollActiveTabToTop();
+      else if (isTabRoute(msg.url)) navigateTab(router, msg.url);
       else router.push(msg.url);
     } else if (msg.type === "ask") {
       useUIStore.getState().setAIDrawerOpen(true);
