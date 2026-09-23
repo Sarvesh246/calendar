@@ -16,15 +16,17 @@ import {
   normalizeActions,
   type AssistantReqBody as ReqBody,
 } from "@/lib/assistant-actions";
+import { fetchGeminiJson, type GeminiFailureCode } from "@/lib/gemini-retry";
 
 export const runtime = "nodejs";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+// Prefer the newest Flash model, but keep a separately verified Flash fallback
+// so a capacity spike on the newest release cannot take the assistant offline.
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3-flash-preview";
 const KEY = process.env.GEMINI_API_KEY;
 const ENDPOINT = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* ------------------------------------------------------------------ */
 /* Gemini response schema                                              */
@@ -156,7 +158,7 @@ YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHA
 2. CHANGE the calendar. They want something written or altered. That includes polite/indirect wording ("can you", "could you", "please", "I need", "I have a … at 5:30", "don't let me forget", "ping me", "nudge me", "put this on my calendar") — they do not have to say add/create/schedule. Return one action per change in "actions". Never claim it's done — the user taps to confirm each action in the UI. Still write a short natural "reply" describing what you're proposing.
 A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action). Several changes in one message (add this, move that, complete the other) → several actions, one per change — up to 8. Carry every detail the user named onto the matching action (time, place, every reminder). Do not drop a reminder or location to "keep it simple".
 
-NATURAL LANGUAGE — there is no required wording, order, or keyword. Users type the way they talk: run-ons, mixed order, typos, fragments. Infer intent from the whole message. A sentence that names a new thing with a time and/or place is a create even without "add" ("Hullabaloo U at 5:30 at PLNK, ping me the day before"). If they describe something that is not in ITEMS and it reads as them wanting it on the calendar, propose a create. If they are asking whether it already exists, answer — and you may still offer a create if it doesn't.
+NATURAL LANGUAGE — there is no required wording, order, or keyword. Users type the way they talk: run-ons, mixed order, typos, fragments, or multiline pasted lists. Infer intent from the whole message. In a multiline list, a detail line such as "Location: Rudder 510" belongs to the event immediately above it; blank lines separate entries. Return one create action for every distinct entry. A sentence that names a new thing with a time and/or place is a create even without "add" ("Hullabaloo U at 5:30 at PLNK, ping me the day before"). If they describe something that is not in ITEMS and it reads as them wanting it on the calendar, propose a create. If they are asking whether it already exists, answer — and you may still offer a create if it doesn't.
 
 ACTION RULES:
 - create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit), "reminders". Choose itemType by meaning. Title is the short name of the thing ("Hullabaloo U meeting"), never the whole instruction ("add an event with a reminder…"). If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date). Spoken clock times without am/pm: 1–6 → afternoon (5:30 → 17:30), 7–11 → morning, 12 → noon. A second "at the …" / "in the …" after a time is a LOCATION, not another time. Weekly class meetings ("MWF 10–10:50", "TTh 2pm", "lecture Mon/Wed/Fri") are events: set repeatFreq "weekly" and repeatDays as 0=Sunday … 6=Saturday (MWF = [1,3,5], TTh = [2,4]). Set at/endAt on the next occurrence of those days. Optional until (ISO) for the last meeting of the term.
@@ -261,41 +263,30 @@ export async function POST(request: Request) {
     },
   });
 
-  // Gemini flash returns a transient 503 ("high demand") or 429 fairly often;
-  // a couple of quick retries usually clear it and are far better UX than
-  // dropping straight to the offline heuristic.
-  const TRANSIENT = new Set([429, 500, 503]);
   let data: unknown;
-  let lastStatus = 0;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(400 * attempt + Math.random() * 300);
-    let r: Response;
-    try {
-      r = await fetch(`${ENDPOINT(MODEL)}?key=${KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        signal: AbortSignal.timeout(13_000),
-      });
-    } catch (err) {
-      lastStatus = 0;
-      console.error("[assistant] request failed (attempt", attempt + 1 + ")", err);
-      continue;
-    }
-    if (r.ok) {
-      data = await r.json();
+  let failure: GeminiFailureCode = "assistant-unreachable";
+  const models = [...new Set([MODEL, FALLBACK_MODEL].filter(Boolean))];
+  for (const [index, model] of models.entries()) {
+    // Stay inside the client's 45s outer timeout even when the preferred model
+    // is unhealthy. Give 3.8 one responsive attempt, then reserve most of the
+    // request budget for retries on the verified fallback.
+    const hasFallback = models.length > 1;
+    const result = await fetchGeminiJson({
+      url: `${ENDPOINT(model)}?key=${KEY}`,
+      body: payload,
+      timeoutMs: hasFallback && index === 0 ? 8_000 : 12_000,
+      attempts: hasFallback ? (index === 0 ? 1 : 3) : 4,
+      budgetMs: hasFallback ? (index === 0 ? 13_000 : 28_000) : 38_000,
+      log: (message, extra) => console.error(`[assistant] ${model}: ${message}`, extra ?? ""),
+    });
+    if (result.ok) {
+      data = result.data;
       break;
     }
-    lastStatus = r.status;
-    const detail = await r.text().catch(() => "");
-    console.error("[assistant] Gemini error", r.status, detail.slice(0, 300));
-    if (!TRANSIENT.has(r.status)) break;
+    failure = result.error;
   }
   if (data === undefined) {
-    return NextResponse.json(
-      { error: lastStatus === 429 || lastStatus === 503 ? "assistant-busy" : "assistant-unreachable" },
-      { status: 200 }
-    );
+    return NextResponse.json({ error: failure }, { status: 200 });
   }
 
   const textOut: string =
