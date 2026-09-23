@@ -14,6 +14,16 @@ export function AssistantModelSelector({ compact = false }: { compact?: boolean 
 
   useEffect(() => {
     void load();
+    // Retry when the app returns to the foreground if the list came back empty.
+    const retry = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", retry);
+    window.addEventListener("focus", retry);
+    return () => {
+      document.removeEventListener("visibilitychange", retry);
+      window.removeEventListener("focus", retry);
+    };
   }, [load]);
 
   return (
