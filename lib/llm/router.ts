@@ -2,8 +2,8 @@ import {
   createChatCompletion,
   listProviderModels,
   ProviderRequestError,
-  type ChatMessage,
   type OpenAiTool,
+  type ChatMessage,
 } from "./openai-compatible";
 import { LLM_PROVIDERS, publicProvider, type LlmProviderConfig, type PublicLlmModel } from "./providers";
 
@@ -18,21 +18,12 @@ const healthCache = new Map<string, ProviderHealth>();
 const healthInFlight = new Map<string, Promise<ProviderHealth>>();
 const cooldownUntil = new Map<string, number>();
 const HEALTHY_TTL = 6 * 60 * 60_000;
-const FAILED_TTL = 60_000;
-
-const PROBE_TOOL: OpenAiTool = {
-  type: "function",
-  function: {
-    name: "datebook_probe",
-    description: "Required startup capability probe. Always call this function.",
-    parameters: {
-      type: "object",
-      properties: { value: { type: "string", enum: ["ready"] } },
-      required: ["value"],
-      additionalProperties: false,
-    },
-  },
-};
+// A failed check is retried slowly: /models is cheap, but hammering a provider
+// that is out of quota only prolongs the outage.
+const FAILED_TTL = 5 * 60_000;
+const COOLDOWN_429_MS = 15 * 60_000;
+const COOLDOWN_5XX_MS = 60_000;
+const COOLDOWN_DEFAULT_MS = 30_000;
 
 function keyFor(provider: LlmProviderConfig) {
   return process.env[provider.keyEnv]?.trim();
@@ -73,31 +64,10 @@ async function checkProvider(provider: LlmProviderConfig, force = false): Promis
       if (!provider.supportsTools) {
         return finish({ provider, enabled: false, checkedAt: Date.now(), error: "Tool calling disabled" });
       }
-      const probe = await createChatCompletion({
-        provider,
-        key,
-        messages: [
-          { role: "system", content: "This is a capability check. Call the required tool exactly once." },
-          { role: "user", content: "Call datebook_probe with value ready." },
-        ],
-        tools: [PROBE_TOOL],
-        forceTool: "datebook_probe",
-        timeoutMs: 12_000,
-      });
-      const call = probe.message.tool_calls?.[0];
-      let args: unknown;
-      try {
-        args = JSON.parse(call?.function.arguments || "{}");
-      } catch {
-        args = null;
-      }
-      const enabled = call?.function.name === "datebook_probe" && (args as { value?: unknown } | null)?.value === "ready";
-      return finish({
-        provider,
-        enabled,
-        checkedAt: Date.now(),
-        error: enabled ? undefined : "Tool-call smoke test did not return the required call",
-      });
+      // Listing the model is the whole health check. It costs no generation
+      // quota; tool-call support is proven by the first real request, and a
+      // provider that fails it falls back and cools down like any other error.
+      return finish({ provider, enabled: true, checkedAt: Date.now() });
     } catch (error) {
       return finish({
         provider,
@@ -140,8 +110,10 @@ export async function providerCandidates(selectedId?: string): Promise<{
 }
 
 export function putProviderOnCooldown(provider: LlmProviderConfig, error: unknown) {
+  const status = error instanceof ProviderRequestError ? error.status : 0;
   const retryAfter = error instanceof ProviderRequestError ? error.retryAfterMs : undefined;
-  cooldownUntil.set(provider.id, Date.now() + Math.max(retryAfter ?? 30_000, 5_000));
+  const fallback = status === 429 ? COOLDOWN_429_MS : status >= 500 ? COOLDOWN_5XX_MS : COOLDOWN_DEFAULT_MS;
+  cooldownUntil.set(provider.id, Date.now() + Math.max(retryAfter ?? fallback, 5_000));
 }
 
 export function shouldFallbackProvider(error: unknown) {
@@ -215,8 +187,3 @@ export async function callRoutedProvider(opts: {
 }
 
 export { createChatCompletion };
-
-// A server process validates configured providers as soon as this module is
-// loaded. Requests share the same in-flight probes, so cold starts do not send
-// duplicate /models or tool-smoke calls.
-void availableLlmModels().catch((error) => console.error("[assistant] provider startup check failed", error));
