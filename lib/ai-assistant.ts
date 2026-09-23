@@ -15,6 +15,8 @@ import {
 } from "date-fns";
 import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
+import { toNewItem } from "./bulk-parse";
+import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
@@ -543,6 +545,26 @@ export function localAnswer(query: string, ctx: Ctx, now = new Date()): Assistan
           patch: { at: at.toISOString() },
         },
       ],
+    };
+  }
+
+  // A pasted list of events becomes one event each, not one event titled after the blob.
+  const multi = parseMultiAdd(raw, ctx.categories, now);
+  if (multi.drafts.length >= 2) {
+    const drafts = [...multi.drafts].sort((a, b) => +a.at - +b.at);
+    const fallbackCategoryId = ctx.categories[0]?.id;
+    const describe = (d: (typeof drafts)[number]) =>
+      `${format(d.at, "EEE, MMM d")}${d.allDay ? "" : ` at ${fmtTime(d.at.toISOString())}`}${d.location ? ` · ${d.location}` : ""}`;
+    const skippedNote = multi.skipped.length
+      ? `\n\nI couldn't find a date for: ${multi.skipped.map((s) => `“${s}”`).join(", ")}.`
+      : "";
+    return {
+      text: `Add these ${drafts.length} items?\n${drafts.map((d) => `- **${d.title}** — ${describe(d)}`).join("\n")}${skippedNote}`,
+      actions: drafts.map((d) => ({
+        kind: "create" as const,
+        summary: `Add “${d.title}” — ${describe(d)}`,
+        draft: toNewItem(d, fallbackCategoryId),
+      })),
     };
   }
 
