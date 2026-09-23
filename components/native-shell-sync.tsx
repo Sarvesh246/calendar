@@ -51,6 +51,15 @@ export function NativeShellSync() {
     if (!wrapped) return;
     postToNative("requestNativeNotifications");
     void loadAssistantModels();
+    const retry = () => {
+      if (document.visibilityState === "visible") void loadAssistantModels();
+    };
+    document.addEventListener("visibilitychange", retry);
+    window.addEventListener("focus", retry);
+    return () => {
+      document.removeEventListener("visibilitychange", retry);
+      window.removeEventListener("focus", retry);
+    };
   }, [wrapped, loadAssistantModels]);
 
   // Recompute date-driven native state at minute boundaries while the app is
