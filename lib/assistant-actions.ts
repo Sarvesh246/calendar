@@ -26,6 +26,8 @@ export interface SlimItem {
 
 export interface AssistantReqBody {
   message: string;
+  modelId?: string;
+  conversationId?: string;
   history?: { role: "user" | "assistant"; text: string }[];
   now: string;
   timeZone?: string;
@@ -36,6 +38,7 @@ export interface AssistantReqBody {
 }
 
 interface RawAction {
+  serverActionId?: string;
   kind?: "create" | "update" | "delete";
   summary?: string;
   itemId?: string;
@@ -60,9 +63,9 @@ interface RawAction {
 }
 
 export type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt"> }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item> }
-  | { kind: "delete"; summary: string; itemId: string; itemTitle: string };
+  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt">; serverActionId?: string }
+  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item>; serverActionId?: string }
+  | { kind: "delete"; summary: string; itemId: string; itemTitle: string; serverActionId?: string };
 
 export function isPureQuestion(message: string): boolean {
   const t = message.trim().toLowerCase();
@@ -152,7 +155,12 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       if (repeat) draft.repeat = repeat;
       const reminders = parseActionReminders(a.reminders);
       if (reminders !== undefined) draft.reminders = reminders;
-      out.push({ kind: "create", summary: summary || `Add “${title}”`, draft });
+      out.push({
+        kind: "create",
+        summary: summary || `Add “${title}”`,
+        draft,
+        ...(a.serverActionId ? { serverActionId: a.serverActionId } : {}),
+      });
       continue;
     }
 
@@ -168,6 +176,7 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
           summary: summary || `Delete “${target.title}”`,
           itemId: target.id,
           itemTitle: target.title,
+          ...(a.serverActionId ? { serverActionId: a.serverActionId } : {}),
         });
         continue;
       }
@@ -216,6 +225,7 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         itemId: target.id,
         itemTitle: target.title,
         patch,
+        ...(a.serverActionId ? { serverActionId: a.serverActionId } : {}),
       });
     }
   }

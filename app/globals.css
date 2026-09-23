@@ -1711,3 +1711,6 @@ html.calendar-dragging * {
    keyframe writing the same property fought the drag and the exit, which is
    what made sheets jump at the moment they were closing. Motion owns the
    transform, CSS owns the geometry. */
+html.native-model-picker .assistant-web-model-selector {
+  visibility: hidden;
+}

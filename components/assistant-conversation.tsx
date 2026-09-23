@@ -16,6 +16,7 @@ import { useAssistantSession } from "@/lib/assistant-session";
 import type { AssistantAction } from "@/lib/ai-assistant";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
+import { AssistantModelSelector } from "@/components/assistant-model-selector";
 
 /**
  * The assistant conversation itself — header, thread, composer. The modal
@@ -123,6 +124,7 @@ export function AssistantConversation({
       {docked ? (
         <div className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-1.5">
           <p className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">Ask about your calendar</p>
+          <AssistantModelSelector compact />
           <button type="button" onClick={reset} disabled={thinking} aria-label="New conversation" title="New conversation" className={cn(headerButton, "disabled:opacity-40")}>
             <SquarePen className="h-4 w-4" strokeWidth={1.9} />
           </button>
@@ -142,6 +144,7 @@ export function AssistantConversation({
             <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
+            <AssistantModelSelector />
             <button type="button" onClick={reset} disabled={thinking} aria-label="New conversation" title="New conversation" className={cn(headerButton, "hidden disabled:opacity-40 md:flex")}>
               <SquarePen className="h-4 w-4" strokeWidth={1.9} />
             </button>
@@ -197,6 +200,10 @@ export function AssistantConversation({
                   <RotateCw className="h-3 w-3" strokeWidth={2} />
                   Offline answer · retry
                 </button>
+              )}
+
+              {m.fallbackNotice && (
+                <p className="text-[11px] leading-relaxed text-ink-faint">{m.fallbackNotice}</p>
               )}
 
               {m.actions?.map((action, ai) => {
