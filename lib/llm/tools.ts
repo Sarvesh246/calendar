@@ -283,7 +283,15 @@ export async function executeDatebookTool(
       summary: String(action.summary),
       expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
     });
-    if (error) throw new Error(`Could not stage assistant action: ${error.message}`);
+    if (error && /assistant_pending_actions|schema cache/i.test(error.message)) {
+      // A newly deployed app may briefly precede its Supabase migration. Keep
+      // Datebook's existing local-first confirmation path alive until the
+      // table is applied; never turn a missing history table into "AI offline".
+      console.warn("[assistant] confirmation table unavailable; using local confirmation");
+      confirmationId = undefined;
+    } else if (error) {
+      throw new Error(`Could not stage assistant action: ${error.message}`);
+    }
   }
   return {
     action: confirmationId ? { ...action, serverActionId: confirmationId } : action,
