@@ -48,18 +48,30 @@ async function checkProvider(provider: LlmProviderConfig, force = false): Promis
   if (existing) return existing;
 
   const promise = (async () => {
+    const started = Date.now();
+    const finish = (result: ProviderHealth) => {
+      console.info(JSON.stringify({
+        event: "assistant.provider_health",
+        provider: provider.id,
+        model: provider.model,
+        latencyMs: Date.now() - started,
+        enabled: result.enabled,
+        error: result.error,
+      }));
+      return result;
+    };
     try {
       const models = await listProviderModels(provider, key);
       if (!models.has(provider.model)) {
-        return {
+        return finish({
           provider,
           enabled: false,
           checkedAt: Date.now(),
           error: `Model ${provider.model} was not returned by /models`,
-        };
+        });
       }
       if (!provider.supportsTools) {
-        return { provider, enabled: false, checkedAt: Date.now(), error: "Tool calling disabled" };
+        return finish({ provider, enabled: false, checkedAt: Date.now(), error: "Tool calling disabled" });
       }
       const probe = await createChatCompletion({
         provider,
@@ -80,19 +92,19 @@ async function checkProvider(provider: LlmProviderConfig, force = false): Promis
         args = null;
       }
       const enabled = call?.function.name === "datebook_probe" && (args as { value?: unknown } | null)?.value === "ready";
-      return {
+      return finish({
         provider,
         enabled,
         checkedAt: Date.now(),
         error: enabled ? undefined : "Tool-call smoke test did not return the required call",
-      };
+      });
     } catch (error) {
-      return {
+      return finish({
         provider,
         enabled: false,
         checkedAt: Date.now(),
         error: error instanceof Error ? error.message.slice(0, 180) : "Provider check failed",
-      };
+      });
     }
   })();
   healthInFlight.set(provider.id, promise);
