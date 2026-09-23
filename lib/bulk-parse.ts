@@ -1,5 +1,6 @@
 import { setHours, setMinutes } from "date-fns";
 import { matchDatePhrase } from "./date-phrase";
+import { parseMultiAdd } from "./multi-add";
 import type { Category, Item, ItemType } from "./types";
 
 /**
@@ -144,7 +145,13 @@ export function looksLikeBulkPaste(raw: string): boolean {
     if (matchDatePhrase(line)) dated += 1;
     if (dated >= 2) return true;
   }
-  return false;
+  // Weekday- or time-only lists ("gym fri 6pm", "lab tue 2pm") carry no calendar date.
+  return !isTabular(lines) && parseMultiAdd(raw, []).drafts.length >= 2;
+}
+
+/** Real columns (tabs, pipes, runs of spaces) mean a table — the cell parser handles those. */
+function isTabular(lines: string[]): boolean {
+  return lines.some((l) => l.includes("\t") || l.includes("|") || /\S {2,}\S/.test(l));
 }
 
 export function parseBulk(
@@ -153,6 +160,10 @@ export function parseBulk(
   now = new Date()
 ): BulkParseResult {
   const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!isTabular(lines)) {
+    const multi = parseMultiAdd(raw, categories, now);
+    if (multi.drafts.length >= 2) return multi;
+  }
   const drafts: BulkDraft[] = [];
   const skipped: string[] = [];
   for (const line of lines) {
