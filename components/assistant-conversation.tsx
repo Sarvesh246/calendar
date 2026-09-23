@@ -49,12 +49,19 @@ export function AssistantConversation({
   // is worth exactly as much as one you finished — keep it.
   const [input, setInput] = useState(() => readDraft("assistant"));
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   useKeepFieldVisible(composerRef, active && !docked);
 
   useEffect(() => {
     writeDraft("assistant", input);
+  }, [input]);
+
+  useEffect(() => {
+    const field = inputRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, 128)}px`;
   }, [input]);
 
   useEffect(() => {
@@ -312,16 +319,24 @@ export function AssistantConversation({
           // the button you need to finish with.
           data-field-group=""
           className={cn(
-            "field-shell focus-within-ring flex items-center gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
+            "field-shell focus-within-ring flex items-end gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
             !docked && "md:px-3 md:py-2"
           )}
         >
-          <input
+          <textarea
             ref={inputRef}
+            rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) send(input);
+              if (
+                e.key === "Enter" &&
+                (e.metaKey || e.ctrlKey) &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault();
+                send(input);
+              }
             }}
             onFocus={() => {
               // Once the keyboard has opened and the drawer resettled, pin the
@@ -332,10 +347,11 @@ export function AssistantConversation({
               }, 300);
             }}
             placeholder="Ask or tell me to change something…"
-            enterKeyHint="send"
+            enterKeyHint="enter"
+            aria-label="Message the assistant"
             className={cn(
-              "min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none",
-              docked ? "min-h-9 px-1" : "min-h-11 px-1 md:min-h-10 md:text-[14px]"
+              "min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-2 text-[13px] leading-[1.4] text-ink placeholder:text-ink-faint focus:outline-none",
+              docked ? "min-h-9 max-h-32" : "min-h-11 max-h-32 md:min-h-10 md:text-[14px]"
             )}
           />
           <button
@@ -343,6 +359,8 @@ export function AssistantConversation({
             onClick={() => send(input)}
             disabled={!input.trim()}
             aria-label="Send"
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+            title="Send (Ctrl/Command + Enter)"
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30",
               docked ? "h-8 w-8" : "h-11 w-11 md:h-10 md:w-10"
