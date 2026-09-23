@@ -23,9 +23,9 @@ import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 /* ------------------------------------------------------------------ */
 
 export type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt"> }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item> }
-  | { kind: "delete"; summary: string; itemId: string; itemTitle: string };
+  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt">; serverActionId?: string }
+  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item>; serverActionId?: string }
+  | { kind: "delete"; summary: string; itemId: string; itemTitle: string; serverActionId?: string };
 
 export interface AssistantResponse {
   text: string;
@@ -34,6 +34,8 @@ export interface AssistantResponse {
   /** True when the network assistant couldn't be reached and this is the
    *  offline heuristic answer — the UI offers a retry. */
   degraded?: boolean;
+  providerLabel?: string;
+  fallbackNotice?: string;
 }
 
 export interface AssistantTurn {
@@ -46,6 +48,8 @@ interface Ctx {
   categories: Category[];
   clock24h: boolean;
   weekStartsOn?: 0 | 1;
+  modelId?: string;
+  conversationId?: string;
 }
 
 /** Compact facts pre-computed for the model and offline heuristics. */
@@ -368,7 +372,7 @@ export async function askAssistant(
   // Hard ceiling so a hung request can never wedge the chat — the server does
   // its own 30s abort on the model call, this is the outer safety net.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45_000);
+  const timer = setTimeout(() => controller.abort(), 60_000);
   try {
     const { authHeaders } = await import("./auth-headers");
     const res = await fetch("/api/assistant", {
@@ -377,6 +381,8 @@ export async function askAssistant(
       signal: controller.signal,
       body: JSON.stringify({
         message,
+        modelId: ctx.modelId,
+        conversationId: ctx.conversationId,
         history: history.slice(-10),
         now: new Date().toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -393,6 +399,8 @@ export async function askAssistant(
           text: data.text,
           suggestions: data.suggestions,
           actions: sanitizeActions(data.actions, ctx),
+          providerLabel: data.providerLabel,
+          fallbackNotice: data.fallbackNotice,
         };
       }
       if (data.error === "assistant-busy") {
@@ -432,7 +440,7 @@ function sanitizeActions(actions: AssistantResponse["actions"], ctx: Ctx): Assis
       if (!a.draft?.title || !a.draft?.at || Number.isNaN(+new Date(a.draft.at))) continue;
       const draft = { ...a.draft };
       if (!draft.categoryId || !catIds.has(draft.categoryId)) draft.categoryId = ctx.categories[0]?.id ?? "";
-      out.push({ kind: "create", summary: a.summary, draft });
+      out.push({ kind: "create", summary: a.summary, draft, serverActionId: a.serverActionId });
     } else if (a.kind === "update") {
       if (!ids.has(a.itemId) || !a.patch || Object.keys(a.patch).length === 0) continue;
       out.push(a);

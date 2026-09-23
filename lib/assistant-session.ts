@@ -6,6 +6,9 @@ import { maybePromptForReminders } from "./reminders";
 import { reminderContext } from "./store-selectors";
 import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
+import { useAssistantModelStore } from "./assistant-models";
+import { authHeaders } from "./auth-headers";
+import type { Item } from "./types";
 
 export interface AssistantMessage {
   role: "user" | "assistant";
@@ -13,6 +16,8 @@ export interface AssistantMessage {
   suggestions?: string[];
   actions?: AssistantAction[];
   degraded?: boolean;
+  providerLabel?: string;
+  fallbackNotice?: string;
   /** Outcome per action index. Lives on the message so it's saved with the
    *  session and travels with it when a retry trims the list. */
   resolved?: Record<number, "applied" | "dismissed">;
@@ -30,6 +35,54 @@ export const WELCOME: AssistantMessage = {
 };
 
 const SESSION_KEY = "datebook-assistant-session";
+const THREAD_KEY = "datebook-assistant-thread";
+
+function conversationId() {
+  if (typeof sessionStorage === "undefined") return undefined;
+  let id = sessionStorage.getItem(THREAD_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(THREAD_KEY, id);
+  }
+  return id;
+}
+
+function itemFromServer(row: Record<string, unknown>): Item {
+  return {
+    id: String(row.id),
+    categoryId: typeof row.category_id === "string" ? row.category_id : "",
+    type: row.type as Item["type"],
+    title: String(row.title),
+    at: String(row.at),
+    createdAt: String(row.created_at || new Date().toISOString()),
+    ...(typeof row.description === "string" ? { description: row.description } : {}),
+    ...(typeof row.location === "string" ? { location: row.location } : {}),
+    ...(typeof row.end_at === "string" ? { endAt: row.end_at } : {}),
+    ...(row.all_day ? { allDay: true } : {}),
+    ...(typeof row.status === "string" ? { status: row.status as Item["status"] } : {}),
+    ...(typeof row.completed_at === "string" ? { completedAt: row.completed_at } : {}),
+    ...(typeof row.status_at === "string" ? { statusAt: row.status_at } : {}),
+    ...(Array.isArray(row.reminders) && row.reminders.length ? { reminders: row.reminders as Item["reminders"] } : {}),
+    ...(typeof row.updated_at === "string" ? { updatedAt: row.updated_at } : {}),
+  };
+}
+
+async function confirmServerAction(serverActionId: string) {
+  const response = await fetch("/api/assistant/confirm", {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ confirmationId: serverActionId }),
+  });
+  const result = (await response.json()) as { item?: Record<string, unknown>; deletedId?: string; error?: string };
+  if (!response.ok || result.error) throw new Error(result.error || "Could not apply this change");
+  useDatebookStore.setState((state) => ({
+    items: result.item
+      ? [...state.items.filter((item) => item.id !== result.item!.id), itemFromServer(result.item)]
+      : result.deletedId
+        ? state.items.filter((item) => item.id !== result.deletedId)
+        : state.items,
+  }));
+}
 
 function loadSessionMessages(): AssistantMessage[] {
   if (typeof sessionStorage === "undefined") return [WELCOME];
@@ -80,11 +133,14 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       .filter((m) => m.text && m.text !== WELCOME.text)
       .map((m) => ({ role: m.role, text: m.text }));
     const { items, categories, settings } = useDatebookStore.getState();
+    const modelId = useAssistantModelStore.getState().selectedId;
     askAssistant(last.text, history, {
       items,
       categories,
       clock24h: settings.clock24h,
       weekStartsOn: settings.weekStartsOn,
+      modelId,
+      conversationId: conversationId(),
     })
       .then((res) =>
         set((s) => ({
@@ -96,6 +152,8 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               suggestions: res.suggestions,
               actions: res.actions,
               degraded: res.degraded,
+              providerLabel: res.providerLabel,
+              fallbackNotice: res.fallbackNotice,
             },
           ],
         }))
@@ -150,6 +208,19 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       const message = get().messages[mi];
       const action = message?.actions?.[ai];
       if (!action || message.resolved?.[ai]) return;
+      if (action.serverActionId) {
+        void confirmServerAction(action.serverActionId)
+          .then(() => get().resolveAction(mi, ai, "applied"))
+          .catch((error) =>
+            set((state) => ({
+              messages: [
+                ...state.messages,
+                { role: "assistant", text: error instanceof Error ? error.message : "Could not apply this change." },
+              ],
+            }))
+          );
+        return;
+      }
       const store = useDatebookStore.getState();
       if (action.kind === "create") {
         let draft = action.draft;
@@ -179,6 +250,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       set({ messages: [WELCOME], queued: null });
       try {
         sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(THREAD_KEY);
       } catch {
         /* private mode */
       }

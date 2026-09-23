@@ -10,6 +10,7 @@ import { setStatusWithUndo } from "@/lib/item-actions";
 import { useUIStore } from "@/lib/ui-store";
 import { isTabRoute } from "@/lib/tab-routes";
 import { navigateTab, useResolvedPathname } from "@/lib/tab-nav";
+import { useAssistantModelStore } from "@/lib/assistant-models";
 
 /**
  * IPA only: keep the native shell's notification / widget / Live Activity /
@@ -39,6 +40,9 @@ export function NativeShellSync() {
   const activeViewId = useUIStore((s) => s.activeViewId);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const hideCompleted = useDatebookStore((s) => s.settings.hideCompleted);
+  const assistantModels = useAssistantModelStore((s) => s.models);
+  const assistantModelId = useAssistantModelStore((s) => s.selectedId);
+  const loadAssistantModels = useAssistantModelStore((s) => s.load);
   const [domRevision, setDomRevision] = useState(0);
   const [timeRevision, setTimeRevision] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,7 +50,8 @@ export function NativeShellSync() {
   useEffect(() => {
     if (!wrapped) return;
     postToNative("requestNativeNotifications");
-  }, [wrapped]);
+    void loadAssistantModels();
+  }, [wrapped, loadAssistantModels]);
 
   // Recompute date-driven native state at minute boundaries while the app is
   // alive. This catches event transitions, midnight, and time-zone changes
@@ -100,6 +105,9 @@ export function NativeShellSync() {
       pathname,
       focusMode,
       obscured: modalOpen,
+      assistantOpen: aiDrawerOpen,
+      assistantModels,
+      assistantModelId,
       inRoom: pathname === "/settings" || pathname === "/schedule",
       filtersActive: Boolean(activeViewId || categoryFilter?.length || hideCompleted),
       appearance: css.colorScheme === "dark" ? "dark" : "light",
@@ -126,6 +134,8 @@ export function NativeShellSync() {
     activeViewId,
     categoryFilter,
     hideCompleted,
+    assistantModels,
+    assistantModelId,
     domRevision,
   ]);
 
@@ -171,7 +181,7 @@ export function NativeShellSync() {
   ]);
 
   useNativeMessage("nativeIntent", (payload) => {
-    const msg = payload as { type?: string; itemId?: string; text?: string; url?: string } | null;
+    const msg = payload as { type?: string; itemId?: string; text?: string; url?: string; modelId?: string } | null;
     if (!msg?.type) return;
     const store = useDatebookStore.getState();
     if (msg.type === "complete" && msg.itemId) {
@@ -190,6 +200,8 @@ export function NativeShellSync() {
       else router.push(msg.url);
     } else if (msg.type === "ask") {
       useUIStore.getState().setAIDrawerOpen(true);
+    } else if (msg.type === "selectAssistantModel" && msg.modelId) {
+      useAssistantModelStore.getState().select(msg.modelId);
     } else if (msg.type === "search") {
       useUIStore.getState().setCommandPaletteOpen(true);
     } else if (msg.type === "filters") {
