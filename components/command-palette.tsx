@@ -13,6 +13,7 @@ import {
   CalendarSearch,
   Keyboard,
   ListChecks,
+  Minimize2,
   Plus,
   Settings,
   Sparkles,
@@ -26,9 +27,11 @@ import { format, startOfDay } from "date-fns";
 import type { Item } from "@/lib/types";
 import { searchItems } from "@/lib/search";
 import { navigateTab } from "@/lib/tab-nav";
+import { focusOnThis, openFocusRoom } from "@/lib/focus-session-store";
 import { useAllViews } from "@/components/saved-views";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 import { useModKeyLabel } from "@/components/keyboard-shortcuts";
+import { motion as motionTokens } from "@/lib/motion";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -42,6 +45,19 @@ export function CommandPalette() {
   const mobile = useMediaQuery("(max-width: 767px)");
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const [desktopPresent, setDesktopPresent] = useState(false);
+
+  // Radix only gets to run its closed-state keyframes while the controlled
+  // dialog is still mounted. Keep it (and its scroll lock) for that exit.
+  useEffect(() => {
+    if (open && !mobile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDesktopPresent(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setDesktopPresent(false), motionTokens.exit * 1000 + 30);
+    return () => window.clearTimeout(timer);
+  }, [open, mobile]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -54,11 +70,11 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
 
-  if (!open) return null;
-  return mobile ? <MobileSearch onClose={() => setOpen(false)} /> : <CommandPaletteDialog />;
+  if (mobile) return open ? <MobileSearch onClose={() => setOpen(false)} /> : null;
+  return open || desktopPresent ? <CommandPaletteDialog active={open} /> : null;
 }
 
-function CommandPaletteDialog() {
+function CommandPaletteDialog({ active }: { active: boolean }) {
   const router = useRouter();
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
@@ -78,7 +94,8 @@ function CommandPaletteDialog() {
   useLockBodyScroll(true);
   const visibleItems = query.trim()
     ? searchItems(sortedItems, categories, query).slice(0, 100)
-    : sortedItems.slice(0, 50);
+    : [];
+  const hasQuery = Boolean(query.trim());
 
   /** Clearing the query on close keeps a stale one from being re-asked the
    *  next time the palette opens. */
@@ -119,7 +136,7 @@ function CommandPaletteDialog() {
 
   return (
     <Command.Dialog
-      open
+      open={active}
       onOpenChange={setPaletteOpen}
       label="Command palette"
       // `palette-overlay` / `palette-panel` carry the enter+exit keyframes (see
@@ -194,13 +211,17 @@ function CommandPaletteDialog() {
           </Command.Group>
         )}
 
-        <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
-            <Plus className="h-4 w-4" strokeWidth={1.75} /> New item <Hint>N</Hint>
+        <Command.Group heading="Go to" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+          <Command.Item
+            onSelect={() => {
+              openFocusRoom(undefined, router);
+              setPaletteOpen(false);
+            }}
+            value="focus room work session"
+            className="cmdk-row min-h-11"
+          >
+            <Minimize2 className="h-4 w-4" strokeWidth={1.75} /> Focus <Hint>F</Hint>
           </Command.Item>
-        </Command.Group>
-
-        <Command.Group heading="Navigate" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
           <Command.Item onSelect={() => go("/today")} className="cmdk-row min-h-11">
             <Sun className="h-4 w-4" strokeWidth={1.75} /> Today <Hint>1</Hint>
           </Command.Item>
@@ -211,92 +232,127 @@ function CommandPaletteDialog() {
             <ListChecks className="h-4 w-4" strokeWidth={1.75} /> Agenda <Hint>3</Hint>
           </Command.Item>
           <Command.Item
-            onSelect={() => calendar({ kind: "jump" })}
-            value="jump to date go to date month year"
-            className="cmdk-row min-h-11"
-          >
-            <CalendarSearch className="h-4 w-4" strokeWidth={1.75} /> Jump to a date… <Hint>D</Hint>
-          </Command.Item>
-          <Command.Item onSelect={() => calendar({ kind: "mode", mode: "month" })} value="month view calendar" className="cmdk-row min-h-11">
-            <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Month view <Hint>M</Hint>
-          </Command.Item>
-          <Command.Item onSelect={() => calendar({ kind: "mode", mode: "week" })} value="week view calendar" className="cmdk-row min-h-11">
-            <CalendarRange className="h-4 w-4" strokeWidth={1.75} /> Week view <Hint>W</Hint>
-          </Command.Item>
-          <Command.Item
             onSelect={() => go("/schedule")}
             value="schedule weekly timetable classes"
             className="cmdk-row min-h-11"
           >
-            <CalendarClock className="h-4 w-4" strokeWidth={1.75} /> Schedule
+            <CalendarClock className="h-4 w-4" strokeWidth={1.75} /> Schedule <Hint>4</Hint>
           </Command.Item>
         </Command.Group>
 
-        <Command.Group heading="Actions" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+        <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+          <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
+            <Plus className="h-4 w-4" strokeWidth={1.75} /> New item <Hint>N</Hint>
+          </Command.Item>
           <Command.Item onSelect={() => ask()} className="cmdk-row min-h-11">
             <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Ask assistant <Hint>A</Hint>
           </Command.Item>
-          <Command.Item
-            onSelect={() => {
-              setPaletteOpen(false);
-              useUIStore.getState().setShortcutsOpen(true);
-            }}
-            value="keyboard shortcuts help hotkeys"
-            className="cmdk-row min-h-11"
-          >
-            <Keyboard className="h-4 w-4" strokeWidth={1.75} /> Keyboard shortcuts <Hint>?</Hint>
-          </Command.Item>
-          <Command.Item onSelect={() => go("/settings#import")} className="cmdk-row min-h-11">
-            <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
-          </Command.Item>
-          <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
-            <Settings className="h-4 w-4" strokeWidth={1.75} /> Settings
-          </Command.Item>
         </Command.Group>
 
-        <Command.Group heading="Views" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-          {views.map((view) => {
-            const active = view.id === activeViewId;
-            return (
+        {hasQuery && (
+          <>
+            <Command.Group heading="Navigate" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
               <Command.Item
-                key={view.id}
-                value={`view ${view.name}`}
-                onSelect={() => {
-                  applyView(active ? null : view);
-                  setPaletteOpen(false);
-                }}
+                onSelect={() => calendar({ kind: "jump" })}
+                value="jump to date go to date month year"
                 className="cmdk-row min-h-11"
               >
-                <Bookmark className="h-4 w-4 shrink-0" strokeWidth={1.75} fill={active ? "currentColor" : "none"} />
-                <span className="truncate">{active ? `Turn off “${view.name}”` : view.name}</span>
+                <CalendarSearch className="h-4 w-4" strokeWidth={1.75} /> Jump to a date… <Hint>D</Hint>
               </Command.Item>
-            );
-          })}
-        </Command.Group>
+              <Command.Item onSelect={() => calendar({ kind: "mode", mode: "month" })} value="month view calendar" className="cmdk-row min-h-11">
+                <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Month view <Hint>M</Hint>
+              </Command.Item>
+              <Command.Item onSelect={() => calendar({ kind: "mode", mode: "week" })} value="week view calendar" className="cmdk-row min-h-11">
+                <CalendarRange className="h-4 w-4" strokeWidth={1.75} /> Week view <Hint>W</Hint>
+              </Command.Item>
+            </Command.Group>
 
-        {sortedItems.length > 0 && (
-          <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
-            {visibleItems.map((item) => {
-              const category = categories.find((c) => c.id === item.categoryId);
-              return (
-                <Command.Item
-                  key={item.id}
-                  value={`${item.title} ${item.description ?? ""} ${item.location ?? ""} ${category?.name ?? ""}`}
-                  onSelect={() => openItem(item)}
-                  className="cmdk-row min-h-11"
-                >
-                  <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                  <span className="truncate">{item.title}</span>
-                  <span className="ml-auto shrink-0 pl-2 text-[11.5px] normal-case tracking-normal text-ink-faint">
-                    {format(new Date(item.at), "MMM d")}
-                  </span>
-                  {category && (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} />
-                  )}
-                </Command.Item>
-              );
-            })}
-          </Command.Group>
+            <Command.Group heading="Actions" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+              <Command.Item
+                onSelect={() => {
+                  setPaletteOpen(false);
+                  useUIStore.getState().setShortcutsOpen(true);
+                }}
+                value="keyboard shortcuts help hotkeys"
+                className="cmdk-row min-h-11"
+              >
+                <Keyboard className="h-4 w-4" strokeWidth={1.75} /> Keyboard shortcuts <Hint>?</Hint>
+              </Command.Item>
+              <Command.Item onSelect={() => go("/settings#import")} className="cmdk-row min-h-11">
+                <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
+              </Command.Item>
+              <Command.Item onSelect={() => go("/settings")} className="cmdk-row min-h-11">
+                <Settings className="h-4 w-4" strokeWidth={1.75} /> Settings
+              </Command.Item>
+            </Command.Group>
+
+            <Command.Group heading="Views" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+              {views.map((view) => {
+                const active = view.id === activeViewId;
+                return (
+                  <Command.Item
+                    key={view.id}
+                    value={`view ${view.name}`}
+                    onSelect={() => {
+                      applyView(active ? null : view);
+                      setPaletteOpen(false);
+                    }}
+                    className="cmdk-row min-h-11"
+                  >
+                    <Bookmark className="h-4 w-4 shrink-0" strokeWidth={1.75} fill={active ? "currentColor" : "none"} />
+                    <span className="truncate">{active ? `Turn off “${view.name}”` : view.name}</span>
+                  </Command.Item>
+                );
+              })}
+            </Command.Group>
+
+            {visibleItems.length > 0 && (
+              <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+                {visibleItems.map((item) => {
+                  const category = categories.find((c) => c.id === item.categoryId);
+                  return (
+                    <Command.Item
+                      key={item.id}
+                      value={`${item.title} ${item.description ?? ""} ${item.location ?? ""} ${category?.name ?? ""}`}
+                      onSelect={() => openItem(item)}
+                      className="cmdk-row min-h-11"
+                    >
+                      <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      <span className="truncate">{item.title}</span>
+                      <span className="ml-auto shrink-0 pl-2 text-[11.5px] normal-case tracking-normal text-ink-faint">
+                        {format(new Date(item.at), "MMM d")}
+                      </span>
+                      {category && (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} />
+                      )}
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            )}
+
+            {visibleItems.some((i) => i.type !== "event" && i.status !== "done") && (
+              <Command.Group heading="Focus" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+                {visibleItems
+                  .filter((i) => i.type !== "event" && i.status !== "done")
+                  .slice(0, 8)
+                  .map((item) => (
+                    <Command.Item
+                      key={`focus-${item.id}`}
+                      value={`focus on this ${item.title}`}
+                      onSelect={() => {
+                        focusOnThis(item.id, router);
+                        setPaletteOpen(false);
+                      }}
+                      className="cmdk-row min-h-11"
+                    >
+                      <Minimize2 className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      <span className="truncate">Focus on this · {item.title}</span>
+                    </Command.Item>
+                  ))}
+              </Command.Group>
+            )}
+          </>
         )}
       </Command.List>
 

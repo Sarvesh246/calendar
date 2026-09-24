@@ -7,9 +7,10 @@ import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import { MobileQuickActions } from "@/components/mobile-quick-actions";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen, Play, Square } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { classMeetingTitle } from "@/lib/class-schedule";
 import { registerItemExpander } from "@/lib/item-focus";
 import { dayKey } from "@/lib/date-utils";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
@@ -56,10 +57,16 @@ export const ItemCard = memo(function ItemCard({
   clock24h,
   showLocation,
   showCategoryDot,
+  showQuickActions = true,
+  onMobileOpen,
 }: {
   item: Item;
   category: Category | undefined;
   day?: Date;
+  /** Today keeps Start/Reschedule on the card; Agenda uses a calmer row. */
+  showQuickActions?: boolean;
+  /** Day sheet (and similar hosts) open edit/actions in-place instead of nesting sheets. */
+  onMobileOpen?: (item: Item) => void;
 } & ItemCardChrome) {
   return item.type === "event" ? (
     <EventCard
@@ -68,6 +75,7 @@ export const ItemCard = memo(function ItemCard({
       day={day}
       clock24h={clock24h}
       showLocation={showLocation}
+      onMobileOpen={onMobileOpen}
     />
   ) : (
     <AssignmentCard
@@ -75,6 +83,8 @@ export const ItemCard = memo(function ItemCard({
       category={category}
       clock24h={clock24h}
       showCategoryDot={showCategoryDot}
+      showQuickActions={showQuickActions}
+      onMobileOpen={onMobileOpen}
     />
   );
 });
@@ -246,8 +256,6 @@ function ExpandPanel({
   clock24h: boolean;
   onCollapse: () => void;
 }) {
-  const mobile = useMediaQuery("(max-width: 767px)");
-  const [editing, setEditing] = useState(false);
   // Mounting the editor is the expensive part of a tap. Opening off a deferred
   // value lets the click paint (chevron, border) first and the editor render
   // in an interruptible pass; closing stays immediate.
@@ -265,14 +273,7 @@ function ExpandPanel({
   return (
     <div className={cn("item-card-expand", open && deferredOpen && "is-open")}>
       <div className="item-card-expand-inner">
-        {loaded && mobile && <div className="mt-3 space-y-3 border-t border-line pt-3 text-[13px]" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-          {item.description && <p className="whitespace-pre-wrap break-words text-ink-soft">{item.description}</p>}
-          {item.location && <p className="text-ink-soft">{item.location}</p>}
-          {item.url && /^https?:\/\//i.test(item.url) && <a className="inline-flex min-h-11 items-center text-accent" href={item.url} target="_blank" rel="noopener noreferrer">Open link</a>}
-          <button className="min-h-11 w-full rounded-lg border border-line text-accent" onClick={() => setEditing(true)}>Edit item</button>
-          {editing && <MobileItemSheet title="Edit item" onClose={() => setEditing(false)}><ItemEditor item={item} category={category} clock24h={clock24h} StatusSegmented={StatusSegmented} onCollapse={() => setEditing(false)} /></MobileItemSheet>}
-        </div>}
-        {loaded && !mobile && (
+        {loaded && (
           <ItemEditor
             item={item}
             category={category}
@@ -308,6 +309,9 @@ function useCompleteStyle(done: boolean) {
 function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
   const openInspector = useUIStore((s) => s.openInspector);
   const key = day ? dayKey(day) : undefined;
+  const status = item.status ?? "todo";
+  const canStart = item.type !== "event" && status !== "done";
+  const doing = status === "doing";
   const btn =
     "flex h-7 w-7 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -321,6 +325,21 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
       onClick={stop}
       onKeyDown={stop}
     >
+      {canStart && (
+        <button
+          type="button"
+          className={btn}
+          aria-label={doing ? "Stop" : "Start"}
+          title={doing ? "Stop" : "Start"}
+          onClick={() => changeMobileStatus(item, doing ? "todo" : "doing")}
+        >
+          {doing ? (
+            <Square className="h-3.5 w-3.5" strokeWidth={1.9} />
+          ) : (
+            <Play className="h-3.5 w-3.5" strokeWidth={1.9} />
+          )}
+        </button>
+      )}
       <button type="button" className={btn} aria-label="Open details" title="Open details" onClick={() => openInspector(item.id)}>
         <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.9} />
       </button>
@@ -436,17 +455,31 @@ function EventCard({
   day,
   clock24h,
   showLocation,
+  onMobileOpen,
 }: {
   item: Item;
   category: Category | undefined;
   day?: Date;
   clock24h: boolean;
   showLocation: boolean;
+  onMobileOpen?: (item: Item) => void;
 }) {
+  const mobile = useMediaQuery("(max-width: 767px)");
+  const [sheetOpen, setSheetOpen] = useState(false);
   const color = category?.color ?? "#8a8a94";
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
   const { remaining, ended } = useEventPhase(item, day);
   const showCompleteStyle = useCompleteStyle(ended);
+  const displayTitle = classMeetingTitle(item, category);
+
+  const openDetails = () => {
+    if (mobile) {
+      if (onMobileOpen) onMobileOpen(item);
+      else setSheetOpen(true);
+      return;
+    }
+    toggle();
+  };
 
   return (
     <CardFrame
@@ -454,21 +487,30 @@ function EventCard({
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
       tabIndex={0}
-      aria-expanded={expanded}
+      aria-expanded={mobile ? undefined : expanded}
       // Named explicitly, because a `role="button"` with no label takes its
       // name from everything inside it — which, now that the card carries its
       // own action buttons, meant a screen reader announced "Physics Lecture
       // Start working on this Reschedule" as the name of one control.
-      aria-label={`${item.title}${ended ? ", ended" : ""}. Show details`}
-      onClick={toggle}
+      aria-label={`${displayTitle}${ended ? ", ended" : ""}. ${mobile ? "Open actions" : "Show details"}`}
+      onClick={openDetails}
       onKeyDown={(e) => {
-        if (!handleItemMenuKey(e, item.id, day ? dayKey(day) : undefined)) keyToggle(e);
+        if (!handleItemMenuKey(e, item.id, day ? dayKey(day) : undefined)) {
+          if (mobile) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openDetails();
+            }
+          } else {
+            keyToggle(e);
+          }
+        }
       }}
       {...itemMenuProps(item.id, day ? dayKey(day) : undefined)}
       className={cn(
         "cat-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        expanded && "border-line-strong"
+        !mobile && expanded && "border-line-strong"
       )}
     >
       <div className="relative flex items-center gap-3">
@@ -495,7 +537,7 @@ function EventCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {item.title}
+            {displayTitle}
             <motion.span
               aria-hidden
               initial={false}
@@ -521,7 +563,7 @@ function EventCard({
               {item.location}
             </p>
           )}
-          <CollapsedDescription show={!expanded} text={item.description} />
+          {!mobile && <CollapsedDescription show={!expanded} text={item.description} />}
         </div>
         {ended && (
           <span
@@ -532,16 +574,29 @@ function EventCard({
           </span>
         )}
         <CardQuickActions item={item} day={day} />
-        <ExpandChevron expanded={expanded} />
+        {!mobile && <ExpandChevron expanded={expanded} />}
       </div>
 
-      <ExpandPanel
-        open={expanded}
-        item={item}
-        category={category}
-        clock24h={clock24h}
-        onCollapse={collapse}
-      />
+      {!mobile && (
+        <ExpandPanel
+          open={expanded}
+          item={item}
+          category={category}
+          clock24h={clock24h}
+          onCollapse={collapse}
+        />
+      )}
+      {mobile && sheetOpen && (
+        <MobileItemSheet title="Edit item" onClose={() => setSheetOpen(false)}>
+          <ItemEditor
+            item={item}
+            category={category}
+            clock24h={clock24h}
+            StatusSegmented={StatusSegmented}
+            onCollapse={() => setSheetOpen(false)}
+          />
+        </MobileItemSheet>
+      )}
     </CardFrame>
   );
 }
@@ -555,17 +610,18 @@ function AssignmentCard({
   category,
   clock24h,
   showCategoryDot,
+  showQuickActions = true,
+  onMobileOpen,
 }: {
   item: Item;
   category: Category | undefined;
   clock24h: boolean;
   showCategoryDot: boolean;
+  showQuickActions?: boolean;
+  onMobileOpen?: (item: Item) => void;
 }) {
   const mobile = useMediaQuery("(max-width: 767px)");
   const [actions, setActions] = useState<"status" | "reschedule" | "edit" | null>(null);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const swiped = useRef(false);
-  const [swipeOffset, setSwipeOffset] = useState(0);
   const toggleItemDone = useDatebookStore((s) => s.toggleItemDone);
   const color = category?.color ?? "#8a8a94";
   const status = item.status ?? "todo";
@@ -573,39 +629,47 @@ function AssignmentCard({
   const overdue = isOverdue(item);
   const showCompleteStyle = useCompleteStyle(done);
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
+  // Named Start/Reschedule on Today are the primary path — swipe competed with
+  // tab swipe and sheet dismiss, so it stays off when those buttons are shown.
+  const allowSwipe = mobile && !showQuickActions && !onMobileOpen;
+
+  const openDetails = () => {
+    if (mobile) {
+      if (onMobileOpen) onMobileOpen(item);
+      else setActions("status");
+      return;
+    }
+    toggle();
+  };
 
   return (
     <CardFrame
       dimmed={showCompleteStyle}
       role="button"
       tabIndex={0}
-      aria-expanded={expanded}
+      aria-expanded={mobile ? undefined : expanded}
       // See the event card above: without this the card's name absorbs the
       // labels of the quick actions sitting inside it.
-      aria-label={`${item.title}. ${done ? "Done" : status === "doing" ? "In progress" : overdue ? "Overdue" : "To do"}. Show details`}
-      onTouchStart={e => { if (!mobile || (e.target as HTMLElement).closest("button, a, input, select, textarea")) return; const t = e.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }; }}
-      style={mobile ? { touchAction: "pan-y", transform: `translateX(${swipeOffset}px)` } : undefined}
-      onTouchMove={e => { const start = touchStart.current; if (!start || expanded) return; const t = e.touches[0]; const dx = t.clientX - start.x; const dy = t.clientY - start.y; if (Math.abs(dy) > Math.abs(dx)) { touchStart.current = null; setSwipeOffset(0); return; } setSwipeOffset(Math.max(-36, Math.min(36, dx / 3))); }}
-      onTouchCancel={() => { touchStart.current = null; setSwipeOffset(0); }}
-      onTouchEnd={e => {
-        setSwipeOffset(0);
-        const start = touchStart.current; touchStart.current = null;
-        if (!start || !mobile || expanded) return;
-        const t = e.changedTouches[0]; const dx = t.clientX - start.x; const dy = t.clientY - start.y;
-        if (Math.abs(dx) < 75 || Math.abs(dx) < Math.abs(dy) * 2) return;
-        swiped.current = true;
-        window.setTimeout(() => { swiped.current = false; }, 400);
-        if (dx < 0) setActions("reschedule"); else changeMobileStatus(item, status === "doing" ? "done" : "doing");
-      }}
-      onClick={() => { if (!swiped.current) toggle(); }}
+      aria-label={`${item.title}. ${done ? "Done" : status === "doing" ? "In progress" : overdue ? "Overdue" : "To do"}. ${mobile ? "Open actions" : "Show details"}`}
+      style={allowSwipe ? { touchAction: "pan-y" } : undefined}
+      onClick={openDetails}
       onKeyDown={(e) => {
-        if (!handleItemMenuKey(e, item.id)) keyToggle(e);
+        if (!handleItemMenuKey(e, item.id)) {
+          if (mobile) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openDetails();
+            }
+          } else {
+            keyToggle(e);
+          }
+        }
       }}
       {...itemMenuProps(item.id)}
       className={cn(
         "bg-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        expanded && "border-line-strong",
+        !mobile && expanded && "border-line-strong",
         overdue && !done && "bg-warn-soft/35",
         status === "doing" && !done && "bg-accent-soft/30"
       )}
@@ -642,7 +706,7 @@ function AssignmentCard({
             {status === "doing" && !overdue && " · in progress"}
             {done && " · done"}
           </p>
-          <CollapsedDescription show={!expanded} text={item.description} />
+          {!mobile && <CollapsedDescription show={!expanded} text={item.description} />}
         </div>
 
         {showCategoryDot && (
@@ -651,28 +715,48 @@ function AssignmentCard({
             style={{ "--cat": color } as React.CSSProperties}
             className={cn(
               "cat-dot h-1.5 w-1.5 shrink-0 rounded-full transition-[opacity,transform] duration-[var(--motion-micro)]",
-              expanded && "scale-50 opacity-0"
+              !mobile && expanded && "scale-50 opacity-0"
             )}
           />
         )}
-        {/* Named controls for exactly what the swipes do, so the swipes are a
-            shortcut rather than the only route. */}
-        {mobile && (
+        {/* Named controls for exactly what the swipes used to do, so the
+            actions stay discoverable on Today. Agenda keeps a calmer row. */}
+        {mobile && showQuickActions && (
           <MobileQuickActions item={item} onReschedule={() => setActions("reschedule")} />
         )}
         <CardQuickActions item={item} />
-        <ExpandChevron expanded={expanded} />
+        {!mobile && <ExpandChevron expanded={expanded} />}
       </div>
 
-      {mobile && actions && actions !== "edit" && <MobileTaskActions item={item} initialReschedule={actions === "reschedule"} onClose={() => setActions(null)} onEdit={() => setActions("edit")} />}
-      {mobile && actions === "edit" && <MobileItemSheet title="Edit item" onClose={() => setActions(null)}><ItemEditor item={item} category={category} clock24h={clock24h} StatusSegmented={StatusSegmented} onCollapse={() => setActions(null)} /></MobileItemSheet>}
-      <ExpandPanel
-        open={expanded}
-        item={item}
-        category={category}
-        clock24h={clock24h}
-        onCollapse={collapse}
-      />
+      {mobile && actions && actions !== "edit" && (
+        <MobileTaskActions
+          item={item}
+          initialReschedule={actions === "reschedule"}
+          onClose={() => setActions(null)}
+          onEdit={() => setActions("edit")}
+          hintSwipe={false}
+        />
+      )}
+      {mobile && actions === "edit" && (
+        <MobileItemSheet title="Edit item" onClose={() => setActions(null)}>
+          <ItemEditor
+            item={item}
+            category={category}
+            clock24h={clock24h}
+            StatusSegmented={StatusSegmented}
+            onCollapse={() => setActions(null)}
+          />
+        </MobileItemSheet>
+      )}
+      {!mobile && (
+        <ExpandPanel
+          open={expanded}
+          item={item}
+          category={category}
+          clock24h={clock24h}
+          onCollapse={collapse}
+        />
+      )}
     </CardFrame>
   );
 }

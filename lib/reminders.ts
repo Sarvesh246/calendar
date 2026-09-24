@@ -3,6 +3,7 @@
 import { format, isToday } from "date-fns";
 import type { Item, Reminder } from "./types";
 import { subscribePush } from "./push-client";
+import { isNativeWrapper } from "./native-bridge";
 import {
   DEFAULT_CLASS_REMINDER_MINUTES,
   classReminderFor,
@@ -64,10 +65,21 @@ export interface ReminderContext {
  * user hasn't decided about notifications yet, ask now (a natural moment, and a
  * real user gesture). No-op once decided or once asked this session.
  */
+export function usesNativeReminders(): boolean {
+  return isNativeWrapper();
+}
+
 export async function maybePromptForReminders(
   getContext: () => ReminderContext
 ): Promise<void> {
-  if (promptedThisSession || notificationPermission() !== "default") return;
+  if (promptedThisSession) return;
+  if (usesNativeReminders()) {
+    promptedThisSession = true;
+    const { postToNative } = await import("./native-bridge");
+    postToNative("requestNativeNotifications");
+    return;
+  }
+  if (notificationPermission() !== "default") return;
   promptedThisSession = true;
   const result = await requestNotificationPermission();
   if (result === "granted") {
@@ -92,7 +104,7 @@ export async function ensureReminderWorker(): Promise<boolean> {
 
 /* --- fired-key bookkeeping --------------------------------------- */
 
-function reminderKey(itemId: string, reminderId: string, offsetMinutes: number): string {
+export function reminderKey(itemId: string, reminderId: string, offsetMinutes: number): string {
   return `${itemId}:${reminderId || `o${offsetMinutes}`}`;
 }
 
@@ -129,7 +141,7 @@ function markFired(key: string): void {
 
 /* --- notification rendering ------------------------------------- */
 
-function reminderBody(item: Item, clock24h: boolean): string {
+export function reminderBody(item: Item, clock24h: boolean): string {
   const at = new Date(item.at);
   const when = format(at, clock24h ? "EEE, MMM d · HH:mm" : "EEE, MMM d · h:mm a");
   if (item.allDay) {
@@ -230,7 +242,7 @@ function deliver(key: string, item: Item, label: string, clock24h: boolean): voi
  * never stored on the item, so re-timing it in Settings takes effect on the
  * next pass — no item writes, no sync round-trip.
  */
-function effectiveReminders(item: Item, classReminderMinutes: number): Reminder[] {
+export function effectiveReminders(item: Item, classReminderMinutes: number): Reminder[] {
   const own = item.reminders ?? [];
   const classReminder = classReminderFor(item, classReminderMinutes);
   return classReminder ? [...own, classReminder] : own;
@@ -246,6 +258,10 @@ export function armReminders(
   clock24h = false,
   classReminderMinutes = DEFAULT_CLASS_REMINDER_MINUTES
 ): void {
+  if (usesNativeReminders()) {
+    clearTimers();
+    return;
+  }
   if (notificationPermission() !== "granted") {
     clearTimers();
     return;

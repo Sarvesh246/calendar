@@ -34,7 +34,7 @@ export function mergeCalendars(
   tombstones: TombstoneMap = {}
 ): CalendarSnapshot {
   const { categories: deduped, remap } = dedupeCategories(
-    reconcile("category", local.categories, cloud.categories, tombstones)
+    reconcileCategories(local.categories, cloud.categories, tombstones)
   );
   const sources = dedupeByUrl(
     reconcile("import_source", local.importSources, cloud.importSources, tombstones)
@@ -273,6 +273,35 @@ function newer<T extends Stamped>(local: T, cloud: T): T {
   const ct = time(cloud.updatedAt ?? cloud.createdAt);
   if (lt !== ct) return lt > ct ? local : cloud;
   return local;
+}
+
+/**
+ * `classTitle` is optional and may not round-trip (a project that hasn't run
+ * the column migration strips it on write). Last-write-wins of the whole row
+ * would then wipe a nickname the user just set. Keep it from the other copy.
+ */
+export function preserveClassTitle(winner: Category, other?: Category): Category {
+  if (winner.classTitle?.trim() || !other?.classTitle?.trim()) return winner;
+  return { ...winner, classTitle: other.classTitle };
+}
+
+function pickCategoryRow(local: Category, cloud: Category): Category {
+  const winner = newer(local, cloud);
+  return preserveClassTitle(winner, winner === local ? cloud : local);
+}
+
+function reconcileCategories(
+  local: Category[],
+  cloud: Category[],
+  tombstones: TombstoneMap
+): Category[] {
+  const byId = new Map<string, Category>();
+  for (const row of cloud) byId.set(row.id, row);
+  for (const row of local) {
+    const existing = byId.get(row.id);
+    byId.set(row.id, existing ? pickCategoryRow(row, existing) : row);
+  }
+  return [...byId.values()].filter((row) => !isDeleted(tombstones, "category", row));
 }
 
 function reconcile<T extends Stamped>(

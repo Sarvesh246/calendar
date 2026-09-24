@@ -89,6 +89,8 @@ export function sanitizeSettings(settings: UserSettings | undefined): UserSettin
   // fires — so coerce whatever localStorage, a backup, or an older client sent.
   const classReminderMinutes = normalizeClassReminderMinutes(base.classReminderMinutes);
   const customTheme = sanitizeCustomTheme(base.customTheme);
+  const liveActivityEnabled = base.liveActivityEnabled !== false;
+  const liveActivityPrivacy = base.liveActivityPrivacy === "hide" ? "hide" : "show";
   const customUnchanged =
     (!base.customTheme && !customTheme) ||
     (!!customTheme &&
@@ -99,12 +101,20 @@ export function sanitizeSettings(settings: UserSettings | undefined): UserSettin
   if (
     landingView === base.landingView &&
     classReminderMinutes === base.classReminderMinutes &&
+    liveActivityEnabled === base.liveActivityEnabled &&
+    liveActivityPrivacy === base.liveActivityPrivacy &&
     customUnchanged &&
     settings
   ) {
     return settings;
   }
-  const next: UserSettings = { ...base, landingView, classReminderMinutes };
+  const next: UserSettings = {
+    ...base,
+    landingView,
+    classReminderMinutes,
+    liveActivityEnabled,
+    liveActivityPrivacy,
+  };
   if (customTheme) next.customTheme = customTheme;
   else delete next.customTheme;
   return next;

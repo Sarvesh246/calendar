@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { PhoneSchedule } from "@/components/schedule/phone-schedule";
+import { MobileRoomHeader } from "@/components/mobile-room-header";
+import { haptic } from "@/lib/haptic";
 import { cn } from "@/lib/utils";
 
 /** Vertical scale of the timetable. One minute ≈ one pixel reads at a glance
@@ -29,6 +31,13 @@ export default function SchedulePage() {
   const categoryFilter = useDeferredCategoryFilter();
   const openClassSchedule = useUIStore((s) => s.openClassSchedule);
   const categoriesById = useCategoriesById();
+  const categories = useDatebookStore((s) => s.categories);
+
+  function openTimes() {
+    haptic("light");
+    const filtered = categoryFilter?.length === 1 ? categoryFilter[0] : undefined;
+    openClassSchedule(filtered);
+  }
 
   const items = useMemo(
     () => applyCategoryFilter(allItems, categoryFilter),
@@ -40,8 +49,8 @@ export default function SchedulePage() {
   const [today] = useState(() => new Date().getDay());
 
   const schedule = useMemo(
-    () => buildWeeklySchedule(items, new Date(), weekStartsOn),
-    [items, weekStartsOn]
+    () => buildWeeklySchedule(items, new Date(), weekStartsOn, categories),
+    [items, weekStartsOn, categories]
   );
 
   const colorOf = (categoryId?: string) =>
@@ -63,8 +72,21 @@ export default function SchedulePage() {
   const empty = schedule.blocks.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="mx-auto flex h-auto min-h-0 w-full max-w-[1120px] flex-col gap-5">
+      <MobileRoomHeader
+        title="Schedule"
+        trailing={
+          <button
+            type="button"
+            onClick={openTimes}
+            className="press-none flex min-h-11 items-center gap-1 rounded-lg px-2 text-[13px] font-semibold text-accent"
+          >
+            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+            Class times
+          </button>
+        }
+      />
+      <header className="hidden flex-wrap items-start justify-between gap-3 md:flex">
         <div className="min-w-0">
           <h1 className="text-[26px] font-semibold tracking-tight text-ink">Schedule</h1>
           <p className="mt-1 max-w-[52ch] text-[13px] text-ink-soft">
@@ -72,7 +94,7 @@ export default function SchedulePage() {
             place.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => openClassSchedule()}>
+        <Button variant="secondary" size="sm" onClick={openTimes}>
           <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
           Class times
         </Button>
@@ -83,7 +105,7 @@ export default function SchedulePage() {
           title="No repeating schedule yet."
           sub="Add your class times — or import a calendar — and anything that lands on the same day each week will lay itself out here."
           action={
-            <Button variant="primary" size="sm" onClick={() => openClassSchedule()}>
+            <Button variant="primary" size="sm" onClick={openTimes}>
               Add class times
             </Button>
           }

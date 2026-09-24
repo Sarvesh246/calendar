@@ -11,10 +11,13 @@ import {
   meetingDateTimes,
   parseClassSchedule,
   parseClockInput,
+  savedClassMeetings,
+  savedMeetingSlotEqual,
   scheduleRepeat,
   untilDayToIso,
   weekdayLong,
   type ClassMeeting,
+  type SavedClassMeeting,
 } from "@/lib/class-schedule";
 import { defaultUntilIso } from "@/lib/repeat";
 import { nanoid } from "@/lib/nanoid";
@@ -26,14 +29,12 @@ import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WeekdayChips } from "@/components/weekday-chips";
+import type { Item } from "@/lib/types";
 
 export { WeekdayChips };
 
 const FIELD =
-  "w-full min-w-0 max-w-full rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
-
-const SELECT =
-  "min-h-11 min-w-0 w-full rounded-lg border border-line bg-surface-sunken/50 px-1 text-center text-[16px] text-ink focus:border-line-strong focus:outline-none";
+  "field-control w-full min-w-0 max-w-full rounded-lg border border-line bg-surface-sunken/50 px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none md:text-[14px]";
 
 const DATE_FIELD = cn(
   FIELD,
@@ -42,17 +43,21 @@ const DATE_FIELD = cn(
   "[&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:p-0"
 );
 
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-
 type MeetingDraft = {
   key: string;
+  repeatId?: string;
   days: number[];
   start: string;
   end: string;
 };
 
-function draftMeeting(days: number[], start = "10:00", end = "10:50"): MeetingDraft {
-  return { key: nanoid(), days, start, end };
+function draftMeeting(
+  days: number[],
+  start = "10:00",
+  end = "10:50",
+  repeatId?: string
+): MeetingDraft {
+  return { key: repeatId ?? nanoid(), repeatId, days, start, end };
 }
 
 function fromParsed(meeting: ClassMeeting): MeetingDraft {
@@ -60,6 +65,19 @@ function fromParsed(meeting: ClassMeeting): MeetingDraft {
     meeting.days,
     clockInput(meeting.hour, meeting.minute),
     clockInput(meeting.endHour, meeting.endMinute)
+  );
+}
+
+function fromSaved(meeting: SavedClassMeeting): MeetingDraft {
+  const endHour = meeting.endHour ?? meeting.hour;
+  const endMinute =
+    meeting.endMinute ??
+    (meeting.endHour == null ? Math.min(meeting.minute + 50, 59) : meeting.minute);
+  return draftMeeting(
+    meeting.days,
+    clockInput(meeting.hour, meeting.minute),
+    clockInput(endHour, endMinute),
+    meeting.repeatId
   );
 }
 
@@ -81,59 +99,40 @@ function TimeField({
   value: string;
   onChange: (next: string) => void;
 }) {
-  const parsed = parseClockInput(value) ?? { hour: 10, minute: 0 };
-  const hour12 = parsed.hour % 12 === 0 ? 12 : parsed.hour % 12;
-  const pm = parsed.hour >= 12;
-  const minuteOpts = MINUTES.includes(parsed.minute)
-    ? MINUTES
-    : [...MINUTES, parsed.minute].sort((a, b) => a - b);
-
-  function emit(nextHour12: number, nextMinute: number, nextPm: boolean) {
-    const hour = (nextHour12 % 12) + (nextPm ? 12 : 0);
-    onChange(clockInput(hour, nextMinute));
-  }
-
   return (
-    <div className="min-w-0">
+    <label className="min-w-0">
       <span className="text-[12px] font-medium text-ink-faint">{label}</span>
-      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1.05fr)] items-center gap-1">
-        <select
-          aria-label={`${label} hour`}
-          value={hour12}
-          onChange={(e) => emit(Number(e.target.value), parsed.minute, pm)}
-          className={SELECT}
-        >
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-            <option key={h} value={h}>
-              {h}
-            </option>
-          ))}
-        </select>
-        <span className="text-[13px] font-medium text-ink-faint">:</span>
-        <select
-          aria-label={`${label} minute`}
-          value={parsed.minute}
-          onChange={(e) => emit(hour12, Number(e.target.value), pm)}
-          className={SELECT}
-        >
-          {minuteOpts.map((m) => (
-            <option key={m} value={m}>
-              {String(m).padStart(2, "0")}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={`${label} AM or PM`}
-          value={pm ? "pm" : "am"}
-          onChange={(e) => emit(hour12, parsed.minute, e.target.value === "pm")}
-          className={SELECT}
-        >
-          <option value="am">AM</option>
-          <option value="pm">PM</option>
-        </select>
-      </div>
-    </div>
+      <input
+        type="time"
+        step={60}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className={cn(DATE_FIELD, "mt-1.5")}
+      />
+    </label>
   );
+}
+
+function snapshotOf(state: {
+  title: string;
+  categoryId: string;
+  meetings: MeetingDraft[];
+  location: string;
+  until: string;
+}) {
+  return JSON.stringify({
+    title: state.title,
+    categoryId: state.categoryId,
+    location: state.location,
+    until: state.until,
+    meetings: state.meetings.map((m) => ({
+      repeatId: m.repeatId ?? "",
+      days: m.days,
+      start: m.start,
+      end: m.end,
+    })),
+  });
 }
 
 export function ClassScheduleSheet() {
@@ -149,8 +148,8 @@ function ClassScheduleSheetBody() {
   const presetCategoryId = useUIStore((s) => s.classScheduleCategoryId);
   const close = useUIStore((s) => s.closeClassSchedule);
   const allCategories = useDatebookStore((s) => s.categories);
+  const items = useDatebookStore((s) => s.items);
   const categories = allCategories.filter((c) => !c.archived);
-  const addItem = useDatebookStore((s) => s.addItem);
   const headingId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -165,33 +164,55 @@ function ClassScheduleSheetBody() {
   const [until, setUntil] = useState("");
   const [paste, setPaste] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const baseline = useRef("");
 
   useLockBodyScroll(true);
 
-  useEffect(() => {
-    const first = presetCategoryId && categories.some((c) => c.id === presetCategoryId)
-      ? presetCategoryId
-      : categories[0]?.id ?? "";
-    const name = categories.find((c) => c.id === first)?.name ?? "";
-    const untilDay = defaultUntilIso().slice(0, 10);
-    queueMicrotask(() => {
-      setCategoryId(first);
-      setTitle(name);
-      setMeetings([draftMeeting([1, 3, 5])]);
-      setLocation("");
-      setUntil(untilDay);
-      setPaste("");
-      setError(null);
+  function loadCategory(id: string) {
+    const cat = categories.find((c) => c.id === id);
+    const saved = savedClassMeetings(items, id);
+    const first = saved[0];
+    const occ = first ? items.find((item) => item.id === first.ids[0]) : undefined;
+    const nextTitle = cat?.classTitle?.trim() || first?.title || cat?.name || "";
+    const nextLocation = first?.location ?? occ?.location ?? "";
+    const nextUntil = (first?.until ?? defaultUntilIso()).slice(0, 10);
+    const nextMeetings = saved.length ? saved.map(fromSaved) : [draftMeeting([1, 3, 5])];
+    setCategoryId(id);
+    setTitle(nextTitle);
+    setMeetings(nextMeetings);
+    setLocation(nextLocation);
+    setUntil(nextUntil);
+    setPaste("");
+    setError(null);
+    baseline.current = snapshotOf({
+      title: nextTitle,
+      categoryId: id,
+      meetings: nextMeetings,
+      location: nextLocation,
+      until: nextUntil,
     });
-  }, [presetCategoryId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
+
+  useEffect(() => {
+    const first =
+      presetCategoryId && categories.some((c) => c.id === presetCategoryId)
+        ? presetCategoryId
+        : categories.find((c) => savedClassMeetings(items, c.id).length > 0)?.id ??
+          categories[0]?.id ??
+          "";
+    queueMicrotask(() => loadCategory(first));
+    // Load once when the sheet opens; category changes go through the select.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetCategoryId]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") dismiss();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function patchMeeting(key: string, patch: Partial<MeetingDraft>) {
     setMeetings((prev) => prev.map((m) => (m.key === key ? { ...m, ...patch } : m)));
@@ -212,10 +233,10 @@ function ClassScheduleSheetBody() {
     haptic("success");
   }
 
-  function submit() {
+  function parseDrafts(): ClassMeeting[] | null {
     if (meetings.some((m) => m.days.length === 0)) {
       setError("Pick at least one day for each time.");
-      return;
+      return null;
     }
     const parsedMeetings: ClassMeeting[] = [];
     for (const meeting of meetings) {
@@ -223,7 +244,7 @@ function ClassScheduleSheetBody() {
       const end = parseClockInput(meeting.end);
       if (!start || !end) {
         setError("Pick a start and end time.");
-        return;
+        return null;
       }
       const next: ClassMeeting = {
         days: meeting.days,
@@ -234,55 +255,97 @@ function ClassScheduleSheetBody() {
       };
       if (!meetingDateTimes(next)) {
         setError("End time needs to be after the start.");
-        return;
+        return null;
       }
       parsedMeetings.push(next);
     }
-    // A lecture and a lab on the same day are two times, not a conflict; only
-    // times that actually overlap are.
     const clash = firstOverlappingDay(parsedMeetings);
     if (clash !== null) {
       setError(`Two of these times overlap on ${weekdayLong(clash)}.`);
-      return;
+      return null;
     }
+    return parsedMeetings;
+  }
+
+  function persist(): boolean {
+    const parsedMeetings = parseDrafts();
+    if (!parsedMeetings) return false;
     const cat = categoryId || categories[0]?.id;
     if (!cat) {
       setError("Add a class first.");
-      return;
+      return false;
     }
     const untilIso = untilDayToIso(until);
     const name = title.trim() || categories.find((c) => c.id === cat)?.name || "Class";
-    const before = useDatebookStore.getState().items.length;
+    const loc = location.trim();
+    const store = useDatebookStore.getState();
+    const existing = savedClassMeetings(store.items, cat);
+    const drafts = meetings.map((draft, i) => ({ draft, parsed: parsedMeetings[i] }));
+
     try {
-      for (const meeting of parsedMeetings) {
-        const range = meetingDateTimes(meeting);
+      for (const saved of existing) {
+        if (!drafts.some(({ draft }) => draft.repeatId === saved.repeatId)) {
+          store.deleteSeries(saved.repeatId);
+        }
+      }
+
+      for (const { draft, parsed } of drafts) {
+        const prev = draft.repeatId
+          ? existing.find((m) => m.repeatId === draft.repeatId)
+          : undefined;
+        if (prev && savedMeetingSlotEqual(prev, parsed)) {
+          patchSeriesMeta(store, prev, name, loc, untilIso);
+          continue;
+        }
+        if (prev) store.deleteSeries(prev.repeatId);
+        const range = meetingDateTimes(parsed);
         if (!range) continue;
-        addItem({
+        store.addItem({
           title: name,
           type: "event",
           categoryId: cat,
           at: range.at.toISOString(),
           endAt: range.endAt.toISOString(),
-          ...(location.trim() ? { location: location.trim() } : {}),
-          repeat: scheduleRepeat(meeting.days, untilIso),
+          ...(loc ? { location: loc } : {}),
+          repeat: scheduleRepeat(parsed.days, untilIso),
         });
       }
+
+      const catObj = store.categories.find((c) => c.id === cat);
+      if (catObj) {
+        const nick = title.trim() && title.trim() !== catObj.name ? title.trim() : undefined;
+        if ((catObj.classTitle ?? "") !== (nick ?? "")) {
+          store.updateCategory(cat, { classTitle: nick });
+        }
+      }
     } catch (err) {
-      console.warn("[datebook] couldn't add class times", err);
-      setError("Couldn't add those times. Try again.");
-      return;
+      console.warn("[datebook] couldn't save class times", err);
+      setError("Couldn't save those times. Try again.");
+      return false;
     }
-    if (useDatebookStore.getState().items.length <= before) {
-      setError("Couldn't add those times. Try again.");
-      return;
-    }
-    haptic("success");
+
+    setError(null);
+    baseline.current = snapshotOf({ title, categoryId: cat, meetings, location, until });
+    return true;
+  }
+
+  function dirty() {
+    return (
+      snapshotOf({ title, categoryId, meetings, location, until }) !== baseline.current
+    );
+  }
+
+  function dismiss() {
+    if (dirty() && !persist()) return;
     close();
   }
 
+  const editing =
+    Boolean(categoryId) && savedClassMeetings(items, categoryId).length > 0;
+
   return (
         <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
-          <Scrim label="Dismiss" onClick={close} />
+          <Scrim label="Dismiss" onClick={dismiss} />
           <motion.div
             role="dialog"
             ref={panelRef}
@@ -304,7 +367,7 @@ function ClassScheduleSheetBody() {
               setDragging(false);
               if (shouldDismissSheet(info)) {
                 haptic("light");
-                close();
+                dismiss();
               }
             }}
             className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface pt-0.5"
@@ -316,15 +379,17 @@ function ClassScheduleSheetBody() {
             >
               <div className="min-w-0">
                 <p id={headingId} className="text-[16px] font-semibold text-ink">
-                  Add class times
+                  Class times
                 </p>
                 <p className="mt-0.5 text-[12.5px] text-ink-soft">
-                  Repeats each week until the term ends.
+                  {editing
+                    ? "Edit this class’s weekly meetings."
+                    : "Add weekly meetings for this class."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={close}
+                onClick={dismiss}
                 aria-label="Close"
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface-sunken hover:text-ink"
               >
@@ -363,11 +428,9 @@ function ClassScheduleSheetBody() {
               <select
                 value={categoryId}
                 onChange={(e) => {
-                  setCategoryId(e.target.value);
-                  const name = categories.find((c) => c.id === e.target.value)?.name;
-                  if (name && (!title || title === categories.find((c) => c.id === categoryId)?.name)) {
-                    setTitle(name);
-                  }
+                  const next = e.target.value;
+                  if (dirty() && !persist()) return;
+                  loadCategory(next);
                 }}
                 className={cn(FIELD, "mt-1.5")}
               >
@@ -386,7 +449,9 @@ function ClassScheduleSheetBody() {
                 className={cn(FIELD, "mt-2")}
               />
 
-              <p className="mt-4 text-[12px] font-medium text-ink-faint">Weekly times</p>
+              <p className="mt-4 text-[12px] font-medium text-ink-faint">
+                {editing ? "Current weekly times" : "Weekly times"}
+              </p>
               <div className="mt-1.5 flex flex-col gap-2">
                 {meetings.map((meeting, index) => (
                   <div
@@ -412,7 +477,7 @@ function ClassScheduleSheetBody() {
                       value={meeting.days}
                       onChange={(days) => patchMeeting(meeting.key, { days })}
                     />
-                    <div className="mt-3 flex min-w-0 flex-col gap-2">
+                    <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
                       <TimeField
                         label="Starts"
                         value={meeting.start}
@@ -466,22 +531,51 @@ function ClassScheduleSheetBody() {
               <div className="flex min-w-0 gap-2">
                 <button
                   type="button"
-                  onClick={close}
+                  onClick={dismiss}
                   className="min-h-11 min-w-0 flex-1 rounded-xl border border-line text-[13.5px] font-medium text-ink-soft hover:text-ink"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="button"
-                  onClick={submit}
+                  onClick={() => {
+                    if (!persist()) return;
+                    haptic("success");
+                    close();
+                  }}
                   className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
                 >
                   <CalendarClock className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                  <span className="truncate">Add to Datebook</span>
+                  <span className="truncate">Save</span>
                 </button>
               </div>
             </div>
           </motion.div>
         </div>
   );
+}
+
+function patchSeriesMeta(
+  store: {
+    items: Item[];
+    updateItem: (id: string, patch: Partial<Item>) => void;
+  },
+  saved: SavedClassMeeting,
+  title: string,
+  location: string,
+  untilIso: string
+) {
+  for (const id of saved.ids) {
+    const item = store.items.find((row) => row.id === id);
+    if (!item) continue;
+    const patch: Partial<Item> = {};
+    if (item.title !== title) patch.title = title;
+    if ((item.location ?? "") !== location) {
+      patch.location = location || undefined;
+    }
+    if (item.repeat && (item.repeat.until ?? "") !== untilIso) {
+      patch.repeat = { ...item.repeat, until: untilIso };
+    }
+    if (Object.keys(patch).length) store.updateItem(id, patch);
+  }
 }

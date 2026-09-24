@@ -67,17 +67,18 @@ export function ImportCalendar() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 sm:flex-row sm:items-center">
+      <div className="field-shell flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 sm:flex-row sm:items-center">
         <Link2 className="h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && url.trim() && !busy && runImport(url)}
-          placeholder="Paste a calendar feed link (Canvas, Google, Outlook…)"
+          placeholder="Paste a feed link…"
+          title="Paste a calendar feed link (Canvas, Google, Outlook…)"
           spellCheck={false}
           aria-label="Calendar feed URL"
           autoCapitalize="off"
-          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
+          className="min-w-0 flex-1 overflow-hidden text-ellipsis bg-transparent text-[13.5px] text-ink placeholder:truncate placeholder:text-ink-faint focus:outline-none"
         />
         <button
           onClick={() => url.trim() && runImport(url)}

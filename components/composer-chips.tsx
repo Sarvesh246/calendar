@@ -188,12 +188,11 @@ export function ComposerChips({
   const activePicker = open === "day" ? dayPicker : open === "class" ? classPicker : reminderPicker;
 
   return (
-    // Wraps rather than scrolls. A horizontal scroller would be tidier at three
-    // chips and completely broken at any number, because `overflow` clips
-    // absolutely-positioned descendants — the pickers were opening *behind* the
-    // text field, unreachable, with only the sliver inside the row hittable.
+    // One compact rail gives the three fields a shared rhythm. Keep the rail's
+    // overflow visible: the desktop pickers are anchored to each field and
+    // would otherwise be clipped by the rounded container.
     <div ref={rootRef} className="mt-2">
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="grid grid-cols-3 gap-1 rounded-[18px] border border-line bg-surface-sunken p-1 shadow-[inset_0_1px_0_color-mix(in_srgb,white_5%,transparent)]">
         <Chip
           icon={<CalendarDays className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={dayChipLabel(resolved.date.value, now)}
@@ -238,24 +237,25 @@ export function ComposerChips({
           {reminderPicker}
         </Chip>
 
-        {/* Only shown once you have actually overridden something, so the row
-            stays three chips wide in the common case. */}
-        {(overrides.dateKey !== undefined ||
-          overrides.categoryId !== undefined ||
-          overrides.reminderMinutes !== undefined) && (
-          <button
-            type="button"
-            onClick={() => {
-              haptic("light");
-              onChange({ dateKey: undefined, categoryId: undefined, reminderMinutes: undefined });
-              setOpen(null);
-            }}
-            className="press-none flex min-h-9 shrink-0 items-center rounded-full px-2.5 text-[12px] font-medium text-ink-faint"
-          >
-            Reset
-          </button>
-        )}
       </div>
+
+      {/* Reset is secondary to the three field choices, so it sits quietly
+          below the rail instead of becoming a mismatched fourth segment. */}
+      {(overrides.dateKey !== undefined ||
+        overrides.categoryId !== undefined ||
+        overrides.reminderMinutes !== undefined) && (
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            onChange({ dateKey: undefined, categoryId: undefined, reminderMinutes: undefined });
+            setOpen(null);
+          }}
+          className="press-none ml-auto mt-1 flex min-h-7 items-center px-1.5 text-[11px] font-medium text-ink-faint hover:text-ink-soft"
+        >
+          Reset details
+        </button>
+      )}
 
       {/* On a phone this stays in the composer's own scroll flow. Opening a
           chip can therefore never put its choices above the visual viewport or
@@ -309,7 +309,7 @@ function Chip({
   const panelId = useId();
   const reduced = prefersReducedMotion();
   return (
-    <div className="relative shrink-0">
+    <div className="relative min-w-0">
       <button
         type="button"
         onClick={() => {
@@ -322,21 +322,47 @@ function Chip({
         // only carried by a 14px glyph, so the name has to say both.
         aria-label={`${detail}: ${label}. Change`}
         className={cn(
-          "press-none flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium",
-          "transition-colors duration-[var(--motion-standard)]",
+          "press-none relative flex min-h-[3.625rem] w-full min-w-0 flex-col items-stretch justify-center gap-1 rounded-[14px] border border-transparent px-2 py-2 text-left",
+          "transition-[background-color,border-color,color,box-shadow] duration-[var(--motion-standard)]",
           open
-            ? "border-accent bg-accent-soft text-accent"
+            ? "border-[color-mix(in_srgb,var(--accent)_34%,var(--line))] bg-accent-soft text-accent shadow-[inset_0_1px_0_color-mix(in_srgb,white_7%,transparent)]"
             : specific
-              ? "border-line-strong bg-surface-sunken text-ink"
-              : "border-line bg-surface text-ink-soft"
+              ? "bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
+              : "bg-surface text-ink-soft shadow-[0_1px_2px_rgb(0_0_0/0.04)]"
         )}
       >
-        {dot ? (
-          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
-        ) : (
-          icon
+        <span className="flex min-w-0 items-center gap-1.5">
+          <motion.span
+            aria-hidden
+            animate={reduced ? undefined : { scale: open ? 1.08 : 1, y: open ? -1 : 0 }}
+            transition={motionTokens.springSnappy}
+            className={cn(
+              "relative flex h-5 w-5 shrink-0 items-center justify-center rounded-[7px]",
+              open || specific ? "bg-accent-soft text-accent" : "bg-surface-sunken text-ink-faint"
+            )}
+          >
+            {icon}
+            {dot && (
+              <span
+                className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-surface"
+                style={{ background: dot }}
+              />
+            )}
+          </motion.span>
+          <span className="truncate text-[9px] font-semibold uppercase tracking-[0.13em] text-ink-faint">
+            {detail}
+          </span>
+        </span>
+        <span className="block min-w-0 truncate text-[11.5px] font-semibold leading-tight">
+          {label}
+        </span>
+        {open && (
+          <motion.span
+            layoutId="composer-field-indicator"
+            className="absolute inset-x-2.5 bottom-0.5 h-0.5 rounded-full bg-accent"
+            transition={reduced ? { duration: 0 } : motionTokens.springSnappy}
+          />
         )}
-        <span className="max-w-[10rem] truncate">{label}</span>
       </button>
 
       <AnimatePresence>

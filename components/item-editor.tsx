@@ -23,6 +23,7 @@ import { formatOffsetLabel } from "@/lib/reminder-defaults";
 import { duplicateItem } from "@/lib/item-actions";
 import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sessions";
 import { WeekdayChips } from "@/components/weekday-chips";
+import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 
 function linkLabel(url: string): string {
   try {
@@ -55,7 +56,7 @@ function DetailRow({
 }
 
 const FIELD =
-  "mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
+  "field-control mt-0.5 w-full min-h-9 rounded-md border border-line bg-surface px-2 py-1.5 text-[13px] text-ink " +
   // A focus ring that grows rather than snapping on — `box-shadow` animates
   // where `border-width` does not, so the border colour and the ring move
   // together on one timing. (This used to end on a bare "focus:" — a class name
@@ -63,6 +64,83 @@ const FIELD =
   "transition-[border-color,box-shadow,background-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] " +
   "hover:border-line-strong focus:border-accent focus:bg-surface-elevated focus:outline-none " +
   "focus:shadow-[0_0_0_3px_var(--accent-soft)]";
+
+function PlaceReminder({
+  item,
+  patch,
+}: {
+  item: Item;
+  patch: (next: Partial<Item>) => void;
+}) {
+  const [name, setName] = useState("");
+  const native = isNativeWrapper();
+
+  useNativeMessage("nativePlace", (payload) => {
+    const place = payload as { lat?: number; lng?: number; name?: string } | null;
+    if (!place || place.lat == null || place.lng == null) return;
+    const current = item.reminders ?? [];
+    if (current.some((r) => r.place)) return;
+    patch({
+      reminders: [
+        ...current,
+        {
+          id: nanoid(),
+          itemId: item.id,
+          offsetMinutes: 0,
+          label: `When I arrive at ${place.name || name || "this place"}`,
+          place: {
+            name: place.name || name || "Saved place",
+            lat: place.lat,
+            lng: place.lng,
+          },
+        },
+      ],
+    });
+  });
+
+  if (!native) return null;
+  const existing = (item.reminders ?? []).filter((r) => r.place);
+
+  return (
+    <div className="mt-2 rounded-lg border border-line/80 bg-surface-sunken/40 px-2.5 py-2">
+      <p className="text-[12px] font-medium text-ink-soft">When I arrive</p>
+      {existing.map((r) => (
+        <button
+          key={r.id}
+          type="button"
+          onClick={() => {
+            const next = (item.reminders ?? []).filter((x) => x.id !== r.id);
+            patch({ reminders: next.length ? next : undefined });
+          }}
+          className="mt-1.5 flex min-h-9 w-full items-center justify-between rounded-md border border-accent/40 bg-accent-soft px-2 text-left text-[12.5px] text-ink"
+        >
+          {r.place?.name}
+          <X className="h-3.5 w-3.5 text-ink-faint" strokeWidth={2.25} />
+        </button>
+      ))}
+      {existing.length === 0 && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Library, studio…"
+            className="min-h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] text-ink"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              postToNative("requestPlace", { name: name.trim() || undefined, itemId: item.id });
+            }}
+            className="rounded-md border border-line px-2 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink"
+          >
+            Use location
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ItemEditor({
   item,
@@ -179,7 +257,7 @@ export function ItemEditor({
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
       aria-label="Title"
-      className="-mx-2 w-[calc(100%+1rem)] rounded-md border border-transparent bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-line focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+      className="field-inline -mx-2 w-[calc(100%+1rem)] bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink"
     />
   ) : (
     <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
@@ -400,6 +478,7 @@ export function ItemEditor({
             Add
           </button>
         </div>
+        <PlaceReminder item={item} patch={patch} />
       </div>
     </DetailRow>
   );

@@ -50,6 +50,7 @@ export function safeCategoryColor(v: unknown): string {
 // it, retry, and keep syncing everything else rather than wedging the queue.
 // The column starts flowing again on its own once the migration is run.
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
+  categories: ["class_title"],
   items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at", "work_for"],
   import_sources: ["last_error"],
   user_settings: [
@@ -58,9 +59,13 @@ const STRIPPABLE_COLS: Record<string, readonly string[]> = {
     "mobile_day_details",
     "custom_theme",
     "class_reminder_minutes",
+    "apple_calendar_sync",
+    "live_activity_enabled",
+    "live_activity_privacy",
   ],
 };
 const stripped: Record<string, Set<string>> = {
+  categories: new Set(),
   items: new Set(),
   import_sources: new Set(),
   user_settings: new Set(),
@@ -107,6 +112,7 @@ export function toCategoryRow(c: Category, userId: string): Row {
     id: c.id,
     user_id: userId,
     name: safeCategoryName(c.name),
+    class_title: c.classTitle?.trim() || null,
     color: safeCategoryColor(c.color),
     archived: c.archived ?? false,
     source_id: c.sourceId ?? null,
@@ -117,6 +123,7 @@ export function rowToCategory(r: Row): Category {
   return {
     id: r.id as string,
     name: safeCategoryName(r.name),
+    ...(typeof r.class_title === "string" && r.class_title.trim() ? { classTitle: r.class_title.trim() } : {}),
     color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
@@ -259,6 +266,9 @@ export function toSettingsRow(s: UserSettings, userId: string): Row {
     hide_completed: s.hideCompleted,
     default_reminder_preset_ids: s.defaultReminderPresetIds,
     class_reminder_minutes: normalizeClassReminderMinutes(s.classReminderMinutes),
+    apple_calendar_sync: s.appleCalendarSync ?? false,
+    live_activity_enabled: s.liveActivityEnabled ?? true,
+    live_activity_privacy: s.liveActivityPrivacy === "hide" ? "hide" : "show",
     onboarding_dismissed: s.onboardingDismissed ?? false,
     mobile_day_details: s.mobileDayDetails,
     custom_theme: s.customTheme ?? null,
@@ -298,6 +308,21 @@ export function rowToSettings(r: Row, local?: UserSettings): UserSettings {
       "class_reminder_minutes",
       normalizeClassReminderMinutes(r.class_reminder_minutes),
       local?.classReminderMinutes
+    ),
+    appleCalendarSync: carried(
+      "apple_calendar_sync",
+      Boolean(r.apple_calendar_sync),
+      local?.appleCalendarSync
+    ),
+    liveActivityEnabled: carried(
+      "live_activity_enabled",
+      r.live_activity_enabled === undefined ? true : Boolean(r.live_activity_enabled),
+      local?.liveActivityEnabled
+    ),
+    liveActivityPrivacy: carried(
+      "live_activity_privacy",
+      r.live_activity_privacy === "hide" ? "hide" : "show",
+      local?.liveActivityPrivacy
     ),
     mobileDayDetails: carried(
       "mobile_day_details",

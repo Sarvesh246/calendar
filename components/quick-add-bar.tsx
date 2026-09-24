@@ -54,7 +54,14 @@ function readComposerOverrides(): ComposerOverrides {
   return next;
 }
 
-export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
+export function QuickAddBar({
+  embedded = false,
+  toolbar = false,
+}: {
+  embedded?: boolean;
+  /** Let the desktop command surface provide the shared border and background. */
+  toolbar?: boolean;
+}) {
   const mobile = useMediaQuery("(max-width: 767px)");
   // What you corrected by tapping a chip. Empty means "whatever the sentence,
   // the context and the defaults work out to".
@@ -395,6 +402,7 @@ export function QuickAddBar({ embedded = false }: { embedded?: boolean }) {
         data-field-group=""
         className={cn(
           "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
+          toolbar && "border-0 bg-transparent py-0 pl-2 pr-0",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
           // The bar itself is the focus indicator for the field inside it, so it
           // has to be unmistakable rather than a half-tinted hairline.

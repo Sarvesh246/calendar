@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { addDays } from "date-fns";
 import {
@@ -12,6 +13,7 @@ import {
   ChevronRight,
   CircleDashed,
   Copy,
+  Minimize2,
   PanelRightOpen,
   PlayCircle,
   Trash2,
@@ -20,6 +22,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore, type ContextMenuRequest } from "@/lib/ui-store";
 import { dayKey } from "@/lib/date-utils";
 import { duplicateItem, rescheduleToDay, setStatusWithUndo } from "@/lib/item-actions";
+import { focusOnThis } from "@/lib/focus-session-store";
 import { takeMenuOpener } from "@/lib/item-menu";
 import { toDateInputValue } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
@@ -50,6 +53,7 @@ export function ItemContextMenu() {
 type Section = "main" | "reschedule" | "date";
 
 function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }) {
+  const router = useRouter();
   const close = useUIStore((s) => s.closeContextMenu);
   const openInspector = useUIStore((s) => s.openInspector);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
@@ -165,7 +169,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: pos.left, top: pos.top, transformOrigin: "top left" }}
-      className="fixed z-[85] w-[232px] rounded-xl border border-line bg-surface p-1 text-[13px] text-ink shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"
+      className="native-context-menu fixed z-[43] w-[232px] rounded-xl border border-line bg-surface p-1 text-[13px] text-ink shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"
     >
       {section === "main" && (
         <>
@@ -173,6 +177,11 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
           <MenuItem icon={PanelRightOpen} onSelect={() => run(() => openInspector(item.id))} hint="↵">
             Open details
           </MenuItem>
+          {work && status !== "done" && (
+            <MenuItem icon={Minimize2} onSelect={() => run(() => focusOnThis(item.id, router))}>
+              Focus on this
+            </MenuItem>
+          )}
           {work && (
             <>
               <Separator />
@@ -261,7 +270,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
             value={date}
             onChange={(e) => setDate(e.target.value)}
             aria-label="New date"
-            className="min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            className="field-control min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
           <button
             type="submit"

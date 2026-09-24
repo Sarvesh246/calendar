@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useCategoriesById } from "@/lib/card-chrome";
+import { classMeetingTitle } from "@/lib/class-schedule";
 import { dayKey, formatTime, isOverdue, toDateInputValue } from "@/lib/date-utils";
 import { dayDelta, shiftedByDays } from "@/lib/calendar-drag-math";
 import { applyBatchPatch, setStatusWithUndo, STATUS_LABEL } from "@/lib/item-actions";
@@ -179,6 +180,7 @@ function AgendaRow({
   const at = new Date(item.at);
   const menuDay = sectionDay ?? dayKey(at);
   const Glyph = item.type === "event" ? Clock : item.type === "assignment" ? FileText : ListTodo;
+  const displayTitle = classMeetingTitle(item, category);
 
   return (
     <div
@@ -199,7 +201,7 @@ function AgendaRow({
         <SelectBox
           checked={selected}
           visible={selecting}
-          label={`Select ${item.title}`}
+          label={`Select ${displayTitle}`}
           onToggle={(range) => onToggle(item.id, range)}
         />
       </div>
@@ -216,7 +218,7 @@ function AgendaRow({
               status === "done" && work ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
             )}
           >
-            {item.title}
+            {displayTitle}
           </button>
           <p className="truncate text-[11.5px] text-ink-faint lg:hidden">{category?.name ?? "No class"}</p>
         </div>
@@ -551,7 +553,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
           setMenu(null);
         }
       }}
-      className="fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-16px_rgb(0_0_0/0.4)]"
+      className="fixed bottom-6 left-1/2 z-[43] flex -translate-x-1/2 items-center gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-16px_rgb(0_0_0/0.4)]"
     >
       <button type="button" onClick={onClear} aria-label="Clear selection" title="Clear selection (Esc)" className={cn(barButton, "w-8 justify-center px-0")}>
         <X className="h-4 w-4" strokeWidth={2} />
@@ -616,7 +618,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
                     autoFocus
                     onChange={(e) => setDate(e.target.value)}
                     aria-label="Move selected items to"
-                    className="min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+                    className="field-control min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
                   />
                   <button
                     type="submit"

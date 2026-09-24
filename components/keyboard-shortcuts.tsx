@@ -8,8 +8,11 @@ import { useUIStore } from "@/lib/ui-store";
 import { useResolvedPathname, navigateTab } from "@/lib/tab-nav";
 import { undoLatest } from "@/lib/action-undo";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
+import { Scrim } from "@/components/ui/scrim";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import { toggleFocusRoom } from "@/lib/focus-session-store";
 
 function isMac() {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
@@ -33,6 +36,7 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["N"], label: "New item" },
         { keys: ["A"], label: "Ask the assistant" },
         { keys: [mod, "Z"], label: "Undo last change" },
+        { keys: ["F"], label: "Focus room" },
         { keys: ["?"], label: "Keyboard shortcuts" },
       ],
     },
@@ -42,12 +46,13 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["1"], label: "Today" },
         { keys: ["2"], label: "Calendar" },
         { keys: ["3"], label: "Agenda" },
+        { keys: ["4"], label: "Schedule" },
       ],
     },
     {
       title: "Calendar",
       items: [
-        { keys: ["T"], label: "Jump to today" },
+        { keys: ["T"], label: "Today page; on Calendar, jump to today" },
         { keys: ["M"], label: "Month view" },
         { keys: ["W"], label: "Week view" },
         { keys: ["←", "→"], label: "Previous / next" },
@@ -61,6 +66,15 @@ function shortcutGroups(mod: string): { title: string; items: Shortcut[] }[] {
         { keys: ["Right-click"], label: "Item actions" },
         { keys: ["Shift", "F10"], label: "Item actions (keyboard)" },
         { keys: ["Drag"], label: "Move, resize, or create on the week" },
+      ],
+    },
+    {
+      title: "Focus room",
+      items: [
+        { keys: ["Esc"], label: "Leave the room (session keeps running)" },
+        { keys: ["Space"], label: "Start or pause" },
+        { keys: ["C"], label: "Mark complete" },
+        { keys: ["S"], label: "Search the queue" },
       ],
     },
   ];
@@ -107,10 +121,20 @@ export function KeyboardShortcuts() {
         if (!onCalendar) navigateTab(router, "/calendar");
       };
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+      if (ui.focusMode) {
+        if (e.key === "?") ui.setShortcutsOpen(true);
+        else if (!e.shiftKey && key === "f") toggleFocusRoom(router);
+        else return;
+        e.preventDefault();
+        return;
+      }
+
       let handled = true;
 
       if (e.key === "?") ui.setShortcutsOpen(true);
       else if (e.shiftKey) handled = false;
+      else if (key === "f") toggleFocusRoom(router);
       else if (key === "/") ui.setCommandPaletteOpen(true);
       else if (key === "n" || key === "c") {
         if (pathRef.current === "/settings") handled = false;
@@ -122,6 +146,7 @@ export function KeyboardShortcuts() {
       else if (key === "1") navigateTab(router, "/today");
       else if (key === "2") navigateTab(router, "/calendar");
       else if (key === "3") navigateTab(router, "/agenda");
+      else if (key === "4") navigateTab(router, "/schedule");
       else if (key === "t") {
         if (onCalendar) ui.sendCalendarCommand({ kind: "today" });
         else navigateTab(router, "/today");
@@ -152,6 +177,7 @@ function ShortcutSheet() {
   const mod = useModKeyLabel();
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, true);
+  useLockBodyScroll(true);
 
   // Esc closes the sheet wherever focus is — including before focus has
   // moved into it.
@@ -167,16 +193,7 @@ function ShortcutSheet() {
 
   return (
     <div className="viewport-pinned-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.button
-        type="button"
-        aria-label="Close keyboard shortcuts"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-        className="overlay-scrim-light absolute inset-0"
-        onClick={() => setOpen(false)}
-      />
+      <Scrim label="Close keyboard shortcuts" tone="light" onClick={() => setOpen(false)} />
       <motion.div
         ref={ref}
         role="dialog"

@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useUIStore } from "@/lib/ui-store";
-import { flushViewState, patchViewState, readViewState } from "@/lib/view-state";
+import { isTabRoute } from "@/lib/tab-routes";
+import { useResolvedPathname } from "@/lib/tab-nav";
+import {
+  flushViewState,
+  patchViewState,
+  readViewState,
+  recallScroll,
+  rememberScroll,
+} from "@/lib/view-state";
 
 /**
- * Keeps the class filter alive across a reload or a trip through Settings.
+ * Keeps the class filter alive across a reload or a trip through Settings, and
+ * remembers the last main tab so Settings/Schedule Done can return there.
  *
  * Filters lived in a plain Zustand store, so they survived tab switches (the
  * pages stay mounted) and nothing else. Coming back from Settings with a filter
@@ -21,6 +30,29 @@ import { flushViewState, patchViewState, readViewState } from "@/lib/view-state"
  * React streamed.
  */
 export function ViewStateSync() {
+  const pathname = useResolvedPathname();
+  const previousPath = useRef(pathname);
+
+  useEffect(() => {
+    if (isTabRoute(pathname)) {
+      patchViewState({ lastTab: pathname });
+    }
+  }, [pathname]);
+
+  // Tab pages restore their own offset. Rooms are not in TabPageHost, so a
+  // trip from a long Agenda used to leave window.scrollY sitting past the
+  // last Settings card until something else clamped it.
+  useLayoutEffect(() => {
+    const from = previousPath.current;
+    if (from && from !== pathname && !isTabRoute(from)) {
+      rememberScroll(from, window.scrollY);
+    }
+    previousPath.current = pathname;
+    if (isTabRoute(pathname)) return;
+    if (window.location.hash) return;
+    window.scrollTo(0, recallScroll(pathname));
+  }, [pathname]);
+
   useEffect(() => {
     const remembered = readViewState().categoryFilter;
     if (remembered && remembered.length > 0) {

@@ -8,6 +8,8 @@ import {
   parseClassSchedule,
   parseClockInput,
   savedClassMeetings,
+  savedMeetingSlotEqual,
+  daysEqual,
   soonestOnDays,
   isClassScheduleItem,
   isClassMeeting,
@@ -162,6 +164,15 @@ describe("savedClassMeetings", () => {
     expect(formatMeetingSummary(saved[0])).toBe("Mon/Wed/Fri 10:20–11:10 AM");
   });
 
+  it("keeps room and until on a saved meeting", () => {
+    const saved = savedClassMeetings(
+      [item({ location: "HECC 108", repeat: { freq: "weekly", byDay: [1, 3, 5], until: "2026-12-12T23:59:59.000Z" } })],
+      "pols"
+    );
+    expect(saved[0].location).toBe("HECC 108");
+    expect(saved[0].until).toMatch(/^2026-12-12/);
+  });
+
   it("keeps split weekly times as two rows", () => {
     const items = [
       item({ id: "mw", repeatId: "a", repeat: { freq: "weekly", byDay: [1, 3] }, at: new Date(2026, 8, 14, 16, 15).toISOString(), endAt: new Date(2026, 8, 14, 17, 0).toISOString() }),
@@ -263,5 +274,44 @@ describe("savedClassMeetings", () => {
     });
     const names = (id?: string) => (id === "pols" ? "POLS 207" : undefined);
     expect(collapseDuplicateClassMeetings([named, feed], names).map((i) => i.id)).toEqual(["named"]);
+  });
+});
+
+describe("savedMeetingSlotEqual", () => {
+  it("matches days and clock, treating a missing end as the next draft end", () => {
+    expect(daysEqual([1, 3, 5], [1, 3, 5])).toBe(true);
+    expect(daysEqual([1, 3], [1, 3, 5])).toBe(false);
+    expect(
+      savedMeetingSlotEqual(
+        {
+          repeatId: "s",
+          ids: ["a"],
+          days: [1, 3, 5],
+          hour: 10,
+          minute: 20,
+          endHour: 11,
+          endMinute: 10,
+          title: "POLS 207",
+          count: 1,
+        },
+        { days: [1, 3, 5], hour: 10, minute: 20, endHour: 11, endMinute: 10 }
+      )
+    ).toBe(true);
+    expect(
+      savedMeetingSlotEqual(
+        {
+          repeatId: "s",
+          ids: ["a"],
+          days: [1, 3, 5],
+          hour: 10,
+          minute: 20,
+          endHour: 11,
+          endMinute: 10,
+          title: "POLS 207",
+          count: 1,
+        },
+        { days: [1, 3, 5], hour: 10, minute: 30, endHour: 11, endMinute: 10 }
+      )
+    ).toBe(false);
   });
 });

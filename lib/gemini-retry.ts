@@ -98,7 +98,8 @@ export async function fetchGeminiJson(opts: {
         retryAfterMs = parseRetryAfterMs(r.headers.get("retry-after"), now());
         const detail = await r.text().catch(() => "");
         opts.log?.(`Gemini error ${r.status}`, detail.slice(0, 300));
-        if (!TRANSIENT.has(r.status)) {
+        // A second 429 means the RPM/daily cap is really spent; more tries only burn quota.
+        if (!TRANSIENT.has(r.status) || (r.status === 429 && attempt >= 1)) {
           return { ok: false, lastStatus, error: classifyGeminiFailure(lastStatus) };
         }
       }

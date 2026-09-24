@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
+import Link from "next/link";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
 import { paintAppearance } from "@/components/theme-provider";
@@ -22,15 +23,17 @@ import {
   SyllabusImportProvider,
 } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
+import { AppLockSection } from "@/components/app-lock-section";
+import { NativeIosSection } from "@/components/native-ios-section";
 import { NotificationToggle } from "@/components/notification-toggle";
-import { CategoryClassTimesControl, ClassTimesRoster } from "@/components/category-class-times";
 import { serializeIcs } from "@/lib/ics";
 import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
+import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { CategoryClassTimesControl } from "@/components/category-class-times";
 import { haptic } from "@/lib/haptic";
-import { useUIStore } from "@/lib/ui-store";
 import {
   CLASS_REMINDER_OPTIONS,
   classReminderLabel,
@@ -48,7 +51,7 @@ import type {
 
 /** `/settings#…` targets: which collapsible section to open, and what to scroll to. */
 const DEEP_LINKS: Record<string, { section: string; anchor: string }> = {
-  import: { section: "calendar", anchor: "import" },
+  import: { section: "import", anchor: "import" },
   reminders: { section: "reminders", anchor: "reminders" },
 };
 
@@ -65,19 +68,17 @@ function downloadFile(name: string, blob: Blob) {
 }
 
 export default function SettingsPage() {
+  const reducedMotion = prefersReducedMotion();
   const settings = useDatebookStore((s) => s.settings);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categories = useDatebookStore((s) => s.categories);
   const addCategory = useDatebookStore((s) => s.addCategory);
-  const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const reminderPresets = useDatebookStore((s) => s.reminderPresets);
   const addReminderPreset = useDatebookStore((s) => s.addReminderPreset);
   const updateReminderPreset = useDatebookStore((s) => s.updateReminderPreset);
   const deleteReminderPreset = useDatebookStore((s) => s.deleteReminderPreset);
   const replaceFromBackup = useDatebookStore((s) => s.replaceFromBackup);
   const resetAllData = useDatebookStore((s) => s.resetAllData);
-  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#007AFF");
@@ -139,20 +140,24 @@ export default function SettingsPage() {
   return (
     // Full-width intro, then a two-column grid on desktop so collapsed
     // section tiles share a row baseline instead of drifting out of line.
-    <div className="mx-auto w-full max-w-[1120px] pb-4">
+    <div className="mx-auto h-auto min-h-0 w-full max-w-[1120px] pb-2">
       <div className="flex flex-col gap-5">
-      <header className="pt-1">
+      <MobileRoomHeader title="Settings" />
+      <header className="hidden pt-1 md:block">
         <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
           Tune how Datebook opens, looks, and keeps your calendar in sync.
         </p>
       </header>
 
-      {/* Most-changed preferences — always visible */}
-      <SettingsCard>
-        <CardHeading title="Everyday preferences" sub="What you see first and how the calendar feels day to day." />
-        <div className="mt-4 flex flex-col gap-5">
-          <SettingBlock label="Open Datebook to" hint="The first screen when you launch the app.">
+      <CollapsibleCard
+        title="Everyday preferences"
+        sub="What you see first and how the calendar feels day to day."
+        storageKey="everyday"
+        defaultOpen
+      >
+        <div className="flex flex-col gap-5">
+          <SettingBlock label="Open Datebook to">
             <Segmented
               segmentId="landing-view"
               value={settings.landingView}
@@ -165,22 +170,7 @@ export default function SettingsPage() {
             />
           </SettingBlock>
 
-          <SettingBlock
-            label="When you tap a day on mobile"
-            hint="Choose how the day's schedule appears on your phone."
-          >
-            <Segmented
-              segmentId="mobile-day-details"
-              value={settings.mobileDayDetails}
-              options={[
-                { value: "sheet", label: "Slide-up panel" },
-                { value: "inline", label: "List below calendar" },
-              ]}
-              onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
-            />
-          </SettingBlock>
-
-          <SettingBlock label="Calendar density" hint="How much fits on screen at once.">
+          <SettingBlock label="Calendar density">
             <Segmented
               segmentId="density"
               value={settings.density}
@@ -195,11 +185,43 @@ export default function SettingsPage() {
               }}
             />
           </SettingBlock>
-        </div>
-      </SettingsCard>
 
-      {/* One grid so desktop rows line up. `order` keeps the phone stack
-          Account → Calendar → Reminders → Display → Appearance → Install. */}
+          <SettingBlock label="Week starts on">
+            <Segmented
+              segmentId="week-starts"
+              value={String(settings.weekStartsOn)}
+              options={[
+                { value: "0", label: "Sunday" },
+                { value: "1", label: "Monday" },
+              ]}
+              onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
+            />
+          </SettingBlock>
+
+          <ToggleRow
+            label="24-hour clock"
+            checked={settings.clock24h}
+            onChange={(v) => updateSettings({ clock24h: v })}
+          />
+
+          <div className="md:hidden">
+            <SettingBlock label="When you tap a day on mobile">
+              <Segmented
+                segmentId="mobile-day-details"
+                value={settings.mobileDayDetails}
+                options={[
+                  { value: "sheet", label: "Slide-up panel" },
+                  { value: "inline", label: "List below calendar" },
+                ]}
+                onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
+              />
+            </SettingBlock>
+          </div>
+        </div>
+      </CollapsibleCard>
+
+      {/* Phone stack: Account → Classes → Import → Meetings → Reminders → Look.
+          Desktop grid keeps columns independent. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <div className="order-1 min-w-0">
       <CollapsibleCard
@@ -209,22 +231,122 @@ export default function SettingsPage() {
         defaultOpen
       >
         <AccountSection />
+        <AppLockSection />
+        <NativeIosSection />
+        <Divider />
+        <Subheading title="Install app" />
+        <p className="mb-2 text-[13px] text-ink-soft">Home screen shortcut for quicker access.</p>
+        <PwaInstallButton />
+      </CollapsibleCard>
+          </div>
+          <div className="order-2 min-w-0">
+      <CollapsibleCard
+        title="Classes"
+        sub="Name, color, meeting name, and optional syllabus per class."
+        storageKey="classes"
+        defaultOpen={false}
+      >
+        <SyllabusImportProvider>
+        <div className="flex flex-col gap-2">
+          {categories.map((cat) => (
+            <CategoryEditor
+              key={cat.id}
+              category={cat}
+              categories={categories}
+              confirmDeleteId={confirmDeleteId}
+              onConfirmDeleteId={setConfirmDeleteId}
+            />
+          ))}
+        </div>
+        <div className="field-shell mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
+          <input
+            type="color"
+            value={newCategoryColor}
+            onChange={(e) => setNewCategoryColor(e.target.value)}
+            className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+            aria-label="New class color"
+          />
+          <input
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !newCategoryName.trim()) return;
+              e.preventDefault();
+              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
+              setNewCategoryName("");
+            }}
+            placeholder="New class"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
+          />
+          <button
+            disabled={!newCategoryName.trim()}
+            onClick={() => {
+              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
+              setNewCategoryName("");
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
+            aria-label="Add class"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        </div>
+        </SyllabusImportProvider>
       </CollapsibleCard>
           </div>
           <div className="order-3 min-w-0">
       <CollapsibleCard
+        id="import"
+        title="Import"
+        sub="Pull due dates from a calendar feed or a syllabus PDF."
+        storageKey="import"
+        defaultOpen={false}
+      >
+        <SyllabusImportProvider>
+        <Subheading title="Calendar link" />
+        <ImportCalendar />
+
+        <Divider />
+
+        <Subheading title="Syllabus PDF" />
+        <ImportSyllabus />
+        <p className="mt-2 text-[12.5px] text-ink-faint">
+          To attach a syllabus to a specific class, open that class under Classes.
+        </p>
+        </SyllabusImportProvider>
+      </CollapsibleCard>
+          </div>
+          <div className="order-4 min-w-0">
+      <CollapsibleCard
+        title="Weekly meetings"
+        sub="Lectures and labs — open a class to edit the times already on it."
+        storageKey="meetings"
+        defaultOpen={false}
+      >
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          Weekly meetings are edited per class. Open a class above, or edit them on Schedule.
+        </p>
+        <Link
+          href="/schedule"
+          className="mt-3 flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
+          Edit on Schedule
+        </Link>
+      </CollapsibleCard>
+          </div>
+          <div className="order-5 min-w-0">
+      <CollapsibleCard
         id="reminders"
         title="Reminders"
-        sub="Alerts while Datebook is open, closed-app push when you’re signed in, and default timing."
+        sub="Alerts on this device, class heads-up, and default timing."
         storageKey="reminders"
-        defaultOpen
+        defaultOpen={false}
       >
         <NotificationToggle />
         <div className="mt-3">
           <Subheading title="Class heads-up" />
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
-            How early a class alert lands — and when Today starts counting the class down. Applies
-            to every weekly class on your schedule.
+            {classReminderLabel(settings.classReminderMinutes)} — also sets when Today starts the countdown.
           </p>
         </div>
         <ClassReminderPicker
@@ -236,10 +358,9 @@ export default function SettingsPage() {
         />
         <Divider />
         <div className="mt-2">
-          <Subheading title="Default reminders" />
+          <Subheading title="Defaults for new items" />
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-soft">
-            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap a reminder to use
-            it by default, or swipe it — left to delete, right to rename.
+            Applied when quick-add doesn&apos;t pick up a reminder from what you typed. Tap to use by default.
           </p>
         </div>
         <div className="mt-2 flex flex-col gap-1.5">
@@ -258,14 +379,15 @@ export default function SettingsPage() {
               <ReminderPresetRow
                 key={rp.id}
                 preset={rp}
-                active={settings.defaultReminderPresetIds.includes(rp.id)}
+                active={(settings.defaultReminderPresetIds ?? []).includes(rp.id)}
                 onToggle={() => {
-                  const active = settings.defaultReminderPresetIds.includes(rp.id);
+                  const selected = settings.defaultReminderPresetIds ?? [];
+                  const active = selected.includes(rp.id);
                   haptic("light");
                   updateSettings({
                     defaultReminderPresetIds: active
-                      ? settings.defaultReminderPresetIds.filter((id) => id !== rp.id)
-                      : [...settings.defaultReminderPresetIds, rp.id],
+                      ? selected.filter((id) => id !== rp.id)
+                      : [...selected, rp.id],
                   });
                 }}
                 onEdit={() => setEditingReminderId(rp.id)}
@@ -278,7 +400,7 @@ export default function SettingsPage() {
           )}
         </div>
 
-        <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
+        <div className="field-shell mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5">
           <input
             type="number"
             min={1}
@@ -314,11 +436,11 @@ export default function SettingsPage() {
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-5 min-w-0">
+          <div className="order-6 min-w-0">
       <CollapsibleCard
-        title="Appearance"
-        sub="Optional color themes. Minimal is the default look."
-        storageKey="appearance"
+        title="Look"
+        sub="Themes and what shows on cards."
+        storageKey="look"
         defaultOpen={false}
       >
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -345,13 +467,10 @@ export default function SettingsPage() {
           {settings.preset === "custom" && (
             <motion.div
               key="custom-editor"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{
-                height: motionTokens.springLayout,
-                opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-              }}
+              initial={reducedMotion ? false : { height: 0 }}
+              animate={{ height: "auto" }}
+              exit={reducedMotion ? { height: 0, transition: { duration: 0 } } : { height: 0 }}
+              transition={reducedMotion ? { duration: 0 } : motionTokens.springLayout}
               className="overflow-hidden"
             >
               <div className="pt-3.5">
@@ -363,212 +482,31 @@ export default function SettingsPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </CollapsibleCard>
-          </div>
-          <div className="order-2 min-w-0">
-      <CollapsibleCard
-        title="Calendar & categories"
-        sub="Organize items by color and pull in events from other calendars."
-        storageKey="calendar"
-        defaultOpen
-      >
-        <SyllabusImportProvider>
-        <div className="flex flex-col gap-2">
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="flex flex-col gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={cat.color}
-                  onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                  className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-                  aria-label={`${cat.name} color`}
-                />
-                <input
-                  value={cat.name}
-                  onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                  // A category with no name is a blank row here, a blank chip on
-                  // every card, and a NOT NULL column in the cloud. The field
-                  // stays clearable while you retype it; leaving it empty is what
-                  // gets repaired.
-                  onBlur={(e) => {
-                    const name = e.target.value.trim();
-                    if (name !== cat.name) updateCategory(cat.id, { name: name || "Uncategorized" });
-                  }}
-                  aria-label={`${cat.name} name`}
-                  className="min-w-0 flex-1 bg-transparent text-[14px] text-ink focus:outline-none"
-                />
-                {cat.archived && <span className="text-[11px] text-ink-faint">Archived</span>}
-                <button
-                  type="button"
-                  onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-                  className="text-[12px] font-medium text-ink-faint hover:text-ink"
-                >
-                  {cat.archived ? "Restore" : "Archive"}
-                </button>
-                {categories.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
-                    aria-expanded={confirmDeleteId === cat.id}
-                    className="text-[12px] font-medium text-warn"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-              {confirmDeleteId === cat.id && (
-                <CategoryDeleteConfirm
-                  category={cat}
-                  categories={categories}
-                  onConfirm={() => {
-                    haptic("warn");
-                    deleteCategory(cat.id);
-                    setConfirmDeleteId(null);
-                  }}
-                  onCancel={() => setConfirmDeleteId(null)}
-                />
-              )}
-              <CategorySyllabusControl category={cat} />
-              <CategoryClassTimesControl category={cat} />
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5">
-          <input
-            type="color"
-            value={newCategoryColor}
-            onChange={(e) => setNewCategoryColor(e.target.value)}
-            className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-            aria-label="New category color"
-          />
-          <input
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || !newCategoryName.trim()) return;
-              e.preventDefault();
-              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
-              setNewCategoryName("");
-            }}
-            placeholder="New category"
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
-          />
-          <button
-            disabled={!newCategoryName.trim()}
-            onClick={() => {
-              addCategory({ name: newCategoryName.trim(), color: newCategoryColor });
-              setNewCategoryName("");
-            }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink disabled:opacity-30"
-            aria-label="Add category"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        </div>
 
         <Divider />
-
-        <Subheading title="Class times" />
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Weekly lectures and labs. Paste something like “ENGL 101 MWF 10:00–10:50”, or two times: “MATH MW 4:15–5:00 TTh 5:30–6:45”.
-        </p>
-        <button
-          type="button"
-          onClick={() => openClassSchedule()}
-          className="mt-2 flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-line px-3.5 text-[13px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
-        >
-          <CalendarClock className="h-4 w-4" strokeWidth={1.75} />
-          Add class times
-        </button>
-        <ClassTimesRoster />
-
-        <Divider />
-
-        <div id="import" className={ANCHOR_OFFSET}>
-          <Subheading title="Import a calendar link" />
-        </div>
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Paste a feed URL from Canvas, Google Calendar, or Outlook. Datebook pulls titles, due dates, and descriptions. Re-sync any time for updates.
-        </p>
-        <ImportCalendar />
-
-        <Divider />
-
-        <Subheading title="Import a syllabus PDF" />
-        <p className="text-[13px] leading-relaxed text-ink-soft">
-          Attach a syllabus. Datebook reads due dates and skips anything already on that class&apos;s calendar.
-        </p>
-        <ImportSyllabus />
-        </SyllabusImportProvider>
-      </CollapsibleCard>
-          </div>
-          <div className="order-4 min-w-0">
-      <CollapsibleCard
-        title="Display options"
-        sub="Clock, week layout, and what shows on cards."
-        storageKey="display"
-        defaultOpen={false}
-      >
         <div className="flex flex-col gap-4">
-          <SettingBlock label="Week starts on">
-            <Segmented
-              segmentId="week-starts"
-              value={String(settings.weekStartsOn)}
-              options={[
-                { value: "0", label: "Sunday" },
-                { value: "1", label: "Monday" },
-              ]}
-              onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
-            />
-          </SettingBlock>
-
-          <ToggleRow
-            label="24-hour clock"
-            checked={settings.clock24h}
-            onChange={(v) => updateSettings({ clock24h: v })}
-          />
           <ToggleRow
             label="Show location on events"
             checked={settings.showLocation}
             onChange={(v) => updateSettings({ showLocation: v })}
           />
           <ToggleRow
-            label="Category color dots"
+            label="Class color dots"
             checked={settings.showCategoryDot}
             onChange={(v) => updateSettings({ showCategoryDot: v })}
-          />
-          <ToggleRow
-            label="Hide completed items"
-            checked={settings.hideCompleted}
-            onChange={(v) => updateSettings({ hideCompleted: v })}
           />
         </div>
       </CollapsibleCard>
           </div>
-          <div className="order-6 min-w-0">
-      <CollapsibleCard
-        title="Install app"
-        sub="Add Datebook to your home screen for offline use."
-        storageKey="install"
-        defaultOpen={false}
-      >
-        <PwaInstallButton />
-      </CollapsibleCard>
-          </div>
       </div>
 
-      {/* Everything that takes your data off (or wipes it from) this device —
-          always expanded, pinned to bottom */}
-      <SettingsCard variant="danger">
-        <CardHeading
-          title="Backup & export"
-          sub="Download a full copy of your data or an .ics for other calendar apps, restore from a file, or wipe this device clean."
-        />
-        <div className="mt-4 flex flex-wrap gap-2">
+      <CollapsibleCard
+        title="Backup & export"
+        sub="Download a full copy or an .ics, or restore from a file."
+        storageKey="backup"
+        defaultOpen={false}
+      >
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -628,6 +566,24 @@ export default function SettingsPage() {
               }}
             />
           </label>
+        </div>
+        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
+          <a href="/privacy" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Privacy policy
+          </a>
+          {" · "}
+          <a href="/terms" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
+            Terms of use
+          </a>
+        </p>
+      </CollapsibleCard>
+
+      <SettingsCard variant="danger">
+        <CardHeading
+          title="Reset calendar data"
+          sub="Delete all items and imported feeds on this device. This cannot be undone."
+        />
+        <div className="mt-4">
           <button
             type="button"
             onClick={() => {
@@ -639,15 +595,6 @@ export default function SettingsPage() {
             Reset calendar data
           </button>
         </div>
-        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
-          <a href="/privacy" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
-            Privacy policy
-          </a>
-          {" · "}
-          <a href="/terms" className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft">
-            Terms of use
-          </a>
-        </p>
       </SettingsCard>
       </div>
     </div>
@@ -675,6 +622,184 @@ function SettingsCard({
     >
       {children}
     </section>
+  );
+}
+
+function CategoryEditor({
+  category: cat,
+  categories,
+  confirmDeleteId,
+  onConfirmDeleteId,
+}: {
+  category: Category;
+  categories: Category[];
+  confirmDeleteId: string | null;
+  onConfirmDeleteId: (id: string | null) => void;
+}) {
+  const updateCategory = useDatebookStore((s) => s.updateCategory);
+  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
+  const [name, setName] = useState(cat.name);
+  const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
+  const nameFocus = useRef(false);
+  const titleFocus = useRef(false);
+  const nameRef = useRef(name);
+  const titleRef = useRef(classTitle);
+  const catRef = useRef(cat);
+  nameRef.current = name;
+  titleRef.current = classTitle;
+  catRef.current = cat;
+
+  useEffect(() => {
+    if (!nameFocus.current) setName(cat.name);
+  }, [cat.name]);
+  useEffect(() => {
+    if (!titleFocus.current) setClassTitle(cat.classTitle ?? "");
+  }, [cat.classTitle]);
+
+  function commitName(raw = nameRef.current) {
+    const current = catRef.current;
+    const next = raw.trim() || "Uncategorized";
+    setName(next);
+    if (next !== current.name) updateCategory(current.id, { name: next });
+  }
+
+  function commitClassTitle(raw = titleRef.current) {
+    const current = catRef.current;
+    const next = raw.trim();
+    setClassTitle(next);
+    if (next !== (current.classTitle ?? "")) {
+      updateCategory(current.id, { classTitle: next || undefined });
+    }
+  }
+
+  function saveClassFields() {
+    commitName();
+    commitClassTitle();
+  }
+
+  useEffect(
+    () => () => {
+      commitName();
+      commitClassTitle();
+    },
+    // Persist the last draft if the row unmounts without a blur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const classDirty =
+    (name.trim() || "Uncategorized") !== cat.name ||
+    classTitle.trim() !== (cat.classTitle ?? "");
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <input
+          type="color"
+          value={cat.color}
+          onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
+          className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
+          aria-label={`${cat.name} color`}
+        />
+        <input
+          type="text"
+          enterKeyHint="done"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          value={name}
+          onFocus={() => {
+            nameFocus.current = true;
+          }}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            nameFocus.current = false;
+            commitName();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }}
+          aria-label={`${cat.name} name`}
+          className="field-inline min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none md:px-2"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            saveClassFields();
+            haptic("success");
+          }}
+          disabled={!classDirty}
+          className="shrink-0 text-[12px] font-medium text-accent disabled:text-ink-faint disabled:opacity-40"
+        >
+          Save
+        </button>
+        {cat.archived && <span className="shrink-0 text-[11px] text-ink-faint">Archived</span>}
+        <button
+          type="button"
+          onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+          className="shrink-0 text-[12px] font-medium text-ink-faint hover:text-ink"
+        >
+          {cat.archived ? "Restore" : "Archive"}
+        </button>
+        {categories.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
+            aria-expanded={confirmDeleteId === cat.id}
+            className="shrink-0 text-[12px] font-medium text-warn"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+      <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
+        <span className="shrink-0">Meeting name</span>
+        <input
+          type="text"
+          enterKeyHint="done"
+          autoComplete="off"
+          value={classTitle}
+          onFocus={() => {
+            titleFocus.current = true;
+          }}
+          onChange={(e) => setClassTitle(e.target.value)}
+          onBlur={() => {
+            titleFocus.current = false;
+            commitClassTitle();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            (e.currentTarget as HTMLInputElement).blur();
+          }}
+          placeholder={name.trim() || cat.name}
+          aria-label={`${cat.name} meeting name`}
+          className="field-inline min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none md:px-2"
+        />
+      </label>
+      {!cat.archived && (
+        <div className="mt-1.5 border-t border-line/60 pt-2 pl-10">
+          <CategoryClassTimesControl category={cat} />
+          <div className="mt-1">
+            <CategorySyllabusControl category={cat} />
+          </div>
+        </div>
+      )}
+      {confirmDeleteId === cat.id && (
+        <CategoryDeleteConfirm
+          category={cat}
+          categories={categories}
+          onConfirm={() => {
+            haptic("warn");
+            deleteCategory(cat.id);
+            onConfirmDeleteId(null);
+          }}
+          onCancel={() => onConfirmDeleteId(null)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -738,14 +863,27 @@ function CollapsibleCard({
   defaultOpen?: boolean;
 }) {
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
+  const reduced = prefersReducedMotion();
 
+  // CSS grid rows, not Framer `height: "auto"`. Everyday (and Reminders) nest
+  // `layoutId` pills inside this body — measuring auto-height while those
+  // layout projections run looped updates and threw React #185 on Settings.
   return (
-    <section id={id} className={cn("overflow-hidden rounded-lg border border-line/80 bg-surface", ANCHOR_OFFSET)}>
+    <section
+      id={id}
+      className={cn(
+        // `self-start` + content-sized height so `grid-rows-[1fr]` (the
+        // open accordion track) cannot resolve against a stretched
+        // min-height ancestor and pad a blank region under the card.
+        "h-auto min-h-0 w-full self-start overflow-hidden rounded-lg border border-line/80 bg-surface",
+        ANCHOR_OFFSET
+      )}
+    >
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="group flex w-full items-start justify-between gap-3 p-4 text-left sm:p-5"
+        className="press-none group flex w-full items-start justify-between gap-3 p-4 text-left transition-colors duration-[var(--motion-micro)] active:bg-surface-sunken sm:p-5"
       >
         <CardHeading title={title} sub={sub} subMinLines={2} />
         <motion.span
@@ -758,25 +896,24 @@ function CollapsibleCard({
         </motion.span>
       </button>
 
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{
-              height: motionTokens.springLayout,
-              opacity: { duration: motionTokens.micro, ease: motionTokens.easeInOut },
-            }}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
-              {children}
-            </div>
-          </motion.div>
+      <div
+        className={cn(
+          "grid h-max content-start",
+          // `1fr` in an auto-height grid still expands to leftover min-height
+          // on iOS WebKit. `max-content` keeps the open track content-sized.
+          open ? "grid-rows-[minmax(0,max-content)]" : "grid-rows-[0fr]",
+          !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
         )}
-      </AnimatePresence>
+        // Closed sections stay in the tree (so open/close doesn't remount
+        // import controls) but must not take focus.
+        inert={open ? undefined : true}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+            {children}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -806,23 +943,29 @@ function subscribeSections(onChange: () => void) {
   return () => sectionListeners.delete(onChange);
 }
 
+function seedSectionOpen(key: string, defaultOpen: boolean): boolean {
+  const cached = sectionOpen.get(key);
+  if (cached !== undefined) return cached;
+  let value = defaultOpen;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null) value = stored === "1";
+  } catch {
+    /* storage disabled */
+  }
+  sectionOpen.set(key, value);
+  return value;
+}
+
 function useSectionOpen(storageKey: string, defaultOpen: boolean): [boolean, () => void] {
   const key = sectionKey(storageKey);
+  // Seed before subscribe so getSnapshot stays pure (no Map writes while React
+  // is comparing snapshots — that path can thrash into max update depth).
+  if (typeof window !== "undefined") seedSectionOpen(key, defaultOpen);
+
   const open = useSyncExternalStore(
     subscribeSections,
-    () => {
-      const cached = sectionOpen.get(key);
-      if (cached !== undefined) return cached;
-      let value = defaultOpen;
-      try {
-        const stored = localStorage.getItem(key);
-        if (stored !== null) value = stored === "1";
-      } catch {
-        /* storage disabled */
-      }
-      sectionOpen.set(key, value);
-      return value;
-    },
+    () => sectionOpen.get(key) ?? defaultOpen,
     () => defaultOpen
   );
 
@@ -1169,11 +1312,9 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const [seenValue, setSeenValue] = useState(value);
-  if (value !== seenValue) {
-    setSeenValue(value);
+  useEffect(() => {
     setDraft(value);
-  }
+  }, [value]);
 
   function emit(raw: string) {
     const next = normalizeThemeHex(raw);
@@ -1189,7 +1330,7 @@ function ColorField({
   }
 
   return (
-    <label className="flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
+    <label className="field-shell flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
       <input
         type="color"
         value={normalizeThemeHex(value) ?? value}
@@ -1303,11 +1444,8 @@ function CustomThemeEditor({
 const REMINDER_REVEAL = 76;
 
 /**
- * A settings row that both taps (toggle default) and swipes (iOS-style,
- * left reveals delete, right reveals edit) — the two gestures don't fight
- * because toggling rides Framer's `onTap`, which only fires when the pointer
- * never crossed its own drag threshold, rather than a native `onClick` that
- * would also fire after a real drag.
+ * A settings row that taps to toggle default, with always-visible Edit /
+ * Delete. On touch, swipe still reveals the same actions as a shortcut.
  */
 function ReminderPresetRow({
   preset,
@@ -1332,7 +1470,7 @@ function ReminderPresetRow({
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      <div className="absolute inset-0 flex items-stretch justify-between" aria-hidden={open === "none"}>
+      <div className="absolute inset-0 flex items-stretch justify-between md:hidden" aria-hidden={open === "none"}>
         <button
           type="button"
           tabIndex={open === "edit" ? 0 : -1}
@@ -1369,22 +1507,47 @@ function ReminderPresetRow({
           else if (info.offset.x >= REMINDER_REVEAL / 2) snapTo(REMINDER_REVEAL, "edit");
           else snapTo(0, "none");
         }}
-        onTap={() => {
-          if (open !== "none") {
-            snapTo(0, "none");
-            return;
-          }
-          onToggle();
-        }}
         className={cn(
-          "relative z-[1] flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-3 text-left text-[14px] transition-colors",
+          "relative z-[1] flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[14px] transition-colors",
           active
             ? "border-accent/40 bg-accent-soft text-ink"
             : "border-line/80 bg-surface text-ink-soft hover:border-line-strong"
         )}
       >
-        {preset.label}
-        {active && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.5} />}
+        <button
+          type="button"
+          onClick={() => {
+            if (open !== "none") {
+              snapTo(0, "none");
+              return;
+            }
+            onToggle();
+          }}
+          className="flex min-h-9 min-w-0 flex-1 items-center justify-between gap-2 text-left"
+        >
+          <span className="truncate">{preset.label}</span>
+          {active && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.5} />}
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            aria-label={`Edit ${preset.label}`}
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-warn hover:bg-warn-soft"
+            aria-label={`Delete ${preset.label}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Delete
+          </button>
+        </div>
       </motion.div>
     </div>
   );
@@ -1413,7 +1576,7 @@ function EditReminderRow({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={motionTokens.springSnappy}
-      className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2"
+      className="field-shell flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2"
     >
       <input
         autoFocus

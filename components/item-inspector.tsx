@@ -4,12 +4,13 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarSearch, X } from "lucide-react";
+import { CalendarSearch, Minimize2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { dayKey } from "@/lib/date-utils";
 import { navigateTab, useResolvedPathname } from "@/lib/tab-nav";
+import { focusOnThis } from "@/lib/focus-session-store";
 import { motion as motionTokens } from "@/lib/motion";
 import { StatusSegmented } from "@/components/item-card";
 import { MobileItemSheet } from "@/components/mobile-item-sheet";
@@ -120,7 +121,7 @@ function InspectorPanel({ item }: { item: Item }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
       transition={motionTokens.spring}
-      className="fixed bottom-4 right-4 top-4 z-[44] flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)] outline-none"
+      className="fixed bottom-4 right-4 top-4 z-[42] flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)] outline-none"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5">
         <span
@@ -132,6 +133,16 @@ function InspectorPanel({ item }: { item: Item }) {
           {item.workFor ? "Planned work" : TYPE_LABEL[item.type]}
           {category ? ` · ${category.name}` : ""}
         </p>
+        {item.type !== "event" && (item.status ?? "todo") !== "done" && (
+          <button
+            type="button"
+            onClick={() => focusOnThis(item.id, router)}
+            className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
+          >
+            <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+            Focus on this
+          </button>
+        )}
         {pathname !== "/calendar" && (
           <button
             type="button"

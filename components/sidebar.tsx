@@ -146,7 +146,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
               <SidebarViews />
               <div className="mt-6 flex items-center justify-between px-2.5">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                  Categories
+                  Classes
                 </p>
                 {filterCount > 0 && (
                   <button
@@ -444,7 +444,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // keyboard and dropping back a beat after it closes.
     // `--tab-bar-rest` is the extra lift above the home indicator / screen
     // edge so the pill is not flush with the bottom.
-    <div className="viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
+    <div className="mobile-web-bottom-nav viewport-pinned-bottom fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+var(--tab-bar-rest))] md:hidden">
       <div className="mx-auto flex h-[58px] max-w-md items-stretch gap-2.5">
         <nav
           aria-label="Primary"

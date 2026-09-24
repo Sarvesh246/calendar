@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { viewSummary } from "@/lib/views";
-import { useAllViews } from "@/components/saved-views";
+import { useAllViews, ViewEditor } from "@/components/saved-views";
 
 export function FilterButton({ className }: { className?: string }) {
   const filter = useUIStore((s) => s.categoryFilter);
@@ -66,7 +66,6 @@ export function FilterButton({ className }: { className?: string }) {
 export function FilterSheet() {
   const open = useUIStore((s) => s.filterOpen);
   const setOpen = useUIStore((s) => s.setFilterOpen);
-  useLockBodyScroll(open);
 
   return (
     <AnimatePresence>
@@ -80,6 +79,10 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
+  // AnimatePresence keeps this body mounted through its exit. Keep the lock
+  // until the scrim and panel are both gone, so fixed chrome cannot repaint
+  // while the sheet is sliding away.
+  useLockBodyScroll(true);
   useDialogFocus(panelRef, true);
   useSheetOverscroll(scrollRef, dragControls);
   const categories = useDatebookStore((s) => s.categories);
@@ -91,6 +94,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   const activeViewId = useUIStore((s) => s.activeViewId);
   const applyView = useUIStore((s) => s.applyView);
   const views = useAllViews();
+  const [savingView, setSavingView] = useState(false);
   const visible = categories.filter((c) => !c.archived);
   const summary = summariseFilters(
     categories,
@@ -174,6 +178,20 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                   </FilterRow>
                 );
               })}
+              {savingView ? (
+                <ViewEditor onDone={() => setSavingView(false)} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setSavingView(true);
+                  }}
+                  className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
+                >
+                  Save this filter
+                </button>
+              )}
             </div>
             <p className="mb-2 text-[15px] font-semibold text-ink">Classes</p>
             <div className="flex flex-col gap-1">

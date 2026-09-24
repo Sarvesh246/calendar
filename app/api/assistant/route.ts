@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
   MAX_ASSISTANT_BODY,
@@ -13,86 +14,17 @@ import {
   sameOrigin,
   tooMany,
 } from "@/lib/api-guard";
-import {
-  isPureQuestion,
-  normalizeActions,
-  type AssistantReqBody as ReqBody,
-} from "@/lib/assistant-actions";
+import { isPureQuestion, normalizeActions, type AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
+import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } from "@/lib/llm/history";
+import { createChatCompletion, callRoutedProvider } from "@/lib/llm/router";
+import { DATEBOOK_TOOLS, executeDatebookTool, MalformedToolArgumentsError } from "@/lib/llm/tools";
+import type { ChatMessage } from "@/lib/llm/openai-compatible";
 
 export const runtime = "nodejs";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
-const KEY = process.env.GEMINI_API_KEY;
-const ENDPOINT = (model: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/* ------------------------------------------------------------------ */
-/* Gemini response schema                                              */
-/* ------------------------------------------------------------------ */
-
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    reply: { type: "STRING" },
-    suggestions: { type: "ARRAY", items: { type: "STRING" } },
-    actions: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          kind: { type: "STRING", enum: ["create", "update", "delete"] },
-          summary: { type: "STRING" },
-          itemId: { type: "STRING" },
-          title: { type: "STRING" },
-          itemType: { type: "STRING", enum: ["event", "assignment", "task"] },
-          at: { type: "STRING" },
-          endAt: { type: "STRING" },
-          allDay: { type: "BOOLEAN" },
-          location: { type: "STRING" },
-          description: { type: "STRING" },
-          categoryId: { type: "STRING" },
-          status: { type: "STRING", enum: ["todo", "doing", "done"] },
-          clearEndAt: { type: "BOOLEAN" },
-          clearLocation: { type: "BOOLEAN" },
-          clearDescription: { type: "BOOLEAN" },
-          repeatFreq: { type: "STRING", enum: ["daily", "weekly", "monthly"] },
-          repeatDays: { type: "ARRAY", items: { type: "NUMBER" } },
-          until: { type: "STRING" },
-          reminders: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                offsetMinutes: { type: "NUMBER" },
-                label: { type: "STRING" },
-              },
-              required: ["offsetMinutes"],
-              propertyOrdering: ["offsetMinutes", "label"],
-            },
-          },
-        },
-        required: ["kind", "summary"],
-        propertyOrdering: [
-          "kind", "summary", "itemId", "title", "itemType", "at", "endAt",
-          "allDay", "location", "description", "categoryId", "status", "clearEndAt",
-          "clearLocation", "clearDescription", "repeatFreq", "repeatDays", "until",
-          "reminders",
-        ],
-      },
-    },
-  },
-  required: ["reply"],
-  propertyOrdering: ["reply", "suggestions", "actions"],
-} as const;
-
-/* ------------------------------------------------------------------ */
-/* Prompt                                                              */
-/* ------------------------------------------------------------------ */
-
-const ASSIGNMENT_WORDS =
-  "homework, hw, reading, problem set, pset, quiz, exam, midterm, final, essay, paper, lab, report, project, milestone, assignment";
+const uuid = z.string().uuid();
+const modelId = z.string().trim().min(1).max(80);
+const MAX_AGENT_LOOPS = 6;
 
 function systemPrompt(body: ReqBody): string {
   const now = new Date(body.now);
@@ -101,100 +33,85 @@ function systemPrompt(body: ReqBody): string {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZone: tz,
   }).format(now);
-
-  const catById = new Map(body.categories.map((c) => [c.id, c.name]));
   const digest = buildAssistantDigest(
-    body.items.map((i) => ({
-      ...i,
-      categoryId: i.categoryId ?? "",
-      createdAt: body.now,
-    })),
-    body.categories,
-    body.now,
-    tz,
-    body.weekStartsOn === 1 ? 1 : 0
+    body.items.map((item) => ({ ...item, categoryId: item.categoryId ?? "", createdAt: body.now })),
+    body.categories, body.now, tz, body.weekStartsOn === 1 ? 1 : 0
   );
-
-  // Keep the prompt bounded: every open assignment/task stays; events fill the rest.
-  const work = body.items.filter((i) => i.type !== "event");
-  const eventBudget = Math.max(0, 180 - work.length);
-  const events = [...body.items]
-    .filter((i) => i.type === "event")
-    .sort(
-      (a, b) =>
-        Math.abs(+new Date(a.at) - +now) - Math.abs(+new Date(b.at) - +now)
-    )
-    .slice(0, eventBudget);
-  const items = [...work, ...events].map((i) => ({
-    ...i,
-    categoryName: i.categoryId ? catById.get(i.categoryId) : undefined,
-    description: i.description ? i.description.slice(0, 180) : undefined,
+  const categoryNames = new Map(body.categories.map((category) => [category.id, category.name]));
+  const items = body.items.slice(0, 240).map((item) => ({
+    ...item,
+    categoryName: item.categoryId ? categoryNames.get(item.categoryId) : undefined,
+    description: item.description?.slice(0, 240),
   }));
 
-  return `You are the assistant built into "Datebook", a personal calendar and task app. You help the signed-in user with ANYTHING about their own schedule: their events, assignments/coursework, tasks, deadlines, workload, free time, and what's coming up.
+  return `You are Datebook's calendar and todo assistant. It is ${human}; current instant ${body.now}; user timezone ${tz}. Use a ${body.clock24h ? "24-hour" : "12-hour"} clock.
 
-Right now it is ${human} (timezone ${tz}). Current instant: ${body.now}. The user uses a ${body.clock24h ? "24-hour" : "12-hour"} clock.
+Calendar categories: ${JSON.stringify(body.categories)}
+Current calendar snapshot: ${JSON.stringify(items)}
+Authoritative digest: ${JSON.stringify(digest)}
 
-The user's full calendar is below as JSON.
-CATEGORIES (id → name): ${JSON.stringify(body.categories)}
-ITEMS: ${JSON.stringify(items)}
+Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For fresh or exact DB context, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool; do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the current time and timezone above. Use ISO 8601 with an explicit offset in tool arguments.
 
-PRE-COMPUTED DIGEST (authoritative — prefer this over re-deriving counts from ITEMS when they disagree):
-${JSON.stringify(digest)}
-
-Item shape: type is "event" (something happening at a time — class, meeting, appointment), "assignment" (due-dated coursework: ${ASSIGNMENT_WORDS}), or "task" (a to-do). "at" is the start time for events and the due time for assignments/tasks. "status" (todo/doing/done) applies to assignments and tasks only. "categoryId" / "categoryName" map to the class/course. "url" (when present) is a link to the source page (e.g. the Canvas assignment); "description" and "location" carry any extra detail the feed provided. "sourceUid" starting with "syl:" is from a syllabus import; other sourceId/sourceUid values are calendar-feed imports (Canvas/Google/Outlook ICS). Repeating class meetings may include "repeat" / "repeatId".
-
-STATUS & DUE SEMANTICS — follow strictly:
-- "done" means finished. A done item is NEVER overdue, NEVER "still due", and NEVER counted in "how many do I have left", "how many due", "due by Sunday", or similar open-work questions unless the user explicitly asks about completed/finished work.
-- "doing" means in progress — it still counts as open work.
-- "todo" (or unset status) with a due datetime in the past = overdue (unless done).
-- "Due by Sunday" = open assignments and tasks whose due date is on or before the coming calendar Sunday (today if today is Sunday). That includes overdue leftover and syllabus/imported work. "Due this week" = open work from today through the end of the user's calendar week (week starts ${body.weekStartsOn === 1 ? "Monday" : "Sunday"}). Neither includes events.
-- Events are not assignments — never mix events into due-counts or overdue lists unless the user asks about events specifically.
-- When the DIGEST and raw ITEMS disagree on counts or membership, trust the DIGEST. DIGEST.dueByNextSunday is the complete list of open work due by Sunday — if it is non-empty, do not say the user is caught up.
-- Only mention completed work (digest.completedLast7Days) when the user asks what they finished, completed, or checked off. Prefer items with a completed-at timestamp; otherwise the due date is used.
-
-YOUR TWO MODES — infer which from the message. When in doubt, ANSWER; only CHANGE the calendar when they want something written, moved, completed, or removed.
-1. ANSWER a question (this is the common case — a chatbot about their calendar). They are asking what is already on the calendar: "what/when/where/how many/do I have/is there/am I free/show me/what's it for…". Answer precisely from the DIGEST and ITEMS above — cite real titles, classes (category names), due dates, times (format for a ${body.clock24h ? "24-hour" : "12-hour"} clock), locations, and links where relevant. Use the DIGEST for counts and date-bounded lists. If nothing matches, say so plainly. Never invent items. Do NOT return any actions for a pure question — answering IS the response.
-2. CHANGE the calendar. They want something written or altered. That includes polite/indirect wording ("can you", "could you", "please", "I need", "I have a … at 5:30", "don't let me forget", "ping me", "nudge me", "put this on my calendar") — they do not have to say add/create/schedule. Return one action per change in "actions". Never claim it's done — the user taps to confirm each action in the UI. Still write a short natural "reply" describing what you're proposing.
-A single message can do both (e.g. "what's Friday look like? move the 3pm to Saturday" → answer + one update action). Several changes in one message (add this, move that, complete the other) → several actions, one per change — up to 8. Carry every detail the user named onto the matching action (time, place, every reminder). Do not drop a reminder or location to "keep it simple".
-
-NATURAL LANGUAGE — there is no required wording, order, or keyword. Users type the way they talk: run-ons, mixed order, typos, fragments. Infer intent from the whole message. A sentence that names a new thing with a time and/or place is a create even without "add" ("Hullabaloo U at 5:30 at PLNK, ping me the day before"). If they describe something that is not in ITEMS and it reads as them wanting it on the calendar, propose a create. If they are asking whether it already exists, answer — and you may still offer a create if it doesn't.
-
-ACTION RULES:
-- create: set "title", "itemType", "at" (full ISO 8601 WITH the user's timezone offset). Optional: "endAt", "allDay", "location", "description", "categoryId" (must be an id from CATEGORIES, else omit), "reminders". Choose itemType by meaning. Title is the short name of the thing ("Hullabaloo U meeting"), never the whole instruction ("add an event with a reminder…"). If the user gave no time: events → 12:00 local, assignments/tasks → 23:59 local. If they gave no date, assume today (or the soonest sensible date). Spoken clock times without am/pm: 1–6 → afternoon (5:30 → 17:30), 7–11 → morning, 12 → noon. A second "at the …" / "in the …" after a time is a LOCATION, not another time. Weekly class meetings ("MWF 10–10:50", "TTh 2pm", "lecture Mon/Wed/Fri") are events: set repeatFreq "weekly" and repeatDays as 0=Sunday … 6=Saturday (MWF = [1,3,5], TTh = [2,4]). Set at/endAt on the next occurrence of those days. Optional until (ISO) for the last meeting of the term.
-- reminders (create and update): array of {offsetMinutes, label?}. The user may ask for several. "a day before" / "the day before" = 1440; "a couple of hours" / "a few hours" = 120; "an hour before" = 60; "10 minutes before" = 10. If they named reminders, set this field to ALL of them. Omit the field entirely to use the app's default reminder. Send [] only when they explicitly want no reminder. Never silently keep only one of several.
-- update: set "itemId" (from ITEMS — you resolve it by matching the user's words to a real item) plus ONLY the fields that change: "at" and/or "endAt" to reschedule, "clearEndAt": true to drop an end time, "title" to rename, "categoryId" to recategorize, "status" to "done" to complete / "todo" to reopen, "location"/"description"/"allDay"/"reminders" as needed. Send "location"/"description" ONLY when giving a new value; to remove one entirely set "clearLocation": true / "clearDescription": true. Never send an empty string for a field you don't want changed.
-- delete: set "itemId".
-- If the user's target is ambiguous (multiple plausible items) or missing, return NO actions and ask a short clarifying question in "reply".
-- "summary" (required on every action) is one plain sentence for a confirmation card, naming time, place, and reminders when the user gave them, e.g. 'Add event "Hullabaloo U meeting" today 5:30 PM at PLNK Building · 1 day before and 2 hours before' or 'Move "Bio lab report" to Fri Aug 29, 11:59 PM'.
-- Resolve all relative dates ("tomorrow", "next Friday", "in 2 weeks", "the 14th") against the current date above.
-
-"suggestions": optionally 2-3 very short follow-up prompts the user might tap next. Make them specific to THIS conversation, not generic.
-
-REPLY STYLE — this renders in a narrow chat bubble on a phone:
-- Keep it short: 1-3 sentences, or a bullet list. No preamble, no "Sure!", no restating the question.
-- Use **bold** ONLY for item titles, dates, times, and counts. Never bold whole sentences.
-- When listing 3+ items, use "- " bullets, one item per line: "- **Bio lab report** — due Fri, 11:59 PM".
-- No headings, no tables. Plain, friendly, direct.
-- Format every time for a ${body.clock24h ? "24-hour" : "12-hour"} clock. Use short weekday+date ("Fri, Aug 29"), not ISO, in the reply text.
-- A long imported title may be shortened naturally in prose as long as it stays recognisable.
-- Treat the conversation so far as context — a terse follow-up like "how about sunday?" or "and next week?" refers to the previous question.
-
-Reply ONLY with JSON matching the schema. "reply" is always present.`;
+Keep the final response short and natural: 1-3 sentences or a compact bullet list, no heading or table. Use bold only for useful titles, dates, times, or counts. Never expose provider internals or tool JSON.`;
 }
 
-/* ------------------------------------------------------------------ */
-/* Handler                                                             */
-/* ------------------------------------------------------------------ */
+function requestHistory(body: ReqBody): ChatMessage[] {
+  return (body.history ?? [])
+    .slice(-16)
+    .filter((turn) => turn && typeof turn.text === "string" && turn.text.trim())
+    .map((turn) => ({ role: turn.role, content: turn.text.trim() }));
+}
+
+async function runAgent(opts: {
+  provider: Parameters<typeof createChatCompletion>[0]["provider"];
+  key: string;
+  messages: ChatMessage[];
+  userId: string | null;
+  threadId: string | null;
+  body: ReqBody;
+}) {
+  const messages = [...opts.messages];
+  const actions: unknown[] = [];
+  let latencyMs = 0;
+  let malformedRetries = 0;
+  for (let loop = 0; loop < MAX_AGENT_LOOPS; loop += 1) {
+    const completion = await createChatCompletion({
+      provider: opts.provider, key: opts.key, messages, tools: DATEBOOK_TOOLS,
+    });
+    latencyMs += completion.latencyMs;
+    const reply = completion.message;
+    messages.push(reply);
+    if (!reply.tool_calls?.length) {
+      return {
+        text: reply.content?.trim() || "I couldn't produce a useful answer. Try rephrasing that request.",
+        actions, latencyMs,
+      };
+    }
+    for (const call of reply.tool_calls) {
+      try {
+        const result = await executeDatebookTool(call.function.name, call.function.arguments, {
+          userId: opts.userId, threadId: opts.threadId, body: opts.body,
+        });
+        if (result.action) actions.push(result.action);
+        messages.push({
+          role: "tool", tool_call_id: call.id, name: call.function.name,
+          content: JSON.stringify(result.output),
+        });
+      } catch (error) {
+        if (!(error instanceof MalformedToolArgumentsError) || malformedRetries >= 1) throw error;
+        malformedRetries += 1;
+        messages.push({
+          role: "tool", tool_call_id: call.id, name: call.function.name,
+          content: JSON.stringify({ error: error.details, retry: "Call the same tool once with valid arguments." }),
+        });
+      }
+    }
+  }
+  throw new Error("Assistant exceeded the maximum tool-call loop count");
+}
 
 export async function POST(request: Request) {
-  if (!KEY) {
-    return NextResponse.json({ error: "assistant-not-configured" }, { status: 200 });
-  }
-  if (!sameOrigin(request)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
+  if (!sameOrigin(request)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const user = await getRequestUser(request);
   const ip = clientKey(request);
   const limitKey = user
@@ -202,141 +119,77 @@ export async function POST(request: Request) {
     : `assistant:ip:${guestBucketKey(request, ip)}`;
   const hourly = user ? 60 : 24;
   if (
-    !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
+    !rateLimit(limitKey, hourly, 60 * 60_000) ||
     !rateLimit(`${limitKey}:burst`, 8, 60_000) ||
     (!user && !ipCeiling("assistant", ip, 150, 60 * 60 * 1000)) ||
-    !(await durableHourlyLimit(limitKey, hourly))
-  ) {
-    return tooMany();
-  }
+    !rateLimit("assistant:global:minute", 240, 60_000) ||
+    !(await durableHourlyLimit(limitKey, hourly)) ||
+    !(await durableHourlyLimit("assistant:global", 3_000))
+  ) return tooMany();
 
   const rawText = await request.text();
-  if (rawText.length > MAX_ASSISTANT_BODY) {
-    return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
-  }
+  if (rawText.length > MAX_ASSISTANT_BODY) return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
   let body: ReqBody;
   try {
     body = JSON.parse(rawText) as ReqBody;
   } catch {
     return NextResponse.json({ error: "bad-request" }, { status: 400 });
   }
-  if (!body?.message?.trim()) {
-    return NextResponse.json({ error: "empty-message" }, { status: 400 });
-  }
-  if (body.message.length > MAX_ASSISTANT_MESSAGE) {
-    return NextResponse.json({ error: "message-too-long" }, { status: 400 });
-  }
+  if (!body?.message?.trim()) return NextResponse.json({ error: "empty-message" }, { status: 400 });
+  if (body.message.length > MAX_ASSISTANT_MESSAGE) return NextResponse.json({ error: "message-too-long" }, { status: 400 });
+  body.now = Number.isNaN(+new Date(body.now)) ? new Date().toISOString() : new Date(body.now).toISOString();
   body.items = Array.isArray(body.items)
-    ? selectAssistantItems(
-        body.items,
-        body.now || new Date().toISOString(),
-        body.timeZone || "UTC",
-        MAX_ASSISTANT_ITEMS
-      )
+    ? selectAssistantItems(body.items, body.now, body.timeZone || "UTC", MAX_ASSISTANT_ITEMS)
     : [];
   body.categories = Array.isArray(body.categories) ? body.categories.slice(0, 80) : [];
+  const selectedId = modelId.safeParse(body.modelId).success ? body.modelId : "auto";
+  const threadId = user && uuid.safeParse(body.conversationId).success ? body.conversationId! : null;
 
-  // Gemini requires `contents` to start with a `user` turn and to alternate
-  // roles. Build history defensively: drop the leading assistant greeting(s) and
-  // collapse any accidental same-role run (keeping the latest of the run).
-  const turns: { role: "user" | "model"; parts: { text: string }[] }[] = [];
-  for (const m of (body.history ?? []).slice(-10)) {
-    if (!m || typeof m.text !== "string" || !m.text.trim()) continue;
-    const role = m.role === "assistant" ? "model" : "user";
-    if (turns.length === 0 && role === "model") continue; // no leading model turn
-    const prev = turns[turns.length - 1];
-    if (prev && prev.role === role) prev.parts = [{ text: m.text }];
-    else turns.push({ role, parts: [{ text: m.text }] });
-  }
-  const lastTurn = turns[turns.length - 1];
-  if (lastTurn && lastTurn.role === "user") lastTurn.parts.push({ text: body.message });
-  else turns.push({ role: "user", parts: [{ text: body.message }] });
-  const contents = turns;
-
-  const payload = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt(body) }] },
-    contents,
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-      // Structured extraction, not open reasoning — keep the "thinking" pass
-      // light so replies come back quickly.
-      thinkingConfig: { thinkingLevel: "low" },
-    },
-  });
-
-  // Gemini flash returns a transient 503 ("high demand") or 429 fairly often;
-  // a couple of quick retries usually clear it and are far better UX than
-  // dropping straight to the offline heuristic.
-  const TRANSIENT = new Set([429, 500, 503]);
-  let data: unknown;
-  let lastStatus = 0;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(400 * attempt + Math.random() * 300);
-    let r: Response;
+  let history = requestHistory(body);
+  if (user && threadId) {
     try {
-      r = await fetch(`${ENDPOINT(MODEL)}?key=${KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        signal: AbortSignal.timeout(13_000),
-      });
-    } catch (err) {
-      lastStatus = 0;
-      console.error("[assistant] request failed (attempt", attempt + 1 + ")", err);
-      continue;
+      await ensureAssistantThread(user.id, threadId);
+      const stored = await loadAssistantHistory(user.id, threadId);
+      if (stored.length) history = stored;
+      await storeAssistantMessage({ userId: user.id, threadId, role: "user", text: body.message });
+    } catch (error) {
+      console.error("[assistant] history write failed", error);
     }
-    if (r.ok) {
-      data = await r.json();
-      break;
-    }
-    lastStatus = r.status;
-    const detail = await r.text().catch(() => "");
-    console.error("[assistant] Gemini error", r.status, detail.slice(0, 300));
-    if (!TRANSIENT.has(r.status)) break;
   }
-  if (data === undefined) {
-    return NextResponse.json(
-      { error: lastStatus === 429 || lastStatus === 503 ? "assistant-busy" : "assistant-unreachable" },
-      { status: 200 }
-    );
-  }
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemPrompt(body) },
+    ...history,
+    { role: "user", content: body.message.trim() },
+  ];
 
-  const textOut: string =
-    (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
-      ?.candidates?.[0]?.content?.parts?.map((p) => p?.text ?? "").join("") ?? "";
-
-  let parsed: { reply?: string; suggestions?: unknown; actions?: unknown };
   try {
-    parsed = JSON.parse(textOut);
-  } catch {
-    // Model occasionally wraps JSON in prose — grab the outermost object.
-    const m = textOut.match(/\{[\s\S]*\}/);
-    try {
-      parsed = m ? JSON.parse(m[0]) : {};
-    } catch {
-      parsed = {};
+    const result = await callRoutedProvider({
+      selectedId, messages, tools: DATEBOOK_TOOLS,
+      run: (provider, key) => runAgent({ provider, key, messages, userId: user?.id ?? null, threadId, body }),
+    });
+    let actions = normalizeActions(result.actions, body);
+    if (isPureQuestion(body.message)) actions = actions.filter((action) => action.kind !== "create");
+    if (user && threadId) {
+      try {
+        await storeAssistantMessage({
+          userId: user.id, threadId, role: "assistant", text: result.text,
+          providerId: result.provider.id, model: result.provider.model,
+        });
+      } catch (error) {
+        console.error("[assistant] history write failed", error);
+      }
     }
+    const fallbackNotice = result.fellBack
+      ? `The selected model was unavailable, so Datebook used ${result.provider.label}.`
+      : undefined;
+    return NextResponse.json({
+      text: result.text,
+      actions: actions.length ? actions : undefined,
+      providerLabel: result.provider.label,
+      fallbackNotice,
+    });
+  } catch (error) {
+    console.error("[assistant] all providers unavailable", error);
+    return NextResponse.json({ error: "assistant-unreachable" }, { status: 200 });
   }
-
-  const reply =
-    typeof parsed.reply === "string" && parsed.reply.trim()
-      ? parsed.reply.trim()
-      : "Sorry — I couldn't work that one out. Try rephrasing?";
-  const suggestions = Array.isArray(parsed.suggestions)
-    ? parsed.suggestions.filter((s): s is string => typeof s === "string" && !!s.trim()).slice(0, 3)
-    : undefined;
-  let actions = normalizeActions(parsed.actions, body);
-  // The model occasionally answers a question AND proposes creating an item that
-  // just echoes the question. Drop creates when nothing was actually asked to change.
-  if (actions && isPureQuestion(body.message)) {
-    actions = actions.filter((a) => a.kind !== "create");
-  }
-
-  return NextResponse.json({
-    text: reply,
-    suggestions,
-    actions: actions && actions.length ? actions : undefined,
-  });
 }

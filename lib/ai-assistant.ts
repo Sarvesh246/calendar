@@ -15,6 +15,8 @@ import {
 } from "date-fns";
 import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
+import { toNewItem } from "./bulk-parse";
+import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
@@ -23,9 +25,9 @@ import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 /* ------------------------------------------------------------------ */
 
 export type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt"> }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item> }
-  | { kind: "delete"; summary: string; itemId: string; itemTitle: string };
+  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt">; serverActionId?: string }
+  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item>; serverActionId?: string }
+  | { kind: "delete"; summary: string; itemId: string; itemTitle: string; serverActionId?: string };
 
 export interface AssistantResponse {
   text: string;
@@ -34,6 +36,8 @@ export interface AssistantResponse {
   /** True when the network assistant couldn't be reached and this is the
    *  offline heuristic answer — the UI offers a retry. */
   degraded?: boolean;
+  providerLabel?: string;
+  fallbackNotice?: string;
 }
 
 export interface AssistantTurn {
@@ -46,6 +50,8 @@ interface Ctx {
   categories: Category[];
   clock24h: boolean;
   weekStartsOn?: 0 | 1;
+  modelId?: string;
+  conversationId?: string;
 }
 
 /** Compact facts pre-computed for the model and offline heuristics. */
@@ -368,7 +374,7 @@ export async function askAssistant(
   // Hard ceiling so a hung request can never wedge the chat — the server does
   // its own 30s abort on the model call, this is the outer safety net.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45_000);
+  const timer = setTimeout(() => controller.abort(), 60_000);
   try {
     const { authHeaders } = await import("./auth-headers");
     const res = await fetch("/api/assistant", {
@@ -377,6 +383,8 @@ export async function askAssistant(
       signal: controller.signal,
       body: JSON.stringify({
         message,
+        modelId: ctx.modelId,
+        conversationId: ctx.conversationId,
         history: history.slice(-10),
         now: new Date().toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -393,6 +401,8 @@ export async function askAssistant(
           text: data.text,
           suggestions: data.suggestions,
           actions: sanitizeActions(data.actions, ctx),
+          providerLabel: data.providerLabel,
+          fallbackNotice: data.fallbackNotice,
         };
       }
       if (data.error === "assistant-busy") {
@@ -432,7 +442,7 @@ function sanitizeActions(actions: AssistantResponse["actions"], ctx: Ctx): Assis
       if (!a.draft?.title || !a.draft?.at || Number.isNaN(+new Date(a.draft.at))) continue;
       const draft = { ...a.draft };
       if (!draft.categoryId || !catIds.has(draft.categoryId)) draft.categoryId = ctx.categories[0]?.id ?? "";
-      out.push({ kind: "create", summary: a.summary, draft });
+      out.push({ kind: "create", summary: a.summary, draft, serverActionId: a.serverActionId });
     } else if (a.kind === "update") {
       if (!ids.has(a.itemId) || !a.patch || Object.keys(a.patch).length === 0) continue;
       out.push(a);
@@ -535,6 +545,26 @@ export function localAnswer(query: string, ctx: Ctx, now = new Date()): Assistan
           patch: { at: at.toISOString() },
         },
       ],
+    };
+  }
+
+  // A pasted list of events becomes one event each, not one event titled after the blob.
+  const multi = parseMultiAdd(raw, ctx.categories, now);
+  if (multi.drafts.length >= 2) {
+    const drafts = [...multi.drafts].sort((a, b) => +a.at - +b.at);
+    const fallbackCategoryId = ctx.categories[0]?.id;
+    const describe = (d: (typeof drafts)[number]) =>
+      `${format(d.at, "EEE, MMM d")}${d.allDay ? "" : ` at ${fmtTime(d.at.toISOString())}`}${d.location ? ` · ${d.location}` : ""}`;
+    const skippedNote = multi.skipped.length
+      ? `\n\nI couldn't find a date for: ${multi.skipped.map((s) => `“${s}”`).join(", ")}.`
+      : "";
+    return {
+      text: `Add these ${drafts.length} items?\n${drafts.map((d) => `- **${d.title}** — ${describe(d)}`).join("\n")}${skippedNote}`,
+      actions: drafts.map((d) => ({
+        kind: "create" as const,
+        summary: `Add “${d.title}” — ${describe(d)}`,
+        draft: toNewItem(d, fallbackCategoryId),
+      })),
     };
   }
 

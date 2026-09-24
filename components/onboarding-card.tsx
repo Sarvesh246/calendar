@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Cloud, Link2, X } from "lucide-react";
+import { Bell, CalendarClock, Cloud, Link2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { motion as motionTokens } from "@/lib/motion";
 import { useAuth } from "@/components/auth-provider";
 import { GoogleSignInButton } from "@/components/account-section";
+import { useUIStore } from "@/lib/ui-store";
 
 export function OnboardingCard() {
   const { user, configured } = useAuth();
@@ -15,6 +16,7 @@ export function OnboardingCard() {
   const sourceCount = useDatebookStore((s) => s.importSources.length);
   const dismissed = useDatebookStore((s) => s.settings.onboardingDismissed);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
+  const openClassSchedule = useUIStore((s) => s.openClassSchedule);
   // The server (and the first client render) sees the store's defaults — no
   // items, no dismissal — so without this gate every load of a *populated*
   // calendar flashed "Datebook starts empty" until the persisted state landed.
@@ -36,7 +38,7 @@ export function OnboardingCard() {
             <div>
               <p className="text-[15px] font-semibold text-ink">Get your week in here</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
-                Datebook starts empty. Import a class feed, turn on reminders, or sign in so this device isn&apos;t the only copy.
+                Datebook starts empty. Import a class feed or add weekly meeting times — then turn on reminders or sign in so this device isn&apos;t the only copy.
               </p>
             </div>
             <button
@@ -51,14 +53,24 @@ export function OnboardingCard() {
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <Link
               href="/settings#import"
-              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink"
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink"
             >
               <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
               Import a calendar
             </Link>
+            <button
+              type="button"
+              onClick={() => openClassSchedule()}
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-sunken"
+            >
+              <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+              Add class times
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-1 pt-0.5">
             <Link
               href="/settings#reminders"
-              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink"
+              className="flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-ink-soft hover:text-ink"
             >
               <Bell className="h-3.5 w-3.5" strokeWidth={2} />
               Enable reminders
@@ -66,7 +78,7 @@ export function OnboardingCard() {
             {configured && user === null && (
               <GoogleSignInButton
                 idleIcon={<Cloud className="h-3.5 w-3.5" strokeWidth={2} />}
-                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-50"
+                className="flex min-h-11 items-center justify-center gap-1.5 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-50"
               >
                 Sign in
               </GoogleSignInButton>

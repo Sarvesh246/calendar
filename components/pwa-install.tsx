@@ -30,14 +30,12 @@ export function PwaInstallButton() {
   }, []);
 
   if (installed) {
-    return <p className="text-[13px] text-ink-soft">Datebook is installed on this device.</p>;
+    return <p className="text-[13px] text-ink-soft">Installed on this device.</p>;
   }
   if (!event) {
     return (
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        On iPhone, open Share and tap Add to Home Screen. If you installed before a recent icon update,
-        remove the old home-screen icon and add again so iOS picks up the latest tile. Chrome and Edge
-        will offer an install button here when the app is installable.
+        iPhone: Share → Add to Home Screen. Chrome/Edge offer Install here when available.
       </p>
     );
   }

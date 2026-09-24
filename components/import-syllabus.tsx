@@ -70,7 +70,8 @@ type SyllabusImportContextValue = {
   status: Status;
   preview: PreviewState | null;
   busy: boolean;
-  pickFile: (file: File, origin: Origin) => void;
+  pickFile: (file: File, origin: Origin, forceCategoryId?: string) => void;
+  setPreviewClass: (categoryId: string) => void;
   toggleDecision: (index: number) => void;
   cancelPreview: () => void;
   confirmPreview: () => void;
@@ -96,12 +97,13 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const pickFile = useCallback((file: File, nextOrigin: Origin) => {
+  const pickFile = useCallback((file: File, nextOrigin: Origin, forceCategoryId?: string) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setOrigin(nextOrigin);
     setPreview(null);
+    haptic("light");
 
     const tooBig = file.size > MAX_SYLLABUS_PDF_BYTES;
     if (tooBig) {
@@ -117,7 +119,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
     }
 
     setStatus({ kind: "loading" });
-    void runExtract(file, nextOrigin, controller.signal)
+    void runExtract(file, nextOrigin, controller.signal, forceCategoryId)
       .then((next) => {
         if (controller.signal.aborted) return;
         if (next.kind === "empty") {
@@ -143,6 +145,34 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       });
   }, []);
 
+  const setPreviewClass = useCallback((categoryId: string) => {
+    setPreview((current) => {
+      if (!current) return current;
+      const store = useDatebookStore.getState();
+      const category = store.categories.find((c) => c.id === categoryId);
+      if (!category) return current;
+      const matches = matchSyllabusItems(current.drafts, store.items, {
+        timeZone: current.timeZone,
+        categoryId,
+      });
+      const decisions = matches.map((m) => defaultSyllabusDecision(m.verdict));
+      const resolved = resolveSyllabusCourse({
+        categories: store.categories,
+        courseName: current.courseName,
+        courseCode: current.courseCode,
+        forceCategoryId: categoryId,
+      });
+      return {
+        ...current,
+        forceCategoryId: categoryId,
+        classLabel: category.name,
+        warning: resolved.status === "forced" ? resolved.warning : undefined,
+        matches,
+        decisions,
+      };
+    });
+  }, []);
+
   const toggleDecision = useCallback((index: number) => {
     setPreview((current) => {
       if (!current || index < 0 || index >= current.decisions.length) return current;
@@ -162,6 +192,13 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
   const confirmPreview = useCallback(() => {
     const current = preview;
     if (!current) return;
+    if (current.origin.type === "shared" && !current.forceCategoryId) {
+      const hasClasses = useDatebookStore.getState().categories.some((c) => !c.archived);
+      if (hasClasses) {
+        setStatus({ kind: "error", message: "Choose a class before adding these." });
+        return;
+      }
+    }
     const result = useDatebookStore.getState().applySyllabusImport({
       drafts: current.drafts,
       timeZone: current.timeZone,
@@ -183,11 +220,12 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       preview,
       busy: status.kind === "loading",
       pickFile,
+      setPreviewClass,
       toggleDecision,
       cancelPreview,
       confirmPreview,
     }),
-    [origin, status, preview, pickFile, toggleDecision, cancelPreview, confirmPreview]
+    [origin, status, preview, pickFile, setPreviewClass, toggleDecision, cancelPreview, confirmPreview]
   );
 
   return (
@@ -203,30 +241,67 @@ function useSyllabusImport(): SyllabusImportContextValue {
   return ctx;
 }
 
-/** Shared attach card under Settings → Import a calendar link. */
+/** Shared attach card under Settings → Import. */
 export function ImportSyllabus() {
-  const { origin, status, preview, busy, pickFile, toggleDecision, cancelPreview, confirmPreview } =
-    useSyllabusImport();
+  const {
+    origin,
+    status,
+    preview,
+    busy,
+    pickFile,
+    setPreviewClass,
+    toggleDecision,
+    cancelPreview,
+    confirmPreview,
+  } = useSyllabusImport();
+  const allCategories = useDatebookStore((s) => s.categories);
+  const categories = useMemo(
+    () => allCategories.filter((c) => !c.archived),
+    [allCategories]
+  );
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [classId, setClassId] = useState("");
   const mine = origin?.type === "shared";
   const showPreview = mine && preview;
   const showStatus =
     mine && (status.kind === "error" || status.kind === "success") && !showPreview;
+  const classReady = Boolean(classId) || categories.length === 0;
+  const onlyClassId = categories.length === 1 ? categories[0].id : "";
+
+  useEffect(() => {
+    if (!onlyClassId) return;
+    setClassId((current) => (current === onlyClassId ? current : onlyClassId));
+  }, [onlyClassId]);
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];
     if (!file || busy) return;
-    pickFile(file, { type: "shared" });
+    if (categories.length > 0 && !classId) {
+      haptic("warn");
+      return;
+    }
+    pickFile(file, { type: "shared" }, classId || undefined);
   }
 
-  function onDragOver(e: DragEvent<HTMLLabelElement>) {
+  function openPicker() {
+    if (busy) return;
+    if (categories.length > 0 && !classId) {
+      haptic("warn");
+      return;
+    }
+    haptic("light");
+    inputRef.current?.click();
+  }
+
+  function onDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    if (!busy) setDragOver(true);
+    if (!busy && classReady) setDragOver(true);
   }
 
-  function onDrop(e: DragEvent<HTMLLabelElement>) {
+  function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragOver(false);
     onFiles(e.dataTransfer.files);
@@ -234,27 +309,65 @@ export function ImportSyllabus() {
 
   return (
     <div className="flex flex-col gap-3">
+      {categories.length > 0 && (
+        <label className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-[12.5px] font-medium text-ink-soft">Class for this syllabus</span>
+          <select
+            value={classId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setClassId(next);
+              if (showPreview && next) setPreviewClass(next);
+            }}
+            disabled={busy}
+            aria-label="Class for this syllabus"
+            className="field-control min-h-11 w-full min-w-0 truncate rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            <option value="">Choose a class…</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          {!classId && (
+            <span className="text-[12px] text-ink-faint">Pick a class before attaching a PDF.</span>
+          )}
+        </label>
+      )}
+
       <input
+        ref={inputRef}
         id={inputId}
         type="file"
         accept="application/pdf"
         className="sr-only"
         aria-label="Syllabus PDF"
-        disabled={busy}
+        disabled={busy || !classReady}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           onFiles(e.target.files);
           e.target.value = "";
         }}
       />
-      <label
-        htmlFor={inputId}
+      <div
+        role="button"
+        tabIndex={busy || !classReady ? -1 : 0}
+        aria-disabled={busy || !classReady}
+        aria-controls={inputId}
+        onClick={openPicker}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openPicker();
+          }
+        }}
         onDragOver={onDragOver}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={cn(
           "flex min-h-11 cursor-pointer flex-col gap-2 rounded-lg border bg-surface px-3 py-2.5 sm:flex-row sm:items-center",
           dragOver ? "border-accent" : "border-line",
-          busy && "pointer-events-none"
+          (busy || !classReady) && "cursor-not-allowed opacity-60"
         )}
       >
         {busy && mine ? (
@@ -273,7 +386,7 @@ export function ImportSyllabus() {
             </span>
           </>
         )}
-      </label>
+      </div>
 
       <StatusLine show={Boolean(showStatus)} status={status} />
 
@@ -286,6 +399,13 @@ export function ImportSyllabus() {
             matches={preview.matches}
             decisions={preview.decisions}
             clock24h={clock24h}
+            categories={categories}
+            selectedCategoryId={preview.forceCategoryId ?? classId}
+            onClassChange={(id) => {
+              if (!id) return;
+              setClassId(id);
+              setPreviewClass(id);
+            }}
             onToggle={toggleDecision}
             onCancel={cancelPreview}
             onConfirm={confirmPreview}
@@ -296,7 +416,7 @@ export function ImportSyllabus() {
   );
 }
 
-/** Per-class control on a Settings category row. */
+/** Per-class control on a Settings import row. */
 export function CategorySyllabusControl({ category }: { category: Category }) {
   const { origin, status, preview, busy, pickFile, toggleDecision, cancelPreview, confirmPreview } =
     useSyllabusImport();
@@ -304,42 +424,55 @@ export function CategorySyllabusControl({ category }: { category: Category }) {
   const sources = useDatebookStore((s) => s.importSources);
   const items = useDatebookStore((s) => s.items);
   const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const mineOrigin: Origin = { type: "category", id: category.id };
   const mine = sameOrigin(origin, mineOrigin);
   const showPreview = mine && preview;
   const showStatus = mine && (status.kind === "error" || status.kind === "success") && !showPreview;
-
   const source = findSyllabusSource(category, sources, items);
+  const reading = busy && mine;
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];
-    if (!file || busy) return;
-    pickFile(file, mineOrigin);
+    if (!file || reading) return;
+    pickFile(file, mineOrigin, category.id);
+  }
+
+  function openPicker() {
+    if (reading) return;
+    haptic("light");
+    inputRef.current?.click();
   }
 
   return (
     <div className="flex flex-col gap-2">
       <input
+        ref={inputRef}
         id={inputId}
         type="file"
         accept="application/pdf"
         className="sr-only"
         aria-label={`Syllabus PDF for ${category.name}`}
-        disabled={busy}
+        disabled={reading}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
           onFiles(e.target.files);
           e.target.value = "";
         }}
       />
-      <label
-        htmlFor={inputId}
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={reading}
+        aria-busy={reading}
+        aria-controls={inputId}
         className={cn(
-          "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-0.5 text-left transition-colors",
+          "flex min-h-11 w-full items-center gap-2 rounded-lg px-0.5 text-left transition-colors",
           "hover:bg-surface-sunken/50",
-          busy && "pointer-events-none"
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+          "disabled:cursor-wait disabled:opacity-70"
         )}
       >
-        {busy && mine ? (
+        {reading ? (
           <span className="flex items-center gap-2 text-[12.5px] text-ink-soft">
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={2} />
             Reading syllabus…
@@ -365,7 +498,7 @@ export function CategorySyllabusControl({ category }: { category: Category }) {
             )}
           </>
         )}
-      </label>
+      </button>
 
       <StatusLine show={Boolean(showStatus)} status={status} />
 
@@ -418,11 +551,13 @@ function StatusLine({ show, status }: { show: boolean; status: Status }) {
 async function runExtract(
   file: File,
   origin: Origin,
-  signal: AbortSignal
+  signal: AbortSignal,
+  forcedClassId?: string
 ): Promise<{ kind: "empty"; message: string } | { kind: "preview"; preview: PreviewState }> {
   const store = useDatebookStore.getState();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const forceCategoryId = origin.type === "category" ? origin.id : undefined;
+  const forceCategoryId =
+    origin.type === "category" ? origin.id : forcedClassId || undefined;
   const extracted = await postSyllabusPdf(file, {
     timeZone,
     categoryId: forceCategoryId,
@@ -469,7 +604,8 @@ async function runExtract(
       warning,
       courseName: extracted.courseName,
       courseCode: extracted.courseCode,
-      forceCategoryId,
+      forceCategoryId:
+        forceCategoryId ?? (resolved.status === "create" ? undefined : resolved.categoryId),
       timeZone,
       drafts,
       matches,

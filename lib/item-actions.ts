@@ -60,6 +60,22 @@ export function applyBatchPatch(
   return undos.length;
 }
 
+/** Focus and Start: one in-progress work item at a time. */
+export function startExclusiveDoing(item: Item) {
+  if (item.type === "event" || (item.status ?? "todo") === "done") return;
+  const others = useDatebookStore
+    .getState()
+    .items.filter((i) => i.id !== item.id && i.type !== "event" && (i.status ?? "todo") === "doing");
+  applyBatchPatch(
+    [...others, item],
+    (it) => {
+      if (it.id === item.id) return (it.status ?? "todo") === "doing" ? null : { status: "doing" };
+      return { status: "todo" };
+    },
+    () => "Started"
+  );
+}
+
 export function dayLabelFor(key: string) {
   return format(dateFromDayKey(key), "EEE, MMM d");
 }

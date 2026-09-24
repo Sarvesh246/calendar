@@ -370,6 +370,10 @@
   /* Air between the tab pill and the home indicator / screen edge. Keeps the
      bar from sitting flush on the bottom. Added on top of --safe-bottom. */
   --tab-bar-rest: 0.75rem;
+  /* Extra page padding so content clears the floating dock. Rooms use this
+     instead of the 5.75rem tab-bar reservation, which was padding a second
+     empty runway under Settings. */
+  --dock-clearance: calc(var(--tab-bar-rest) + 4.25rem);
   /* Geometry of the floating glass header cluster (components/mobile-header-actions.tsx).
      Kept here so the space a page reserves for it can never drift from where
      the cluster actually sits. */
@@ -533,6 +537,13 @@ html.scroll-locked body {
   html {
     scrollbar-gutter: stable;
   }
+}
+
+/* The stable gutter is outside the fixed containing block in Chromium. A
+   full-screen scrim laid out with inset-0 alone leaves that narrow strip of
+   the live page exposed at the right edge while a menu is open. */
+.fixed.inset-0 {
+  width: 100vw;
 }
 
 /* Keep the app's own fixed chrome welded to the device window while the
@@ -718,6 +729,64 @@ button, a, [role="button"], summary, input, textarea, select, label {
   backdrop-filter: blur(18px) saturate(130%);
 }
 
+/* The IPA draws its persistent navigation and utility controls in the native
+   layer with UIVisualEffectView. Hide only the duplicate WebView chrome; the
+   PWA keeps the existing, performant CSS material above. The native wrapper
+   injects this class before first paint, and NativeShellSync reasserts it. */
+.native-ios .mobile-web-bottom-nav,
+.native-ios .mobile-web-header-actions,
+.native-ios .focus-exit-button,
+.native-ios .focus-end-button {
+  display: none !important;
+}
+
+/* Native chrome overlays the WebView. Don't also reserve the PWA tab-bar
+   footprint — that double-count is the extra Settings scroll. The stacked
+   Liquid Glass dock (Add above the 3-tab tray) still needs clearance. */
+.native-ios {
+  --dock-clearance: 8.25rem;
+}
+
+/* Content remains a calm solid layer. These are the few transient WebView
+   controls that cannot move native without breaking sheet gestures, focus
+   trapping, or contextual positioning, so the IPA gives them a restrained
+   companion material instead of glassing every card. */
+.native-ios .native-glass-control {
+  background: color-mix(in srgb, var(--surface-elevated) 66%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--line-strong) 56%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 8px 22px -12px rgb(0 0 0 / 0.42);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.native-ios .native-sheet-header {
+  margin-inline: -0.25rem;
+  padding-inline: 0.25rem;
+  border-bottom: 0.5px solid color-mix(in srgb, var(--line) 58%, transparent);
+}
+
+.native-ios .native-context-menu {
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+  border-color: color-mix(in srgb, var(--line-strong) 62%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 20px 54px -18px rgb(0 0 0 / 0.52);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+.native-ios .focus-room {
+  padding-bottom: calc(var(--safe-bottom) + 4.75rem);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .native-ios .native-glass-control,
+  .native-ios .native-context-menu {
+    background: var(--surface-elevated);
+    backdrop-filter: none;
+  }
+}
+
 /* The global control rule uses `manipulation`, which includes horizontal pan.
    A swipe begins on a tab link, so the browser otherwise cancels the captured
    pointer as soon as it decides to own that horizontal gesture. Keep vertical
@@ -820,6 +889,50 @@ button, a, [role="button"], summary, input, textarea, select, label {
    focus indicator instead of two; the wrapper must provide it. */
 .focus-within-ring :focus-visible {
   outline: none;
+}
+
+/* Desktop form refinement -------------------------------------------------
+ *
+ * A field's focus treatment belongs to its visible silhouette. Previously
+ * the global outline landed on the raw input node, so transparent inputs
+ * inside rounded rows drew a sharp inner rectangle. These two recipes keep
+ * one rounded, theme-aware halo around the thing that actually reads as the
+ * control: the field itself, or the composite shell that contains it. */
+@media (min-width: 768px) {
+  .field-control,
+  .field-inline,
+  .field-shell {
+    transition-property: border-color, background-color, box-shadow;
+    transition-duration: var(--motion-standard);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  .field-control:focus-visible,
+  .field-inline:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    background-color: var(--surface-elevated);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .field-inline {
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+  }
+
+  .field-inline:hover {
+    border-color: var(--line);
+  }
+
+  .field-shell:focus-within {
+    border-color: var(--accent);
+    background-color: var(--surface-elevated);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .field-shell :is(input, textarea, select):focus-visible {
+    outline: none;
+  }
 }
 
 /* Command palette (cmdk) rows */
@@ -974,25 +1087,29 @@ a,
 [role="button"],
 summary,
 label {
-  transition-property: transform, color, background-color, border-color, opacity, box-shadow;
+  /* Independent scale composes with Framer's transform and Tailwind's translate.
+     Transitioning transform globally made animated controls trail their own
+     spring one frame at a time. */
+  transition-property: scale, color, background-color, border-color, opacity, box-shadow;
   transition-duration: var(--motion-micro);
   transition-timing-function: var(--ease-standard);
 }
 
 /* Release is the half you actually watch, so let it ease back a touch slower
    than it went down. */
-button:not(:disabled):active,
-a:not([aria-disabled="true"]):active,
-[role="button"]:not([aria-disabled="true"]):active,
+button:not(:disabled):not(.press-none):not(.press-surface):not([role="menuitem"]):active,
+a:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
+[role="button"]:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 summary:active {
-  transform: scale(0.97);
+  scale: 0.97;
   transition-duration: 80ms;
 }
 
 button.press-none:active,
 a.press-none:active,
-[role="button"].press-none:active {
-  transform: none;
+[role="button"].press-none:active,
+[role="menuitem"]:active {
+  scale: 1;
 }
 
 /* Fields ease into focus too. Without this the accent ring and the border
@@ -1043,11 +1160,9 @@ select {
 @keyframes route-enter {
   from {
     opacity: 0;
-    translate: 0 10px;
   }
   to {
     opacity: 1;
-    translate: 0 0;
   }
 }
 
@@ -1055,8 +1170,25 @@ select {
   /* Deliberately quicker than `--motion-standard`. A route change is not an
      element arriving on a page you are already looking at — you are waiting for
      it, and the reveal is time added to a navigation that already cost you a
-     router commit. */
-  animation: route-enter 150ms var(--ease-standard) both;
+     router commit. Opacity only: a 6px `translate` on the page box made a
+     containing block on iOS, so overflow-hidden children (calendar, rooms)
+     clipped and the document grew by the leftover offset. */
+  animation: route-enter 140ms var(--ease-standard);
+}
+
+/* Tab page: same softness, no `both` (so a restarted spam-tap cannot sit on
+   the from-keyframe), no translate. Calendar overflow stays hidden. */
+@keyframes tab-page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tab-page-enter {
+  animation: tab-page-enter 140ms var(--ease-standard);
 }
 
 @keyframes route-enter-instant {
@@ -1080,7 +1212,15 @@ body {
 
 .page-shell > * > * {
   animation: content-rise 150ms var(--ease-standard) both;
-  backface-visibility: hidden;
+}
+
+/* iOS: `both` can leave a delayed section at opacity 0 if the animation is
+   paused (backgrounded WKWebView, hidden tab host). Phone rooms skip the
+   stagger so Settings/Schedule paint complete on the first frame. */
+@media (max-width: 767px) {
+  .page-shell > * > * {
+    animation: none;
+  }
 }
 /* Skip the stagger on the very first paint — it made cold starts feel blank. */
 html[data-first-load="1"] .page-shell > * > * {
@@ -1164,7 +1304,7 @@ html[data-first-load="1"] .page-shell > * > * {
   to { opacity: 0; translate: 18px 0; }
 }
 @keyframes overlay-in {
-  from { opacity: 0; }
+  from { opacity: 0.78; }
 }
 @keyframes overlay-out {
   to { opacity: 0; }
@@ -1204,9 +1344,6 @@ html[data-first-load="1"] .page-shell > * > * {
   }
   .assistant-panel.is-closed {
     animation: drawer-out 160ms ease-in forwards;
-  }
-  .assistant-overlay {
-    background: color-mix(in srgb, var(--ink) 14%, transparent);
   }
 }
 
@@ -1508,6 +1645,8 @@ html.calendar-dragging * {
    last keyframe says. */
 @media (prefers-reduced-motion: reduce) {
   .page-shell > * > *,
+  .route-enter,
+  .tab-page-enter,
   .thinking-dot,
   .toast-drain,
   .complete-ripple,
@@ -1529,6 +1668,7 @@ html.calendar-dragging * {
   a:not([aria-disabled="true"]):active,
   [role="button"]:not([aria-disabled="true"]):active,
   summary:active {
+    scale: 1;
     transform: none;
   }
 
@@ -1571,3 +1711,6 @@ html.calendar-dragging * {
    keyframe writing the same property fought the drag and the exit, which is
    what made sheets jump at the moment they were closing. Motion owns the
    transform, CSS owns the geometry. */
+html.native-model-picker .assistant-web-model-selector {
+  visibility: hidden;
+}

@@ -1,3 +1,4 @@
+import type { Item } from "./types";
 import type { SyncMode, SyncStatus } from "./store";
 
 /**
@@ -16,7 +17,44 @@ import type { SyncMode, SyncStatus } from "./store";
  *  - Signed in, pushed            → "Saved", briefly.
  *  - Signed in, queued or offline → "Waiting to sync", until it clears.
  *  - Failed                       → "Couldn't sync" with a retry, until it clears.
+ *  - Status flips (done/doing)    → never: those already have a Completed toast.
  */
+
+/** Fields a complete / start / reopen write is allowed to touch. */
+const STATUS_ONLY_KEYS = new Set([
+  "status",
+  "completedAt",
+  "statusAt",
+  "updatedAt",
+]);
+
+/**
+ * True when every changed item differs only in status / completion timestamps.
+ * Completing an assignment already shows its own "Completed" snackbar — the
+ * save pill must not pile on.
+ */
+export function isStatusOnlyItemsChange(prev: Item[], next: Item[]): boolean {
+  if (prev.length !== next.length) return false;
+  const prevById = new Map(prev.map((item) => [item.id, item]));
+  let sawStatusEdit = false;
+
+  for (const item of next) {
+    const before = prevById.get(item.id);
+    if (!before) return false;
+    if (before === item) continue;
+
+    const keys = new Set([...Object.keys(before), ...Object.keys(item)]) as Set<keyof Item>;
+    for (const key of keys) {
+      if (before[key] === item[key]) continue;
+      if (!STATUS_ONLY_KEYS.has(key)) return false;
+      if (key === "status" || key === "completedAt" || key === "statusAt") {
+        sawStatusEdit = true;
+      }
+    }
+  }
+
+  return sawStatusEdit;
+}
 
 export type SaveTone = "saved" | "pending" | "error";
 

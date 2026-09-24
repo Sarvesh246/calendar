@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
-import { CalendarClock, LayoutList, Rows3 } from "lucide-react";
+import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
@@ -29,8 +29,6 @@ import type { AgendaStickySection } from "@/lib/agenda-sticky";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
-import { ViewMenu } from "@/components/view-menu";
-import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -230,47 +228,40 @@ export default function AgendaPage() {
               );
             })}
           </div>
-          {/* Agenda answers "what's next"; the timetable answers "what does a
-              week look like". They belong within reach of each other. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => router.push("/schedule")}
-            aria-label="Open the full weekly schedule"
-          >
-            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
-            Schedule
-          </Button>
-          <ViewMenu />
         </div>
       </header>
 
-      <div className="flex gap-1">
-        {heat.map((d) => (
-          <button
-            key={d.date.toISOString()}
-            type="button"
-            onClick={() => {
-              setCalendarFocusDate(dayKey(d.date));
-              router.push("/calendar");
-            }}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
-            title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
-          >
-            <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
-              {format(d.date, "EEEEE")}
-            </span>
-            <span
-              className={cn(
-                "h-1.5 w-full rounded-full",
-                d.intensity === 0 && "bg-surface-sunken",
-                d.intensity === 1 && "bg-good",
-                d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
-                d.intensity >= 4 && "bg-warn"
-              )}
-            />
-          </button>
-        ))}
+      <div>
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+          This week
+        </p>
+        <div className="flex gap-1">
+          {heat.map((d) => (
+            <button
+              key={d.date.toISOString()}
+              type="button"
+              onClick={() => {
+                setCalendarFocusDate(dayKey(d.date));
+                router.push("/calendar");
+              }}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
+              title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
+            >
+              <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
+                {format(d.date, "EEEEE")}
+              </span>
+              <span
+                className={cn(
+                  "h-1.5 w-full rounded-full",
+                  d.intensity === 0 && "bg-surface-sunken",
+                  d.intensity === 1 && "bg-good",
+                  d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
+                  d.intensity >= 4 && "bg-warn"
+                )}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {isEmpty && (
@@ -330,6 +321,7 @@ export default function AgendaPage() {
                           key={item.id}
                           item={item}
                           category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          showQuickActions={false}
                           {...chrome}
                         />
                       ))}
@@ -365,7 +357,8 @@ export default function AgendaPage() {
                             item={item}
                             category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
                             day={group.date}
-                            {...chrome}
+                            showQuickActions={false}
+                          {...chrome}
                           />
                         ))}
                       </AnimatePresence>
@@ -392,6 +385,7 @@ export default function AgendaPage() {
                           key={item.id}
                           item={item}
                           category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
+                          showQuickActions={false}
                           {...chrome}
                         />
                       ))}

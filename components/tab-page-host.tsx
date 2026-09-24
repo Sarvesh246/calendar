@@ -17,6 +17,7 @@ import { isTabRoute, TAB_ROUTES, type TabRoute } from "@/lib/tab-routes";
 import { flushViewState, recallScroll, rememberScroll } from "@/lib/view-state";
 import { useTabPageSwipe } from "@/lib/use-tab-page-swipe";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { usePageEnter } from "@/lib/page-enter";
 
 const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
   "/today": () => import("@/components/pages/today-page"),
@@ -97,7 +98,9 @@ export function TabPageHost({ pathname }: { pathname: string }) {
   useTabScrollMemory(active);
   const phone = useMediaQuery("(max-width: 767px)");
   const hostRef = useRef<HTMLDivElement>(null);
+  const enterRef = usePageEnter(active, Boolean(active));
   const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
+  const pageLive = swipe.dragging || swipe.offsetting;
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
@@ -118,12 +121,13 @@ export function TabPageHost({ pathname }: { pathname: string }) {
         return (
           <Activity key={href} mode={isActive || isPeek ? "visible" : "hidden"}>
           <motion.div
+            ref={isActive ? enterRef : undefined}
             className={cn(
               href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
               isPeek && "pointer-events-none absolute inset-0 overflow-auto overscroll-contain"
             )}
             style={
-              isActive
+              isActive && pageLive
                 ? { x: swipe.x, willChange: "transform" }
                 : isPeek
                   ? { x: swipe.peekX, willChange: "transform" }

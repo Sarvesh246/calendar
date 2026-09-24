@@ -10,6 +10,7 @@ import {
   notificationPermission,
 } from "@/lib/reminders";
 import { subscribePush } from "@/lib/push-client";
+import { isNativeWrapper } from "@/lib/native-bridge";
 
 /**
  * Headless. Keeps the local reminder timers in sync with the item list: re-arms
@@ -23,6 +24,7 @@ export function ReminderScheduler() {
 
   useEffect(() => {
     void (async () => {
+      if (isNativeWrapper()) return;
       await ensureReminderWorker();
       if (notificationPermission() === "granted") await subscribePush();
     })();
@@ -40,6 +42,10 @@ export function ReminderScheduler() {
   }, []);
 
   useEffect(() => {
+    if (isNativeWrapper()) {
+      disarmReminders();
+      return;
+    }
     if (notificationPermission() !== "granted") {
       disarmReminders();
       return;

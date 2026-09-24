@@ -13,15 +13,15 @@ import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 /**
  * The filter you forgot you set.
  *
- * Until now the only sign that a class filter was on was an 8px dot in the
- * corner of the filter button, and "hide completed" had no sign at all — it
- * lives three taps deep in a menu. Both silently delete things from every
- * screen at once, which is how "my assignment disappeared" happens.
+ * Until now the only sign that a class filter was on was an 8px dot on More,
+ * and "hide completed" had no sign at all — it lives in the Filter sheet (and
+ * as a Settings preference). Both silently delete things from every screen at
+ * once, which is how "my assignment disappeared" happens.
  *
  * So: a compact line that names what is on ("2 classes · Incomplete") and can
  * turn it off in one tap, on every tab, whenever a filter is active — and
- * nothing at all when none is. Phones only; the desktop sidebar already shows
- * the selected classes as a list you can't miss.
+ * nothing at all when none is. Shown on phones and desktop (a collapsed rail
+ * can hide the sidebar Classes/Views). Tapping the line opens the Filter sheet.
  */
 export function FilterSummaryBar() {
   const categories = useDatebookStore((s) => s.categories);
@@ -58,16 +58,16 @@ export function FilterSummaryBar() {
           animate={reduced ? { opacity: 1 } : { height: "auto", opacity: 1 }}
           exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
           transition={reduced ? motionTokens.tweenStandard : motionTokens.springLayout}
-          className="shrink-0 overflow-hidden md:hidden"
+          className="shrink-0 overflow-hidden"
         >
-          <div className="mb-2.5 flex items-center gap-2 rounded-full border border-accent/35 bg-accent-soft px-1 py-1">
+          <div className="mb-1.5 flex items-center gap-1.5 rounded-full border border-accent/35 bg-accent-soft px-1 py-0.5 md:mb-2.5 md:gap-2 md:py-1">
             <button
               type="button"
               onClick={() => {
                 haptic("light");
                 setFilterOpen(true);
               }}
-              className="press-none flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-full px-2.5 text-left"
+              className="press-none flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-full px-2.5 text-left md:min-h-9"
               aria-label={`${summary.announcement}. Change filters`}
             >
               <SlidersHorizontal
@@ -75,7 +75,7 @@ export function FilterSummaryBar() {
                 strokeWidth={2}
                 aria-hidden
               />
-              <span className="min-w-0 truncate text-[12.5px] font-medium text-accent">
+              <span className="min-w-0 truncate text-[12px] font-medium text-accent md:text-[12.5px]">
                 {summary.label}
               </span>
             </button>
@@ -88,11 +88,11 @@ export function FilterSummaryBar() {
                   startTransition(() => updateSettings({ hideCompleted: false }));
                 }
               }}
-              className="press-none flex h-9 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-2.5 text-[12.5px] font-semibold text-accent"
-              aria-label="Clear all filters"
+              className="press-none flex h-8 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-accent md:h-9 md:text-[12.5px]"
+              aria-label="Clear filters"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-              Reset
+              Clear filters
             </button>
           </div>
           {/* Announced once per change rather than on every re-render of the

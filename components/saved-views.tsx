@@ -120,7 +120,7 @@ function toggleIn<T>(list: T[], value: T): T[] {
 }
 
 /** Save what you're looking at (or a new combination) as a named view. */
-function ViewEditor({ onDone }: { onDone: () => void }) {
+export function ViewEditor({ onDone }: { onDone: () => void }) {
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const current = useUIStore((s) => s.viewFilter);
   const applyView = useUIStore((s) => s.applyView);
@@ -177,7 +177,7 @@ function ViewEditor({ onDone }: { onDone: () => void }) {
         maxLength={60}
         placeholder="View name"
         aria-label="View name"
-        className="min-h-8 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+        className="field-control min-h-8 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
       />
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">Status</legend>
@@ -204,7 +204,7 @@ function ViewEditor({ onDone }: { onDone: () => void }) {
         <select
           value={range}
           onChange={(e) => setRange(e.target.value as ViewRange)}
-          className="min-h-8 rounded-md border border-line bg-surface px-1.5 text-[12.5px] text-ink focus:border-accent focus:outline-none"
+          className="field-control min-h-8 rounded-md border border-line bg-surface px-1.5 text-[12.5px] text-ink focus:border-accent focus:outline-none"
         >
           {VIEW_RANGES.map((r) => (
             <option key={r.value} value={r.value}>
