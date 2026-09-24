@@ -22,8 +22,24 @@ const HEALTHY_TTL = 6 * 60 * 60_000;
 // that is out of quota only prolongs the outage.
 const FAILED_TTL = 5 * 60_000;
 const COOLDOWN_429_MS = 15 * 60_000;
+const COOLDOWN_413_MS = 5 * 60_000;
 const COOLDOWN_5XX_MS = 60_000;
 const COOLDOWN_DEFAULT_MS = 30_000;
+
+// Providers that share an endpoint and key (both Gemini entries, both Groq entries)
+// need only one /models call between them.
+const modelLists = new Map<string, Promise<Set<string>>>();
+function listModelsOnce(provider: LlmProviderConfig, key: string) {
+  const cacheKey = `${provider.baseURL}|${key.slice(-8)}`;
+  const hit = modelLists.get(cacheKey);
+  if (hit) return hit;
+  const promise = listProviderModels(provider, key);
+  modelLists.set(cacheKey, promise);
+  // Keep it just long enough to cover the parallel checks in one pass.
+  const clear = () => setTimeout(() => modelLists.delete(cacheKey), 5_000);
+  promise.then(clear, clear);
+  return promise;
+}
 
 function keyFor(provider: LlmProviderConfig) {
   return process.env[provider.keyEnv]?.trim();
@@ -52,7 +68,7 @@ async function checkProvider(provider: LlmProviderConfig, force = false): Promis
       return result;
     };
     try {
-      const models = await listProviderModels(provider, key);
+      const models = await listModelsOnce(provider, key);
       if (!models.has(provider.model)) {
         return finish({
           provider,
@@ -112,7 +128,7 @@ export async function providerCandidates(selectedId?: string): Promise<{
 export function putProviderOnCooldown(provider: LlmProviderConfig, error: unknown) {
   const status = error instanceof ProviderRequestError ? error.status : 0;
   const retryAfter = error instanceof ProviderRequestError ? error.retryAfterMs : undefined;
-  const fallback = status === 429 ? COOLDOWN_429_MS : status >= 500 ? COOLDOWN_5XX_MS : COOLDOWN_DEFAULT_MS;
+  const fallback = status === 429 ? COOLDOWN_429_MS : status === 413 ? COOLDOWN_413_MS : status >= 500 ? COOLDOWN_5XX_MS : COOLDOWN_DEFAULT_MS;
   cooldownUntil.set(provider.id, Date.now() + Math.max(retryAfter ?? fallback, 5_000));
 }
 
@@ -126,6 +142,7 @@ export function shouldFallbackProvider(error: unknown) {
   return (
     error.status === 0 ||
     error.status === 408 ||
+    error.status === 413 ||
     error.status === 429 ||
     error.status >= 500 ||
     error.modelNotFound
