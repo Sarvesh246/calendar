@@ -8,6 +8,8 @@ export type LlmProviderConfig = {
   model: string;
   supportsTools: boolean;
   tier: ProviderTier;
+  /** Cap hidden reasoning tokens: they count against TPM/quota and add latency. */
+  reasoningEffort?: "low";
 };
 
 /**
@@ -23,6 +25,7 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
     keyEnv: "GROQ_API_KEY",
     model: "openai/gpt-oss-120b",
     supportsTools: true,
+    reasoningEffort: "low",
     tier: 1,
   },
   // Flash-Lite has the highest free-tier RPM and daily caps of the Gemini models,
@@ -34,6 +37,7 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
     keyEnv: "GEMINI_API_KEY",
     model: "gemini-3.5-flash-lite",
     supportsTools: true,
+    reasoningEffort: "low",
     tier: 1,
   },
   {
@@ -43,6 +47,7 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
     keyEnv: "GEMINI_API_KEY",
     model: "gemini-3.1-flash-lite",
     supportsTools: true,
+    reasoningEffort: "low",
     tier: 1,
   },
   {
@@ -79,6 +84,7 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
     keyEnv: "GROQ_API_KEY",
     model: "openai/gpt-oss-20b",
     supportsTools: true,
+    reasoningEffort: "low",
     tier: 2,
   },
 ] as const;

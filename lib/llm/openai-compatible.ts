@@ -122,7 +122,8 @@ export async function createChatCompletion(opts: {
     tool_choice: opts.forceTool
       ? { type: "function", function: { name: opts.forceTool } }
       : "auto",
-    parallel_tool_calls: false,
+    parallel_tool_calls: true,
+    ...(opts.provider.reasoningEffort ? { reasoning_effort: opts.provider.reasoningEffort } : {}),
     temperature: 0.2,
     max_tokens: 1_200,
   };
