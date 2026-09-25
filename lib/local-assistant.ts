@@ -22,7 +22,17 @@ import {
 } from "date-fns";
 import type { AssistantAction, AssistantCtx, AssistantResponse, AssistantTurn } from "./ai-assistant";
 import { toNewItem } from "./bulk-parse";
-import { formatMeetingSummary, isClassMeeting, savedClassMeetings } from "./class-schedule";
+import {
+  formatMeetingSummary,
+  formatTimeRange,
+  isClassMeeting,
+  meetingDateTimes,
+  parseClassSchedule,
+  savedClassMeetings,
+  savedMeetingSlotEqual,
+  scheduleRepeat,
+  weekdayShort,
+} from "./class-schedule";
 import { matchDatePhrase } from "./date-phrase";
 import {
   happeningNow,
@@ -35,6 +45,7 @@ import {
 import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import { parseQuickAdd } from "./quick-add-parser";
+import { findOverlapGroups } from "./overlap";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
@@ -2187,6 +2198,564 @@ function searchIntent(env: Env): Outcome {
 }
 
 /* ------------------------------------------------------------------ */
+/* Phase 3: plans, judgement calls with one right answer, more edits  */
+/* ------------------------------------------------------------------ */
+
+/** Rough time a piece of work takes — only used to size planned blocks and workload. */
+function estimateMinutes(item: Item): number {
+  const t = item.title.toLowerCase();
+  if (/\b(?:exam|midterm|final|test)\b/.test(t)) return 120;
+  if (/\b(?:project|paper|essay|report|presentation|thesis)\b/.test(t)) return 120;
+  if (item.type === "task") return 30;
+  if (/\b(?:quiz|reading|response|discussion|post|reflection|worksheet)\b/.test(t)) return 45;
+  return 60;
+}
+
+function hoursText(minutes: number): string {
+  const h = Math.round((minutes / 60) * 2) / 2;
+  if (h < 1) return `${Math.max(15, Math.round(minutes / 15) * 15)} minutes`;
+  return `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+/** Free stretches on `day` with extra blocks (already planned in this reply) taken out. */
+function openSlots(env: Env, day: Date, taken: Array<[Date, Date]>, from = WORK_START, to = WORK_END): Array<[Date, Date]> {
+  let gaps = freeGaps(env, day, from, to);
+  for (const [a, b] of taken) {
+    const next: Array<[Date, Date]> = [];
+    for (const [s, e] of gaps) {
+      if (+b <= +s || +a >= +e) next.push([s, e]);
+      else {
+        if (+a > +s) next.push([s, a]);
+        if (+b < +e) next.push([b, e]);
+      }
+    }
+    gaps = next;
+  }
+  return gaps;
+}
+
+function weekRange(now: Date, weekStartsOn: 0 | 1): { start: Date; end: Date } {
+  const today = startOfDay(now);
+  const toWeekEnd = ((weekStartsOn === 1 ? 0 : 6) - today.getDay() + 7) % 7;
+  return { start: today, end: addDays(today, toWeekEnd + 1) };
+}
+
+function planRange(env: Env, q: string): { start: Date; end: Date; label: string } {
+  const today = startOfDay(env.now);
+  const ref = findDayRef(q, env.now);
+  if (ref?.kind === "day") return { start: ref.day, end: addDays(ref.day, 1), label: ref.label };
+  if (ref?.kind === "range") return { start: ref.start < today ? today : ref.start, end: ref.end, label: ref.label };
+  if (/\bweekend\b/.test(q)) {
+    const sat = today.getDay() === 0 ? addDays(today, -1) : thisOrNextWeekday(6, today);
+    return { start: sat < today ? today : sat, end: addDays(sat, 2), label: "this weekend" };
+  }
+  if (/\b(?:day|today)\b/.test(q)) return { start: today, end: addDays(today, 1), label: "today" };
+  const w = weekRange(env.now, env.ctx.weekStartsOn ?? 0);
+  return { ...w, label: "this week" };
+}
+
+const DAILY_PLAN_CAP = 4 * 60;
+const PLAN_FROM = 9;
+const PLAN_TO = 21;
+
+/** "plan my week", "spread my homework across the weekend", "block time for all my assignments". */
+function planWeekIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  const plan =
+    /^plan (?:out )?(?:my |the )?(?:whole )?(?:week|weekend|day|today|tomorrow|next week|rest of (?:the|my|this) week|next few days|next \d+ days)\b/.test(q) ||
+    /^(?:make|build|give me|create) (?:me )?an? (?:work |homework )?(?:plan|schedule) for (?:my |the |this )?(?:week|weekend|day|today|tomorrow|next week)\b/.test(q) ||
+    /^spread (?:out )?(?:my |all my |the )?(?:homework|work|assignments|studying|everything)(?: out)? (?:over|across|through(?:out)?) /.test(q) ||
+    /^(?:schedule|block|find|make|set aside|plan) (?:some )?(?:time|work time|study time|blocks?) (?:for|to (?:work on|do|finish)) (?:all (?:of )?|each of |everything\b|every(?:thing)? )(?:my |the )?(?:homework|assignments?|work|things? due|tasks?|it)?/.test(q);
+  if (!plan) return undefined;
+  const range = planRange(env, q);
+  if (+range.end <= +startOfDay(now)) return { text: `${cap(range.label)} is already over — want me to plan the days ahead instead?` };
+  const cls = findClass(env, q);
+  const kind = /\bhomework|assignments?\b/.test(q) ? "assignment" : /\btasks?\b/.test(q) ? "task" : undefined;
+  const lookahead = Math.max(+range.end, +addDays(startOfDay(now), 3));
+  const planned = new Set(ctx.items.filter((i) => i.workFor && +new Date(i.at) >= +now).map((i) => i.workFor!));
+  const work = ctx.items
+    .filter((i) => isOpen(i) && (!kind || i.type === kind) && (!cls || i.categoryId === cls.id))
+    .filter((i) => +new Date(i.at) < lookahead && (+new Date(i.at) >= +range.start || (isOverdueAt(i, now) && +range.start <= +addDays(startOfDay(now), 1))))
+    .filter((i) => !planned.has(i.id))
+    .sort((a, b) => {
+      const ao = isOverdueAt(a, now) ? 0 : 1;
+      const bo = isOverdueAt(b, now) ? 0 : 1;
+      return ao - bo || byAt(a, b);
+    })
+    .slice(0, 8);
+  const alreadyPlanned = ctx.items.filter((i) => isOpen(i) && planned.has(i.id) && +new Date(i.at) < lookahead);
+  if (!work.length) {
+    return {
+      text: alreadyPlanned.length
+        ? `Everything due ${range.label} already has time blocked for it — you're set.`
+        : `Nothing${cls ? ` for ${cls.name}` : ""} is due ${range.label === "today" ? "soon" : range.label} that needs planning — you're clear.`,
+    };
+  }
+
+  const taken: Array<[Date, Date]> = [];
+  const perDay = new Map<number, number>();
+  const placed: Array<{ item: Item; start: Date; end: Date }> = [];
+  const unplaced: Item[] = [];
+  for (const item of work) {
+    const minutes = estimateMinutes(item);
+    const due = new Date(item.at);
+    const overdue = isOverdueAt(item, now);
+    const lastDay = overdue ? addDays(range.end, -1) : new Date(Math.min(+addDays(range.end, -1), +startOfDay(due)));
+    let slot: [Date, Date] | null = null;
+    for (let d = range.start < startOfDay(now) ? startOfDay(now) : range.start; +d <= +lastDay && !slot; d = addDays(d, 1)) {
+      if ((perDay.get(+d) ?? 0) + minutes > DAILY_PLAN_CAP) continue;
+      const gap = openSlots(env, d, taken, PLAN_FROM, PLAN_TO).find(([a, b]) => +b - +a >= minutes * 60_000 && (overdue || +addMinutes(a, minutes) <= +due));
+      if (gap) slot = [gap[0], addMinutes(gap[0], minutes)];
+    }
+    if (!slot) {
+      unplaced.push(item);
+      continue;
+    }
+    // A short break after each block so the plan isn't back-to-back.
+    taken.push([slot[0], addMinutes(slot[1], 15)]);
+    perDay.set(+startOfDay(slot[0]), (perDay.get(+startOfDay(slot[0])) ?? 0) + minutes);
+    placed.push({ item, start: slot[0], end: slot[1] });
+  }
+  if (!placed.length) {
+    return { text: `I couldn't fit any work blocks ${range.label} — your free time runs out before the deadlines. Want me to look at a shorter block for ${bold(work[0].title)}?` };
+  }
+  placed.sort((a, b) => +a.start - +b.start);
+  const lines = placed.map(({ item, start, end }) => {
+    const dueTxt = isOverdueAt(item, now) ? "overdue" : `due ${describeWhen(env, item)}`;
+    return `- **${cap(dayName(start, now))}** ${fmtTime(start, ctx.clock24h)}–${fmtTime(end, ctx.clock24h)} — ${item.title} (${dueTxt})`;
+  });
+  const missed = unplaced.length ? `\n\nI couldn't fit ${joinNatural(unplaced.map((i) => bold(i.title)))} before ${unplaced.length === 1 ? "its" : "their"} deadline — your calendar is full there.` : "";
+  const actions: AssistantAction[] = placed.map(({ item, start, end }) => ({
+    kind: "create",
+    summary: `Block ${dayName(start, now)}, ${fmtTime(start, ctx.clock24h)}–${fmtTime(end, ctx.clock24h)} for “${item.title}”`,
+    draft: {
+      type: "event",
+      title: `Work on: ${item.title}`,
+      categoryId: item.categoryId,
+      at: start.toISOString(),
+      endAt: end.toISOString(),
+      reminders: [],
+      workFor: item.id,
+      ...(item.url ? { url: item.url } : {}),
+    },
+  }));
+  const already = alreadyPlanned.length ? ` (${joinNatural(alreadyPlanned.map((i) => i.title))} already ${alreadyPlanned.length === 1 ? "has" : "have"} time blocked.)` : "";
+  return {
+    text: `Here's a plan for ${range.label} — ${plural(placed.length, "work block")}, earliest deadlines first. None of your due dates move.${already}\n${lines.join("\n")}${missed}\n\nConfirm the blocks you want below.`,
+    actions,
+  };
+}
+
+/** "should I do the essay or problem set 4 first?" — deadlines decide it. */
+function compareIntent(env: Env): Outcome {
+  const { q, now } = env;
+  const m =
+    /^(?:should i|do i) (?:do|work on|start(?: with)?|finish|study for|tackle|focus on|prioriti[sz]e) (.+?) or (.+?)(?: first| next| now)?$/.exec(q) ??
+    /^(?:which (?:should i do|is more urgent|comes first|first)|what (?:should i do )?first|what is more urgent)[:,]? (.+?) or (.+?)$/.exec(q) ??
+    /^(.+?) or (.+?) first$/.exec(q);
+  if (!m) return undefined;
+  const a = resolveTarget(env, m[1], "open-work");
+  const b = resolveTarget(env, m[2], "open-work");
+  if (a.kind !== "one" || b.kind !== "one" || a.item.id === b.item.id) return null;
+  const x = a.item;
+  const y = b.item;
+  const why = (i: Item) => (isOverdueAt(i, now) ? `it was due ${dayName(new Date(i.at), now)}` : `it's due ${describeWhen(env, i)}`);
+  const xo = isOverdueAt(x, now);
+  const yo = isOverdueAt(y, now);
+  let first: Item;
+  let reason: string;
+  if (xo !== yo) {
+    first = xo ? x : y;
+    reason = `${why(first)} — it's already overdue`;
+  } else if (!isSameDay(new Date(x.at), new Date(y.at))) {
+    first = +new Date(x.at) < +new Date(y.at) ? x : y;
+    const other = first === x ? y : x;
+    reason = `${why(first)}, and ${bold(other.title)} isn't due until ${describeWhen(env, other)}`;
+  } else if ((x.status === "doing") !== (y.status === "doing")) {
+    first = x.status === "doing" ? x : y;
+    reason = `they're both due ${dayName(new Date(x.at), now)}, and you've already started it`;
+  } else {
+    const [ex, ey] = [estimateMinutes(x), estimateMinutes(y)];
+    first = ex >= ey ? x : y;
+    reason = ex === ey ? `they're both due ${dayName(new Date(x.at), now)}; starting the first one keeps the other as your fallback` : `they're both due ${dayName(new Date(x.at), now)}, and it's likely the bigger job`;
+  }
+  return { text: `Start with ${bold(first.title)} — ${reason}.` };
+}
+
+/** "what should I prioritize this week" — overdue, then soonest, with in-progress work noted. */
+function prioritizeIntent(env: Env): Outcome {
+  const { q, now } = env;
+  if (!/^(?:what should i prioriti[sz]e|what(?: is| are)? (?:my )?(?:top )?priorit(?:y|ies)|what(?: is|'s)? most (?:important|urgent|pressing)|what matters most|what should i focus on)(?: (?:this|next|for (?:the|this)) (?:week|weekend)| today| tomorrow| first| now)?$/.test(q)) return undefined;
+  const range = planRange(env, q);
+  const open = env.ctx.items.filter((i) => isOpen(i) && (isOverdueAt(i, now) || +new Date(i.at) < +range.end)).sort((a, b) => (isOverdueAt(a, now) ? 0 : 1) - (isOverdueAt(b, now) ? 0 : 1) || byAt(a, b));
+  if (!open.length) return { text: `Nothing is due ${range.label} — you're free to get ahead on what's next.` };
+  const top = open.slice(0, 3).map((i, n) => `${n + 1}. ${bold(i.title)} — ${isOverdueAt(i, now) ? `overdue (was due ${dayName(new Date(i.at), now)})` : `due ${describeWhen(env, i)}`}${i.status === "doing" ? ", already started" : ""}`);
+  const more = open.length > 3 ? `\n\nAfter those, ${plural(open.length - 3, "more thing")} ${open.length - 3 === 1 ? "is" : "are"} due ${range.label}.` : "";
+  return { text: `In order of what's due${range.label === "this week" ? " this week" : ` ${range.label}`}:\n${top.join("\n")}${more}` };
+}
+
+function rangeCounts(env: Env, start: Date, end: Date) {
+  let classes = 0;
+  let events = 0;
+  let classMinutes = 0;
+  let freeMinutes = 0;
+  const due: Item[] = [];
+  const busiest = { day: start, n: -1 };
+  let lightest: { day: Date; n: number } | null = null;
+  for (let d = start; +d < +end; d = addDays(d, 1)) {
+    const c = collectDay(env, d, {});
+    const cls = c.events.filter((e) => isClass(env, e)).length;
+    classes += cls;
+    events += c.events.length - cls;
+    for (const e of c.events) if (!e.allDay && e.endAt) classMinutes += (+new Date(e.endAt) - +new Date(e.at)) / 60_000;
+    due.push(...c.openWork);
+    freeMinutes += freeGaps(env, d, WORK_START, WORK_END).filter(([a, b]) => +b - +a >= 30 * 60_000).reduce((s, [a, b]) => s + (+b - +a) / 60_000, 0);
+    const n = c.events.length + c.openWork.length;
+    if (n > busiest.n) Object.assign(busiest, { day: d, n });
+    if (!lightest || n < lightest.n) lightest = { day: d, n };
+  }
+  return { classes, events, due, classMinutes, freeMinutes, busiest, lightest };
+}
+
+/** "summarize my week", "give me a rundown of tomorrow", "recap last week". */
+function summaryIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  if (!/\b(?:summari[sz]e|summary|rundown|run-down|overview|recap|brief(?:ing)?|debrief|lowdown|snapshot)\b/.test(q) && !/^(?:catch me up|what(?: do i| have i) (?:have|got) going on)$/.test(q)) return undefined;
+  if (/\bsyllabus\b/.test(q) || findClass(env, q)?.syllabus && /\bsyllabus|class|course\b/.test(q)) return undefined;
+  const ref = findDayRef(q, now);
+  const today = startOfDay(now);
+  if (ref && +((ref.kind === "day" ? addDays(ref.day, 1) : ref.end)) <= +today) {
+    const start = ref.kind === "day" ? ref.day : ref.start;
+    const end = ref.kind === "day" ? addDays(ref.day, 1) : ref.end;
+    const done = ctx.items.filter((i) => isWork(i) && i.status === "done" && +new Date(i.completedAt ?? i.at) >= +start && +new Date(i.completedAt ?? i.at) < +end);
+    const events = ctx.items.filter((i) => i.type === "event" && +new Date(i.at) >= +start && +new Date(i.at) < +end);
+    const left = ctx.items.filter((i) => isOpen(i) && +new Date(i.at) >= +start && +new Date(i.at) < +end);
+    const parts = [
+      done.length ? `you finished ${bold(plural(done.length, "item"))} (${joinNatural(done.slice(0, 4).map((i) => i.title))}${done.length > 4 ? ", and more" : ""})` : "you didn't check anything off",
+      events.length ? `had ${plural(events.length, "event")}` : "had nothing on the calendar",
+    ];
+    const tail = left.length ? ` ${plural(left.length, "thing")} from then ${left.length === 1 ? "is" : "are"} still open: ${joinNatural(left.map((i) => bold(i.title)))}.` : " Nothing from then is left open.";
+    return { text: `${cap(ref.label)} ${parts.join(" and ")}.${tail}` };
+  }
+  if (ref?.kind === "day" || /\b(?:today|my day|the day)\b/.test(q)) {
+    const day = ref?.kind === "day" ? ref : { kind: "day" as const, day: today, label: "today", text: "" };
+    const base = dayAnswer(env, day, {});
+    const gaps = freeGaps(env, day.day, WORK_START, WORK_END).filter(([a, b]) => +b - +a >= 60 * 60_000);
+    const free = gaps.length ? `\n\nYou're free ${joinNatural(gaps.slice(0, 3).map(([a, b]) => `${fmtTime(a, ctx.clock24h)}–${fmtTime(b, ctx.clock24h)}`))}.` : "";
+    return { text: `${base.text}${free}` };
+  }
+  const range = ref?.kind === "range" ? { start: ref.start < today ? today : ref.start, end: ref.end, label: ref.label } : { ...weekRange(now, ctx.weekStartsOn ?? 0), label: "this week" };
+  const c = rangeCounts(env, range.start, range.end);
+  const overdue = ctx.items.filter((i) => isOpen(i) && isOverdueAt(i, now));
+  if (!c.classes && !c.events && !c.due.length) return { text: `${cap(range.label)} is clear — nothing scheduled or due.${overdue.length ? ` You do still have ${bold(`${overdue.length} overdue`)}.` : ""}` };
+  const head = [c.classes ? plural(c.classes, "class", "classes") : "", c.events ? plural(c.events, "other event") : "", c.due.length ? `${c.due.length} due` : ""].filter(Boolean);
+  const lines: string[] = [];
+  if (c.due.length) lines.push(`- Due: ${c.due.slice(0, 6).map((i) => `${bold(i.title)} ${dayName(new Date(i.at), now)}`).join(", ")}${c.due.length > 6 ? `, +${c.due.length - 6} more` : ""}`);
+  if (c.busiest.n > 0) lines.push(`- Busiest: ${bold(cap(longDay(c.busiest.day, now)))} (${plural(c.busiest.n, "thing")})`);
+  if (c.lightest && c.lightest.n < c.busiest.n) lines.push(`- Lightest: ${bold(cap(longDay(c.lightest.day, now)))}${c.lightest.n === 0 ? " — wide open" : ""}`);
+  if (overdue.length) lines.push(`- Overdue: ${joinNatural(overdue.slice(0, 4).map((i) => bold(i.title)))}`);
+  return { text: `${cap(range.label)}: ${joinNatural(head)}.\n${lines.join("\n")}` };
+}
+
+/** "is my week realistic", "am I overloaded", "how's my workload" — a number-backed read, not a pep talk. */
+function workloadIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  if (!/\b(?:realistic|manageable|doable|overloaded|over ?booked|workload|too much (?:to do|work|on my plate)|how heavy|can i (?:handle|get it all done|finish everything)|will i (?:have time|finish|get everything done))\b/.test(q)) return undefined;
+  if (/\b(?:stress|overwhelm|anxious|anxiety|panic|cry|depress|burn(?:ed|t)? out|give up|hate)\w*/.test(q)) return undefined;
+  const range = planRange(env, q);
+  const c = rangeCounts(env, range.start < startOfDay(now) ? startOfDay(now) : range.start, range.end);
+  const startsNow = +range.start <= +addDays(startOfDay(now), 1);
+  const overdue = startsNow ? ctx.items.filter((i) => isOpen(i) && isOverdueAt(i, now)) : [];
+  const workItems = [...overdue, ...c.due.filter((i) => !overdue.includes(i))];
+  const need = workItems.reduce((s, i) => s + estimateMinutes(i), 0);
+  if (!workItems.length) return { text: `${cap(range.label)} is light — nothing due, and about ${bold(hoursText(c.freeMinutes))} free outside your schedule.` };
+  const ratio = need / Math.max(c.freeMinutes, 1);
+  const verdict = ratio < 0.35 ? "very manageable" : ratio < 0.7 ? "full but doable" : ratio < 1 ? "tight" : "more than your free time allows";
+  const crunch = c.busiest.n >= 3 ? ` ${bold(cap(longDay(c.busiest.day, now)))} is the crunch, with ${plural(c.busiest.n, "thing")} on it.` : "";
+  const offer = ratio >= 0.35 ? " Want me to plan work blocks so it all fits?" : "";
+  return {
+    text: `${cap(range.label)} looks ${bold(verdict)}: ${plural(workItems.length, "thing")} to get done${overdue.length ? ` (${overdue.length} overdue)` : ""} — roughly ${bold(hoursText(need))} of work by my estimate — against about ${bold(hoursText(c.freeMinutes))} of free time outside your ${plural(c.classes + c.events, "scheduled thing")}.${crunch}${offer}`,
+  };
+}
+
+/** "do I have any conflicts this week", "am I double-booked tomorrow". */
+function conflictIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  if (!/\b(?:conflicts?|overlap(?:s|ping)?|clash(?:es)?|double[- ]?booked|double book(?:ed|ings?)?|two things at (?:the same|once))\b/.test(q)) return undefined;
+  if (/\b(?:add|move|delete|fix|resolve)\b/.test(q)) return null;
+  const ref = findDayRef(q, now);
+  const start = ref?.kind === "day" ? ref.day : ref?.kind === "range" ? (ref.start < startOfDay(now) ? startOfDay(now) : ref.start) : startOfDay(now);
+  const end = ref?.kind === "day" ? addDays(ref.day, 1) : ref?.kind === "range" ? ref.end : addDays(startOfDay(now), 7);
+  const label = ref?.label ?? "in the next 7 days";
+  const found: string[] = [];
+  for (let d = start; +d < +end; d = addDays(d, 1)) {
+    const onDay = ctx.items.filter((i) => i.type === "event" && !i.allDay && i.status !== "done" && itemOccupiesDay(i, d));
+    for (const g of findOverlapGroups(onDay, d)) {
+      const names = g.items.map((i) => `${bold(i.title)} (${fmtTime(i.at, ctx.clock24h)}${i.endAt ? `–${fmtTime(i.endAt, ctx.clock24h)}` : ""})`);
+      found.push(`- **${cap(dayName(d, now))}** — ${joinNatural(names)}`);
+    }
+  }
+  if (!found.length) return { text: `No conflicts ${label} — nothing overlaps.` };
+  return { text: `${found.length === 1 ? "One overlap" : `${found.length} overlaps`} ${label}:\n${found.join("\n")}` };
+}
+
+/** "which class has the most work this week", "how much do I have for each class". */
+function classWorkIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  if (!/\b(?:which|what) (?:class|course)(?: has| is)? (?:the )?(?:most|heaviest|biggest|least|lightest)\b|\b(?:heaviest|lightest|busiest) (?:class|course)\b|\b(?:each|every|per) (?:class|course)\b|\bby (?:class|course)\b/.test(q)) return undefined;
+  const ref = findDayRef(q, now);
+  const end = ref?.kind === "range" ? ref.end : ref?.kind === "day" ? addDays(ref.day, 1) : null;
+  const label = ref?.label ?? "open";
+  const counts = ctx.categories
+    .filter((c) => !c.archived)
+    .map((c) => ({ c, items: ctx.items.filter((i) => i.categoryId === c.id && isOpen(i) && (!end || +new Date(i.at) < +end)) }))
+    .filter((r) => r.items.length);
+  if (!counts.length) return { text: `Nothing ${label === "open" ? "open" : `due ${label}`} in any class.` };
+  const least = /\b(?:least|lightest)\b/.test(q);
+  counts.sort((a, b) => (least ? a.items.length - b.items.length : b.items.length - a.items.length) || a.c.name.localeCompare(b.c.name));
+  if (/\b(?:each|every|per|by) (?:class|course)\b/.test(q)) {
+    return { text: `${label === "open" ? "Open work" : `Due ${label}`} by class:\n${counts.map((r) => `- ${bold(r.c.name)} — ${r.items.length} (${r.items.slice(0, 3).map((i) => i.title).join(", ")}${r.items.length > 3 ? ", …" : ""})`).join("\n")}` };
+  }
+  const top = counts[0];
+  return { text: `${bold(top.c.name)} has the ${least ? "least" : "most"}${label === "open" ? " open work" : ` due ${label}`}: ${joinNatural(top.items.slice(0, 4).map((i) => bold(i.title)))}${top.items.length > 4 ? `, plus ${top.items.length - 4} more` : ""}.` };
+}
+
+/** "what are the notes on the essay", "what's the link for problem set 4", "what reminders are on X", "tell me about the dentist". */
+function detailIntent(env: Env): Outcome {
+  const { q, ctx } = env;
+  let m: RegExpExecArray | null;
+  const field =
+    (m = /^(?:what(?: is| are)? (?:the )?(?:notes?|description|details?|info(?:rmation)?) (?:on|for|of|about) |(?:show|give) me (?:the )?(?:notes?|details?) (?:on|for) |(?:tell me |what do you know )?about )(?:my |the )?(.+)$/.exec(q))
+      ? "details"
+      : (m = /^(?:what(?: is|'s)? (?:the )?(?:link|url|canvas link|page) (?:for|to|of) |where(?: is| can i find) (?:the )?(?:link|page) (?:for|to) |open )(?:my |the )?(.+?)(?:'s link| link)?$/.exec(q))
+        ? "link"
+        : (m = /^(?:what reminders?(?: do i have| are| is)? (?:set )?(?:on|for) |when (?:will|do) i (?:get reminded|get a reminder|be reminded) (?:about|for|of) |(?:do i|is there|are there) (?:have )?(?:a |any )?reminders? (?:on|for) )(?:my |the )?(.+)$/.exec(q))
+          ? "reminders"
+          : null;
+  if (!field || !m) return undefined;
+  const phrase = m[1].replace(/\b(?:assignment|event|item)$/, "").trim();
+  if (!phrase || PRONOUN_ONLY.test(phrase)) return undefined;
+  const target = resolveTarget(env, phrase, "any");
+  if (target.kind === "none") return field === "details" ? undefined : null;
+  if (target.kind === "many") return null;
+  const i = target.item;
+  if (field === "link") return i.url ? { text: `Here's the link for ${bold(i.title)}: ${i.url}` } : { text: `${bold(i.title)} doesn't have a link saved.` };
+  if (field === "reminders") {
+    const rs = (i.reminders ?? []).filter((r) => !r.place);
+    const classNote = isClass(env, i) ? " Class heads-up reminders come from Settings → Reminders." : "";
+    if (!rs.length) return { text: `${bold(i.title)} has no reminders set.${classNote}` };
+    const at = new Date(i.at);
+    const whens = rs.map((r) => `${r.label} (${dayName(addMinutes(at, -r.offsetMinutes), env.now)} at ${fmtTime(addMinutes(at, -r.offsetMinutes), ctx.clock24h)})`);
+    return { text: `${bold(i.title)} will remind you ${joinNatural(whens)}.` };
+  }
+  const bits = [
+    `${i.type === "event" ? "" : "due "}${describeWhen(env, i)}${i.type === "event" && i.endAt && !i.allDay ? `–${fmtTime(i.endAt, ctx.clock24h)}` : ""}`,
+    className(env, i) ? `in ${className(env, i)}` : "",
+    i.location ? `at ${i.location}` : "",
+    i.type !== "event" ? (i.status === "done" ? "done" : i.status === "doing" ? "in progress" : "not started") : "",
+  ].filter(Boolean);
+  if (/\b(?:notes?|description)\b/.test(q) && !i.description?.trim()) return { text: `${bold(i.title)} doesn't have any notes — it's ${bits.join(", ")}.` };
+  const notes = i.description?.trim() ? `\n\nNotes: ${i.description.trim().slice(0, 400)}${i.description.trim().length > 400 ? "…" : ""}` : "";
+  const link = i.url ? `\n\nLink: ${i.url}` : "";
+  const rem = i.reminders?.length ? ` Reminders: ${joinNatural(i.reminders.map((r) => r.label))}.` : "";
+  return { text: `${bold(i.title)} — ${bits.join(", ")}.${rem}${notes}${link}` };
+}
+
+/** "what's in Hall B", "what do I have at the library". */
+function placeIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  const m = /^(?:what(?: is| do i have| have i got)?|anything|what(?:'s| is) (?:happening|going on)) (?:in|at) (?:the )?(.+?)(?: (?:today|tomorrow|this week|next week))?$/.exec(q);
+  if (!m) return undefined;
+  const place = tokens(m[1]);
+  if (!place.length || findDayRef(m[1], now) || findClass(env, m[1])) return undefined;
+  const hits = ctx.items
+    .filter((i) => i.location && place.every((p) => tokenMatches(p, tokens(i.location!))) && +new Date(i.endAt ?? i.at) >= +startOfDay(now))
+    .sort(byAt);
+  if (!hits.length) return undefined;
+  const seen = new Set<string>();
+  const uniq = hits.filter((i) => (seen.has(seriesKey(i)) ? false : (seen.add(seriesKey(i)), true)));
+  return { text: `Coming up at ${bold(hits[0].location!)}: ${joinNatural(uniq.slice(0, 5).map((i) => `${bold(i.title)} (${describeWhen(env, i)})`))}.` };
+}
+
+/** "CS 101 meets MWF 10–10:50 in Hall B" → weekly class meetings, like the Class times sheet. */
+function classTimesIntent(env: Env): Outcome {
+  const { n, q, ctx, now } = env;
+  if (!/\b(?:meets?|meeting times?|class (?:is|times?)|lectures? (?:is|are)|has class|is on|are on|every)\b|^(?:add|set) (?:class times|my class times|class)/.test(q)) return undefined;
+  if (/\?$/.test(env.raw) || /^(?:when|what|where|who|how|does|do|is)\b/.test(q)) return undefined;
+  const text = n.replace(/^(?:add|set|save|put in)\s+(?:the\s+)?(?:class times?|schedule|meeting times?)?\s*(?:for\s+)?/i, "").replace(/\b(?:meets?|has class|class is|is on|are on|lectures? (?:is|are))\b/gi, " ");
+  const parsed = parseClassSchedule(text, ctx.categories, now);
+  if (!parsed?.categoryId || !parsed.meetings.length) return undefined;
+  const cls = ctx.categories.find((c) => c.id === parsed.categoryId)!;
+  const rawLoc = parsed.location ?? /\b(?:in|at)\s+(?:the\s+)?([A-Z0-9][\w .'-]{1,40}?)(?:\s+until\b|$)/i.exec(text)?.[1]?.trim();
+  const loc = rawLoc ? placeName(rawLoc).replace(/\b([a-z])\b/g, (c) => c.toUpperCase()) : undefined;
+  const leftover = contentWords(parsed.title.replace(new RegExp(rawLoc ? rawLoc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "(?!)", "i"), " ").replace(/\b(?:in|at|room)\b/gi, " "));
+  if (leftover.length && !leftover.every((w) => categoryTokens(cls).includes(w) || w === "class" || w === "lecture" || w === "lab")) return null;
+  const existing = savedClassMeetings(ctx.items, cls.id);
+  const fresh = parsed.meetings.filter((m) => !existing.some((s) => savedMeetingSlotEqual(s, m)));
+  if (!fresh.length) return { text: `${bold(cls.name)} already has those class times saved.` };
+  // Changing a saved time from chat would leave the old series behind and show the class twice.
+  const clashing = existing.filter((s) => fresh.some((m) => m.days.some((d) => s.days.includes(d))));
+  if (clashing.length) {
+    return { text: `${bold(cls.name)} already meets ${joinNatural(clashing.map((s) => bold(formatMeetingSummary(s, ctx.clock24h))))}. To change that, open **Schedule → Class times** — editing it there replaces the old times instead of adding a second set.` };
+  }
+  const title = cls.classTitle?.trim() || cls.name;
+  const lastDay = cls.syllabus?.keyDates.find((k) => /\b(?:last day of (?:classes|instruction)|classes end|end of classes|last class)\b/i.test(k.label));
+  const untilIso = lastDay ? new Date(`${lastDay.date}T23:59:59`).toISOString() : parsed.until;
+  const until = format(new Date(untilIso), "MMM d");
+  const actions: AssistantAction[] = [];
+  const labels: string[] = [];
+  for (const m of fresh) {
+    const range = meetingDateTimes(m, now);
+    if (!range) return null;
+    const summary = formatTimeRange(m.hour, m.minute, m.endHour, m.endMinute, ctx.clock24h);
+    const days = m.days.map((d) => weekdayShort(d)).join("/");
+    labels.push(`${days} ${summary}`);
+    actions.push({
+      kind: "create",
+      summary: `Add ${title} — ${days} ${summary}${loc ? ` · ${loc}` : ""}, weekly until ${until}`,
+      draft: {
+        type: "event",
+        title,
+        categoryId: cls.id,
+        at: range.at.toISOString(),
+        endAt: range.endAt.toISOString(),
+        reminders: [],
+        ...(loc ? { location: loc } : {}),
+        repeat: scheduleRepeat(m.days, untilIso),
+      },
+    });
+  }
+  return {
+    text: `I'll add ${bold(cls.name)} class times: ${bold(joinNatural(labels))}${loc ? ` in ${loc}` : ""}, repeating weekly until ${until}.${existing.length ? " Your other saved times stay as they are." : ""} Confirm below.`,
+    actions,
+  };
+}
+
+/** Length, copies, all-day, type, reminders off, clearing a field. */
+function moreEditsIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  let m: RegExpExecArray | null;
+  const one = (phrase: string, scope: Scope, build: Build): Outcome => {
+    const t = resolveTarget(env, phrase, scope);
+    if (t.kind === "none") return null;
+    if (t.kind === "many") return askWhich(env, t.items, build);
+    return build(t.item, t.series);
+  };
+
+  // "make the meeting 2 hours long", "extend lab by 30 minutes", "shorten X by 15 min", "X should end at 5pm"
+  if ((m = /^(?:make|change|set) (.+?) (?:to )?(?:be )?((?:\d+(?:\.\d+)?|an?|one|two|three|half an?)\s*(?:hours?|hrs?|minutes?|mins?))(?: long)?$/.exec(q))) {
+    const mins = spanMinutes(m[2]);
+    return one(m[1], "any", (item) => {
+      if (item.type !== "event" || item.allDay) return null;
+      const end = addMinutes(new Date(item.at), mins);
+      return { text: `I'll make ${bold(item.title)} ${bold(hoursText(mins).replace(/^1 hour$/, "an hour"))}, ending at ${fmtTime(end, ctx.clock24h)}. Confirm below.`, actions: [update(item, `Make “${item.title}” ${hoursText(mins)}`, { endAt: end.toISOString() })] };
+    });
+  }
+  if ((m = /^(extend|lengthen|shorten|cut) (.+?) by ((?:\d+|an?|one|two|half an?)\s*(?:hours?|hrs?|minutes?|mins?))$/.exec(q))) {
+    const mins = spanMinutes(m[3]) * (/^(?:shorten|cut)$/.test(m[1]) ? -1 : 1);
+    return one(m[2], "any", (item) => {
+      if (item.type !== "event" || item.allDay) return null;
+      const oldEnd = item.endAt ? new Date(item.endAt) : addMinutes(new Date(item.at), 60);
+      const end = addMinutes(oldEnd, mins);
+      if (+end <= +new Date(item.at)) return { text: `That would end ${bold(item.title)} before it starts.` };
+      return { text: `I'll have ${bold(item.title)} end at ${bold(fmtTime(end, ctx.clock24h))} instead of ${fmtTime(oldEnd, ctx.clock24h)}. Confirm below.`, actions: [update(item, `End “${item.title}” at ${fmtTime(end, ctx.clock24h)}`, { endAt: end.toISOString() })] };
+    });
+  }
+  if ((m = /^(?:make |have |set )?(.+?) (?:should |to )?(?:end|finish|wrap up)(?:s)? (?:at|by) (.+)$/.exec(q)) && !/^(?:when|what|does|do|is)\b/.test(q)) {
+    const t = findTime(`at ${m[2]}`);
+    if (!t) return undefined;
+    return one(m[1].replace(/^(?:make|have|set)\s+/, ""), "any", (item) => {
+      if (item.type !== "event" || item.allDay) return null;
+      const end = atTime(new Date(item.at), t);
+      if (+end <= +new Date(item.at)) return { text: `${bold(item.title)} starts at ${fmtTime(item.at, ctx.clock24h)}, so it can't end at ${fmtTime(end, ctx.clock24h)}.` };
+      return { text: `I'll have ${bold(item.title)} end at ${bold(fmtTime(end, ctx.clock24h))}. Confirm below.`, actions: [update(item, `End “${item.title}” at ${fmtTime(end, ctx.clock24h)}`, { endAt: end.toISOString() })] };
+    });
+  }
+
+  // "duplicate the review session to friday", "copy gym to tomorrow at 7am"
+  if ((m = /^(?:duplicate|copy|clone|repeat) (.+?) (?:to|on|for|onto) (.+)$/.exec(q))) {
+    const ref = findDayRef(m[2], now);
+    const t = findTime(m[2]);
+    if (!ref && !t) return undefined;
+    if (ref?.kind === "range") return null;
+    return one(m[1], "any", (item) => {
+      const orig = new Date(item.at);
+      const at = atTime(ref?.kind === "day" ? ref.day : startOfDay(orig), t ?? { h: orig.getHours(), m: orig.getMinutes() });
+      const draft: Omit<Item, "id" | "createdAt"> = {
+        type: item.type,
+        title: item.title,
+        categoryId: item.categoryId,
+        at: at.toISOString(),
+        ...(item.endAt ? { endAt: new Date(+at + (+new Date(item.endAt) - +orig)).toISOString() } : {}),
+        ...(item.allDay ? { allDay: true } : {}),
+        ...(item.location ? { location: item.location } : {}),
+        ...(item.description ? { description: item.description } : {}),
+        ...(item.url ? { url: item.url } : {}),
+        ...(item.type !== "event" ? { status: "todo" as ItemStatus } : {}),
+        reminders: (item.reminders ?? []).map((r) => ({ ...r, id: nanoid(), itemId: "" })),
+      };
+      const when = whenText(env, item, at);
+      const on = /^(?:today|tomorrow)/.test(when) ? "" : "on ";
+      return { text: `I'll add a copy of ${bold(item.title)} ${on}${bold(when)}. The original stays put. Confirm below.`, actions: [{ kind: "create", summary: `Copy “${item.title}” to ${when}`, draft }] };
+    });
+  }
+
+  // "make the career fair all day"
+  if ((m = /^(?:make|set|change) (.+?) (?:to )?(?:an? )?all[- ]day(?: event)?$/.exec(q))) {
+    return one(m[1], "any", (item) => {
+      if (item.allDay) return { text: `${bold(item.title)} is already all day.` };
+      if (item.type !== "event") return null;
+      return { text: `I'll make ${bold(item.title)} an all-day event on ${dayName(new Date(item.at), now)}. Confirm below.`, actions: [update(item, `Make “${item.title}” all day`, { allDay: true, endAt: undefined })] };
+    });
+  }
+
+  // "make the reading a task", "change buy textbook to an assignment"
+  if ((m = /^(?:make|change|turn|convert|mark) (.+?) (?:in)?to (?:an? )?(task|assignment|to-?do)$/.exec(q) ?? /^(?:make) (.+?) (?:an? )?(task|assignment)$/.exec(q))) {
+    const type = m[2] === "assignment" ? "assignment" : "task";
+    return one(m[1], "any", (item) => {
+      if (item.type === "event") return null;
+      if (item.type === type) return { text: `${bold(item.title)} is already ${type === "task" ? "a task" : "an assignment"}.` };
+      return { text: `I'll change ${bold(item.title)} to ${type === "task" ? "a task" : "an assignment"}. Confirm below.`, actions: [update(item, `Make “${item.title}” ${type === "task" ? "a task" : "an assignment"}`, { type })] };
+    });
+  }
+
+  // "remove the reminders from the essay", "turn off reminders for gym", "no reminders for X"
+  if ((m = /^(?:remove|delete|clear|turn off|stop|disable|cancel|mute) (?:all |the |my )?(?:reminders?|notifications?|alerts?) (?:from|for|on|about) (.+)$/.exec(q) ?? /^(?:no|don't send|do not send) (?:reminders?|notifications?) (?:for|on|about) (.+)$/.exec(q))) {
+    return one(m[1], "any", (item) =>
+      item.reminders?.length
+        ? { text: `I'll turn off the reminders on ${bold(item.title)} (${joinNatural(item.reminders.map((r) => r.label))}). Confirm below.`, actions: [update(item, `Remove reminders from “${item.title}”`, { reminders: [] })] }
+        : { text: `${bold(item.title)} doesn't have any reminders to remove.` }
+    );
+  }
+
+  // "remove the location from the dentist", "clear the notes on the essay"
+  if ((m = /^(?:remove|delete|clear|erase|drop) (?:the )?(location|place|room|notes?|description|link|url) (?:from|on|for|of) (.+)$/.exec(q))) {
+    const which = /^(?:location|place|room)$/.test(m[1]) ? "location" : /^(?:link|url)$/.test(m[1]) ? "url" : "description";
+    const noun = which === "location" ? "location" : which === "url" ? "link" : "notes";
+    return one(m[2], "any", (item) =>
+      item[which]
+        ? { text: `I'll remove the ${noun} from ${bold(item.title)}. Confirm below.`, actions: [update(item, `Remove the ${noun} from “${item.title}”`, { [which]: undefined })] }
+        : { text: `${bold(item.title)} doesn't have ${noun === "notes" ? "any notes" : `a ${noun}`}.` }
+    );
+  }
+  return undefined;
+}
+
+/** "never mind" / "yes, do it" right after a proposal. */
+function proposalReplyIntent(env: Env): Outcome {
+  const last = [...env.history].reverse().find((t) => t.role === "assistant");
+  if (!last || !/Confirm(?: each| the blocks you want)? below|Confirm below to add it/.test(last.text)) return undefined;
+  const q = env.q;
+  if (/^(?:never ?mind|nvm|cancel(?: that| it)?|don't(?: do (?:that|it))?|do not(?: do (?:that|it))?|forget (?:it|that)|no(?: thanks| thank you)?|nope|scratch that|stop)$/.test(q)) {
+    return { text: pick(q, ["No problem — nothing's changed. You can just leave that card, or tap **Cancel** to clear it.", "Okay, I won't change anything. Tap **Cancel** on the card if you want it gone."]) };
+  }
+  if (/^(?:(?:yes|yeah|yep|yup|sure|ok(?:ay)?|sounds good|perfect|great)[,!. ]*)?(?:please )?(?:do it|go ahead|confirm(?: it)?|please do|add (?:it|them)|apply (?:it|them)|make it so|let's do it|yes please)?$/.test(q) && q.trim()) {
+    return { text: "Tap the button on the card above and it's done — I always wait for your tap before changing your calendar." };
+  }
+  return undefined;
+}
+
+/* ------------------------------------------------------------------ */
 /* Entry                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -2197,7 +2766,18 @@ const NEEDS_REASONING =
 const OFF_TOPIC = /\b(?:weather|forecast|temperature|rain(?:ing|y)?|snow(?:ing|y)?|humid|news|headlines|stocks?|who won|scores? of|recipe|translate|definition|define|meaning of|capital of|how do you spell|joke|poem|story|song|lyrics|calculate|solve|equation|derivative|integral|trivia|fun fact)\b/;
 
 /** Reasoning-flavoured phrasings we can still answer exactly. */
-const REASONING_OK = /^(?:what|which) (?:should|do) i (?:work on|do|tackle|start with|focus on)|^when (?:should|can|could) i (?:work on|study for|study|do|start|finish|get to)\b|\bshould i (?:bring|buy)\b/;
+const REASONING_OK = new RegExp(
+  [
+    String.raw`^(?:what|which) (?:should|do) i (?:work on|do|tackle|start with|focus on|prioriti[sz]e)`,
+    String.raw`^when (?:should|can|could) i (?:work on|study for|study|do|start|finish|get to)\b`,
+    String.raw`\bshould i (?:bring|buy)\b`,
+    // Plans, comparisons, summaries and workload reads have exact answers from the calendar.
+    String.raw`^plan (?:out )?(?:my |the )?(?:whole )?(?:week|weekend|day|today|tomorrow|next week|rest of (?:the|my|this) week|next few days)$`,
+    String.raw`^(?:should i|do i) (?:do|work on|start(?: with)?|finish|study for|tackle|focus on|prioriti[sz]e) .+ or .+`,
+    String.raw`^summari[sz]e (?:my |the )?(?:week|day|today|tomorrow|next week|weekend|yesterday|last week|week ahead)$`,
+    String.raw`^(?:is|are|how|what|am|can|will|do)\b.*\b(?:realistic|manageable|doable|overloaded|workload|too much)\b`,
+  ].join("|")
+);
 
 const ACTION_VERB = "(?:mark|move|delete|add|remove|complete|reschedule|push|cancel|rename|finish|start|remind|set|change|schedule|block|find|create|book|put|reopen|postpone|check off)";
 const COMPOUND_SPLIT = new RegExp(String.raw`\s*;\s*|,?\s+(?:and then|then|and also|also)\s+|,?\s+and\s+(?=${ACTION_VERB}\b)|,\s+(?=${ACTION_VERB}\b)`);
@@ -2209,11 +2789,17 @@ function questionNeedsContext(q: string): boolean {
 
 function run(env: Env): Outcome {
   const pipeline: Array<(e: Env) => Outcome> = [
+    proposalReplyIntent,
     smallTalk,
     (e) => answerHelpQuestion(e.q),
     syllabusIntent,
+    classTimesIntent,
+    planWeekIntent,
+    compareIntent,
+    prioritizeIntent,
     plannerIntent,
     reminderIntent,
+    moreEditsIntent,
     fieldEditIntent,
     moveIntent,
     deleteIntent,
@@ -2221,6 +2807,10 @@ function run(env: Env): Outcome {
     completeIntent,
     addIntent,
     focusIntent,
+    summaryIntent,
+    workloadIntent,
+    conflictIntent,
+    classWorkIntent,
     statsIntent,
     classesIntent,
     dateMathIntent,
@@ -2235,6 +2825,8 @@ function run(env: Env): Outcome {
     progressIntent,
     completedIntent,
     countIntent,
+    detailIntent,
+    placeIntent,
     lookupIntent,
     weekSummaryIntent,
     searchIntent,
@@ -2314,7 +2906,8 @@ function resolvePronouns(n: string, q: string, subjects: string[]): { n: string;
   const isAsk = /^(?:when|where|what time|how long) (?:is|was|does|did|will) (?:it|that)\b/.test(q) && !/^what time is it$/.test(q);
   if (!isEdit && !isAsk) return { n, q };
   const plural = /\b(?:them|those|these|both(?: of them)?|all of them|they)\b/;
-  const single = /\b(?:it|that one|this one|that|this)\b(?!\s+(?:is due|was due))/;
+  // "this"/"that" are pronouns only on their own — "this week", "that friday" are dates.
+  const single = /\b(?:it|that one|this one)\b(?!\s+(?:is due|was due))|\b(?:that|this)\b(?=\s+(?:to|on|for|by|as|until|till|back|up|done|off|first|now|over|forward|later|earlier)\b|\s*$)/;
   const re = plural.test(q) ? plural : single.test(q) ? single : null;
   if (!re) return { n, q };
   if (!subjects.length) return null;
@@ -2384,7 +2977,8 @@ export function tryLocalAnswer(
   if (!n) return null;
   let q = expand(n);
 
-  if (NEEDS_REASONING.test(q) && !REASONING_OK.test(q)) return null;
+  const emotional = /\b(?:stress|overwhelm|anxious|anxiety|panic|worried|burn(?:ed|t)? out|give up|can't cope)\w*/.test(q);
+  if (NEEDS_REASONING.test(q) && (emotional || !REASONING_OK.test(q))) return null;
   if (OFF_TOPIC.test(q)) return null;
 
   if (depth === 0) {
