@@ -17,6 +17,7 @@ import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
 import { toNewItem } from "./bulk-parse";
 import { parseMultiAdd } from "./multi-add";
+import { localReplyDelayMs, tryLocalAnswer } from "./local-assistant";
 import { nanoid } from "./nanoid";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
@@ -45,7 +46,7 @@ export interface AssistantTurn {
   text: string;
 }
 
-interface Ctx {
+export interface AssistantCtx {
   items: Item[];
   categories: Category[];
   clock24h: boolean;
@@ -369,8 +370,21 @@ export function shouldHandOffToAssistant(text: string): boolean {
 export async function askAssistant(
   message: string,
   history: AssistantTurn[],
-  ctx: Ctx
+  ctx: AssistantCtx
 ): Promise<AssistantResponse> {
+  // Most daily asks are lookups or one-item edits over data already on this
+  // device. Answer those here (same voice, same confirm cards) and keep the
+  // model for what needs judgement; anything not confidently understood is null.
+  try {
+    const local = tryLocalAnswer(message, history, ctx);
+    if (local) {
+      await new Promise((resolve) => setTimeout(resolve, localReplyDelayMs(local.text, message)));
+      return local;
+    }
+  } catch {
+    /* a local-engine bug must never cost the user an answer — ask the model */
+  }
+
   // Hard ceiling so a hung request can never wedge the chat — the server does
   // its own 30s abort on the model call, this is the outer safety net.
   const controller = new AbortController();
@@ -431,7 +445,7 @@ export async function askAssistant(
 }
 
 /** Defensive pass over server actions before the store applies them. */
-function sanitizeActions(actions: AssistantResponse["actions"], ctx: Ctx): AssistantAction[] | undefined {
+function sanitizeActions(actions: AssistantResponse["actions"], ctx: AssistantCtx): AssistantAction[] | undefined {
   if (!Array.isArray(actions)) return undefined;
   const ids = new Set(ctx.items.map((i) => i.id));
   const catIds = new Set(ctx.categories.map((c) => c.id));
@@ -458,7 +472,7 @@ function sanitizeActions(actions: AssistantResponse["actions"], ctx: Ctx): Assis
 /* Local heuristic engine (no network) — covers the common asks       */
 /* ------------------------------------------------------------------ */
 
-export function localAnswer(query: string, ctx: Ctx, now = new Date()): AssistantResponse {
+export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()): AssistantResponse {
   const raw = query.trim();
   const q = raw.toLowerCase();
   const fmtTime = (iso: string) => format(new Date(iso), ctx.clock24h ? "HH:mm" : "h:mm a");
@@ -823,7 +837,7 @@ function miss(q: string): AssistantResponse {
   };
 }
 
-function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string, wantsCompleted = false): AssistantResponse {
+function dayAnswer(day: Date, ctx: AssistantCtx, fmtTime: (iso: string) => string, wantsCompleted = false): AssistantResponse {
   const on = ctx.items
     .filter((i) => {
       if (wantsCompleted) return i.status === "done" && isSameDay(new Date(i.completedAt ?? i.at), day);
@@ -850,7 +864,7 @@ function dayAnswer(day: Date, ctx: Ctx, fmtTime: (iso: string) => string, wantsC
   };
 }
 
-function rangeAnswer(label: string, start: Date, end: Date, ctx: Ctx): AssistantResponse {
+function rangeAnswer(label: string, start: Date, end: Date, ctx: AssistantCtx): AssistantResponse {
   const inRange = ctx.items.filter((i) => isWithinInterval(new Date(i.at), { start, end }));
   const due = inRange.filter((i) => i.type !== "event" && i.status !== "done");
   const events = inRange.filter((i) => i.type === "event" && i.status !== "done");
@@ -861,7 +875,7 @@ function rangeAnswer(label: string, start: Date, end: Date, ctx: Ctx): Assistant
   return { text: `${cap(label)}: ${parts.join("; ")}.`, suggestions: ["What's my busiest day?", "What's on today?"] };
 }
 
-function busiestDay(ctx: Ctx): AssistantResponse {
+function busiestDay(ctx: AssistantCtx): AssistantResponse {
   const now = new Date();
   const end = addDays(now, 7);
   const counts = new Map<string, { count: number; label: string }>();
@@ -882,7 +896,7 @@ function busiestDay(ctx: Ctx): AssistantResponse {
   };
 }
 
-function freeTime(q: string, ctx: Ctx, fmtTime: (iso: string) => string): AssistantResponse {
+function freeTime(q: string, ctx: AssistantCtx, fmtTime: (iso: string) => string): AssistantResponse {
   const day = /tomorrow/.test(q) ? addDays(new Date(), 1) : new Date();
   const events = ctx.items
     .filter((i) => i.type === "event" && !i.allDay && isSameDay(new Date(i.at), day))

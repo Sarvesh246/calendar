@@ -208,7 +208,9 @@ export async function POST(request: Request) {
     try {
       await ensureAssistantThread(user.id, threadId);
       const stored = await loadAssistantHistory(user.id, threadId);
-      if (stored.length) history = trimHistory(stored);
+      // The client's thread also holds answers produced on-device, which never reach
+      // this table; only fall back to stored history when the client sent none.
+      if (!history.length && stored.length) history = trimHistory(stored);
       await storeAssistantMessage({ userId: user.id, threadId, role: "user", text: body.message });
     } catch (error) {
       console.error("[assistant] history write failed", error);
