@@ -10,8 +10,6 @@ import type { AssistantResponse } from "./ai-assistant";
 import type { SyllabusInfo, SyllabusKeyDate, SyllabusPerson, SyllabusPolicy } from "./syllabus-info";
 import type { Category } from "./types";
 
-type Outcome = AssistantResponse | null | undefined;
-
 export type SyllabusEnv = {
   /** Lowercased, contractions expanded. */
   q: string;
@@ -21,7 +19,16 @@ export type SyllabusEnv = {
   categories: Category[];
   /** The class the sentence names outright, if any. */
   named?: Category;
+  /**
+   * Classes whose due dates came from a syllabus import. Imports from before
+   * course details were kept have dates but no `syllabus` — those deserve a
+   * different answer than a class that never had one.
+   */
+  importedFromSyllabus?: ReadonlySet<string>;
 };
+
+/** A reply that only says "I don't have that" — the caller may prefer a calendar answer. */
+export type SyllabusResponse = AssistantResponse & { missing?: true };
 
 const bold = (s: string) => `**${s}**`;
 
@@ -101,7 +108,7 @@ const TOPIC_RE: Array<[Topic, RegExp]> = [
   ["ta", /\b(?:tas?|t\.a\.?s?|teaching assistants?|teaching fellows?|graders?|section leaders?)\b/],
   ["instructor", /\b(?:professors?|profs?|instructors?|teachers?|lecturers?|who (?:is )?teach(?:es|ing)?|taught by|who runs)\b/],
   ["scale", /\b(?:grad(?:e|ing) scale|letter grades?|cut-?offs?|grade boundaries|what (?:is|counts as) an? [abcdf][+-]?\b|how (?:many|much) (?:points|percent) (?:for|is) an? [abcdf]|what percent(?:age)? (?:is|for) an? [abcdf])/],
-  ["grading", /\b(?:grad(?:e|ing|ed) (?:breakdown|weights?|distribution|split|composition)|how (?:is|am i|are we|will i be) (?:it |this |the class |the course |[a-z0-9 ]+ )?graded|worth|weight(?:ed|ing)?|how much (?:is|does|do|are)|percent(?:age)? of (?:the|my) grade|counts? for|what (?:makes up|goes into) (?:the|my) grade)\b/],
+  ["grading", /\b(?:grad(?:e|ing|ed) (?:breakdown|weights?|distribution|split|composition)|how (?:is|am i|are we|will i be) (?:it |this |the class |the course |[a-z0-9 ]+ )?graded|worth|weight(?:ed|ing)?|how much (?:is|does|do|are)|percent(?:age)? of (?:the|my|your) (?:final |overall |class |course )?grade|what percent(?:age)?|how (?:many|much) percent|counts? for|what (?:makes up|goes into) (?:the|my) grade)\b/],
   ["materials", /\b(?:text ?books?|books?|materials|required (?:reading|texts?)|course packs?|readers?|calculators?|software|supplies|what do i need to buy)\b/],
   ["prereq", /\bpre-?req(?:uisite)?s?\b/],
   ["website", /\b(?:website|web site|course (?:page|site)|canvas (?:page|site|link)|class (?:page|site))\b/],
@@ -109,7 +116,9 @@ const TOPIC_RE: Array<[Topic, RegExp]> = [
   ["keyDate", /\b(?:spring break|fall break|winter break|thanksgiving|reading (?:week|day|period)|holidays?|no class(?:es)?|class(?:es)? (?:is |are )?cancel+ed|(?:add|drop|add\/drop|withdraw(?:al)?) (?:deadline|date|period)|last day (?:of|to) (?:class(?:es)?|drop|withdraw|add)|first day of class(?:es)?|finals? (?:week|period)|semester (?:start|end)s?|when does (?:the )?(?:semester|term|class(?:es)?) (?:start|end|begin|finish))\b/],
 ];
 
-function topicsOf(q: string): Topic[] {
+function topicsOf(qIn: string): Topic[] {
+  // "what % is the final" — the % sign is gone once words are tokenized.
+  const q = qIn.replace(/(\d+\s*)?%/g, (m, n) => (n ? m : " percent ")).replace(/\s+/g, " ");
   const out: Topic[] = [];
   for (const [t, re] of TOPIC_RE) if (re.test(q)) out.push(t);
   if (POLICY_SYNONYMS.some((p) => p.re.test(q)) || /\b(?:polic(?:y|ies)|rules?)\b/.test(q)) out.push("policy");
@@ -388,7 +397,18 @@ function nounFor(topic: Topic, q: string): string {
  * Answer a syllabus question, or step aside. Plural or class-less questions
  * ("who are my professors") are answered across every class that has details.
  */
-export function answerSyllabusQuestion(envIn: SyllabusEnv): Outcome {
+function missingFor(c: Category, env: SyllabusEnv, topic: Topic, q: string): SyllabusResponse {
+  const name = bold(displayName(c));
+  if (env.importedFromSyllabus?.has(c.id)) {
+    return {
+      missing: true,
+      text: `I have ${name}'s due dates from its syllabus, but not ${nounFor(topic, q)} — that part wasn't saved when it was imported. If you want me to know it, re-add the same PDF under Settings → Classes; your assignments and progress stay as they are.`,
+    };
+  }
+  return { missing: true, text: `I don't have the ${name} syllabus saved. Import it under Settings → Classes and I can answer questions like that.` };
+}
+
+export function answerSyllabusQuestion(envIn: SyllabusEnv): SyllabusResponse | null | undefined {
   const env = envIn.named
     ? { ...envIn, q: envIn.q.replace(new RegExp(`\\b${envIn.named.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), " ").replace(/\s+/g, " ").trim() }
     : envIn;
@@ -397,7 +417,8 @@ export function answerSyllabusQuestion(envIn: SyllabusEnv): Outcome {
   const topics = topicsOf(q);
   if (!topics.length) return undefined;
   // "what grade do I need on the final" needs current scores we don't have.
-  if (/\bwhat (?:grade|score) do i need\b|\bmy (?:current )?grade\b|\bam i (?:passing|failing)\b/.test(q)) return null;
+  // "what percentage of my grade is quizzes" is a weight question and stays here.
+  if (/\bwhat (?:grade|score) do i need\b|\bwhat is my (?:current |overall |final )?grade\b|(?<!of )\bmy (?:current |overall )?grade (?:is|in|right now|so far)\b|\bam i (?:passing|failing)\b|\bcalculate my grade\b/.test(q)) return null;
   const topic = topics[0];
   const all = withInfo(env.categories);
 
@@ -406,7 +427,7 @@ export function answerSyllabusQuestion(envIn: SyllabusEnv): Outcome {
     if (!info) {
       // Only claim ignorance for topics a calendar can't answer either.
       if (topic === "keyDate" || topic === "meetings") return undefined;
-      return { text: `I don't have the ${bold(displayName(env.named))} syllabus details saved. Import its syllabus under Settings → Classes and I can answer questions like that.` };
+      return missingFor(env.named, env, topic, q);
     }
     for (const t of topics) {
       const text = answerFor(env.named, info, t, env);
@@ -419,7 +440,15 @@ export function answerSyllabusQuestion(envIn: SyllabusEnv): Outcome {
   if (!all.length) {
     if (topic === "keyDate" || topic === "meetings" || topic === "description") return undefined;
     if (topic === "general" || /\bsyllabus\b/.test(q) || ["instructor", "ta", "officeHours", "grading", "scale", "policy", "materials"].includes(topic)) {
-      return { text: "I don't have any syllabus details saved yet. Import a syllabus under Settings → Classes — along with due dates it reads the instructor, office hours, grading, and policies — and I can answer that." };
+      const imported = env.categories.filter((c) => !c.archived && env.importedFromSyllabus?.has(c.id));
+      if (imported.length === 1) return missingFor(imported[0], env, topic, q);
+      if (imported.length > 1) {
+        return {
+          missing: true,
+          text: `I have the due dates from your ${joinNatural(imported.map((c) => bold(displayName(c))))} syllabi, but not ${nounFor(topic, q)} — that part wasn't saved when they were imported. Re-adding a PDF under Settings → Classes fills it in without touching your assignments.`,
+        };
+      }
+      return { missing: true, text: "I don't have any syllabus details saved yet. Import a syllabus under Settings → Classes — along with due dates it reads the instructor, office hours, grading, and policies — and I can answer that." };
     }
     return undefined;
   }

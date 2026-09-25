@@ -38,6 +38,7 @@ import { parseQuickAdd } from "./quick-add-parser";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
+import { isSyllabusSourceUid } from "./syllabus-match";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
 type Env = {
@@ -2250,16 +2251,37 @@ function syllabusIntent(env: Env): Outcome {
   // Questions about a specific item ("when is my meeting with professor lee")
   // are calendar lookups, not syllabus ones.
   if (/^(?:when|what time)\b/.test(env.q) && /\b(?:meeting|appointment|exam|quiz|midterm|final|due)\b/.test(env.q)) return undefined;
-  const out = answerSyllabusQuestion({
+  const importedFromSyllabus = new Set(env.ctx.items.filter((i) => isSyllabusSourceUid(i.sourceUid)).map((i) => i.categoryId));
+  const res = answerSyllabusQuestion({
     q: env.q,
     raw: env.raw.toLowerCase(),
     now: env.now,
     categories: env.ctx.categories,
     named: findClass(env, env.q),
+    importedFromSyllabus,
   });
-  const cls = out && /(?:What do you want to know|Which one do you want)\?$/.test(out.text) ? /\*\*(.+?)\*\*/.exec(out.text)?.[1] : undefined;
-  if (out && cls) pendingSyllabus = { prompt: out.text, className: cls };
+  if (!res) return res;
+  const { missing, ...out } = res;
+  // "When are office hours?" with an Office Hours event on the calendar: the
+  // calendar answers that better than a note about missing syllabus details.
+  if (missing && calendarMentions(env)) return undefined;
+  const cls = /(?:What do you want to know|Which one do you want)\?$/.test(out.text) ? /\*\*(.+?)\*\*/.exec(out.text)?.[1] : undefined;
+  if (cls) pendingSyllabus = { prompt: out.text, className: cls };
   return out;
+}
+
+const QUESTION_WORDS = new Set(["who", "what", "when", "where", "which", "how", "is", "are", "can", "do", "does", "tell", "about", "syllabus", "say", "says", "much", "many", "wa", "will", "should", "could", "would"]);
+
+/** Does the question name something that's actually on the calendar? */
+function calendarMentions(env: Env): boolean {
+  const cls = findClass(env, env.q);
+  const want = tokens(env.q).filter((t) => !QUESTION_WORDS.has(t) && !categoryTokens(cls).includes(t));
+  if (!want.length) return false;
+  return env.ctx.items.some((i) => {
+    if (cls && i.categoryId !== cls.id) return false;
+    const have = tokens(i.title);
+    return want.filter((w) => tokenMatches(w, have)).length >= Math.min(2, want.length);
+  });
 }
 
 function isMutation(r: AssistantResponse): boolean {
