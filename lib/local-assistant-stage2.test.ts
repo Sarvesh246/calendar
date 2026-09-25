@@ -31,6 +31,15 @@ describe("syllabus questions", () => {
     expect(text("what's the prof's office")).toContain("Lyon 310");
   });
 
+  it("answers a casual 'what percentage is X' question", () => {
+    const engr = ctx.categories.find((c) => c.id === "c1")!;
+    engr.name = "ENGR 102";
+    engr.syllabus = { ...ctx.categories.find((c) => c.id === "c2")!.syllabus!, grading: [{ component: "Quizzes", weight: "15%" }, { component: "Labs", weight: "30%" }] };
+    expect(text("can u check what percentage of my grade is the quizzes in my engr 102 class")).toBe("**Quizzes** is worth **15%** of your **ENGR 102** grade.");
+    expect(text("how much are labs worth in engr 102")).toContain("30%");
+    expect(text("what % is the quizzes for engr 102")).toContain("15%");
+  });
+
   it("answers grading, scale and materials", () => {
     expect(text("how much is the final worth")).toMatch(/Final exam.*35%/);
     expect(text("how is econ graded")).toContain("Participation");
