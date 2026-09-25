@@ -256,7 +256,12 @@ function extractLocation(text: string): { location?: string; rest: string } {
 }
 
 function tidyLocation(s: string): string {
-  return s.replace(/[?!.]+$/g, "").replace(/\s{2,}/g, " ").trim();
+  // "dinner at olive garden at 7pm" leaves "olive garden at" once the time is gone.
+  return s
+    .replace(/[?!.]+$/g, "")
+    .replace(/(?:\s+(?:at|on|by|from|for|in|,))+\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function cleanTitle(text: string): string {

@@ -40,6 +40,7 @@ import {
   type SyllabusExtractResult,
 } from "@/lib/syllabus-extract";
 import { SYLLABUS_CLIENT_RETRY_MS } from "@/lib/syllabus-limits";
+import { normalizeSyllabusInfo, type SyllabusInfo } from "@/lib/syllabus-info";
 import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,7 @@ type PreviewState = {
   warning?: string;
   courseName: string;
   courseCode: string;
+  info?: SyllabusInfo;
   forceCategoryId?: string;
   timeZone: string;
   drafts: SyllabusDraft[];
@@ -207,6 +209,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       courseCode: current.courseCode,
       fileName: current.fileName,
       decisions: current.decisions,
+      info: current.info,
     });
     haptic("success");
     setPreview(null);
@@ -604,6 +607,7 @@ async function runExtract(
       warning,
       courseName: extracted.courseName,
       courseCode: extracted.courseCode,
+      ...(extracted.info ? { info: extracted.info } : {}),
       forceCategoryId:
         forceCategoryId ?? (resolved.status === "create" ? undefined : resolved.categoryId),
       timeZone,
@@ -686,7 +690,8 @@ async function postSyllabusPdfOnce(
   const items = Array.isArray((data as { items?: unknown }).items)
     ? ((data as { items: SyllabusExtractedItem[] }).items)
     : [];
-  return { courseName, courseCode, items };
+  const info = normalizeSyllabusInfo((data as { info?: unknown }).info, { fileName: file.name });
+  return { courseName, courseCode, items, ...(info ? { info } : {}) };
 }
 
 function summarizeApply(added: number, matched: number): string {

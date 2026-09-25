@@ -44,6 +44,65 @@ const RESPONSE_SCHEMA = {
   properties: {
     courseName: { type: "STRING" },
     courseCode: { type: "STRING" },
+    info: {
+      type: "OBJECT",
+      properties: {
+        term: { type: "STRING" },
+        description: { type: "STRING" },
+        meetings: { type: "STRING" },
+        location: { type: "STRING" },
+        website: { type: "STRING" },
+        prerequisites: { type: "STRING" },
+        people: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              role: { type: "STRING", enum: ["instructor", "ta", "other"] },
+              name: { type: "STRING" },
+              email: { type: "STRING" },
+              phone: { type: "STRING" },
+              office: { type: "STRING" },
+              officeHours: { type: "STRING" },
+            },
+            required: ["role", "name"],
+          },
+        },
+        grading: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: { component: { type: "STRING" }, weight: { type: "STRING" } },
+            required: ["component", "weight"],
+          },
+        },
+        gradeScale: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: { grade: { type: "STRING" }, range: { type: "STRING" } },
+            required: ["grade", "range"],
+          },
+        },
+        materials: { type: "ARRAY", items: { type: "STRING" } },
+        policies: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: { topic: { type: "STRING" }, text: { type: "STRING" } },
+            required: ["topic", "text"],
+          },
+        },
+        keyDates: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: { label: { type: "STRING" }, date: { type: "STRING" }, endDate: { type: "STRING" } },
+            required: ["label", "date"],
+          },
+        },
+      },
+    },
     items: {
       type: "ARRAY",
       items: {
@@ -66,7 +125,7 @@ const RESPONSE_SCHEMA = {
     },
   },
   required: ["courseName", "courseCode", "items"],
-  propertyOrdering: ["courseName", "courseCode", "items"],
+  propertyOrdering: ["courseName", "courseCode", "items", "info"],
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -100,7 +159,7 @@ function systemPrompt(opts: {
       ? `The user's existing class names (for matching courseName / courseCode only — this is not a calendar dump): ${JSON.stringify(opts.categories.map((c) => c.name))}.`
       : `The user did not name a class; read courseName and courseCode from the PDF.`;
 
-  return `You extract dated graded work from a course syllabus PDF for "Datebook", a personal calendar and assignment app.
+  return `You read a course syllabus PDF: extract its dated graded work AND the course reference details for "Datebook", a personal calendar and assignment app.
 
 Right now it is ${human} (timezone ${tz}). Current instant: ${opts.now}.
 ${classHint}
@@ -109,7 +168,7 @@ WHAT TO EXTRACT — graded or due work only:
 - homework / problem sets, quizzes, exams (midterm, final), papers / essays, labs, projects / milestones, graded discussions, presentations that have a due date or exam date
 - Prefer an extra row over a miss. A human will review before anything is saved.
 
-WHAT TO SKIP:
+WHAT TO SKIP in items (put these in "info" instead when present):
 - lectures, recitations, class meeting times
 - office hours, tutoring hours
 - policies, grading weights, academic integrity, attendance rules
@@ -136,6 +195,18 @@ KIND: homework | quiz | exam | paper | lab | project | discussion | other
 courseName: the full course title. courseCode: department + number (e.g. ENGL 101) if present, else "".
 title: the short assignment name, not the whole course name.
 notes: optional one-line extra (chapter, room) — omit if nothing useful.
+
+INFO — the course reference a student asks about all term. Copy facts faithfully and concisely; omit anything the PDF does not say. Never guess.
+- term: e.g. "Fall 2026"
+- description: 1-2 sentence summary of what the course covers
+- meetings: when and where class meets as written ("MWF 10:00-10:50, Hall B 120"); location: room/building
+- website: course site URL if printed (http/https only); prerequisites: as written
+- people: every instructor and TA with name, email, phone, office, and officeHours as written ("Tue 2-4 PM, Zoom Thu 7 PM")
+- grading: each graded component with its weight as written ("Midterm" / "25%"); a drop rule is its own component if stated
+- gradeScale: letter grade cutoffs ("A" / "93-100")
+- materials: required/optional textbooks (title, author, edition), software, supplies
+- policies: one entry per policy topic with a short topic label and a 1-3 sentence faithful summary. Cover whatever the syllabus includes: late work, missed/makeup exams, attendance, participation, regrades, extra credit, collaboration, academic integrity, AI tool use, laptops/phones, accommodations, communication/email response time, dropped scores, exam format/cheat sheets, and anything else a student would ask
+- keyDates: non-assignment calendar facts with YYYY-MM-DD dates: first/last day of class, no-class days, holidays, breaks (endDate for spans), add/drop and withdraw deadlines, final exam period
 
 Reply ONLY with JSON matching the schema.`;
 }

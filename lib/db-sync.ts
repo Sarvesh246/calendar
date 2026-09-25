@@ -9,6 +9,7 @@ import type {
 import { tombKey, type EntityKind, type TombstoneMap } from "./tombstones";
 import { sanitizeCustomTheme } from "./custom-theme";
 import { normalizeClassReminderMinutes } from "./class-reminder";
+import { normalizeSyllabusInfo } from "./syllabus-info";
 
 /* ------------------------------------------------------------------ */
 /* Row <-> client-model mappers                                        */
@@ -50,7 +51,7 @@ export function safeCategoryColor(v: unknown): string {
 // it, retry, and keep syncing everything else rather than wedging the queue.
 // The column starts flowing again on its own once the migration is run.
 const STRIPPABLE_COLS: Record<string, readonly string[]> = {
-  categories: ["class_title"],
+  categories: ["class_title", "syllabus"],
   items: ["url", "completed_at", "source_snapshot", "repeat", "repeat_id", "status_at", "work_for"],
   import_sources: ["last_error"],
   user_settings: [
@@ -107,6 +108,10 @@ export function describeError(e: unknown): string {
   return String(e);
 }
 
+function syllabusFromRow(v: unknown) {
+  return v ? normalizeSyllabusInfo(v) : undefined;
+}
+
 export function toCategoryRow(c: Category, userId: string): Row {
   return {
     id: c.id,
@@ -116,6 +121,7 @@ export function toCategoryRow(c: Category, userId: string): Row {
     color: safeCategoryColor(c.color),
     archived: c.archived ?? false,
     source_id: c.sourceId ?? null,
+    syllabus: c.syllabus ?? null,
     updated_at: c.updatedAt ?? new Date().toISOString(),
   };
 }
@@ -127,6 +133,7 @@ export function rowToCategory(r: Row): Category {
     color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
+    ...(syllabusFromRow(r.syllabus) ? { syllabus: syllabusFromRow(r.syllabus) } : {}),
     ...(isoOrNull(r.updated_at) ? { updatedAt: isoOrNull(r.updated_at) as string } : {}),
   };
 }

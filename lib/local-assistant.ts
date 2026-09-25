@@ -36,7 +36,9 @@ import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import { parseQuickAdd } from "./quick-add-parser";
 import { formatOffsetLabel } from "./reminder-defaults";
-import type { Category, Item, ItemStatus } from "./types";
+import { answerHelpQuestion } from "./local-help";
+import { answerSyllabusQuestion } from "./local-syllabus";
+import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
 type Env = {
   ctx: AssistantCtx;
@@ -185,6 +187,17 @@ function findDayRef(qIn: string, now: Date): DayRef | null {
     const toSat = (6 - today.getDay() + 7) % 7;
     return { kind: "range", start: today, end: addDays(today, toSat + 1), label: "the rest of this week", text: m[0] };
   }
+  if ((m = /\blast week\b/.exec(q))) {
+    const start = addDays(today, -today.getDay() - 7);
+    return { kind: "range", start, end: addDays(start, 7), label: "last week", text: m[0] };
+  }
+  if ((m = /\b(this|the|next|last) month\b/.exec(q))) {
+    const which = m[1];
+    const offset = which === "next" ? 1 : which === "last" ? -1 : 0;
+    const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    return { kind: "range", start, end, label: which === "next" ? "next month" : which === "last" ? "last month" : "this month", text: m[0] };
+  }
   if ((m = /\bnext week\b/.exec(q))) {
     const start = addDays(today, 7 - today.getDay());
     return { kind: "range", start, end: addDays(start, 7), label: "next week", text: m[0] };
@@ -204,7 +217,7 @@ function findDayRef(qIn: string, now: Date): DayRef | null {
     const dow = WEEKDAY_INDEX[wd[2]];
     const mod = wd[1];
     let d = thisOrNextWeekday(dow as 0, today);
-    if (mod === "next") d = addDays(nextOccurrence(dow, today), 7);
+    if (mod === "next") d = addDays(today, 7 - today.getDay() + dow);
     if (mod === "last") d = prevWeekday(dow, today);
     return day(d, mod === "next" || mod === "last" ? `${mod} ${format(d, "EEEE")}` : format(d, "EEEE"), wd[0]);
   }
@@ -222,12 +235,6 @@ function findDayRef(qIn: string, now: Date): DayRef | null {
     }
   }
   return null;
-}
-
-function nextOccurrence(dow: number, from: Date): Date {
-  let d = addDays(startOfDay(from), 1);
-  while (d.getDay() !== dow) d = addDays(d, 1);
-  return d;
 }
 
 type TimeRef = { h: number; m: number; text: string; explicit: boolean };
@@ -425,12 +432,58 @@ function describeWhen(env: Env, item: Item): string {
   return `${dayName(d, env.now)}${time}`;
 }
 
+type Build = (item: Item, series: number) => AssistantResponse | null;
+
+/**
+ * The last "which one?" we asked, and what to do once the user picks. Lives in
+ * memory for this tab only: a reload drops it and the reply goes to the model.
+ */
+let pendingChoice: { prompt: string; options: Item[]; build: Build } | null = null;
+/** We asked "what do you want to know?" about a class's syllabus; the reply is the topic. */
+let pendingSyllabus: { prompt: string; className: string } | null = null;
+
+/** For tests: forget any half-finished "which one?" exchange. */
+export function resetLocalAssistantState() {
+  pendingChoice = null;
+  pendingSyllabus = null;
+}
+
 /** Ask which of a few matches was meant; more than a handful is the model's job. */
-function askWhich(env: Env, items: Item[]): AssistantResponse | null {
+function askWhich(env: Env, items: Item[], build?: Build): AssistantResponse | null {
   if (items.length > 4) return null;
   const options = items.map((i) => `${bold(i.title)} (${describeWhen(env, i)})`);
   const last = options.pop();
-  return { text: `Which one do you mean — ${options.length ? `${options.join(", ")} or ${last}` : last}?` };
+  const text = `Which one do you mean — ${options.length ? `${options.join(", ")} or ${last}` : last}?`;
+  if (build) pendingChoice = { prompt: text, options: items, build };
+  return { text };
+}
+
+const ORDINALS: Record<string, number> = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2, fourth: 3, "4th": 3, four: 3 };
+
+/** "the second one", "problem set 4", "the one on friday" → one of the options. */
+function pickOption(env: Env, options: Item[]): Item | null {
+  const q = env.q.replace(/^(?:the|um|uh|oh|i meant|i mean|mean)\s+/g, "").trim();
+  if (/^(?:neither|none|nevermind|never mind|cancel|forget it|no)\b/.test(q)) return null;
+  const titleHits = options.filter((o) => {
+    const want = tokens(q.replace(/\b(?:one|the|on|due)\b/g, " "));
+    const have = [...tokens(o.title), ...tokens(format(new Date(o.at), "EEEE MMM d"))];
+    return want.length > 0 && want.every((w) => tokenMatches(w, have) || (/^\d+$/.test(w) && have.includes(w)));
+  });
+  if (titleHits.length === 1) return titleHits[0];
+  const dayRef = findDayRef(q, env.now);
+  if (dayRef?.kind === "day") {
+    const onDay = options.filter((o) => isSameDay(new Date(o.at), dayRef.day));
+    if (onDay.length === 1) return onDay[0];
+  }
+  if (/^(?:last|the last|latter|the latter)(?: one)?$/.test(q)) return options[options.length - 1];
+  if (/^(?:former|the former)(?: one)?$/.test(q)) return options[0];
+  const ord = /^(first|1st|second|2nd|third|3rd|fourth|4th|one|two|three|four)(?: one)?$/.exec(q) ?? /^#?([1-4])$/.exec(q);
+  if (ord) {
+    const idx = /^\d$/.test(ord[1]) ? +ord[1] - 1 : ORDINALS[ord[1]];
+    // A bare number that is also in a title ("4" → "Problem Set 4") was handled above.
+    if (idx >= 0 && idx < options.length) return options[idx];
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -484,11 +537,43 @@ function update(item: Item, summary: string, patch: Partial<Item>): AssistantAct
   return { kind: "update", summary, itemId: item.id, itemTitle: item.title, patch };
 }
 
+function statusAction(item: Item, status: ItemStatus): AssistantAction {
+  const verb = status === "done" ? "done" : status === "doing" ? "in progress" : "to do";
+  return update(item, `Mark “${item.title}” ${verb}`, { status });
+}
+
+function statusFor(item: Item, status: ItemStatus): AssistantResponse | null {
+  if (item.type === "event") return null;
+  const current = item.status ?? "todo";
+  if (current === status) {
+    return { text: `${bold(item.title)} is already ${status === "doing" ? "in progress" : status === "done" ? "done" : "on your to-do list"}.` };
+  }
+  const text =
+    status === "done"
+      ? pick(item.title, [`I'll mark ${bold(item.title)} as done. Confirm below.`, `Marking ${bold(item.title)} done — confirm below and it's checked off.`])
+      : status === "doing"
+        ? `I'll mark ${bold(item.title)} as in progress. Confirm below.`
+        : `I'll reopen ${bold(item.title)}. Confirm below.`;
+  return { text, actions: [statusAction(item, status)] };
+}
+
 function setStatus(env: Env, phrase: string, status: ItemStatus): Outcome {
   const p = phrase.trim();
   if (!p || PRONOUN_ONLY.test(p)) return null;
-  if (/\b(?:everything|all|every|each)\b/.test(p) && !/\ball[- ]day\b/.test(p)) return null;
   const scope: Scope = status === "done" ? "open-work" : status === "todo" ? "done-work" : "open-work";
+  if (isBulk(p)) {
+    const items = selectBulk(env, p, status === "todo" ? "reopen" : "done");
+    if (!items) return null;
+    return bulkResponse(env, p, items, status === "done" ? "mark done" : status === "doing" ? "mark in progress" : "reopen", (i) => statusAction(i, status));
+  }
+  const several = resolveSeveral(env, p, scope);
+  if (several) {
+    if (several.length > 12) return null;
+    const actions = several.map((i) => statusAction(i, status));
+    const verb = status === "done" ? "mark" : status === "doing" ? "start" : "reopen";
+    const tail = status === "done" ? " as done" : status === "doing" ? "" : "";
+    return { text: `I'll ${verb} ${joinNatural(several.map((i) => bold(i.title)))}${tail}. Confirm below.`, actions };
+  }
   let target = resolveTarget(env, p, scope);
   if (target.kind === "none") {
     // "Already done" is worth saying rather than looking like a miss.
@@ -501,21 +586,112 @@ function setStatus(env: Env, phrase: string, status: ItemStatus): Outcome {
     target = { kind: "none" };
   }
   if (target.kind === "none") return null;
-  if (target.kind === "many") return askWhich(env, target.items);
-  const { item } = target;
-  if (item.type === "event") return null;
-  const current = item.status ?? "todo";
-  if (current === status) {
-    return { text: `${bold(item.title)} is already ${status === "doing" ? "in progress" : status === "done" ? "done" : "on your to-do list"}.` };
+  if (target.kind === "many") return askWhich(env, target.items, (item) => statusFor(item, status));
+  return statusFor(target.item, status);
+}
+
+/* ------------------------------------------------------------------ */
+/* Several things at once                                              */
+/* ------------------------------------------------------------------ */
+
+const BULK_WORD = /\b(?:everything|all(?![- ]day)|every(?!\s+(?:day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)|each|both)\b/;
+
+function isBulk(phrase: string): boolean {
+  return BULK_WORD.test(expand(phrase));
+}
+
+const BULK_FILLER = new Set([
+  "all", "everything", "every", "each", "both", "my", "the", "due", "on", "for", "in", "from", "of", "that", "which", "is", "are",
+  "i", "have", "as", "thing", "item", "stuff", "assignment", "homework", "task", "todo", "event", "meeting", "class", "lecture",
+  "overdue", "late", "past", "completed", "complete", "done", "finished", "checked", "off", "open", "remaining", "left",
+  "outstanding", "incomplete", "unfinished", "upcoming", "scheduled", "this", "next", "last", "today", "tomorrow", "week", "weekend",
+  "month", "tonight", "them", "those", "these", "back", "forward", "to", "until",
+]);
+
+type BulkPurpose = "done" | "reopen" | "delete" | "move";
+
+/**
+ * "everything due friday", "all my overdue econ homework", "all completed
+ * tasks" → the items it means, or null when the phrase is not narrowed enough
+ * to act on safely ("delete everything") or has words we don't understand.
+ */
+function selectBulk(env: Env, phraseIn: string, purpose: BulkPurpose): Item[] | null {
+  const { now } = env;
+  let p = expand(phraseIn);
+  const ref = findDayRef(p, now);
+  if (ref) p = p.replace(ref.text, " ");
+  const cls = findClass(env, p);
+  const overdue = /\b(?:overdue|late|past due)\b/.test(p);
+  const done = /\b(?:completed|done|finished|checked off)\b/.test(p) && purpose !== "done";
+  const kind = /\b(?:assignments?|homework|hw)\b/.test(p)
+    ? "assignment"
+    : /\b(?:tasks?|to-?dos?)\b/.test(p)
+      ? "task"
+      : /\b(?:classes|lectures?)\b/.test(p)
+        ? "class"
+        : /\b(?:events?|meetings?|appointments?)\b/.test(p)
+          ? "event"
+          : undefined;
+  if (!ref && !cls && !overdue && !done) return null;
+  const dueOnly = /\bdue\b/.test(p) && !kind;
+  const clsWords = new Set(categoryTokens(cls));
+  const leftover = tokens(p).filter((t) => !BULK_FILLER.has(t) && !clsWords.has(t));
+  if (leftover.length) return null;
+
+  let items = env.ctx.items.filter((i) => {
+    if (kind === "class") return isClass(env, i);
+    if (kind === "event") return i.type === "event";
+    if (kind) return i.type === kind;
+    return true;
+  });
+  if (dueOnly) items = items.filter(isWork);
+  if (purpose === "done") items = items.filter(isOpen);
+  if (purpose === "reopen") items = items.filter((i) => isWork(i) && i.status === "done");
+  if (purpose === "move") items = items.filter((i) => i.type === "event" || i.status !== "done");
+  if (overdue) items = items.filter((i) => isOpen(i) && isOverdueAt(i, now));
+  if (done) items = items.filter((i) => isWork(i) && i.status === "done");
+  if (cls) items = items.filter((i) => i.categoryId === cls.id);
+  if (ref?.kind === "day") items = items.filter((i) => (i.type === "event" ? itemOccupiesDay(i, ref.day) : isDueOnDay(i, ref.day)));
+  if (ref?.kind === "range") items = items.filter((i) => +new Date(i.at) >= +ref.start && +new Date(i.at) < +ref.end);
+  // Without a day, a class's weekly meetings would be the whole semester.
+  if (!ref && (kind === "class" || kind === "event") && purpose !== "done") return null;
+  return items.sort(byAt);
+}
+
+const BULK_CAP: Record<string, number> = { "mark done": 20, "mark in progress": 20, reopen: 20, delete: 15, move: 15 };
+
+function bulkResponse(env: Env, phrase: string, items: Item[], verb: string, action: (i: Item) => AssistantAction, detail?: (i: Item) => string): AssistantResponse | null {
+  if (items.length > (BULK_CAP[verb] ?? 15)) return null;
+  const what = expand(phrase).replace(/\b(?:all(?: of)?|everything|every|each|both|my|the)\b/g, " ").replace(/\s+/g, " ").trim() || "items";
+  if (!items.length) {
+    const phrase = /^(?:due|on|for|from|in)\b/.test(what) ? `anything ${what}` : `any ${what.replace(/\bas$/, "").trim()}`;
+    return { text: `I don't see ${phrase} to ${verb}.` };
   }
-  const verb = status === "done" ? "as done" : status === "doing" ? "as in progress" : "to to-do";
-  const text =
-    status === "done"
-      ? pick(item.title, [`I'll mark ${bold(item.title)} as done — confirm below.`, `Marking ${bold(item.title)} done. Confirm below and it's checked off.`])
-      : status === "doing"
-        ? `I'll mark ${bold(item.title)} as in progress — confirm below.`
-        : `I'll reopen ${bold(item.title)} — confirm below.`;
-  return { text, actions: [update(item, `Mark “${item.title}” ${verb.replace("as ", "")}`.replace("to to-do", "to do"), { status })] };
+  if (items.length === 1) {
+    const one = items[0];
+    const tail = detail ? ` ${detail(one)}` : "";
+    return { text: `Just one: I'll ${verb === "mark done" ? `mark ${bold(one.title)} as done` : `${verb} ${bold(one.title)}${tail}`}. Confirm below.`, actions: [action(one)] };
+  }
+  const shown = items.slice(0, 6).map((i) => `${bold(i.title)}${detail ? ` (${detail(i)})` : ""}`);
+  const more = items.length > 6 ? ` and ${items.length - 6} more` : "";
+  const head = verb === "mark done" ? `I'll mark these ${items.length} as done` : `I'll ${verb} these ${items.length}`;
+  return { text: `${head}: ${shown.join(", ")}${more}. Confirm each below.`, actions: items.map(action) };
+}
+
+/** "the essay and problem set 4" / "a, b and c" → each one, only if every part is unambiguous. */
+function resolveSeveral(env: Env, phrase: string, scope: Scope): Item[] | null {
+  if (!/,|\band\b|&/.test(phrase)) return null;
+  const whole = resolveTarget(env, phrase, scope);
+  if (whole.kind === "one") return null;
+  const parts = phrase.split(/\s*,\s*(?:and\s+)?|\s+and\s+|\s*&\s*/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const out: Item[] = [];
+  for (const part of parts) {
+    const t = resolveTarget(env, part, scope);
+    if (t.kind !== "one") return null;
+    if (!out.some((i) => i.id === t.item.id)) out.push(t.item);
+  }
+  return out.length >= 2 ? out : null;
 }
 
 function completeIntent(env: Env): Outcome {
@@ -527,7 +703,7 @@ function completeIntent(env: Env): Outcome {
   if (reopen) return setStatus(env, reopen[1], "todo");
   const doing = /^(?:start|begin|resume|work on|started|starting|i am (?:starting|working on|doing|beginning|on))\s+(.+)$/.exec(q) ?? /^(?:mark|set|put)\s+(.+?)\s+(?:as\s+|to\s+)?(?:in progress|doing|started|in-progress|underway|working on)$/.exec(q);
   if (doing) return setStatus(env, doing[1], "doing");
-  if ((m = /^(?:mark|set|check off|tick off|cross off|complete)\s+(.+?)(?:\s+(?:as\s+)?(?:done|complete|completed|finished|off))?$/.exec(q)) && !/\b(?:overdue|late)\b/.test(q)) {
+  if ((m = /^(?:mark|set|check off|tick off|cross off|complete)\s+(.+?)(?:\s+(?:as\s+)?(?:done|complete|completed|finished|off))?$/.exec(q))) {
     return setStatus(env, m[1].replace(/\s+(?:off|as|done)$/, ""), "done");
   }
   if ((m = /^(?:i(?: have|'ve)?\s+)?(?:just\s+)?(?:finished|completed|done|turned in|submitted|handed in|wrapped up|knocked out|did)\s+(?:with\s+)?(.+)$/.exec(q))) {
@@ -555,10 +731,10 @@ function parseDelta(text: string): number | null {
 
 function moveIntent(env: Env): Outcome {
   const { q, now } = env;
-  const verb = MOVE_VERB.exec(q);
+  const makeDue = /^make\s+(.+?)\s+due\s+(?:at|on|by)?\s*(.+)$/.exec(q);
+  const verb = makeDue ? ["", "move", `${makeDue[1]} to ${makeDue[2]}`] : MOVE_VERB.exec(q);
   if (!verb) return undefined;
   const body = verb[2];
-  if (/\b(?:everything|all my|all of|all events|all tasks)\b/.test(body)) return null;
 
   type Attempt = { targetText: string; apply: (item: Item) => { at: Date } | null; detail: string };
   const attempts: Attempt[] = [];
@@ -606,63 +782,98 @@ function moveIntent(env: Env): Outcome {
     });
   }
 
-  for (const attempt of attempts) {
-    const target = resolveTarget(env, attempt.targetText, "any");
-    if (target.kind === "none") continue;
-    if (target.kind === "many") return askWhich(env, target.items);
-    const { item, series } = target;
+  const moveAction = (item: Item, to: Date): AssistantAction => {
+    const from = new Date(item.at);
+    const patch: Partial<Item> = { at: to.toISOString() };
+    if (item.endAt) patch.endAt = new Date(+new Date(item.endAt) + (+to - +from)).toISOString();
+    return update(item, `Move “${item.title}” to ${whenText(env, item, to)}`, patch);
+  };
+  const build = (attempt: Attempt): Build => (item, series) => {
     const result = attempt.apply(item);
     if (!result) return null;
     const from = new Date(item.at);
     const to = result.at;
     if (+to === +from) return { text: `${bold(item.title)} is already at that time — ${describeWhen(env, item)}.` };
     if (item.type !== "event" && item.status === "done") return null;
-    const patch: Partial<Item> = { at: to.toISOString() };
-    if (item.endAt) patch.endAt = new Date(+new Date(item.endAt) + (+to - +from)).toISOString();
-    const eod = (d: Date) => item.type !== "event" && d.getHours() === 23 && d.getMinutes() === 59;
-    const toText = `${dayName(to, now)}${item.allDay || eod(to) ? "" : ` at ${fmtTime(to, env.ctx.clock24h)}`}`;
+    const toText = whenText(env, item, to);
     const once = series > 1 ? " (just this one)" : "";
     const lead = item.type === "event" ? `Moving ${bold(item.title)}` : `Moving the ${bold(item.title)} deadline`;
-    return {
-      text: `${lead} from ${describeWhen(env, item)} to ${bold(toText)}${once}. Confirm below.`,
-      actions: [update(item, `Move “${item.title}” to ${toText}`, patch)],
-    };
+    return { text: `${lead} from ${describeWhen(env, item)} to ${bold(toText)}${once}. Confirm below.`, actions: [moveAction(item, to)] };
+  };
+
+  for (const attempt of attempts) {
+    const targetText = attempt.targetText
+      .replace(/^(?:the\s+)?(?:due date|due time|deadline|start time|time|date|day)\s+(?:of|for|on)\s+/, "")
+      .replace(/(?:'s|s')?\s+(?:due date|due time|deadline|start time|time|date)$/, "");
+    if (isBulk(targetText)) {
+      const items = selectBulk(env, targetText, "move");
+      if (!items) return null;
+      return bulkResponse(env, targetText, items, "move", (item) => moveAction(item, attempt.apply(item)!.at), (item) => `to ${whenText(env, item, attempt.apply(item)!.at)}`);
+    }
+    const several = resolveSeveral(env, targetText, "any");
+    if (several) {
+      if (several.length > 8) return null;
+      const actions = several.map((item) => moveAction(item, attempt.apply(item)!.at));
+      return { text: `I'll move ${joinNatural(several.map((i) => `${bold(i.title)} to ${whenText(env, i, attempt.apply(i)!.at)}`))}. Confirm below.`, actions };
+    }
+    const target = resolveTarget(env, targetText, "any");
+    if (target.kind === "none") continue;
+    if (target.kind === "many") return askWhich(env, target.items, build(attempt));
+    return build(attempt)(target.item, target.series);
   }
-  return null;
+  return undefined;
+}
+
+function whenText(env: Env, item: Item, to: Date): string {
+  const eod = item.type !== "event" && to.getHours() === 23 && to.getMinutes() === 59;
+  return `${dayName(to, env.now)}${item.allDay || eod ? "" : ` at ${fmtTime(to, env.ctx.clock24h)}`}`;
+}
+
+function deleteAction(item: Item): AssistantAction {
+  return { kind: "delete", summary: `Delete “${item.title}”`, itemId: item.id, itemTitle: item.title };
 }
 
 function deleteIntent(env: Env): Outcome {
-  const m = /^(?:delete|remove|cancel|trash|get rid of|drop|scrap|erase)\s+(.+)$/.exec(env.q);
+  const m = /^(?:delete|remove|cancel|trash|get rid of|drop|scrap|erase|clear)\s+(.+)$/.exec(env.q);
   if (!m) return undefined;
   const phrase = m[1];
-  if (/\b(?:everything|all|every|whole|entire)\b/.test(phrase) && !/\ball[- ]day\b/.test(phrase)) return null;
-  if (/\b(?:my )?(?:calendar|schedule|account|data|reminders?)\b/.test(phrase) && !/\bclass\b/.test(phrase)) return null;
+  if (/\b(?:whole|entire)\b/.test(phrase)) return null;
+  if (/^(?:my |the )?(?:calendar|schedule|account|data|reminders?|history|chat|conversation)$/.test(phrase.trim())) return null;
   if (PRONOUN_ONLY.test(phrase.trim())) return null;
+  if (isBulk(phrase)) {
+    const items = selectBulk(env, phrase, "delete");
+    if (!items) return null;
+    return bulkResponse(env, phrase, items, "delete", deleteAction);
+  }
+  const several = resolveSeveral(env, phrase, "any");
+  if (several) {
+    if (several.length > 8) return null;
+    return { text: `I'll delete ${joinNatural(several.map((i) => bold(i.title)))}. Confirm below.`, actions: several.map(deleteAction) };
+  }
+  const build: Build = (item, series) => {
+    const once = series > 1 ? " — just this one, not the whole series" : "";
+    return { text: `I'll delete ${bold(item.title)} (${describeWhen(env, item)})${once}. Confirm below.`, actions: [deleteAction(item)] };
+  };
   const target = resolveTarget(env, phrase, "any");
   if (target.kind === "none") return null;
-  if (target.kind === "many") return askWhich(env, target.items);
-  const { item, series } = target;
-  const once = series > 1 ? " — just this one, not the whole series" : "";
-  return {
-    text: `I'll delete ${bold(item.title)} (${describeWhen(env, item)})${once}. Confirm below.`,
-    actions: [{ kind: "delete", summary: `Delete “${item.title}”`, itemId: item.id, itemTitle: item.title }],
-  };
+  if (target.kind === "many") return askWhich(env, target.items, build);
+  return build(target.item, target.series);
 }
 
 function renameIntent(env: Env): Outcome {
   const m = /^(?:rename|retitle|re-title)\s+(.+?)\s+(?:to|as)\s+(.+)$/.exec(env.q);
   if (!m) return undefined;
-  const target = resolveTarget(env, m[1], "any");
-  if (target.kind === "none") return null;
-  if (target.kind === "many") return askWhich(env, target.items);
   const original = /^(?:rename|retitle|re-title)\s+.+?\s+(?:to|as)\s+(.+)$/i.exec(env.n);
   const title = (original?.[1] ?? m[2]).trim().replace(/^["']|["']$/g, "");
   if (!title || title.length > 120) return null;
-  if (title === target.item.title) return { text: `${bold(title)} already has that name.` };
-  return {
-    text: `I'll rename ${bold(target.item.title)} to ${bold(title)}. Confirm below.`,
-    actions: [update(target.item, `Rename to “${title}”`, { title })],
-  };
+  const build: Build = (item) =>
+    title === item.title
+      ? { text: `${bold(title)} already has that name.` }
+      : { text: `I'll rename ${bold(item.title)} to ${bold(title)}. Confirm below.`, actions: [update(item, `Rename to “${title}”`, { title })] };
+  const target = resolveTarget(env, m[1], "any");
+  if (target.kind === "none") return null;
+  if (target.kind === "many") return askWhich(env, target.items, build);
+  return build(target.item, target.series);
 }
 
 function reminderIntent(env: Env): Outcome {
@@ -673,19 +884,238 @@ function reminderIntent(env: Env): Outcome {
   const phrase = swapped ? m[2] : m[1];
   const minutes = parseDelta(swapped ? m[1] : m[2]);
   if (!minutes || minutes > 14 * 1440) return null;
+  const label = formatOffsetLabel(minutes);
+  const build: Build = (item) => {
+    if (item.reminders?.some((r) => r.offsetMinutes === minutes && !r.place)) {
+      return { text: `${bold(item.title)} already has a reminder ${label}.` };
+    }
+    const reminders = [...(item.reminders ?? []), { id: nanoid(), itemId: item.id, offsetMinutes: minutes, label }];
+    return { text: `I'll add a reminder ${label} ${bold(item.title)}. Confirm below.`, actions: [update(item, `Remind ${label} “${item.title}”`, { reminders })] };
+  };
   const target = resolveTarget(env, phrase, "any");
   if (target.kind === "none") return null;
-  if (target.kind === "many") return askWhich(env, target.items);
-  const { item } = target;
-  const label = formatOffsetLabel(minutes);
-  if (item.reminders?.some((r) => r.offsetMinutes === minutes && !r.place)) {
-    return { text: `${bold(item.title)} already has a reminder ${label}.` };
+  if (target.kind === "many") return askWhich(env, target.items, build);
+  return build(target.item, target.series);
+}
+
+/* ------------------------------------------------------------------ */
+/* Field edits: class, location, notes                                 */
+/* ------------------------------------------------------------------ */
+
+function fieldEditIntent(env: Env): Outcome {
+  const { q, n } = env;
+  let m: RegExpExecArray | null;
+
+  // "put the essay under econ", "move lab report to cs 101"
+  if ((m = /^(?:put|move|file|assign|switch|change|set)\s+(.+?)\s+(?:under|in|into|to|as|for)\s+(?:the\s+|my\s+)?(.+?)(?:\s+class)?$/.exec(q))) {
+    const cls = findClass(env, m[2]);
+    const exact = cls && tokens(m[2].replace(/\bclass\b/, "")).every((t) => tokenMatches(t, categoryTokens(cls)));
+    if (cls && exact && !findDayRef(m[2], env.now) && !findTime(m[2])) {
+      const build: Build = (item) =>
+        item.categoryId === cls.id
+          ? { text: `${bold(item.title)} is already under ${bold(cls.name)}.` }
+          : { text: `I'll move ${bold(item.title)} to ${bold(cls.name)}. Confirm below.`, actions: [update(item, `File “${item.title}” under ${cls.name}`, { categoryId: cls.id })] };
+      const target = resolveTarget(env, m[1], "any");
+      if (target.kind === "none") return null;
+      if (target.kind === "many") return askWhich(env, target.items, build);
+      return build(target.item, target.series);
+    }
   }
-  const reminders = [...(item.reminders ?? []), { id: nanoid(), itemId: item.id, offsetMinutes: minutes, label }];
-  return {
-    text: `I'll add a reminder ${label} ${bold(item.title)}. Confirm below.`,
-    actions: [update(item, `Remind ${label} “${item.title}”`, { reminders })],
+
+  // "set the location of the dentist to Main St Dental", "change the lab's room to B204"
+  const loc =
+    /^(?:set|change|update|make)\s+(?:the\s+)?(?:location|place|room|venue|address)\s+(?:of|for)\s+(.+?)\s+to\s+(.+)$/i.exec(n) ??
+    /^(?:set|change|update)\s+(.+?)(?:'s|’s)?\s+(?:location|room|place|venue|address)\s+to\s+(.+)$/i.exec(n);
+  if (loc) {
+    const location = loc[2].trim().replace(/^["']|["']$/g, "");
+    if (!location || location.length > 120) return null;
+    const build: Build = (item) => ({
+      text: `I'll set the location of ${bold(item.title)} to ${bold(location)}. Confirm below.`,
+      actions: [update(item, `Set location of “${item.title}” to ${location}`, { location })],
+    });
+    const target = resolveTarget(env, loc[1], "any");
+    if (target.kind === "none") return null;
+    if (target.kind === "many") return askWhich(env, target.items, build);
+    return build(target.item, target.series);
+  }
+
+  // "add a note to the essay: use MLA", "note on lab report that it's in groups"
+  const note = /^(?:add (?:a )?note|note|add notes?)\s+(?:to|on|for)\s+(.+?)\s*(?::|saying|that says|that)\s+(.+)$/i.exec(n);
+  if (note) {
+    const text = note[2].trim();
+    if (!text || text.length > 500) return null;
+    const build: Build = (item) => ({
+      text: `I'll add that note to ${bold(item.title)}. Confirm below.`,
+      actions: [update(item, `Add a note to “${item.title}”`, { description: item.description ? `${item.description}\n${text}` : text })],
+    });
+    const target = resolveTarget(env, note[1], "any");
+    if (target.kind === "none") return null;
+    if (target.kind === "many") return askWhich(env, target.items, build);
+    return build(target.item, target.series);
+  }
+  return undefined;
+}
+
+/* ------------------------------------------------------------------ */
+/* Planning work time                                                  */
+/* ------------------------------------------------------------------ */
+
+const PLAN_HEAD = /^(?:find|block(?: off| out)?|schedule|set aside|carve out|plan|reserve|save|make|give me|get me|book|put in|add)\s+(?:me\s+)?(?:some\s+)?/;
+const PLAN_SPAN = /^((?:a|an|one|two|three|four|\d+(?:\.\d+)?|a couple(?: of)?|couple(?: of)?|half an?)\s+(?:hours?|hrs?|minutes?|mins?)|an? hour|time|study time|work time|(?:a )?(?:work|study|focus) (?:session|block|time)|a block|(?:a )?session)(?:\s+of\s+time)?\s*/;
+const PLAN_PURPOSE = /^(?:(?:to|for)\s+)?(?:work(?:ing)? on|study(?:ing)? for|studying|study|do(?:ing)?|finish(?:ing)?|start(?:ing)?|prep(?:are|aring)?(?: for)?|review(?:ing)?(?: for)?|write|writing|focus(?:ing)? on|for)\s+/;
+
+function spanMinutes(span: string): number {
+  if (/^half an?/.test(span)) return 30;
+  if (/couple/.test(span)) return 120;
+  const m = /^(a|an|one|two|three|four|\d+(?:\.\d+)?)\s+(hours?|hrs?|minutes?|mins?)/.exec(span);
+  if (!m) return 60;
+  const n = /^\d/.test(m[1]) ? parseFloat(m[1]) : WORD_NUM[m[1]] ?? 1;
+  return Math.round(/^h/.test(m[2]) ? n * 60 : n);
+}
+
+function busyBlocks(env: Env, day: Date) {
+  return env.ctx.items
+    .filter((i) => i.type === "event" && !i.allDay && itemOccupiesDay(i, day))
+    .map((i) => ({ item: i, start: new Date(i.at), end: i.endAt ? new Date(i.endAt) : addMinutes(new Date(i.at), 60) }))
+    .map((e) => ({ ...e, start: e.start < startOfDay(day) ? startOfDay(day) : e.start }))
+    .sort((a, b) => +a.start - +b.start);
+}
+
+/** Open stretches on `day` between `fromH` and `toH`, never earlier than now. */
+function freeGaps(env: Env, day: Date, fromH: number, toH: number): Array<[Date, Date]> {
+  let start = atTime(day, { h: fromH, m: 0 });
+  const end = atTime(day, { h: toH, m: 0 });
+  // Leave a few minutes to get going: a block "starting now" is already late.
+  if (+env.now + 10 * 60_000 > +start) start = new Date(Math.ceil((+env.now + 10 * 60_000) / (15 * 60_000)) * 15 * 60_000);
+  if (+start >= +end) return [];
+  const gaps: Array<[Date, Date]> = [];
+  let cursor = start;
+  for (const e of busyBlocks(env, day)) {
+    if (+e.end <= +cursor) continue;
+    if (+e.start > +cursor) gaps.push([cursor, +e.start < +end ? e.start : end]);
+    if (+e.end > +cursor) cursor = e.end;
+    if (+cursor >= +end) break;
+  }
+  if (+cursor < +end) gaps.push([cursor, end]);
+  return gaps.filter(([a, b]) => +b > +a);
+}
+
+function partOfDay(q: string): { from: number; to: number; label: string } | null {
+  if (/\bmorning\b/.test(q)) return { from: 8, to: 12, label: "morning" };
+  if (/\bafternoon\b/.test(q)) return { from: 12, to: 17, label: "afternoon" };
+  if (/\b(?:evening|tonight|night)\b/.test(q)) return { from: 17, to: 22, label: "evening" };
+  return null;
+}
+
+function plannerIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  let rest: string | null = null;
+  let minutes = 60;
+  const when = /^when (?:should|can|could) i (?:work on|study for|study|do|start|finish|get to)\s+(.+)$/.exec(q);
+  if (when) rest = when[1];
+  else {
+    const head = PLAN_HEAD.exec(q);
+    if (!head) return undefined;
+    const afterHead = q.slice(head[0].length);
+    const span = PLAN_SPAN.exec(afterHead);
+    if (!span) return undefined;
+    minutes = spanMinutes(span[1]);
+    const afterSpan = afterHead.slice(span[0].length);
+    // Day words may sit between the span and the purpose: "2 hours tomorrow for the essay".
+    const lead = findDayRef(afterSpan, now);
+    const trimmed = lead && afterSpan.indexOf(lead.text) === 0 ? afterSpan.slice(lead.text.length).trim() : afterSpan;
+    const purpose = PLAN_PURPOSE.exec(trimmed);
+    if (!purpose) return undefined;
+    rest = `${trimmed.slice(purpose[0].length)}${lead && trimmed !== afterSpan ? ` ${lead.text}` : ""}`;
+  }
+  if (minutes < 15 || minutes > 6 * 60) return null;
+
+  let phrase = rest;
+  const part = partOfDay(phrase);
+  const dayRef = findDayRef(phrase, now);
+  if (dayRef) phrase = phrase.replace(dayRef.text, " ");
+  const time = findTime(phrase);
+  if (time) phrase = phrase.replace(time.text, " ");
+  phrase = phrase.replace(/\b(?:in the |this |tomorrow )?(?:morning|afternoon|evening|tonight|night)\b/g, " ").replace(/\bbefore (?:it'?s|it is) due\b/g, " ").replace(/\s+/g, " ").trim();
+  if (!phrase) return null;
+
+  const asking = Boolean(when);
+  const cls = findClass(env, phrase);
+  if (cls && tokens(phrase.replace(/\b(?:class|course)\b/g, "")).every((t) => tokenMatches(t, categoryTokens(cls)))) {
+    return planFor(env, { cls, minutes, dayRef, time, part, asking });
+  }
+  const build: Build = (item) => planFor(env, { item, minutes, dayRef, time, part, asking });
+  let target = resolveTarget(env, phrase, "open-work");
+  // "study for the midterm" — an exam on the calendar is a fine thing to plan toward.
+  if (target.kind === "none") {
+    const ev = resolveTarget(env, phrase, "any");
+    if (ev.kind !== "none") target = ev.kind === "one" && ev.item.type !== "event" ? { kind: "none" } : ev;
+  }
+  if (target.kind === "many") return askWhich(env, target.items, build);
+  if (target.kind === "one") return build(target.item, target.series);
+  void ctx;
+  return null;
+}
+
+function planFor(
+  env: Env,
+  o: { item?: Item; cls?: Category; minutes: number; dayRef: DayRef | null; time: TimeRef | null; part: { from: number; to: number; label: string } | null; asking?: boolean }
+): AssistantResponse | null {
+  const { now, ctx } = env;
+  const due = o.item ? new Date(o.item.at) : null;
+  const firstDay = o.dayRef?.kind === "day" ? o.dayRef.day : o.dayRef?.kind === "range" ? o.dayRef.start : startOfDay(now);
+  const goalOpen = o.item && (o.item.type === "event" ? +due! > +now : isOpen(o.item));
+  const lastDay = o.dayRef?.kind === "day" ? o.dayRef.day : o.dayRef?.kind === "range" ? addDays(o.dayRef.end, -1) : due && goalOpen && +due > +now ? startOfDay(due) : addDays(startOfDay(now), 6);
+  const from = o.part?.from ?? WORK_START;
+  const to = o.part?.to ?? WORK_END;
+  const label = o.item ? o.item.title : `Study: ${o.cls!.name}`;
+
+  let start: Date | null = null;
+  let clash: Item | undefined;
+  if (o.time) {
+    start = atTime(firstDay, o.time);
+    const end = addMinutes(start, o.minutes);
+    clash = busyBlocks(env, firstDay).find((b) => +b.start < +end && +b.end > +start!)?.item;
+  } else {
+    for (let d = firstDay; +d <= +lastDay; d = addDays(d, 1)) {
+      if (+d < +startOfDay(now)) continue;
+      const gap = freeGaps(env, d, from, to).find(([a, b]) => +b - +a >= o.minutes * 60_000);
+      if (gap) {
+        start = gap[0];
+        break;
+      }
+    }
+  }
+  const hours = o.minutes % 60 === 0 ? plural(o.minutes / 60, "hour") : o.minutes > 60 ? `${Math.floor(o.minutes / 60)}h ${o.minutes % 60}m` : `${o.minutes} minutes`;
+  if (!start) {
+    const span = o.dayRef ? o.dayRef.label : due ? "before it's due" : "this week";
+    return { text: `I couldn't find a free ${hours.replace(/^1 hour$/, "hour")} ${o.part ? `in the ${o.part.label} ` : ""}${span} — your calendar's full${o.dayRef ? " then" : ""}. Want to try a shorter block, or a different day?` };
+  }
+  const isExam = o.item?.type === "event";
+  if (due && +addMinutes(start, o.minutes) > +due && goalOpen) {
+    return { text: `That would run past ${isExam ? "the start of " : "the deadline for "}${bold(o.item!.title)} (${describeWhen(env, o.item!)}). Pick an earlier time?` };
+  }
+  const end = addMinutes(start, o.minutes);
+  const draft: Omit<Item, "id" | "createdAt"> = {
+    type: "event",
+    title: o.item ? `${isExam ? "Study for" : "Work on"}: ${o.item.title}` : `Study: ${o.cls!.name}`,
+    categoryId: o.item?.categoryId ?? o.cls!.id,
+    at: start.toISOString(),
+    endAt: end.toISOString(),
+    reminders: [],
+    // Planned time points back at the work it serves; exams are events, so they don't.
+    ...(o.item && !isExam ? { workFor: o.item.id } : {}),
+    ...(o.item?.url ? { url: o.item.url } : {}),
   };
+  const slot = `${dayName(start, now)}, ${fmtTime(start, ctx.clock24h)}–${fmtTime(end, ctx.clock24h)}`;
+  const goal = bold(o.item ? o.item.title : o.cls!.name);
+  const dueNote = o.item && goalOpen ? ` (${isExam ? "" : "due "}${describeWhen(env, o.item)})` : "";
+  const clashNote = clash ? ` Heads up — that overlaps ${bold(clash.title)}.` : "";
+  const keep = o.item && !isExam ? " Your deadline stays where it is." : "";
+  const text = o.asking
+    ? `Your next open ${hours.replace(/^1 hour$/, "hour")} is ${bold(slot)}. I can block it for ${goal}${dueNote}.${keep} Confirm below to add it.`
+    : `I'll block ${bold(slot)} to ${isExam || !o.item ? "study for" : "work on"} ${goal}${dueNote}.${keep}${clashNote} Confirm below.`;
+  return { text, actions: [{ kind: "create", summary: `Block ${slot} for “${label}”`, draft }] };
 }
 
 const ADD_VERB = /^(?:add|create|schedule|new|put|set up|book|block off|remind me to|remind me|make (?:a|an)|note that|i have|i've got|i have got|i got|i need to|i gotta|i have to|i must)\b/;
@@ -699,6 +1129,9 @@ const GLUE = new Set([
   "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
   "january", "february", "march", "april", "june", "july", "august", "september", "october", "november", "december",
   "from", "until", "till", "through", "am", "pm", "hour", "hours", "minute", "minutes", "before", "after", "week", "weeks", "days",
+  "with", "reminder", "reminders", "remind", "ping", "nudge", "early", "ahead", "couple", "few", "one", "two", "three",
+  "every", "each", "weekly", "daily", "monthly", "weekday", "weekdays", "mondays", "tuesdays", "wednesdays", "thursdays",
+  "fridays", "saturdays", "sundays", "starting", "semester", "end", "hr", "hrs", "min", "mins",
 ]);
 
 function contentWords(text: string): string[] {
@@ -723,6 +1156,23 @@ function titleIsFaithful(source: string, title: string, location: string | undef
   return wanted.every((w) => kept.has(w)) && [...contentWords(title)].every((w) => wanted.includes(w));
 }
 
+/** "olive garden" → "Olive Garden"; anything the user already cased, or "the library"-style common places, stays as typed. */
+function placeName(location: string): string {
+  if (/[A-Z]/.test(location) || /^(?:library|gym|office|home|school|work|campus|class|lab|dorm|park|store|cafe|coffee shop|dining hall|union|student center)$/i.test(location)) return location;
+  return location.replace(/\b([a-z])([a-z]*)/g, (_, a: string, b: string) => (["of", "the", "and", "at", "on", "in"].includes(a + b) ? a + b : a.toUpperCase() + b));
+}
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function repeatText(rule: RepeatRule): string {
+  const until = rule.until ? ` until ${format(new Date(rule.until), "MMM d")}` : "";
+  if (rule.freq === "daily") return `every day${until}`;
+  if (rule.freq === "monthly") return `every month${until}`;
+  const days = rule.byDay?.length ? rule.byDay.map((d) => DAY_NAMES[d]) : [];
+  if (days.length === 5 && !rule.byDay!.includes(0) && !rule.byDay!.includes(6)) return `every weekday${until}`;
+  return `${days.length ? `every ${joinNatural(days)}` : "every week"}${until}`;
+}
+
 function addIntent(env: Env): Outcome {
   const { n, q, ctx, now } = env;
   if (!ADD_VERB.test(q)) return undefined;
@@ -733,16 +1183,21 @@ function addIntent(env: Env): Outcome {
   const stripped = n.replace(/^(?:note that|remind me to|remind me|i(?:'ve| have) got to|i need to|i gotta|i have to|i must|i(?:'ve| have) got|i got|i have)\s+(?:an?\s+)?/i, "");
   const parsed = parseQuickAdd(stripped, ctx.categories);
   const reminderCount = parsed.reminders?.length ?? 0;
-  const rich = /\b(?:remind(?:er|ers| me)|ping me|nudge me|don'?t forget)\b/i.test(stripped) && !isTask;
-  if (parsed.repeat || rich || reminderCount > 1) return null;
+  // A reminder word the parser didn't turn into a reminder means it misread the sentence.
+  const reminderWords = (stripped.match(/\b(?:remind(?:er|ers| me)?|ping me|nudge me)\b/gi) ?? []).length;
+  if (reminderWords > reminderCount && !isTask) return null;
+  if (reminderCount > 4) return null;
   // No date means the model should ask, not us guessing "today".
   if (!parsed.confidence.date) return null;
   const timed = HAS_TIME.test(stripped);
   if (parsed.type === "event" && !isTask && !parsed.allDay && !timed) return null;
+  // "add a meeting at 3" — the parser treats the only noun as filler and leaves "Untitled".
+  const bareNoun = /^untitled$/i.test(parsed.title) ? /\b(meeting|appointment|event|call|interview|session)\b/i.exec(stripped)?.[1] : undefined;
+  if (bareNoun) parsed.title = bareNoun;
   const title = parsed.title.replace(/^(?:a|an|the)\s+/i, "").trim();
   if (!titleIsFaithful(stripped, parsed.title, parsed.location, ctx.categories.find((c) => c.id === parsed.categoryId))) return null;
   if (!title || title.length > 90 || title.split(/\s+/).length > 12) return null;
-  if (/^(?:a |the )?(?:reminder|event|task|assignment|meeting)$/i.test(title)) return null;
+  if (!bareNoun && /^(?:a |the )?(?:reminder|event|task|assignment|meeting)$/i.test(title)) return null;
 
   const cat = ctx.categories.find((c) => c.id === parsed.categoryId);
   const reminders = parsed.reminders?.map((r) => ({ id: nanoid(), itemId: "", offsetMinutes: r.offsetMinutes, label: r.label }));
@@ -755,7 +1210,7 @@ function addIntent(env: Env): Outcome {
     at: due.toISOString(),
     ...(parsed.endAt ? { endAt: parsed.endAt.toISOString() } : {}),
     ...(parsed.allDay ? { allDay: true } : {}),
-    ...(parsed.location ? { location: parsed.location } : {}),
+    ...(parsed.location ? { location: placeName(parsed.location) } : {}),
     ...(reminders?.length ? { reminders } : {}),
   };
   if (type !== "event") draft.status = "todo";
@@ -763,11 +1218,26 @@ function addIntent(env: Env): Outcome {
   const day = dayName(due, now);
   const relDay = /^(?:today|tomorrow|yesterday)$/.test(day);
   const whenText = parsed.allDay ? `${day} (all day)` : endOfDay ? day : `${day} at ${fmtTime(due, ctx.clock24h)}`;
+  const spokenLocation = parsed.location && /[A-Z]/.test(placeName(parsed.location)) && placeName(parsed.location) !== parsed.location ? placeName(parsed.location) : parsed.location && new RegExp(`\\bthe ${parsed.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(stripped) ? `the ${parsed.location}` : parsed.location;
   const extras = [
-    parsed.location ? `at ${parsed.location}` : "",
+    spokenLocation ? `at ${spokenLocation}` : "",
     cat ? `under ${cat.name}` : "",
     parsed.reminderLabel ? `with a reminder ${parsed.reminderLabel}` : "",
   ].filter(Boolean);
+  if (parsed.repeat) {
+    draft.repeat = parsed.repeat;
+    const rep = repeatText(parsed.repeat);
+    const time = parsed.allDay ? "" : ` at ${fmtTime(due, ctx.clock24h)}`;
+    const starting = relDay ? ` starting ${day}` : ` starting ${format(due, "MMM d")}`;
+    extras.unshift(`${rep}${time}${starting}`);
+    return {
+      text: `I'll add ${bold(draft.title)}, ${bold(`${rep}${time}`)}${starting}${extras.length > 1 ? `, ${extras.slice(1).join(", ")}` : ""}. Confirm below.`,
+      actions: [{ kind: "create", summary: `Add “${draft.title}” — ${rep}${time}`, draft }],
+    };
+  }
+  if ((parsed.reminders?.length ?? 0) > 1) {
+    extras.splice(extras.findIndex((e) => e.startsWith("with a reminder")), 1, `with reminders ${joinNatural(parsed.reminders!.map((r) => r.label))}`);
+  }
   const lead =
     type === "event"
       ? `I'll add ${bold(draft.title)} ${relDay || parsed.allDay ? "" : "on "}${bold(whenText)}`
@@ -852,7 +1322,7 @@ function bullets(lines: string[], max = 8): string {
   return shown.join("\n");
 }
 
-type DayOpts = { only?: "events" | "work" | "classes"; evening?: boolean; cls?: Category };
+type DayOpts = { only?: "events" | "work" | "classes"; evening?: boolean; cls?: Category; after?: Date; before?: Date };
 
 function collectDay(env: Env, day: Date, opts: DayOpts) {
   const { now } = env;
@@ -865,6 +1335,14 @@ function collectDay(env: Env, day: Date, opts: DayOpts) {
   if (opts.only === "events") work = [];
   if (opts.only === "work") events = [];
   if (opts.evening) events = events.filter((e) => e.allDay || new Date(e.at).getHours() >= 17 || (e.endAt && new Date(e.endAt).getHours() >= 18));
+  if (opts.after) {
+    events = events.filter((e) => !e.allDay && +new Date(e.at) >= +opts.after!);
+    work = work.filter((w) => +new Date(w.at) >= +opts.after!);
+  }
+  if (opts.before) {
+    events = events.filter((e) => !e.allDay && +new Date(e.at) < +opts.before!);
+    work = work.filter((w) => +new Date(w.at) < +opts.before!);
+  }
   const endedEvents = isTodayDay ? events.filter((e) => isEventEnded(e, now, day)) : [];
   const liveEvents = isTodayDay ? events.filter((e) => !isEventEnded(e, now, day)) : events;
   const doneWork = work.filter((w) => w.status === "done");
@@ -941,7 +1419,8 @@ function cap(s: string): string {
 function rangeAnswer(env: Env, ref: Extract<DayRef, { kind: "range" }>, opts: DayOpts): AssistantResponse {
   const { now } = env;
   const days: Date[] = [];
-  for (let d = ref.start; d < ref.end && days.length < 14; d = addDays(d, 1)) if (d >= startOfDay(now) || opts.only === undefined) days.push(d);
+  const wholePast = +ref.end <= +startOfDay(now);
+  for (let d = ref.start; d < ref.end && days.length < 31; d = addDays(d, 1)) if (d >= startOfDay(now) || wholePast) days.push(d);
   const rows: { day: Date; lines: string[]; events: number; due: number }[] = [];
   let events = 0;
   let due = 0;
@@ -966,15 +1445,17 @@ function rangeAnswer(env: Env, ref: Extract<DayRef, { kind: "range" }>, opts: Da
   }
   const summary = joinNatural([events ? plural(events, opts.only === "classes" ? "class" : "event", opts.only === "classes" ? "classes" : "events") : "", due ? `${due} due` : ""].filter(Boolean));
   void noun;
+  const hiddenDays = rows.length > 8 ? rows.length - 8 : 0;
   const body = rows
-    .slice(0, 7)
+    .slice(0, 8)
     .map((r) => {
       const shown = r.lines.slice(0, 4);
       const more = r.lines.length - shown.length;
       return `- **${dayName(r.day, now) === "today" || dayName(r.day, now) === "tomorrow" ? cap(dayName(r.day, now)) : format(r.day, "EEE, MMM d")}** — ${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`;
     })
     .join("\n");
-  return { text: `${cap(ref.label)} you have ${bold(summary)}:\n${body}` };
+  const past = +ref.end <= +startOfDay(now);
+  return { text: `${cap(ref.label)} you ${past ? "had" : "have"} ${bold(summary)}:\n${body}${hiddenDays ? `\n- …and ${plural(hiddenDays, "more day")}` : ""}` };
 }
 
 /** Everything open, soonest first — the "what's due" family with no day named. */
@@ -1016,6 +1497,17 @@ function refineOpts(q: string, cls: Category | undefined): DayOpts {
   return { only, cls };
 }
 
+const AGENDA_VOCAB = new Set([
+  "what", "anything", "something", "show", "list", "agenda", "schedule", "plan", "going", "happening", "got", "calendar",
+  "due", "busy", "need", "plate", "looking", "look", "like", "class", "classe", "lecture", "lab", "section", "event",
+  "meeting", "appointment", "assignment", "homework", "hw", "task", "todo", "deadline", "left", "else", "still",
+  "remaining", "open", "upcoming", "coming", "doing", "get", "gotta", "work", "turn", "submit", "hand", "project",
+  "paper", "essay", "exam", "quiz", "test", "week", "weekend", "month", "rest", "day", "happen", "tonight", "morning",
+  "afternoon", "evening", "else", "stuff", "thing", "much", "many", "how", "ahead", "whole", "entire", "full",
+  "s", "nothing", "there", "any", "anything", "everything", "sure", "again", "exactly", "overview", "rundown", "summary",
+  "left", "yet", "done", "after", "before", "until", "today", "tomorrow", "next", "this", "last", "should", "wa",
+]);
+
 function agendaIntent(env: Env): Outcome {
   const { q, now } = env;
   const ref = findDayRef(q, now);
@@ -1028,6 +1520,21 @@ function agendaIntent(env: Env): Outcome {
   if (/\b(?:add|create|move|delete|remove|cancel|rename|reschedule|push|mark)\b/.test(q)) return undefined;
   const opts = refineOpts(q, cls);
   const bareClassName = cls && !ref;
+  // "what's the weather tomorrow" has a day in it but isn't about the calendar.
+  const rest = tokens((ref ? q.replace(ref.text, " ") : q).replace(/\b(?:after|before|until) (?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|lunch)\b/g, " "))
+    .filter((t) => !AGENDA_VOCAB.has(t) && !categoryTokens(cls).includes(t));
+  if (rest.length && !rest.every((t) => env.ctx.items.some((i) => tokenMatches(t, tokens(i.title))))) return undefined;
+  const clock = /\b(after|before|until)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)\b/.exec(q);
+  if (clock && ref?.kind !== "range") {
+    const t = findTime(`at ${clock[2]}`);
+    const day = ref?.kind === "day" ? ref : { kind: "day" as const, day: startOfDay(now), label: "today", text: "" };
+    if (t) {
+      const cut = atTime(day.day, t);
+      if (clock[1] === "after") opts.after = cut;
+      else opts.before = cut;
+      return dayAnswer(env, { ...day, label: `${clock[1] === "after" ? "after" : "before"} ${fmtTime(cut, env.ctx.clock24h)} ${day.label}` }, opts);
+    }
+  }
 
   if (ref && !bareClassName) {
     const by = /\b(by|before|until|till|through|thru)\b/.test(q.replace(ref.text, "_")) && (opts.only === "work" || /\bdue\b/.test(q));
@@ -1111,7 +1618,7 @@ function completedIntent(env: Env): Outcome {
     .filter((i) => { const t = new Date(i.completedAt ?? i.at); return t >= start && t < end; })
     .sort((a, b) => +new Date(b.completedAt ?? b.at) - +new Date(a.completedAt ?? a.at));
   if (/\bhow many\b/.test(q)) return { text: done.length ? `You finished ${bold(plural(done.length, "item"))} ${label}.` : `Nothing finished ${label} yet.` };
-  if (!done.length) return { text: `You haven't finished anything ${label} yet.` };
+  if (!done.length) return { text: +end <= +startOfDay(now) ? `You didn't check anything off ${label}.` : `You haven't finished anything ${label} yet.` };
   if (done.length <= 3) return { text: `You finished ${bold(plural(done.length, "item"))} ${label}: ${joinNatural(done.map((i) => bold(i.title)))}.` };
   return { text: `You finished ${bold(plural(done.length, "item"))} ${label}:\n${bullets(done.map((i) => bold(i.title)), 8)}` };
 }
@@ -1182,6 +1689,145 @@ function nextIntent(env: Env): Outcome {
   return { text: `Up next: ${describeWorkShort(w!)}.${e ? ` ${describeEvent(e, "Your next event is")}` : ""}` };
 }
 
+function classesIntent(env: Env): Outcome {
+  const { q, ctx } = env;
+  if (!/^(?:what|which) (?:are )?(?:my )?(?:classes|courses)(?: am i (?:taking|in|enrolled in))?(?: this (?:semester|term))?$|^(?:list|show)(?: me)? (?:all )?my (?:classes|courses)$|^what (?:classes|courses) (?:am i|do i) (?:taking|take|have|in)(?: this (?:semester|term))?$|^how many (?:classes|courses) (?:am i taking|do i have|do i take)(?: this (?:semester|term))?$/.test(q)) return undefined;
+  const classes = ctx.categories.filter((c) => !c.archived && !/^(?:personal|work|home|family|life|imported|uncategorized|general|misc|miscellaneous|other)$/i.test(c.name.trim()));
+  if (!classes.length) return { text: "You haven't added any classes yet. Add them under **Settings → Classes**, or import a syllabus and I'll set one up." };
+  if (/^how many/.test(q)) return { text: `You're taking ${bold(plural(classes.length, "class", "classes"))}: ${joinNatural(classes.map((c) => bold(c.name)))}.` };
+  const lines = classes.map((c) => {
+    const meets = savedClassMeetings(ctx.items, c.id);
+    const summary = meets.length ? meets.map((m) => formatMeetingSummary(m, ctx.clock24h)).join(", ") : c.syllabus?.meetings;
+    const prof = c.syllabus?.people.find((p) => p.role === "instructor");
+    return `- ${bold(c.name)}${summary ? ` — ${summary}` : ""}${prof ? ` · ${prof.name}` : ""}`;
+  });
+  return { text: `You're taking ${plural(classes.length, "class", "classes")}:\n${lines.join("\n")}` };
+}
+
+function whereNextIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  if (!/^where (?:is|do i have) (?:my |the )?next (?:class|lecture|event|meeting)$|^where (?:do i|should i) (?:go|be) next$/.test(q)) return undefined;
+  const classOnly = /\b(?:class|lecture)\b/.test(q);
+  const next = ctx.items
+    .filter((i) => i.type === "event" && !i.allDay && (!classOnly || isClass(env, i)) && +new Date(i.endAt ?? i.at) >= +now)
+    .sort(byAt)[0];
+  if (!next) return { text: classOnly ? "I don't see any upcoming classes." : "Nothing coming up on your calendar." };
+  const d = new Date(next.at);
+  const where = next.location ?? (categoryOf(env, next)?.syllabus?.location);
+  return {
+    text: where
+      ? `Your next ${classOnly ? "class" : "stop"}, ${bold(next.title)}, is in ${bold(where)} — ${dayName(d, now)} at ${fmtTime(d, ctx.clock24h)}.`
+      : `Your next ${classOnly ? "class" : "thing"} is ${bold(next.title)} ${dayName(d, now)} at ${fmtTime(d, ctx.clock24h)}, but it doesn't have a location saved.`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Dates, countdowns, progress                                         */
+/* ------------------------------------------------------------------ */
+
+function dateMathIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  let m: RegExpExecArray | null;
+
+  // "what day is oct 12", "what's the date next friday"
+  if ((m = /^(?:what|which) (?:day(?: of the week)?|date) (?:is|was|will be|falls on|lands on)\s+(.+)$/.exec(q) ?? /^what is the date (?:on |of )?(.+)$/.exec(q))) {
+    const ref = findDayRef(m[1], now);
+    if (!ref || ref.kind !== "day" || m[1].replace(ref.text, "").replace(/\b(?:it|going to be)\b/g, "").trim()) return undefined;
+    const asksWeekday = /\bday\b/.test(q.slice(0, 20)) && /\d/.test(ref.text);
+    return { text: asksWeekday ? `${format(ref.day, "MMMM d")} is a ${bold(format(ref.day, "EEEE"))}.` : `${cap(ref.label)} is ${bold(format(ref.day, "EEEE, MMMM d"))}.` };
+  }
+
+  // "how many days until spring break", "how long until my next class", "days till the essay is due"
+  if ((m = /^(?:how (?:many|much) (?:days|weeks|time|hours)|how long|days|weeks) (?:until|till|til|before|left (?:until|till|before))\s+(.+?)(?:\s+(?:is due|is|starts|begins|happens))?$/.exec(q))) {
+    const subject = m[1].replace(/^(?:my|the)\s+/, "").trim();
+    const unitWeeks = /^(?:how many weeks|weeks)/.test(q);
+    const say = (label: string, target: Date, exactTime: boolean) => {
+      const days = differenceInCalendarDays(startOfDay(target), startOfDay(now));
+      if (days < 0) return { text: `${label} already passed — it was ${relative(target, now)}.` };
+      if (days === 0) {
+        const until = exactTime ? untilPhrase(target, now) : null;
+        return { text: `${label} is ${bold("today")}${until ? ` — ${until}` : ""}.` };
+      }
+      if (unitWeeks) {
+        const w = Math.round((days / 7) * 10) / 10;
+        return { text: `${label} is ${bold(`${w} week${w === 1 ? "" : "s"}`)} away (${format(target, "EEE, MMM d")}).` };
+      }
+      const hours = exactTime ? untilPhrase(target, now) : null;
+      return { text: `${label} is ${bold(days === 1 ? "tomorrow" : `${days} days`)} away${days === 1 && hours ? ` — ${hours}` : ` (${format(target, "EEE, MMM d")})`}.` };
+    };
+    if (/^next (?:class|lecture)$/.test(subject)) {
+      const next = ctx.items.filter((i) => i.type === "event" && !i.allDay && isClass(env, i) && +new Date(i.at) > +now).sort(byAt)[0];
+      if (!next) return { text: "I don't see any upcoming classes." };
+      const until = untilPhrase(new Date(next.at), now);
+      return until ? { text: `Your next class, ${bold(next.title)}, starts ${bold(until)}.` } : say(`Your next class, ${bold(next.title)},`, new Date(next.at), true);
+    }
+    const ref = findDayRef(subject, now);
+    if (ref && !subject.replace(ref.text, "").trim()) return say(cap(ref.label), ref.kind === "day" ? ref.day : ref.start, false);
+    const target = resolveTarget(env, subject, "any");
+    if (target.kind === "one") return say(bold(target.item.title), new Date(target.item.at), !target.item.allDay);
+    // Syllabus dates — "spring break", "the drop deadline".
+    const want = tokens(subject);
+    for (const c of ctx.categories) {
+      const hit = c.syllabus?.keyDates.find((k) => want.length && want.every((w) => tokenMatches(w, tokens(k.label))));
+      if (hit) {
+        const [y, mo, d] = hit.date.split("-").map(Number);
+        return say(bold(hit.label), new Date(y, mo - 1, d), false);
+      }
+    }
+    return target.kind === "many" ? askWhich(env, target.items, (item) => say(bold(item.title), new Date(item.at), !item.allDay)) : null;
+  }
+
+  // "how long is the midterm", "how long does lecture last"
+  if ((m = /^how long (?:is|does|will) (?:my |the )?(.+?)(?:\s+(?:last|take|run|go))?$/.exec(q))) {
+    const target = resolveTarget(env, m[1], "any");
+    if (target.kind !== "one" || target.item.type !== "event") return target.kind === "none" ? undefined : null;
+    const e = target.item;
+    if (!e.endAt || e.allDay) return { text: `${bold(e.title)} doesn't have an end time saved${e.allDay ? " — it's an all-day event" : ""}.` };
+    const mins = Math.round((+new Date(e.endAt) - +new Date(e.at)) / 60_000);
+    const dur = mins % 60 === 0 ? plural(mins / 60, "hour") : mins > 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} minutes`;
+    return { text: `${bold(e.title)} runs ${bold(dur)}, ${fmtTime(e.at, ctx.clock24h)}–${fmtTime(e.endAt, ctx.clock24h)}.` };
+  }
+
+  // "what week is it", "what week of the semester are we in"
+  if (/^what week (?:is it|are we (?:in|on)|of the (?:semester|term|quarter) (?:is it|are we (?:in|on)))$/.test(q)) {
+    const weekStart = addDays(startOfDay(now), -((now.getDay() - (ctx.weekStartsOn ?? 0) + 7) % 7));
+    for (const c of ctx.categories) {
+      const first = c.syllabus?.keyDates.find((k) => /\b(?:first day|classes (?:begin|start)|instruction begins|start of (?:classes|semester|term))\b/i.test(k.label));
+      if (first) {
+        const [y, mo, d] = first.date.split("-").map(Number);
+        const week = Math.floor(differenceInCalendarDays(startOfDay(now), new Date(y, mo - 1, d)) / 7) + 1;
+        if (week >= 1 && week <= 20) return { text: `It's ${bold(`week ${week}`)} of the semester — the week of ${format(weekStart, "MMM d")}.` };
+      }
+    }
+    return { text: `It's the week of ${bold(format(weekStart, "MMMM d"))}.` };
+  }
+  return undefined;
+}
+
+function statsIntent(env: Env): Outcome {
+  const { q, now } = env;
+  if (!/\b(?:how productive|how (?:am|have) i (?:doing|been doing)|how did i do|my progress|progress report|how much (?:did i|have i) (?:get|gotten|got) done|completion rate|am i on track|am i keeping up|how am i keeping up)\b/.test(q)) return undefined;
+  const ref = findDayRef(q, now);
+  const weekStart = addDays(startOfDay(now), -((now.getDay() - (env.ctx.weekStartsOn ?? 0) + 7) % 7));
+  const start = ref?.kind === "range" ? (ref.label === "this week" ? weekStart : ref.start) : ref?.kind === "day" ? ref.day : weekStart;
+  const end = ref?.kind === "range" ? ref.end : ref?.kind === "day" ? addDays(ref.day, 1) : addDays(startOfDay(now), 1);
+  const label = ref ? ref.label : "this week";
+  const work = env.ctx.items.filter(isWork);
+  const finished = work.filter((i) => i.status === "done" && +new Date(i.completedAt ?? i.at) >= +start && +new Date(i.completedAt ?? i.at) < +end);
+  const dueSoFar = work.filter((i) => +new Date(i.at) >= +start && +new Date(i.at) < Math.min(+end, +now));
+  const dueDone = dueSoFar.filter((i) => i.status === "done").length;
+  const overdue = work.filter((i) => isOpen(i) && isOverdueAt(i, now));
+  const early = finished.filter((i) => +new Date(i.at) >= +end).length;
+  const parts: string[] = [];
+  parts.push(finished.length ? `You've finished ${bold(plural(finished.length, "item"))} ${label}` : `You haven't checked anything off ${label} yet`);
+  if (dueSoFar.length) parts.push(`${dueDone} of the ${dueSoFar.length} that came due ${dueDone === 1 ? "is" : "are"} done`);
+  if (early) parts.push(`${early} ahead of schedule`);
+  const tail = overdue.length
+    ? ` You have ${bold(`${overdue.length} overdue`)}${overdue.length <= 2 ? ` (${joinNatural(overdue.map((i) => i.title))})` : ""} — clearing ${overdue.length === 1 ? "that" : "those"} would put you fully on track.`
+    : dueSoFar.length || finished.length ? " Nothing is overdue — you're on track." : "";
+  return { text: `${parts.join(", ")}.${tail}` };
+}
+
 function nowIntent(env: Env): Outcome {
   const { q, now, ctx } = env;
   if (!/^(?:what|which|am i|do i|who|is there|anything)\b.*\b(?:now|right now|currently|at the moment)\b|^what am i doing$|^am i in (?:a )?class(?: right now)?$/.test(q) && !/^(?:what class (?:do i have|am i in) now)$/.test(q)) return undefined;
@@ -1229,14 +1875,29 @@ function freeIntent(env: Env): Outcome {
   if (!asksFree) return undefined;
   if (/\b(?:add|schedule|create|book|move)\b/.test(q)) return undefined;
   const ref = findDayRef(q, now);
-  if (ref && ref.kind === "range" && ref.end.getTime() - ref.start.getTime() > 3 * 86_400_000) return null;
+  if (ref && ref.kind === "range" && ref.end.getTime() - ref.start.getTime() > 8 * 86_400_000) return null;
   const time = findTime(q);
   const day = ref?.kind === "day" ? ref.day : ref?.kind === "range" ? ref.start : startOfDay(now);
   const label = ref?.kind === "day" ? ref.label : ref?.kind === "range" ? ref.label : "today";
   if (ref?.kind === "range") {
-    const evs = ctx.items.filter((i) => i.type === "event" && +new Date(i.at) >= +ref.start && +new Date(i.at) < +ref.end).sort(byAt);
-    if (!evs.length) return { text: `Nothing on your calendar ${label} — you're completely free.` };
-    return { text: `${cap(label)} you have ${joinNatural(evs.slice(0, 5).map((e) => `${bold(e.title)} (${dayName(new Date(e.at), now)}${e.allDay ? "" : ` at ${fmtTime(e.at, ctx.clock24h)}`})`))}${evs.length > 5 ? `, plus ${evs.length - 5} more` : ""}; the rest of the time is open.` };
+    const part = partOfDay(q);
+    const rows: string[] = [];
+    let open = 0;
+    for (let d = ref.start < startOfDay(now) ? startOfDay(now) : ref.start; +d < +ref.end && rows.length < 7; d = addDays(d, 1)) {
+      const gaps = freeGaps(env, d, part?.from ?? WORK_START, part?.to ?? WORK_END).filter(([a, b]) => +b - +a >= 60 * 60_000);
+      const booked = busyBlocks(env, d).length;
+      const dayLabel = dayName(d, now) === "today" || dayName(d, now) === "tomorrow" ? cap(dayName(d, now)) : format(d, "EEE, MMM d");
+      if (!booked) {
+        open += 1;
+        rows.push(`- **${dayLabel}** — wide open`);
+      } else if (gaps.length) {
+        rows.push(`- **${dayLabel}** — ${gaps.slice(0, 3).map(([a, b]) => `${fmtTime(a, ctx.clock24h)}–${fmtTime(b, ctx.clock24h)}`).join(", ")}`);
+      } else {
+        rows.push(`- **${dayLabel}** — booked up`);
+      }
+    }
+    if (!rows.length) return { text: `There's not much of ${label} left to plan around.` };
+    return { text: `Here's your free time ${label}${part ? ` (${part.label}s)` : ""}${open ? ` — ${plural(open, "day")} completely open` : ""}:\n${rows.join("\n")}` };
   }
 
   const timed = ctx.items
@@ -1433,7 +2094,7 @@ function lookupIntent(env: Env): Outcome {
   if (cls && bareClass) return classScheduleAnswer(env, cls, kind) ?? null;
 
   const target = resolveTarget(env, phrase, "any");
-  if (target.kind === "none") return null;
+  if (target.kind === "none") return undefined;
   if (target.kind === "many") {
     const items = target.items.filter((i) => +new Date(i.at) >= +startOfDay(now) || i.status !== "done");
     if (items.length < 2 || items.length > 5) return null;
@@ -1494,7 +2155,8 @@ function searchIntent(env: Env): Outcome {
   const m = /^(?:do i have|have i got|is there|are there|got|any)\s+(?:an?\s+|any\s+|anything\s+(?:about\s+|for\s+|called\s+|with\s+)?|something\s+(?:about|for)\s+)?(.+)$/.exec(q);
   if (!m) return undefined;
   let phrase = m[1];
-  if (/\b(?:free|time|room|space|gap|gaps|openings?|questions?|idea|problem|issue|to do)\b/.test(phrase) || /^(?:due|overdue|stuff|things|classes|class|plans?|homework|assignments?|tasks?|events?)\b/.test(phrase) && !/\b(?:for|in)\b/.test(phrase)) {
+  if (/^(?:after|before|later|else|left|tonight|going on|happening|this (?:morning|afternoon|evening))\b/.test(phrase)) return undefined;
+  if (/\b(?:free|time|room|space|gap|gaps|openings?|questions?|idea|problem|issue|to do|curve)\b/.test(phrase) || /^(?:due|overdue|stuff|things|classes|class|plans?|homework|assignments?|tasks?|events?)\b/.test(phrase) && !/\b(?:for|in)\b/.test(phrase)) {
     return undefined;
   }
   const ref = findDayRef(phrase, now);
@@ -1530,26 +2192,40 @@ function searchIntent(env: Env): Outcome {
 /** Words that mean the user wants reasoning, not a lookup. Always the model's job. */
 const NEEDS_REASONING =
   /\b(?:should i|recommend|suggest(?:ions?)?|advice|prioriti[sz]e|plan my|plan out|study plan|help me (?:plan|study|prepare|organi[sz]e|balance|decide|figure|manage)|summari[sz]e|explain|overwhelm(?:ed|ing)?|stress(?:ed|ful)?|worried|too much|too busy|realistic|workload|how (?:can|do) i (?:manage|balance|fit|catch up)|procrastinat\w*|motivat\w*|brainstorm|write me|write (?:a|an)|draft (?:me|a|an)|compose|rewrite|reschedule everything|rearrange)\b|^(?:why|compare)\b/;
+/** General-knowledge asks — nothing on the calendar can answer these. */
+const OFF_TOPIC = /\b(?:weather|forecast|temperature|rain(?:ing|y)?|snow(?:ing|y)?|humid|news|headlines|stocks?|who won|scores? of|recipe|translate|definition|define|meaning of|capital of|how do you spell|joke|poem|story|song|lyrics|calculate|solve|equation|derivative|integral|trivia|fun fact)\b/;
 
-const COMPOUND = /\s+(?:and then|then|and also|also|;)\s+|\s+and\s+(?=(?:mark|move|delete|add|remove|complete|reschedule|push|cancel|rename|finish|start)\b)/;
+/** Reasoning-flavoured phrasings we can still answer exactly. */
+const REASONING_OK = /^(?:what|which) (?:should|do) i (?:work on|do|tackle|start with|focus on)|^when (?:should|can|could) i (?:work on|study for|study|do|start|finish|get to)\b|\bshould i (?:bring|buy)\b/;
+
+const ACTION_VERB = "(?:mark|move|delete|add|remove|complete|reschedule|push|cancel|rename|finish|start|remind|set|change|schedule|block|find|create|book|put|reopen|postpone|check off)";
+const COMPOUND_SPLIT = new RegExp(String.raw`\s*;\s*|,?\s+(?:and then|then|and also|also)\s+|,?\s+and\s+(?=${ACTION_VERB}\b)|,\s+(?=${ACTION_VERB}\b)`);
 const FOLLOW_UP = /^(?:and\s+|what about\s+|how about\s+|what of\s+|and what about\s+|then\s+)(.+)$/;
 
 function questionNeedsContext(q: string): boolean {
-  return /\b(?:same|instead|that one|the other|another one|before that|after that|earlier one|later one|previous|last one)\b/.test(q);
+  return /\b(?:same|instead|the other|another one|before that|after that|earlier one|later one|previous)\b/.test(q);
 }
 
 function run(env: Env): Outcome {
   const pipeline: Array<(e: Env) => Outcome> = [
     smallTalk,
+    (e) => answerHelpQuestion(e.q),
+    syllabusIntent,
+    plannerIntent,
     reminderIntent,
+    fieldEditIntent,
     moveIntent,
     deleteIntent,
     renameIntent,
     completeIntent,
     addIntent,
     focusIntent,
+    statsIntent,
+    classesIntent,
+    dateMathIntent,
     freeIntent,
     busiestIntent,
+    whereNextIntent,
     nextIntent,
     nowIntent,
     firstLastIntent,
@@ -1570,14 +2246,74 @@ function run(env: Env): Outcome {
   return undefined;
 }
 
+function syllabusIntent(env: Env): Outcome {
+  // Questions about a specific item ("when is my meeting with professor lee")
+  // are calendar lookups, not syllabus ones.
+  if (/^(?:when|what time)\b/.test(env.q) && /\b(?:meeting|appointment|exam|quiz|midterm|final|due)\b/.test(env.q)) return undefined;
+  const out = answerSyllabusQuestion({
+    q: env.q,
+    raw: env.raw.toLowerCase(),
+    now: env.now,
+    categories: env.ctx.categories,
+    named: findClass(env, env.q),
+  });
+  const cls = out && /(?:What do you want to know|Which one do you want)\?$/.test(out.text) ? /\*\*(.+?)\*\*/.exec(out.text)?.[1] : undefined;
+  if (out && cls) pendingSyllabus = { prompt: out.text, className: cls };
+  return out;
+}
+
 function isMutation(r: AssistantResponse): boolean {
   return Boolean(r.actions?.length);
 }
 
+const CONFIRM_TAIL = /\s*(?:—\s*)?confirm(?: each)? below(?: and it's checked off)?\.?\s*$/i;
+
+/** Titles the last reply was about, in order: the "it" in "move it to friday". */
+function recentSubjects(history: AssistantTurn[], ctx: AssistantCtx): string[] {
+  const last = [...history].reverse().find((t) => t.role === "assistant");
+  if (!last) return [];
+  const titles = new Map(ctx.items.map((i) => [i.title.toLowerCase(), i.title]));
+  const out: string[] = [];
+  for (const m of last.text.matchAll(/\*\*(.+?)\*\*/g)) {
+    const title = titles.get(m[1].trim().toLowerCase());
+    if (title && !out.includes(title)) out.push(title);
+  }
+  return out;
+}
+
+const EDIT_HEAD = /^(?:mark|move|reschedule|push|bump|shift|postpone|delay|delete|remove|cancel|rename|complete|finish|start|reopen|change|set|put|check off|remind me about|add (?:a )?reminder (?:to|for)|(?:block|find|schedule|set aside|carve out|plan|reserve|make) (?:off |out )?(?:\S+ ){0,6}(?:for|to (?:work on|study for|do|finish|start))|i (?:just )?(?:finished|did|submitted|turned in)|done with|finished with)\b/;
+
+/**
+ * Swap "it" / "them" for what the last reply was about. Only in edits and in
+ * "when/where is it" questions, and only when that subject is unambiguous.
+ */
+function resolvePronouns(n: string, q: string, subjects: string[]): { n: string; q: string } | null {
+  const isEdit = EDIT_HEAD.test(q) || /^(?:it|that|they|those|both)(?: one)? (?:is|are|was|were) (?:all )?(?:done|finished|complete|completed|submitted)$/.test(q);
+  const isAsk = /^(?:when|where|what time|how long) (?:is|was|does|did|will) (?:it|that)\b/.test(q) && !/^what time is it$/.test(q);
+  if (!isEdit && !isAsk) return { n, q };
+  const plural = /\b(?:them|those|these|both(?: of them)?|all of them|they)\b/;
+  const single = /\b(?:it|that one|this one|that|this)\b(?!\s+(?:is due|was due))/;
+  const re = plural.test(q) ? plural : single.test(q) ? single : null;
+  if (!re) return { n, q };
+  if (!subjects.length) return null;
+  if (re === single && subjects.length !== 1) return null;
+  const replacement = re === plural ? subjects.join(" and ") : subjects[0];
+  const reN = new RegExp(re.source, "i");
+  return { n: n.replace(reN, replacement), q: q.replace(re, replacement.toLowerCase()) };
+}
+
+function mergeResponses(parts: AssistantResponse[]): AssistantResponse {
+  const actions = parts.flatMap((p) => p.actions ?? []);
+  const text = parts
+    .map((p) => p.text.replace(CONFIRM_TAIL, "").replace(/[.\s]*$/, "."))
+    .join(" ");
+  return { text: actions.length ? `${text} Confirm below.` : text, ...(actions.length ? { actions } : {}) };
+}
+
 /**
  * Answer from the calendar on this device, or return `null` to let the model
- * have it. Anything ambiguous, multi-part, advisory, or context-dependent is
- * `null` on purpose.
+ * have it. Anything ambiguous, advisory, or context-dependent that we can't
+ * resolve exactly is `null` on purpose.
  */
 export function tryLocalAnswer(
   message: string,
@@ -1587,9 +2323,35 @@ export function tryLocalAnswer(
   depth = 0
 ): AssistantResponse | null {
   const raw = message.trim();
-  if (!raw || raw.length > 260) return null;
+  if (!raw || raw.length > 400) return null;
+  const lastAssistant = [...history].reverse().find((t) => t.role === "assistant");
 
-  if (/\n/.test(raw) || raw.length > 90) {
+  // The user is answering our "which one do you mean?".
+  if (depth === 0 && pendingChoice) {
+    const choice = pendingChoice;
+    pendingChoice = null;
+    if (lastAssistant?.text === choice.prompt) {
+      const q0 = expand(normalize(raw) || raw);
+      const picked = pickOption({ ctx, now, raw, n: q0, q: q0, history }, choice.options);
+      if (picked) return choice.build(picked, 1);
+      if (q0.split(" ").length <= 4) return null;
+    }
+  }
+
+  // "the late policy" after we asked what they want to know from a syllabus.
+  if (depth === 0 && pendingSyllabus) {
+    const follow = pendingSyllabus;
+    pendingSyllabus = null;
+    if (lastAssistant?.text === follow.prompt && raw.split(/\s+/).length <= 8) {
+      const topic = expand(normalize(raw) || raw);
+      if (!/^(?:what|when|where|who|how|is|are|can|do|does)\b/.test(topic)) {
+        const asked = tryLocalAnswer(`what does the ${follow.className.toLowerCase()} syllabus say about ${topic}`, [], ctx, now, 1);
+        return asked;
+      }
+    }
+  }
+
+  if (/\n/.test(raw) || raw.length > 160) {
     const list = pastedListIntent({ ctx, now, raw, n: raw, q: expand(raw), history });
     return list ?? null;
   }
@@ -1598,16 +2360,37 @@ export function tryLocalAnswer(
   // "thanks!" is all filler — keep it so small talk can answer it.
   if (!n) n = raw.replace(/[?!.]+$/, "").trim();
   if (!n) return null;
-  const q = expand(n);
-  const env: Env = { ctx, now, raw, n, q, history };
+  let q = expand(n);
 
-  if (NEEDS_REASONING.test(q) && !/^(?:what|which) (?:should|do) i (?:work on|do|tackle|start with|focus on)/.test(q)) return null;
-  if (COMPOUND.test(q) && /\b(?:mark|move|delete|add|remove|complete|reschedule|push|cancel|rename|finish|start)\b/.test(q)) return null;
+  if (NEEDS_REASONING.test(q) && !REASONING_OK.test(q)) return null;
+  if (OFF_TOPIC.test(q)) return null;
+
+  if (depth === 0) {
+    const resolved = resolvePronouns(n, q, recentSubjects(history, ctx));
+    if (!resolved) return null;
+    n = resolved.n;
+    q = resolved.q;
+  }
   if (questionNeedsContext(q)) return null;
 
-  // A reply to a question the assistant just asked ("Which one?") needs the thread.
-  const lastAssistant = [...history].reverse().find((t) => t.role === "assistant");
-  if (lastAssistant && /\?\s*$/.test(lastAssistant.text) && q.split(" ").length <= 5 && !/^(?:what|when|where|who|which|how|do|did|am|is|are|add|move|delete|mark|show|list)\b/.test(q) && !/^(?:hi|hey|hello|thanks|thank you|ok|okay)$/.test(q)) {
+  // "mark the essay done and move problem set 4 to friday" — each part must stand on its own.
+  if (depth === 0) {
+    const parts = n.split(COMPOUND_SPLIT).map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2 && parts.length <= 4) {
+      const answers: AssistantResponse[] = [];
+      for (const part of parts) {
+        const a = tryLocalAnswer(part, history, ctx, now, 1);
+        if (!a || /\?\s*$/.test(a.text)) return null;
+        answers.push(a);
+      }
+      return mergeResponses(answers);
+    }
+  }
+
+  const env: Env = { ctx, now, raw, n, q, history };
+
+  // A short reply to a question the assistant asked needs the thread.
+  if (depth === 0 && lastAssistant && /\?\s*$/.test(lastAssistant.text) && q.split(" ").length <= 5 && !/^(?:what|when|where|who|which|how|do|did|am|is|are|can|add|move|delete|mark|show|list|push|cancel|rename|remind|block|find)\b/.test(q) && !/^(?:hi|hey|hello|thanks|thank you|ok|okay)$/.test(q)) {
     return null;
   }
 
@@ -1615,18 +2398,28 @@ export function tryLocalAnswer(
   const followUp = FOLLOW_UP.exec(q);
   if (followUp && depth === 0) {
     const ref = findDayRef(followUp[1], now);
+    const cls = findClass(env, followUp[1]);
     const prev = [...history].reverse().find((t) => t.role === "user");
-    if (!ref || !prev) return null;
+    if ((!ref && !cls) || !prev) return null;
     const prevQ = expand(normalize(prev.text));
-    if (/^(?:add|create|move|delete|remove|cancel|rename|mark|schedule|push|remind|reschedule)/.test(prevQ) || ref === null) return null;
-    const prevRef = findDayRef(prevQ, now);
-    const merged = prevRef ? prevQ.replace(prevRef.text, ref.text) : `${prevQ} ${ref.text}`;
-    const result = tryLocalAnswer(merged, history.slice(0, -0), ctx, now, 1);
+    if (/^(?:add|create|move|delete|remove|cancel|rename|mark|schedule|push|remind|reschedule|block|find)/.test(prevQ)) return null;
+    let merged = prevQ;
+    if (ref) {
+      const prevRef = findDayRef(prevQ, now);
+      merged = prevRef ? merged.replace(prevRef.text, ref.text) : `${merged} ${ref.text}`;
+    }
+    if (cls) {
+      const prevCls = findClass(env, prevQ);
+      merged = prevCls ? merged.replace(new RegExp(prevCls.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), cls.name.toLowerCase()) : `${merged} for ${cls.name.toLowerCase()}`;
+    }
+    const result = tryLocalAnswer(merged, history, ctx, now, 1);
     return result && !isMutation(result) ? result : null;
   }
 
   const out = run(env);
   if (!out) return null;
+  // A new answer replaces any "which one?" still waiting, except the one it just asked.
+  if (pendingChoice && pendingChoice.prompt !== out.text) pendingChoice = null;
   return out;
 }
 

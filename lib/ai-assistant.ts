@@ -405,7 +405,7 @@ export async function askAssistant(
         clock24h: ctx.clock24h,
         weekStartsOn: ctx.weekStartsOn ?? 0,
         items: selectAssistantItems(ctx.items, new Date().toISOString()).map(toAssistantSlimItem),
-        categories: ctx.categories.map((c) => ({ id: c.id, name: c.name })),
+        categories: ctx.categories.map((c) => ({ id: c.id, name: c.name, ...(c.syllabus ? { syllabus: c.syllabus } : {}) })),
       }),
     });
     if (res.ok) {
