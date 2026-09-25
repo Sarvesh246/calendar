@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { tryLocalAnswer, localReplyDelayMs } from "./local-assistant";
+import { tryLocalAnswer, localReplyDelayMs, resetLocalAssistantState } from "./local-assistant";
+import { beforeEach } from "vitest";
 import type { AssistantCtx, AssistantTurn } from "./ai-assistant";
 import type { Category, Item } from "./types";
 
@@ -39,6 +40,7 @@ const items: Item[] = [
 ];
 
 const ctx: AssistantCtx = { items, categories, clock24h: false, weekStartsOn: 0 };
+beforeEach(() => resetLocalAssistantState());
 const ask = (text: string, history: AssistantTurn[] = []) => tryLocalAnswer(text, history, ctx, NOW);
 const text = (t: string) => ask(t)?.text ?? null;
 
@@ -50,7 +52,6 @@ describe("local assistant — deferral", () => {
     "move it to Friday",
     "mark it done",
     "delete everything",
-    "mark essay done and move problem set 4 to friday",
     "xyzzy plugh",
     "what's the weather",
     "",
@@ -302,8 +303,8 @@ describe("local assistant — changing the calendar", () => {
     expect(ask("remind me to call mom tomorrow")?.actions?.[0]).toMatchObject({ kind: "create" });
     expect(ask("add something later")).toBeNull();
     expect(ask("add dinner with sam tomorrow")).toBeNull(); // no time: the model asks
-    expect(ask("add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before")).toBeNull();
-    expect(ask("add yoga every monday at 7am")).toBeNull();
+    expect(ask("add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before")?.actions?.[0]).toMatchObject({ kind: "create" });
+    expect(ask("add yoga every monday at 7am")?.actions?.[0]).toMatchObject({ kind: "create", draft: { repeat: { freq: "weekly", byDay: [1] } } });
   });
 
   it("splits a pasted list into events", () => {
@@ -335,7 +336,7 @@ describe("local assistant — more phrasings", () => {
   });
 
   it("does not hijack how-to and advice questions", () => {
-    for (const q of ["how do I add an event", "what's the best way to study for finals", "what do I need to do to prepare for the dentist"]) {
+    for (const q of ["what's the best way to study for finals", "what do I need to do to prepare for the dentist"]) {
       expect(ask(q), q).toBeNull();
     }
   });

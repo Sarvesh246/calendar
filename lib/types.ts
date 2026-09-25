@@ -1,3 +1,5 @@
+import type { SyllabusInfo } from "./syllabus-info";
+
 export type ItemType = "event" | "assignment" | "task";
 export type ItemStatus = "todo" | "doing" | "done";
 export type RepeatFreq = "daily" | "weekly" | "monthly";
@@ -24,6 +26,8 @@ export interface Category {
   sourceId?: string;
   /** ISO datetime of the last local edit — the tiebreaker when two devices disagree. */
   updatedAt?: string;
+  /** Course details read from an imported syllabus: staff, grading, policies, key dates. */
+  syllabus?: SyllabusInfo;
 }
 
 export interface ReminderPlace {

@@ -10,6 +10,7 @@ import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } fr
 import { createChatCompletion, callRoutedProvider } from "@/lib/llm/router";
 import { DATEBOOK_TOOLS, executeDatebookTool, MalformedToolArgumentsError } from "@/lib/llm/tools";
 import type { ChatMessage } from "@/lib/llm/openai-compatible";
+import { normalizeSyllabusInfo, syllabusDigest } from "@/lib/syllabus-info";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,24 @@ function localStamp(iso: string | undefined, tz: string): string {
  * one compact line per item (local time, no urls/source ids/descriptions) instead
  * of pretty JSON with every field. Full detail is one list_* tool call away.
  */
+const SYLLABUS_WORDS = /\b(?:syllabus|professor|prof|instructor|teacher|ta|tas|office hours?|email|contact|grad(?:e|ed|ing)|worth|weight|percent|policy|policies|late|extension|attendance|absen\w*|make-?up|regrade|extra credit|cheat\w*|plagiari\w*|integrity|ai|chatgpt|collaborat\w*|textbook|book|materials|prereq\w*|break|holiday|drop|withdraw|deadline|final|midterm|exam|allowed|rules?)\b/i;
+
+/**
+ * Syllabus details are only worth their tokens when the question is about a
+ * course: the classes the message names, or every class that has details when
+ * it asks something syllabus-shaped without naming one.
+ */
+function relevantSyllabi(body: ReqBody): string {
+  const message = body.message.toLowerCase();
+  const withInfo = body.categories
+    .map((c) => ({ name: c.name, info: normalizeSyllabusInfo(c.syllabus) }))
+    .filter((c): c is { name: string; info: NonNullable<typeof c.info> } => Boolean(c.info));
+  if (!withInfo.length) return "";
+  const named = withInfo.filter((c) => message.includes(c.name.toLowerCase()));
+  const chosen = named.length ? named : SYLLABUS_WORDS.test(message) ? withInfo.slice(0, 4) : [];
+  return chosen.map((c) => syllabusDigest(c.name, c.info)).join("\n\n").slice(0, 12_000);
+}
+
 function systemPrompt(body: ReqBody): string {
   const now = new Date(body.now);
   const tz = body.timeZone || "UTC";
@@ -72,16 +91,19 @@ function systemPrompt(body: ReqBody): string {
     nextEvent: digest.nextEvent ? entry(digest.nextEvent) : undefined,
   };
   const snapshot = body.items.slice(0, SNAPSHOT_ITEMS).map(line).join("\n");
+  const syllabi = relevantSyllabi(body);
   const hidden = body.items.length - SNAPSHOT_ITEMS;
 
   return `You are Datebook's calendar and todo assistant. It is ${human}; current instant ${body.now}; user timezone ${tz}. Use a ${body.clock24h ? "24-hour" : "12-hour"} clock.
 
-Calendar categories (id:name): ${body.categories.map((c) => `${c.id}:${c.name}`).join(", ")}
+Calendar categories (classes, id:name): ${body.categories.map((c) => `${c.id}:${c.name}`).join(", ")}
 Authoritative digest (local times): ${JSON.stringify(compactDigest)}
 Calendar snapshot, one item per line as id|type|status|start (local)|end|title|class|location, open work and soonest first${hidden > 0 ? `; ${hidden} more not shown, use list_events/list_tasks for them` : ""}:
 ${snapshot}
 
-Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the current time and timezone above. Use ISO 8601 with an explicit offset in tool arguments.
+${syllabi ? `${syllabi}
+
+` : ""}Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the current time and timezone above. Use ISO 8601 with an explicit offset in tool arguments.
 
 Keep the final response short and natural: 1-3 sentences or a compact bullet list, no heading or table. Use bold only for useful titles, dates, times, or counts. Never expose provider internals or tool JSON.`;
 }
