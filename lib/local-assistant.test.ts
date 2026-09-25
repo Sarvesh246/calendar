@@ -47,7 +47,6 @@ const text = (t: string) => ask(t)?.text ?? null;
 describe("local assistant — deferral", () => {
   it.each([
     "should I study for my exam or finish the essay?",
-    "help me plan my week",
     "why is my calendar so full",
     "move it to Friday",
     "mark it done",

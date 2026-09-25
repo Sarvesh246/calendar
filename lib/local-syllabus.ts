@@ -108,7 +108,7 @@ const TOPIC_RE: Array<[Topic, RegExp]> = [
   ["ta", /\b(?:tas?|t\.a\.?s?|teaching assistants?|teaching fellows?|graders?|section leaders?)\b/],
   ["instructor", /\b(?:professors?|profs?|instructors?|teachers?|lecturers?|who (?:is )?teach(?:es|ing)?|taught by|who runs)\b/],
   ["scale", /\b(?:grad(?:e|ing) scale|letter grades?|cut-?offs?|grade boundaries|what (?:is|counts as) an? [abcdf][+-]?\b|how (?:many|much) (?:points|percent) (?:for|is) an? [abcdf]|what percent(?:age)? (?:is|for) an? [abcdf])/],
-  ["grading", /\b(?:grad(?:e|ing|ed) (?:breakdown|weights?|distribution|split|composition)|how (?:is|am i|are we|will i be) (?:it |this |the class |the course |[a-z0-9 ]+ )?graded|worth|weight(?:ed|ing)?|how much (?:is|does|do|are)|percent(?:age)? of (?:the|my|your) (?:final |overall |class |course )?grade|what percent(?:age)?|how (?:many|much) percent|counts? for|what (?:makes up|goes into) (?:the|my) grade)\b/],
+  ["grading", /\b(?:grad(?:e|ing|ed) (?:breakdown|weights?|distribution|split|composition)|how (?:is|am i|are we|will i be) (?:it |this |the class |the course |[a-z0-9 ]+ )?graded|worth|weight(?:ed|ing)?|how much (?:is|does|do|are)\b(?=.*\b(?:worth|count|weigh|percent|grade)\b)|percent(?:age)? of (?:the|my|your) (?:final |overall |class |course )?grade|what percent(?:age)?|how (?:many|much) percent|counts? for|what (?:makes up|goes into) (?:the|my) grade)\b/],
   ["materials", /\b(?:text ?books?|books?|materials|required (?:reading|texts?)|course packs?|readers?|calculators?|software|supplies|what do i need to buy)\b/],
   ["prereq", /\bpre-?req(?:uisite)?s?\b/],
   ["website", /\b(?:website|web site|course (?:page|site)|canvas (?:page|site|link)|class (?:page|site))\b/],
