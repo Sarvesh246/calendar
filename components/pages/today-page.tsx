@@ -158,13 +158,6 @@ function TodayDashboard() {
     />
   );
 
-  // When nothing is live, Today’s list leads; Happening Now (upcoming) follows.
-  const liveNow = useMemo(
-    () => happeningNowStack(items, now, categories, classCountdownWindowMs(classReminderMinutes)),
-    [items, now, categories, classReminderMinutes]
-  );
-  const hasLive = liveNow.happening.length > 0 || liveNow.startingSoon.length > 0;
-
   /**
    * What needs attention, in one line, above the day.
    *
@@ -332,10 +325,9 @@ function TodayDashboard() {
       <FeedHealthBanner />
       {header}
       {attentionStrip}
-      {/* Live class first when something is happening; otherwise the day list
-          leads so “nothing live” doesn’t bury Today under an upcoming card. */}
-      {hasLive ? happening : todaySection}
-      {hasLive ? todaySection : happening}
+      {/* What's live (or next) always leads, above the day list. */}
+      {happening}
+      {todaySection}
       {overdueSection}
       <TodayNextStepTips />
       {comingUpSection}
