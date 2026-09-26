@@ -123,7 +123,9 @@ export function AssistantConversation({
     <>
       {docked ? (
         <div className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-1.5">
-          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">Ask about your calendar</p>
+          {/* The panel's tab already says "Assistant" and the intro says what to
+              ask, so the header is just controls — a label here only truncated. */}
+          <div className="flex-1" />
           <AssistantModelSelector compact />
           <button type="button" onClick={reset} disabled={thinking} aria-label="New conversation" title="New conversation" className={cn(headerButton, "disabled:opacity-40")}>
             <SquarePen className="h-4 w-4" strokeWidth={1.9} />
