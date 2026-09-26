@@ -1203,6 +1203,23 @@ select {
   }
 }
 
+/* Desktop rail's active pill (see `movePill` in sidebar.tsx). */
+.rail-pill {
+  transition:
+    transform 340ms cubic-bezier(0.32, 0.72, 0, 1),
+    height 340ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 160ms var(--ease-standard);
+  will-change: transform;
+}
+.rail-pill.rail-pill-instant {
+  transition: opacity 160ms var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-pill {
+    transition: none;
+  }
+}
+
 @keyframes route-enter-instant {
   from {
     opacity: 0.92;

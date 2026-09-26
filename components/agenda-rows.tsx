@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarClock,
@@ -371,23 +372,69 @@ function StatusGlyph({ status }: { status: ItemStatus }) {
   );
 }
 
+const STATUS_MENU_WIDTH = 160;
+/** Three options at min-h-8 plus the list's padding and border. */
+const STATUS_MENU_HEIGHT = 3 * 32 + 10;
+const MENU_EDGE = 8;
+
+/**
+ * Where the menu goes, in viewport coordinates. It lives in a portal because
+ * the rows sit in a clipping container — anchored inside it, a row near the
+ * bottom (or right) edge cut the menu off. Opens upward when there's no room
+ * below, and stays inside the window horizontally.
+ */
+function statusMenuPlacement(anchor: DOMRect) {
+  const below = window.innerHeight - anchor.bottom;
+  const up = below < STATUS_MENU_HEIGHT + MENU_EDGE && anchor.top > below;
+  const left = Math.max(
+    MENU_EDGE,
+    Math.min(anchor.left, window.innerWidth - STATUS_MENU_WIDTH - MENU_EDGE)
+  );
+  return up
+    ? { left, bottom: window.innerHeight - anchor.top + 4, up }
+    : { left, top: anchor.bottom + 4, up };
+}
+
 /** Status as an inline pill that opens a three-way choice. */
 function StatusPicker({ item }: { item: Item }) {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<ReturnType<typeof statusMenuPlacement> | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const status = item.status ?? "todo";
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const anchor = buttonRef.current?.getBoundingClientRect();
+      if (anchor) setPlace(statusMenuPlacement(anchor));
+    };
+    update();
+    // A fixed menu doesn't follow its row, so close it once the page scrolls
+    // out from under it (but not when the scroll is inside the menu itself).
+    const onScroll = (e: Event) => {
+      if (listRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!ref.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("pointerdown", onDown, true);
     listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus({ preventScroll: true });
     return () => document.removeEventListener("pointerdown", onDown, true);
-  }, [open]);
+  }, [open, place]);
 
   function choose(next: ItemStatus) {
     haptic(next === "done" ? "success" : "light");
@@ -416,17 +463,25 @@ function StatusPicker({ item }: { item: Item }) {
         <span className="whitespace-nowrap">{STATUS_LABEL[status]}</span>
         <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={2.25} />
       </button>
+      {typeof document !== "undefined" && createPortal(
       <AnimatePresence>
-        {open && (
+        {open && place && (
           <motion.ul
             ref={listRef}
             role="listbox"
             aria-label="Status"
-            initial={{ opacity: 0, scale: 0.96, y: -4 }}
+            data-no-shortcuts
+            initial={{ opacity: 0, scale: 0.96, y: place.up ? 4 : -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
             transition={motionTokens.springSnappy}
-            style={{ transformOrigin: "top left" }}
+            style={{
+              left: place.left,
+              top: place.top,
+              bottom: place.bottom,
+              width: STATUS_MENU_WIDTH,
+              transformOrigin: place.up ? "bottom left" : "top left",
+            }}
             onKeyDown={(e) => {
               const options = [...(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
               const index = options.indexOf(document.activeElement as HTMLElement);
@@ -442,7 +497,7 @@ function StatusPicker({ item }: { item: Item }) {
                 setOpen(false);
               }
             }}
-            className="absolute left-0 top-[calc(100%+4px)] z-20 w-40 rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.3)]"
+            className="fixed z-[70] rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.3)]"
           >
             {STATUSES.map((s) => (
               <li
@@ -469,7 +524,9 @@ function StatusPicker({ item }: { item: Item }) {
             ))}
           </motion.ul>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
     </div>
   );
 }
