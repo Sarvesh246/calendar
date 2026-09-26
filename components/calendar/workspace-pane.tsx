@@ -1,8 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ListTodo, Sparkles } from "lucide-react";
 import { DayAgenda } from "@/components/day-agenda";
 import { PlanningTray } from "@/components/calendar/planning-tray";
@@ -16,13 +15,13 @@ import {
   type PaneTab,
 } from "@/lib/workspace-prefs";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
-const AssistantConversation = dynamic(
-  () => import("@/components/assistant-conversation").then((m) => ({ default: m.AssistantConversation })),
-  {
+const loadAssistant = () =>
+  import("@/components/assistant-conversation").then((m) => ({ default: m.AssistantConversation }));
+
+const AssistantConversation = dynamic(loadAssistant, {
     ssr: false,
     loading: () => (
       <div role="status" className="flex flex-1 items-center justify-center text-[12px] text-ink-faint">
@@ -37,6 +36,31 @@ const TABS: { id: PaneTab; label: string; Icon: typeof CalendarDays }[] = [
   { id: "plan", label: "To place", Icon: ListTodo },
   { id: "assistant", label: "Assistant", Icon: Sparkles },
 ];
+
+/** One tab's content. Hidden panels stay mounted (and keep their scroll). */
+function PanePanel({
+  id,
+  show,
+  className,
+  children,
+}: {
+  id: PaneTab;
+  show: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      id={`pane-panel-${id}`}
+      role="tabpanel"
+      aria-labelledby={`pane-tab-${id}`}
+      hidden={!show}
+      className={cn("min-h-0 flex-1 flex-col", show && "tab-page-enter flex", className)}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** Never let the pane take more than this share of the window. */
 const MAX_VIEWPORT_SHARE = 0.45;
@@ -73,6 +97,24 @@ export function WorkspacePane({
   const asideRef = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number; latest: number } | null>(null);
   const [resizing, setResizing] = useState(false);
+  const activeIndex = Math.max(0, TABS.findIndex((t) => t.id === tab));
+
+  // Panels seen so far this session. Grown during render (not in an effect) so
+  // the first visit mounts in the same commit that flips the tab.
+  const [visited, setVisited] = useState<ReadonlySet<PaneTab>>(() => new Set([tab]));
+  if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
+
+  // Fetch the assistant's chunk while idle so its first open isn't a network
+  // wait stacked on top of the switch.
+  useEffect(() => {
+    const load = () => void loadAssistant();
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(load, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(load, 1500);
+    return () => clearTimeout(id);
+  }, []);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !asideRef.current) return;
@@ -160,7 +202,18 @@ export function WorkspacePane({
 
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface">
         <div className="shrink-0 border-b border-line p-1.5">
-          <div role="tablist" aria-label="Side panel content" className="flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5">
+          <div role="tablist" aria-label="Side panel content" className="relative flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5">
+            {/* One pill that slides with a CSS transform. It runs on the
+                compositor, so it keeps gliding even while the next panel mounts
+                — a JS layout animation froze mid-slide on that same frame. */}
+            <span
+              aria-hidden
+              className="pane-tab-pill pointer-events-none absolute bottom-0.5 left-0.5 top-0.5 rounded-md bg-surface shadow-[0_1px_3px_rgb(0_0_0/0.12)]"
+              style={{
+                width: `calc((100% - 4px - ${(TABS.length - 1) * 2}px) / ${TABS.length})`,
+                transform: `translateX(calc(${activeIndex} * (100% + 2px)))`,
+              }}
+            />
             {TABS.map(({ id, label, Icon }) => {
               const active = tab === id;
               return (
@@ -184,13 +237,6 @@ export function WorkspacePane({
                     active ? "text-ink" : "text-ink-soft hover:text-ink"
                   )}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="pane-tab-pill"
-                      className="absolute inset-0 rounded-md bg-surface shadow-[0_1px_3px_rgb(0_0_0/0.12)]"
-                      transition={motionTokens.spring}
-                    />
-                  )}
                   <Icon className={cn("relative z-[1] h-3.5 w-3.5", id === "assistant" && "text-accent")} strokeWidth={1.9} />
                   <span className="relative z-[1]">{label}</span>
                 </button>
@@ -199,22 +245,23 @@ export function WorkspacePane({
           </div>
         </div>
 
-        <div
-          id={`pane-panel-${tab}`}
-          role="tabpanel"
-          aria-labelledby={`pane-tab-${tab}`}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {tab === "day" && (
-            <div className="flex min-h-0 flex-1 flex-col p-4">
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* A panel mounts on its first visit and then stays, hidden, so
+              switching back is a display toggle instead of a rebuild. */}
+          {visited.has("day") && (
+            <PanePanel id="day" show={tab === "day"} className="p-4">
               <DayAgenda className="min-h-0 flex-1" date={selectedDate} items={selectedItems} onAdd={onAdd} />
-            </div>
+            </PanePanel>
           )}
-          {tab === "plan" && <PlanningTray items={items} mode={mode} onSwitchToWeek={onSwitchToWeek} />}
-          {tab === "assistant" && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <AssistantConversation variant="docked" active />
-            </div>
+          {visited.has("plan") && (
+            <PanePanel id="plan" show={tab === "plan"}>
+              <PlanningTray items={items} mode={mode} onSwitchToWeek={onSwitchToWeek} />
+            </PanePanel>
+          )}
+          {visited.has("assistant") && (
+            <PanePanel id="assistant" show={tab === "assistant"}>
+              <AssistantConversation variant="docked" active={tab === "assistant"} />
+            </PanePanel>
           )}
         </div>
       </div>
