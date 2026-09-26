@@ -156,7 +156,6 @@ export function ItemEditor({
   StatusSegmented: (props: {
     value: ItemStatus;
     onChange: (status: ItemStatus) => void;
-    layoutScope: string;
   }) => React.ReactNode;
   /** Close the card this editor is expanded inside. */
   onCollapse?: () => void;
@@ -390,7 +389,6 @@ export function ItemEditor({
     <DetailRow icon={<Check className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Status">
       <StatusSegmented
         value={item.status ?? "todo"}
-        layoutScope={`${variant}-${item.id}`}
         onChange={(status) => setItemStatus(item.id, status)}
       />
       {isOverdue(item) && item.status !== "done" && <p className="mt-1.5 text-warn">Overdue</p>}

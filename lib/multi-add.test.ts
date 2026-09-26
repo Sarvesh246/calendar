@@ -1,10 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { format } from "date-fns";
 import { parseMultiAdd } from "./multi-add";
 import { looksLikeBulkPaste, parseBulk } from "./bulk-parse";
 import { localAnswer } from "./ai-assistant";
 
 const NOW = new Date(2026, 8, 23, 10, 0);
+// Relative words ("tomorrow", "fri") resolve against the real clock, so pin it.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 const categories = [{ id: "c1", name: "Clubs", color: "#3DBE8B" }];
 
 const INTERVIEWS = `add these to my calendar:

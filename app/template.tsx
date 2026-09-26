@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 import { isTabRoute } from "@/lib/tab-routes";
 
 // A template (unlike a layout) re-mounts on every navigation. Wrapping the page
-// in `.page-shell` here means its sections replay the staggered `content-rise`
-// reveal (see globals.css) each time the route changes — no JS, so it can never
-// leave a page stuck mid-animation.
+// in `.route-enter` gives it one short settle (`page-settle` in globals.css)
+// each time the route changes — CSS only, so it can never leave a page stuck
+// mid-animation, and it never starts from blank.
 //
 // Tab routes are kept alive in AppShell's TabPageHost, so this wrapper only
 // applies to real remounts (Settings, legal pages). The tab pill carries that
