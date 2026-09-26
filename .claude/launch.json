@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "autoPort": true,
       "port": 3000
+    },
+    {
+      "name": "datebook-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "-p", "3100"],
+      "port": 3100
     }
   ]
 }
