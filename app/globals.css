@@ -741,10 +741,15 @@ button, a, [role="button"], summary, input, textarea, select, label {
 }
 
 /* Native chrome overlays the WebView. Don't also reserve the PWA tab-bar
-   footprint — that double-count is the extra Settings scroll. The stacked
-   Liquid Glass dock (Add above the 3-tab tray) still needs clearance. */
+   footprint — that double-count is the extra Settings scroll. This was
+   tuned to 8.25rem back when the dock stacked the Add button above the
+   3-tab tray as two rows; the dock has been a single side-by-side row for
+   a while now (UITabBarController tray + separate "+" circle, both ~64pt),
+   so that old height left ~3rem of unnecessary blank scroll below the
+   last Settings card. Sized to the current dock's real footprint (its own
+   height plus its offset from the safe area) with a modest buffer. */
 .native-ios {
-  --dock-clearance: 8.25rem;
+  --dock-clearance: 6.5rem;
 }
 
 /* Content remains a calm solid layer. These are the few transient WebView

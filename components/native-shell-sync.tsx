@@ -92,7 +92,7 @@ export function NativeShellSync() {
     const root = document.documentElement;
     root.classList.add("native-ios");
     const observer = new MutationObserver(() => setDomRevision((value) => value + 1));
-    observer.observe(root, { attributes: true, attributeFilter: ["class", "style"] });
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "style", "data-preset"] });
     return () => observer.disconnect();
   }, [wrapped]);
 
