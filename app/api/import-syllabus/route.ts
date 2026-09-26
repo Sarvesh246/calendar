@@ -5,9 +5,12 @@ import {
   SYLLABUS_BURST,
   SYLLABUS_HOURLY_ANON,
   SYLLABUS_HOURLY_AUTH,
+  SYLLABUS_IP_CEILING,
   clientKey,
   durableHourlyLimit,
   getRequestUser,
+  guestBucketKey,
+  ipCeiling,
   rateLimit,
   sameOrigin,
   syllabusLimitKey,
@@ -234,11 +237,12 @@ export async function POST(request: Request) {
 
   const user = await getRequestUser(request);
   const ip = clientKey(request);
-  const limitKey = syllabusLimitKey(user, ip);
+  const limitKey = syllabusLimitKey(user, user ? ip : guestBucketKey(request, ip));
   const hourly = user ? SYLLABUS_HOURLY_AUTH : SYLLABUS_HOURLY_ANON;
   if (
     !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
     !rateLimit(`${limitKey}:burst`, SYLLABUS_BURST, 60_000) ||
+    (!user && !ipCeiling("syllabus", ip, SYLLABUS_IP_CEILING, 60 * 60 * 1000)) ||
     !(await durableHourlyLimit(limitKey, hourly))
   ) {
     return tooMany();

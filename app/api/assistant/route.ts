@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
-  MAX_ASSISTANT_BODY, MAX_ASSISTANT_ITEMS, MAX_ASSISTANT_MESSAGE,
-  clientKey, durableHourlyLimit, getRequestUser, rateLimit, sameOrigin, tooMany,
+  MAX_ASSISTANT_BODY,
+  MAX_ASSISTANT_ITEMS,
+  MAX_ASSISTANT_MESSAGE,
+  clientKey,
+  durableHourlyLimit,
+  getRequestUser,
+  guestBucketKey,
+  ipCeiling,
+  rateLimit,
+  sameOrigin,
+  tooMany,
 } from "@/lib/api-guard";
 import { isPureQuestion, normalizeActions, type AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
 import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } from "@/lib/llm/history";
@@ -197,11 +206,14 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const user = await getRequestUser(request);
   const ip = clientKey(request);
-  const limitKey = user ? `assistant:user:${user.id}` : `assistant:ip:${ip}`;
-  const hourly = user ? 60 : 20;
+  const limitKey = user
+    ? `assistant:user:${user.id}`
+    : `assistant:ip:${guestBucketKey(request, ip)}`;
+  const hourly = user ? 60 : 24;
   if (
     !rateLimit(limitKey, hourly, 60 * 60_000) ||
     !rateLimit(`${limitKey}:burst`, 8, 60_000) ||
+    (!user && !ipCeiling("assistant", ip, 150, 60 * 60 * 1000)) ||
     !rateLimit("assistant:global:minute", 240, 60_000) ||
     !(await durableHourlyLimit(limitKey, hourly)) ||
     !(await durableHourlyLimit("assistant:global", 3_000))
