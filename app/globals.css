@@ -1191,6 +1191,18 @@ select {
   animation: tab-page-enter 140ms var(--ease-standard);
 }
 
+/* Desktop side-panel segmented control. A transform transition is composited,
+   so the slide stays smooth while the incoming panel renders underneath. */
+.pane-tab-pill {
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane-tab-pill {
+    transition: none;
+  }
+}
+
 @keyframes route-enter-instant {
   from {
     opacity: 0.92;
