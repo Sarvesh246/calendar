@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,20 +15,7 @@ import { StatusSegmented } from "@/components/item-card";
 import { MobileItemSheet } from "@/components/mobile-item-sheet";
 import type { Item } from "@/lib/types";
 
-const ItemEditor = dynamic(
-  () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
-  {
-    ssr: false,
-    loading: () => (
-      <div role="status" className="space-y-3">
-        <span className="sr-only">Loading item details…</span>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} aria-hidden className="h-9 animate-pulse rounded-md bg-surface-sunken" />
-        ))}
-      </div>
-    ),
-  }
-);
+import { ItemEditor } from "@/components/item-editor-lazy";
 
 const TYPE_LABEL: Record<Item["type"], string> = {
   event: "Event",

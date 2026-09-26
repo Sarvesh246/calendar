@@ -1,6 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazyComponent } from "@/lib/lazy-component";
+import { registerWarmUp, warmUp } from "@/lib/warm-chunks";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef, useState } from "react";
@@ -39,29 +40,20 @@ import { KeyboardShortcuts, Kbd, useModKeyLabel } from "./keyboard-shortcuts";
 import { ItemContextMenu } from "./item-context-menu";
 import { DragOverlay } from "./drag-overlay";
 
-const ItemInspector = dynamic(
-  () => import("./item-inspector").then((m) => ({ default: m.ItemInspector })),
-  { ssr: false }
-);
-const CommandPalette = dynamic(
-  () => import("./command-palette").then((m) => ({ default: m.CommandPalette })),
-  { ssr: false }
-);
-const AIDrawer = dynamic(() => import("./ai-drawer").then((m) => ({ default: m.AIDrawer })), {
-  ssr: false,
-});
-const MergeCloudDialog = dynamic(
-  () => import("./merge-cloud-dialog").then((m) => ({ default: m.MergeCloudDialog })),
-  { ssr: false }
-);
-const ClassScheduleSheet = dynamic(
-  () => import("./class-schedule-sheet").then((m) => ({ default: m.ClassScheduleSheet })),
-  { ssr: false }
-);
-const FilterSheet = dynamic(
-  () => import("./filter-sheet").then((m) => ({ default: m.FilterSheet })),
-  { ssr: false }
-);
+// Overlays are split out of the first load and fetched while idle (see
+// lib/warm-chunks.ts); once in, they open in the same frame as the tap.
+const ItemInspector = lazyComponent<object>(() => import("./item-inspector").then((m) => m.ItemInspector));
+registerWarmUp(ItemInspector.preload);
+const CommandPalette = lazyComponent<object>(() => import("./command-palette").then((m) => m.CommandPalette));
+registerWarmUp(CommandPalette.preload);
+const AIDrawer = lazyComponent<object>(() => import("./ai-drawer").then((m) => m.AIDrawer));
+registerWarmUp(AIDrawer.preload);
+const MergeCloudDialog = lazyComponent<object>(() => import("./merge-cloud-dialog").then((m) => m.MergeCloudDialog));
+registerWarmUp(MergeCloudDialog.preload);
+const ClassScheduleSheet = lazyComponent<object>(() => import("./class-schedule-sheet").then((m) => m.ClassScheduleSheet));
+registerWarmUp(ClassScheduleSheet.preload);
+const FilterSheet = lazyComponent<object>(() => import("./filter-sheet").then((m) => m.FilterSheet));
+registerWarmUp(FilterSheet.preload);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
@@ -103,6 +95,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useKeyboardInset();
   const setShortcutsOpen = useUIStore((s) => s.setShortcutsOpen);
   const modKey = useModKeyLabel();
+
+  // Fetch every on-demand panel once the first screen has settled.
+  useEffect(() => warmUp(), []);
 
   // Device layout prefs load after mount so the server render and the first
   // client render agree.

@@ -524,8 +524,8 @@ body {
   }
 }
 
-html.scroll-locked,
-html.scroll-locked body {
+html.scroll-locked-overflow,
+html.scroll-locked-overflow body {
   overflow: hidden;
 }
 
@@ -1126,8 +1126,11 @@ select {
 /* Large surfaces — cards, day cells, list rows. A 3% squeeze on something the
    width of the screen looks like a glitch; these get a whisper of scale plus a
    real depth cue instead. */
+/* No `box-shadow` in the list: a shadow can't animate on the compositor, so on
+   a card-sized surface every frame of a press re-painted the whole card. The
+   scale carries the motion; the shadow just drops. */
 .press-surface {
-  transition-property: transform, background-color, border-color, box-shadow, opacity;
+  transition-property: transform, background-color, border-color, opacity;
   transition-duration: var(--motion-standard);
   transition-timing-function: var(--ease-standard);
 }
@@ -1145,50 +1148,27 @@ select {
   }
 }
 
-/* Each freshly navigated page reveals its sections with a light upward stagger.
-   `.page-shell` is the wrapper from app/template.tsx; its single child is the
-   page root, so `> * > *` targets that page's own top-level sections. */
-@keyframes content-rise {
+/* Arriving content eases in — but never from nothing.
+
+   Every page swap used to start at opacity 0, and Settings/Schedule stacked a
+   second from-zero fade on each of their sections. On a dark theme that is a
+   blink: for a few frames the screen is empty, then it isn't. The swap now
+   starts most of the way there (0.6), so the old page is replaced by a slightly
+   dim new one that settles — the eye reads continuity, not a flash. One fade,
+   opacity only (a translate on the page box made a containing block on iOS and
+   clipped overflow-hidden children), decelerating so it lands softly. */
+@keyframes page-settle {
   from {
-    opacity: 0;
+    opacity: 0.6;
   }
   to {
     opacity: 1;
   }
 }
 
-@keyframes route-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.route-enter {
-  /* Deliberately quicker than `--motion-standard`. A route change is not an
-     element arriving on a page you are already looking at — you are waiting for
-     it, and the reveal is time added to a navigation that already cost you a
-     router commit. Opacity only: a 6px `translate` on the page box made a
-     containing block on iOS, so overflow-hidden children (calendar, rooms)
-     clipped and the document grew by the leftover offset. */
-  animation: route-enter 140ms var(--ease-standard);
-}
-
-/* Tab page: same softness, no `both` (so a restarted spam-tap cannot sit on
-   the from-keyframe), no translate. Calendar overflow stays hidden. */
-@keyframes tab-page-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
+.route-enter,
 .tab-page-enter {
-  animation: tab-page-enter 140ms var(--ease-standard);
+  animation: page-settle 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Desktop side-panel segmented control. A transform transition is composited,
@@ -1201,6 +1181,19 @@ select {
   .pane-tab-pill {
     transition: none;
   }
+}
+
+/* Shared selected-segment highlight (lib/sliding-pill.ts). Positioned and
+   slid entirely by transform, so it lives on the compositor. */
+.sliding-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  transition: opacity 160ms var(--ease-standard);
 }
 
 /* Desktop rail's active pill (see `movePill` in sidebar.tsx). */
@@ -1220,15 +1213,6 @@ select {
   }
 }
 
-@keyframes route-enter-instant {
-  from {
-    opacity: 0.92;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 html,
 body {
   transition: background-color 200ms var(--ease-standard);
@@ -1237,57 +1221,6 @@ body {
 :root[data-preset="paper"] .page-shell > header h1,
 :root[data-preset="paper"] .page-shell h1.text-\[26px\] {
   font-weight: 600;
-}
-
-.page-shell > * > * {
-  animation: content-rise 150ms var(--ease-standard) both;
-}
-
-/* iOS: `both` can leave a delayed section at opacity 0 if the animation is
-   paused (backgrounded WKWebView, hidden tab host). Phone rooms skip the
-   stagger so Settings/Schedule paint complete on the first frame. */
-@media (max-width: 767px) {
-  .page-shell > * > * {
-    animation: none;
-  }
-}
-/* Skip the stagger on the very first paint — it made cold starts feel blank. */
-html[data-first-load="1"] .page-shell > * > * {
-  animation: none;
-}
-/* Delays tighten as they go: the first few sections carry the sense of a
-   deliberate reveal, the rest catch up so the page never feels slow to settle. */
-.page-shell > * > *:nth-child(1) {
-  animation-delay: 0ms;
-}
-.page-shell > * > *:nth-child(2) {
-  animation-delay: 24ms;
-}
-.page-shell > * > *:nth-child(3) {
-  animation-delay: 44ms;
-}
-.page-shell > * > *:nth-child(4) {
-  animation-delay: 60ms;
-}
-.page-shell > * > *:nth-child(5) {
-  animation-delay: 72ms;
-}
-.page-shell > * > *:nth-child(6) {
-  animation-delay: 82ms;
-}
-.page-shell > * > *:nth-child(n + 7) {
-  animation-delay: 90ms;
-}
-
-/* …but not on the three tab routes. Switching tabs already has its own
-   motion — the pill travelling under your thumb — and replaying a 165ms
-   staggered reveal of every section on top of it made a swap that should feel
-   immediate read as a stutter. What is left is half what it was: the last
-   section used to land the better part of 400ms after the tap, which is long
-   enough to read as the app thinking rather than as a reveal. The stagger stays where it earns its keep: the
-   first arrival at a page you navigated to deliberately (Settings). */
-.route-enter-instant > * > * {
-  animation: none;
 }
 
 /* Cold-start veil. Matches the page so the iOS splash and the first paint
@@ -1673,7 +1606,6 @@ html.calendar-dragging * {
    forced, because a 0.01ms `both`/`forwards` animation still holds whatever the
    last keyframe says. */
 @media (prefers-reduced-motion: reduce) {
-  .page-shell > * > *,
   .route-enter,
   .tab-page-enter,
   .thinking-dot,

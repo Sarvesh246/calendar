@@ -22,6 +22,7 @@ import { DaySheet } from "@/components/day-sheet";
 import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
 
@@ -105,6 +106,7 @@ export default function CalendarPage() {
   const [jumpOpen, setJumpOpen] = useState(false);
   // Which way the period last moved, so the grid can leave the way it came.
   const [direction, setDirection] = useState<1 | -1>(1);
+  const { containerRef: modeBarRef, pillRef: modePillRef, moveTo: moveModePill } = useSlidingPill(mode);
 
   useEffect(() => {
     if (!calendarFocusDate) return;
@@ -332,27 +334,32 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+            <div
+              ref={modeBarRef}
+              className="relative flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5"
+            >
+              <span
+                ref={modePillRef}
+                aria-hidden
+                className="sliding-pill rounded-md bg-accent"
+              />
               {(["month", "week"] as CalendarMode[]).map((m) => (
                 <button
                   key={m}
                   type="button"
-                  onClick={() => changeMode(m)}
+                  data-pill-key={m}
+                  onClick={(e) => {
+                    if (m !== mode) moveModePill(e.currentTarget);
+                    changeMode(m);
+                  }}
                   aria-pressed={mode === m}
                   title={`${m === "month" ? "Month" : "Week"} (${m === "month" ? "M" : "W"})`}
                   className={cn(
                     "press-none relative h-9 rounded-md px-3.5 text-[13px] font-medium capitalize",
-                    "transition-colors duration-[var(--motion-standard)]",
-                    mode === m ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+                    "transition-colors duration-[var(--motion-micro)]",
+                    "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
                   )}
                 >
-                  {mode === m && (
-                    <motion.span
-                      layoutId="calendar-mode-pill"
-                      className="absolute inset-0 rounded-md bg-accent"
-                      transition={motionTokens.spring}
-                    />
-                  )}
                   <span className="relative z-[1]">{m}</span>
                 </button>
               ))}

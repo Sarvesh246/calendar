@@ -1,7 +1,9 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ComponentProps, type ReactNode } from "react";
+import type { AssistantConversation as AssistantConversationType } from "@/components/assistant-conversation";
+import { lazyComponent } from "@/lib/lazy-component";
+import { registerWarmUp } from "@/lib/warm-chunks";
 import { CalendarDays, ListTodo, Sparkles } from "lucide-react";
 import { DayAgenda } from "@/components/day-agenda";
 import { PlanningTray } from "@/components/calendar/planning-tray";
@@ -18,18 +20,17 @@ import { haptic } from "@/lib/haptic";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
-const loadAssistant = () =>
-  import("@/components/assistant-conversation").then((m) => ({ default: m.AssistantConversation }));
-
-const AssistantConversation = dynamic(loadAssistant, {
-    ssr: false,
-    loading: () => (
+const AssistantConversation = lazyComponent<ComponentProps<typeof AssistantConversationType>>(
+  () => import("@/components/assistant-conversation").then((m) => m.AssistantConversation),
+  function AssistantLoading() {
+    return (
       <div role="status" className="flex flex-1 items-center justify-center text-[12px] text-ink-faint">
         Loading assistant…
       </div>
-    ),
+    );
   }
 );
+registerWarmUp(AssistantConversation.preload);
 
 const TABS: { id: PaneTab; label: string; Icon: typeof CalendarDays }[] = [
   { id: "day", label: "Day", Icon: CalendarDays },
@@ -104,17 +105,6 @@ export function WorkspacePane({
   const [visited, setVisited] = useState<ReadonlySet<PaneTab>>(() => new Set([tab]));
   if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
 
-  // Fetch the assistant's chunk while idle so its first open isn't a network
-  // wait stacked on top of the switch.
-  useEffect(() => {
-    const load = () => void loadAssistant();
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(load, { timeout: 3000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = setTimeout(load, 1500);
-    return () => clearTimeout(id);
-  }, []);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !asideRef.current) return;

@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
 import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -30,8 +30,8 @@ import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
@@ -61,6 +61,7 @@ export default function AgendaPage() {
   const desktop = useMediaQuery("(min-width: 768px)");
   const layout = useWorkspacePrefs((s) => s.agendaLayout);
   const setLayout = useWorkspacePrefs((s) => s.setAgendaLayout);
+  const { containerRef: layoutBarRef, pillRef: layoutPillRef, moveTo: moveLayoutPill } = useSlidingPill(layout);
   // Rows are a desk layout; a phone always gets cards.
   const rows = desktop && layout === "rows";
 
@@ -122,6 +123,23 @@ export default function AgendaPage() {
   const revealMoreOverdue = useCallback(() => {
     startTransition(() => setOverdueLimit((limit) => limit + OVERDUE_PAGE_SIZE));
   }, []);
+
+  // Fill the rest in while nothing is happening, one page per idle slice, so a
+  // scroll never has to mount days on its way down — that mid-scroll render
+  // was the Agenda's hitch. The sentinel below stays as the fallback for a
+  // fling that outruns idle time. `content-visibility` keeps the extra days
+  // nearly free until they're on screen.
+  const pendingFill = !allGroupsVisible || visibleLater.length < later.length;
+  useEffect(() => {
+    if (!pendingFill) return;
+    const fill = () => (allGroupsVisible ? revealMoreLater() : revealMoreGroups());
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(fill, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(fill, 200);
+    return () => window.clearTimeout(id);
+  }, [pendingFill, allGroupsVisible, groupLimit, laterLimit, revealMoreGroups, revealMoreLater]);
 
   const isEmpty =
     overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
@@ -195,7 +213,8 @@ export default function AgendaPage() {
           <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <div role="radiogroup" aria-label="Agenda layout" className="hidden items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 md:flex">
+          <div ref={layoutBarRef} role="radiogroup" aria-label="Agenda layout" className="relative hidden items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 md:flex">
+            <span ref={layoutPillRef} aria-hidden className="sliding-pill rounded-md bg-accent" />
             {LAYOUTS.map(({ value, label, Icon }) => {
               const active = layout === value;
               return (
@@ -204,24 +223,19 @@ export default function AgendaPage() {
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  onClick={() => {
+                  data-pill-key={value}
+                  onClick={(e) => {
                     if (active) return;
                     haptic("light");
+                    moveLayoutPill(e.currentTarget);
                     startTransition(() => setLayout(value));
                   }}
                   className={cn(
                     "press-none relative flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium",
-                    "transition-colors duration-[var(--motion-standard)]",
-                    active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+                    "transition-colors duration-[var(--motion-micro)]",
+                    "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
                   )}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="agenda-layout-pill"
-                      className="absolute inset-0 rounded-md bg-accent"
-                      transition={motionTokens.spring}
-                    />
-                  )}
                   <Icon className="relative z-[1] h-3.5 w-3.5" strokeWidth={1.9} />
                   <span className="relative z-[1]">{label}</span>
                 </button>
@@ -430,7 +444,7 @@ function AgendaContinuation({ label, onReveal }: { label: string; onReveal: () =
       ([entry]) => {
         if (entry.isIntersecting) onReveal();
       },
-      { rootMargin: "360px 0px" }
+      { rootMargin: "1200px 0px" }
     );
     observer.observe(node);
     return () => observer.disconnect();

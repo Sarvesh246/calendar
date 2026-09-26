@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
-import dynamic from "next/dynamic";
 import { dayLabel } from "@/lib/date-utils";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
@@ -25,10 +24,7 @@ import type { FilterBreakdown } from "@/lib/filters";
 import type { OverlapGroup } from "@/lib/overlap";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 
-const ItemEditor = dynamic(
-  () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
-  { ssr: false }
-);
+import { ItemEditor } from "@/components/item-editor-lazy";
 
 /** The heading travels the way the day did — the only cue that says which. */
 const headingVariants = {

@@ -31,6 +31,7 @@ import { parseBackup, serializeBackup } from "@/lib/backup";
 import { PwaInstallButton } from "@/components/pwa-install";
 import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { CategoryClassTimesControl } from "@/components/category-class-times";
 import { haptic } from "@/lib/haptic";
@@ -1080,28 +1081,31 @@ function Segmented({
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
+  const { containerRef, pillRef, moveTo } = useSlidingPill(value);
   return (
-    <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-auto">
+    <div
+      ref={containerRef}
+      data-segment={segmentId}
+      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-auto"
+    >
+      <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
       {options.map((opt) => {
         const active = value === opt.value;
         return (
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(opt.value)}
+            data-pill-key={opt.value}
+            onClick={(e) => {
+              if (!active) moveTo(e.currentTarget);
+              onChange(opt.value);
+            }}
             className={cn(
-              "press-none relative min-h-10 flex-1 rounded-lg px-3 text-[13px] font-medium transition-colors sm:flex-none sm:px-4",
-              active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+              "press-none relative min-h-10 flex-1 rounded-lg px-3 text-[13px] font-medium transition-colors duration-[var(--motion-micro)] sm:flex-none sm:px-4",
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
             )}
             aria-pressed={active}
           >
-            {active && (
-              <motion.span
-                layoutId={`settings-segment-${segmentId}`}
-                className="absolute inset-0 rounded-lg bg-accent"
-                transition={motionTokens.spring}
-              />
-            )}
             <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>
           </button>
         );
@@ -1128,14 +1132,17 @@ function ClassReminderPicker({
   const options: number[] = [...CLASS_REMINDER_OPTIONS];
   if (!options.includes(minutes)) options.push(minutes);
   options.sort((a, b) => a - b);
+  const { containerRef, pillRef, moveTo } = useSlidingPill(String(minutes));
 
   return (
     <div className="mt-2 flex flex-col gap-2">
       <div
+        ref={containerRef}
         role="radiogroup"
         aria-label="Class heads-up timing"
-        className="grid grid-cols-4 gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 p-1"
+        className="relative grid grid-cols-4 gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 p-1"
       >
+        <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
         {options.map((opt) => {
           const active = opt === minutes;
           return (
@@ -1144,19 +1151,16 @@ function ClassReminderPicker({
               type="button"
               role="radio"
               aria-checked={active}
-              onClick={() => onChange(opt)}
+              data-pill-key={String(opt)}
+              onClick={(e) => {
+                if (!active) moveTo(e.currentTarget);
+                onChange(opt);
+              }}
               className={cn(
-                "press-none relative min-h-10 rounded-lg px-2 text-[13px] font-medium transition-colors",
-                active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+                "press-none relative min-h-10 rounded-lg px-2 text-[13px] font-medium transition-colors duration-[var(--motion-micro)]",
+                "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
               )}
             >
-              {active && (
-                <motion.span
-                  layoutId="settings-class-reminder"
-                  className="absolute inset-0 rounded-lg bg-accent"
-                  transition={motionTokens.spring}
-                />
-              )}
               <span className="relative z-[1] whitespace-nowrap">
                 {classReminderOptionLabel(opt)}
               </span>
@@ -1400,8 +1404,7 @@ function CustomThemeEditor({
           className="mt-2.5 rounded-lg border p-2.5 transition-colors duration-200"
         >
           <div className="flex items-center gap-2">
-            <motion.span
-              layout
+            <span
               style={{ background: vars["--accent"] }}
               className="h-2 w-2 shrink-0 rounded-full transition-colors duration-200"
             />
