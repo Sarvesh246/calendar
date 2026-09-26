@@ -301,7 +301,7 @@ describe("local assistant — changing the calendar", () => {
     expect(due.actions?.[0]).toMatchObject({ kind: "create", draft: { type: "assignment" } });
     expect(ask("remind me to call mom tomorrow")?.actions?.[0]).toMatchObject({ kind: "create" });
     expect(ask("add something later")).toBeNull();
-    expect(ask("add dinner with sam tomorrow")).toBeNull(); // no time: the model asks
+    expect(ask("add dinner with sam tomorrow")?.text).toMatch(/^What time is \*\*Dinner with sam\*\* /); // no time: ask, don't guess
     expect(ask("add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before")?.actions?.[0]).toMatchObject({ kind: "create" });
     expect(ask("add yoga every monday at 7am")?.actions?.[0]).toMatchObject({ kind: "create", draft: { repeat: { freq: "weekly", byDay: [1] } } });
   });
