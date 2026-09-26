@@ -49,6 +49,10 @@ import { findOverlapGroups } from "./overlap";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
+import { findComponent, letterFloor, letterFor, neededScore, weightedSoFar, weightFraction } from "./local-grades";
+import { answerMath } from "./local-math";
+import { draftEmail, recipient, type EmailKind } from "./local-writing";
+import type { SyllabusGradeCutoff } from "./syllabus-info";
 import { isSyllabusSourceUid } from "./syllabus-match";
 import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 
@@ -458,11 +462,13 @@ let pendingSyllabus: { prompt: string; className: string } | null = null;
 export function resetLocalAssistantState() {
   pendingChoice = null;
   pendingSyllabus = null;
+  pendingGrade = null;
+  pendingAdd = null;
 }
 
 /** Ask which of a few matches was meant; more than a handful is the model's job. */
 function askWhich(env: Env, items: Item[], build?: Build): AssistantResponse | null {
-  if (items.length > 4) return null;
+  if (items.length > 6) return null;
   const options = items.map((i) => `${bold(i.title)} (${describeWhen(env, i)})`);
   const last = options.pop();
   const text = `Which one do you mean — ${options.length ? `${options.join(", ")} or ${last}` : last}?`;
@@ -470,7 +476,7 @@ function askWhich(env: Env, items: Item[], build?: Build): AssistantResponse | n
   return { text };
 }
 
-const ORDINALS: Record<string, number> = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2, fourth: 3, "4th": 3, four: 3 };
+const ORDINALS: Record<string, number> = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2, fourth: 3, "4th": 3, four: 3, fifth: 4, "5th": 4, five: 4, sixth: 5, "6th": 5, six: 5 };
 
 /** "the second one", "problem set 4", "the one on friday" → one of the options. */
 function pickOption(env: Env, options: Item[]): Item | null {
@@ -489,7 +495,7 @@ function pickOption(env: Env, options: Item[]): Item | null {
   }
   if (/^(?:last|the last|latter|the latter)(?: one)?$/.test(q)) return options[options.length - 1];
   if (/^(?:former|the former)(?: one)?$/.test(q)) return options[0];
-  const ord = /^(first|1st|second|2nd|third|3rd|fourth|4th|one|two|three|four)(?: one)?$/.exec(q) ?? /^#?([1-4])$/.exec(q);
+  const ord = /^(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|sixth|6th|one|two|three|four|five|six)(?: one)?$/.exec(q) ?? /^#?([1-6])$/.exec(q);
   if (ord) {
     const idx = /^\d$/.test(ord[1]) ? +ord[1] - 1 : ORDINALS[ord[1]];
     // A bare number that is also in a title ("4" → "Problem Set 4") was handled above.
@@ -525,7 +531,7 @@ function smallTalk(env: Env): Outcome {
     return { text: "Doing well, thanks. What can I help you with on your calendar?" };
   }
   if (/^(?:what can you do|help|what do you do|how do you work|what can i ask(?: you)?|what can i say|how can you help|what are your features|commands)$/.test(q)) {
-    return { text: "I can answer questions about your calendar — what's on a day, what's due, when you're free, when a class meets — and make changes for you: add, move, rename, complete, or delete items. Just say it however you'd say it to a person, and I'll ask you to confirm before anything changes." };
+    return { text: "I can answer questions about your calendar — what's on a day, what's due, when you're free, when a class meets — and make changes for you: add, move, rename, complete, or delete items. I can also plan study time before an exam, draft an email to a professor, work out what you need on a final, and answer questions from your syllabus. Just say it however you'd say it to a person, and I'll ask you to confirm before anything changes." };
   }
   if (/^(?:who are you|what are you)$/.test(q)) {
     return { text: "I'm Datebook's assistant — I help you check your schedule and keep it up to date." };
@@ -1199,10 +1205,11 @@ function addIntent(env: Env): Outcome {
   const reminderWords = (stripped.match(/\b(?:remind(?:er|ers| me)?|ping me|nudge me)\b/gi) ?? []).length;
   if (reminderWords > reminderCount && !isTask) return null;
   if (reminderCount > 4) return null;
-  // No date means the model should ask, not us guessing "today".
-  if (!parsed.confidence.date) return null;
+  // No date, or an event with no time: ask, never guess "today" or a time.
   const timed = HAS_TIME.test(stripped);
-  if (parsed.type === "event" && !isTask && !parsed.allDay && !timed) return null;
+  const explicitAdd = /^(?:add|create|schedule|new|put|book|set up|remind me)\b/.test(q);
+  const missing = !parsed.confidence.date ? "when" : parsed.type === "event" && !isTask && !parsed.allDay && !timed ? "time" : null;
+  if (missing === "when" && (!explicitAdd || timed || parsed.repeat)) return null;
   // "add a meeting at 3" — the parser treats the only noun as filler and leaves "Untitled".
   const bareNoun = /^untitled$/i.test(parsed.title) ? /\b(meeting|appointment|event|call|interview|session)\b/i.exec(stripped)?.[1] : undefined;
   if (bareNoun) parsed.title = bareNoun;
@@ -1210,6 +1217,18 @@ function addIntent(env: Env): Outcome {
   if (!titleIsFaithful(stripped, parsed.title, parsed.location, ctx.categories.find((c) => c.id === parsed.categoryId))) return null;
   if (!title || title.length > 90 || title.split(/\s+/).length > 12) return null;
   if (!bareNoun && /^(?:a |the )?(?:reminder|event|task|assignment|meeting)$/i.test(title)) return null;
+  if (missing === "when" && /^(?:some ?thing|stuff|things?|anything|it|that|this|one)\b|\b(?:later|sometime|soon|eventually|at some point)\b/i.test(title)) return null;
+  if (missing) {
+    const shown = bold(title.charAt(0).toUpperCase() + title.slice(1));
+    let text: string;
+    if (missing === "time") {
+      const d = dayName(parsed.at, now);
+      text = `What time is ${shown} ${/^(?:today|tomorrow|tonight)$/.test(d) ? d : `on ${d}`}?`;
+    } else if (/^remind me\b/.test(q)) text = `When should I remind you to ${title.charAt(0).toLowerCase()}${title.slice(1)}?`;
+    else text = parsed.type === "event" && !isTask ? `When is ${shown}?` : `When is ${shown} due?`;
+    pendingAdd = { prompt: text, text: n };
+    return { text };
+  }
 
   const cat = ctx.categories.find((c) => c.id === parsed.categoryId);
   const reminders = parsed.reminders?.map((r) => ({ id: nanoid(), itemId: "", offsetMinutes: r.offsetMinutes, label: r.label }));
@@ -2756,6 +2775,404 @@ function proposalReplyIntent(env: Env): Outcome {
 }
 
 /* ------------------------------------------------------------------ */
+/* Phase 4: math, grades, emails, study plans, feeling behind          */
+/* ------------------------------------------------------------------ */
+
+/** We asked for their current grade; the reply is a number. */
+let pendingGrade: { prompt: string; name: string; scale: SyllabusGradeCutoff[]; component: string; weight: number; target?: { label: string; floor: number } } | null = null;
+/** We asked when something is ("What time is Dinner with Sam tomorrow?"); the reply finishes the add. */
+let pendingAdd: { prompt: string; text: string } | null = null;
+
+/** "what's 23 × 17", "15% of 80", "3.5 hours in minutes". */
+function mathIntent(env: Env): Outcome {
+  if (!/\d/.test(env.q)) return undefined;
+  const text = answerMath(env.q);
+  return text ? { text } : undefined;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+/** "an A", "an F", "an 88", "an 18" — by sound, not spelling. */
+const an = (label: string) => (/^(?:[AEF]|8|11(?!\d)|18(?!\d))/i.test(label) ? "an" : "a");
+
+/** Plain letters, best first — the syllabus scale if it has one, else 90/80/70/60. */
+function scaleRows(scale: SyllabusGradeCutoff[]): Array<{ label: string; floor: number }> {
+  const rows = scale
+    .map((g) => ({ label: g.grade.trim().toUpperCase(), floor: Number(/(\d+(?:\.\d+)?)/.exec(g.range)?.[1]) }))
+    .filter((r) => /^[A-D]$/.test(r.label) && Number.isFinite(r.floor))
+    .sort((a, b) => b.floor - a.floor);
+  return rows.length ? rows : ["A", "B", "C", "D"].map((l) => ({ label: l, floor: letterFloor([], l)!.floor }));
+}
+
+function neededText(g: { name: string; scale: SyllabusGradeCutoff[]; component: string; weight: number; target?: { label: string; floor: number } }, current: number): string {
+  const comp = g.component.toLowerCase();
+  const lead = `With ${an(fmtGrade(current))} ${bold(fmtGrade(current))} going into the ${bold(comp)} (${fmtGrade(g.weight * 100)}% of your ${g.name} grade)`;
+  const need = (t: number) => neededScore(current, t, g.weight);
+  const standard = !g.scale.some((s) => /^[A-D]$/i.test(s.grade.trim()));
+  const scaleNote = standard ? " I used the usual 90/80/70/60 cut-offs — your syllabus doesn't list a scale." : "";
+  const assume = ` That treats your ${fmtGrade(current)} as your grade on everything else.`;
+  const named = (t: { label: string; floor: number }) => (/^\d/.test(t.label) ? bold(t.label) : `${an(t.label)} ${bold(t.label)} (${fmtGrade(t.floor)})`);
+  if (g.target) {
+    const n = need(g.target.floor);
+    if (n <= 0) return `${lead}, you'll finish with at least ${named(g.target)} even with a 0 on it.${assume}`;
+    if (n > 100) {
+      const alt = scaleRows(g.scale).find((r) => need(r.floor) <= 100 && r.floor < g.target!.floor);
+      const altText = alt ? ` ${cap(named(alt))} needs ${bold(fmtGrade(Math.max(0, round1(need(alt.floor)))))}.` : "";
+      return `${lead}, you'd need ${bold(fmtGrade(round1(n)))} on it to finish with ${named(g.target)} — more than 100, so that's out of reach on the ${comp} alone.${altText}${assume}${/^\d/.test(g.target.label) ? "" : scaleNote}`;
+    }
+    return `${lead}, you need ${bold(fmtGrade(round1(n)))} on it to finish with ${named(g.target)}.${assume}${/^\d/.test(g.target.label) ? "" : scaleNote}`;
+  }
+  const rows = scaleRows(g.scale).map((r) => {
+    const n = need(r.floor);
+    const say = n <= 0 ? "locked in, even with a 0" : n > 100 ? `${fmtGrade(round1(n))} — out of reach` : bold(fmtGrade(round1(n)));
+    return `- ${bold(r.label)} (${fmtGrade(r.floor)}): ${say}`;
+  });
+  return `${lead}, here's what you need on it:\n${rows.join("\n")}\n\n${assume.trim()}${scaleNote}`;
+}
+
+/** "92 on problem sets", "midterm 81", "the midterm was 81" — every number must be accounted for. */
+function parseScores(text: string): Array<{ phrase: string; score: number }> | null {
+  const out: Array<{ phrase: string; score: number }> = [];
+  for (const chunkRaw of text.split(/,|;|\band\b|\bso\b|\bwhat\b|\bhow\b/)) {
+    const chunk = chunkRaw.trim();
+    if (!/\d/.test(chunk)) continue;
+    const a = /(\d+(?:\.\d+)?)\s*(?:%|percent)?\s+(?:on|in|for) (?:the |my |our |all )?([a-z][a-z ]*?)(?: so far| in [a-z][a-z ]*)?$/.exec(chunk);
+    const b = /^(?:i (?:got|have|had|scored|made|am at) )?(?:an? )?(?:the |my |our )?([a-z][a-z ]*?)\s*(?:[:=-]|is|was|were|are|at|average(?:d)?|avg)?\s*(\d+(?:\.\d+)?)\s*(?:%|percent)?$/.exec(chunk);
+    if (a) out.push({ phrase: a[2], score: Number(a[1]) });
+    else if (b && !/^i\b/.test(b[1])) out.push({ phrase: b[1], score: Number(b[2]) });
+    else return null;
+  }
+  return out;
+}
+
+function fmtGrade(n: number): string {
+  return String(round1(n));
+}
+
+/** "what do I need on the final to get an A", "what's my grade in econ", "am I passing". */
+function gradeIntent(env: Env): Outcome {
+  const { q, ctx } = env;
+  const needAsk = /\bwhat (?:grade |score |percent(?:age)? |mark )?do i (?:need|have to (?:get|score|make))\b|\bwhat do i need to (?:get|score|make)\b|\bhow (?:well|high|much) do i (?:need|have) to (?:do|score|get)\b/.test(q);
+  const gradeAsk = /\bwhat is my (?:current |overall |class )?grade\b|\bwhat grade do i have\b|\bam i (?:passing|failing)\b|\b(?:calculate|figure out|work out) my grade\b|\bmy (?:current |overall )?grade (?:in|for|right now|so far)\b|\bwhere do i stand\b/.test(q);
+  if (!needAsk && !gradeAsk) return undefined;
+  const cls = findClass(env, q);
+  const stripped = cls ? q.replace(cls.name.toLowerCase(), " ").replace(/\b(?:in|for) (?:my |the )?(?:class|course)\b/, " ") : q;
+
+  if (needAsk) {
+    if (/\bto pass\b/.test(q)) return null;
+    const compPhrase = /\bon (?:the |my |our )?([a-z][a-z0-9 ]*?)(?= to\b| in\b| for\b| if\b| so\b|,|$)/.exec(stripped)?.[1]?.trim() || "final";
+    const tgt = /\b(?:to (?:get|keep|end up with|finish with|end with|have|make|land|pull)|for)\s+(?:an?\s+)?(?:(\d+(?:\.\d+)?)\s*(?:%|percent)?|([abcd][+-]?))(?=[\s,.?!]|$)/.exec(stripped);
+    const explicitW = /\b(?:worth|counts? (?:for|as)|weighted(?: at)?|is)\s+(\d+(?:\.\d+)?)\s*(?:%|percent)/.exec(stripped)?.[1];
+    const cur = /\b(?:i have|i have got|i am at|i am sitting at|currently(?: have| at| sitting at)?|my (?:current )?grade is|sitting at|i am currently at)\s+(?:an?\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)?/.exec(stripped)?.[1];
+
+    let target: { label: string; floor: number } | undefined;
+    const scale = cls?.syllabus?.gradeScale ?? [];
+    if (tgt?.[1]) target = { label: tgt[1], floor: Number(tgt[1]) };
+    else if (tgt?.[2]) {
+      const f = letterFloor(scale, tgt[2]);
+      if (!f) return null;
+      target = { label: tgt[2].toUpperCase(), floor: f.floor };
+    }
+
+    let component = compPhrase;
+    let weight: number | null = explicitW ? Number(explicitW) / 100 : null;
+    let host = cls;
+    if (weight === null) {
+      // No class named: the one class whose syllabus has this component.
+      const candidates = (cls ? [cls] : ctx.categories).flatMap((c) => {
+        const row = c.syllabus?.grading?.length ? findComponent(c.syllabus.grading, compPhrase) : null;
+        const w = row ? weightFraction(row.weight) : null;
+        return row && w !== null ? [{ c, row, w }] : [];
+      });
+      if (candidates.length !== 1) return null;
+      host = candidates[0].c;
+      component = candidates[0].row.component;
+      weight = candidates[0].w;
+      if (tgt?.[2] && !cls) {
+        const f = letterFloor(host.syllabus?.gradeScale ?? [], tgt[2]);
+        if (!f) return null;
+        target = { label: tgt[2].toUpperCase(), floor: f.floor };
+      }
+    }
+    if (!(weight > 0 && weight < 1)) return null;
+    const g = { name: host?.name ?? "class", scale: host?.syllabus?.gradeScale ?? [], component: cap(component), weight, target };
+    if (!cur) {
+      const text = `What's your grade in ${bold(host?.name ?? "the class")} right now, going into the ${bold(component.toLowerCase())}?`;
+      pendingGrade = { prompt: text, ...g };
+      return { text };
+    }
+    return { text: neededText(g, Number(cur)) };
+  }
+
+  // "What's my grade?" — Datebook has no scores, but it can do the math if they're given.
+  const grading = cls?.syllabus?.grading ?? [];
+  const scores = parseScores(stripped.replace(/\bwhat is my .*$|\bam i (?:passing|failing).*$/, ""));
+  if (scores === null) return null;
+  if (scores.length) {
+    if (!cls || !grading.length) return null;
+    const res = weightedSoFar(grading, scores);
+    if (!res) return null;
+    const letter = cls.syllabus?.gradeScale.length ? letterFor(cls.syllabus.gradeScale, res.average) : null;
+    const parts = joinNatural(res.used.map((u) => u.component.toLowerCase()));
+    const rest = grading.filter((row) => !res.used.some((u) => u.component === row.component));
+    const final = rest.find((row) => /\bfinal\b/i.test(row.component) && weightFraction(row.weight) !== null);
+    const covered = res.covered < 0.999 ? ` (that covers ${parts} — ${fmtGrade(res.covered * 100)}% of the grade)` : "";
+    return {
+      text: `Based on those, you're at ${bold(fmtGrade(res.average))} in ${bold(cls.name)}${covered}.${letter ? ` That's ${an(letter)} ${bold(letter)} on the syllabus scale.` : ""}${final ? ` Ask me what you need on the ${final.component.toLowerCase()} to get a grade you want and I'll work it out.` : ""}`,
+    };
+  }
+  const intro = `Datebook doesn't keep your scores, so I can't see your grade${cls ? ` in ${bold(cls.name)}` : ""}`;
+  if (cls && grading.length) {
+    const example = grading.slice(0, 2).map((row, i) => `${row.component.toLowerCase()} ${i ? 81 : 92}`).join(", ");
+    return {
+      text: `${intro} — but I can work it out if you tell me what you have. ${cls.name} is graded:\n${grading.map((row) => `- ${bold(row.component)} — ${row.weight}`).join("\n")}\n\nSend something like "${example}" and I'll do the math.`,
+    };
+  }
+  return { text: `${intro}. If you tell me your scores and how much each part is worth, I'll work out where you stand.` };
+}
+
+/** The class an email is about: named directly, via its instructor's name, or via the item. */
+function classForEmail(env: Env, body: string): Category | undefined {
+  const named = findClass(env, body);
+  if (named) return named;
+  const byPerson = env.ctx.categories.filter((c) =>
+    (c.syllabus?.people ?? []).some((p) => {
+      const last = p.name.trim().split(/\s+/).pop()?.toLowerCase();
+      return last && last.length > 2 && new RegExp(`\\b${last.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(body);
+    })
+  );
+  return byPerson.length === 1 ? byPerson[0] : undefined;
+}
+
+/** "email my econ professor asking for an extension on problem set 4 because I was sick". */
+function emailIntent(env: Env): Outcome {
+  const { q, n, ctx, now } = env;
+  if (!/\b(?:e-?mail|message|msg|note)\b/.test(q)) return undefined;
+  if (!/\b(?:professor|prof|instructor|teacher|lecturer|ta|t\.a\.|teaching assistant|dr\.? [a-z]+)\b/.test(q)) return undefined;
+  // Writing one, not asking for an address ("what's the professor's email").
+  if (!/^(?:write|draft|compose|send|e-?mail|message|shoot|type up|make|create|put together|help me (?:write|draft)|how (?:do|should) i (?:email|ask))\b/.test(q)) return undefined;
+  if (/\b(?:give up|hopeless|depress\w*|suicid\w*|hurt myself|kill myself|self[- ]harm)\b/.test(q)) return null;
+  const kind: EmailKind | null = /\b(?:extension|more time|extra time|extend (?:the |my )?(?:deadline|due date)|(?:turn|hand|submit)(?:ting)? (?:it |.+ )?in late|submit (?:it )?late|late submission)\b/.test(q)
+    ? "extension"
+    : /\b(?:miss(?:ing)?|won't be (?:in|at)|will not be (?:in|at|able to (?:come|attend|make it))|can't (?:make it|come|attend|go)|cannot (?:make it|come|attend|go)|absent|absence|skip(?:ping)?|not (?:be )?(?:coming|attending|in class))\b/.test(q)
+      ? "absence"
+      : /\b(?:meet(?:ing)?|office hours|set up a time|(?:talk|chat) (?:to|with)|appointment|go over)\b/.test(q)
+        ? "meeting"
+        : null;
+  // Any other email ("about the reading") is open-ended writing.
+  if (!kind) return null;
+
+  const reasonM = /\b(?:because|since|cause|cuz|bc|due to)\s+(.+)$/i.exec(n);
+  let reason = reasonM?.[1]?.trim();
+  if (reason && /^due to/i.test(reasonM![0])) reason = `of ${reason}`;
+  if (reason && (reason.length > 100 || /[?]/.test(reason) || /\b(?:you|your)\b/i.test(reason))) return null;
+  const body = reasonM ? q.slice(0, q.length - reasonM[0].length).trim() : q;
+  const wantTa = /\b(?:ta|t\.a\.|teaching assistant)\b/.test(body);
+
+  let cls = classForEmail(env, body);
+  let item: Item | undefined;
+  let extra: string | undefined;
+  let dayText: string | undefined;
+  let subjectDay: string | undefined;
+  if (kind === "extension") {
+    extra = /\b(?:(?:a|an|one|two|three|four|five|\d+|a couple(?: of)?|a few) (?:more )?(?:days?|weeks?)|until (?:next )?[a-z]+day)\b/.exec(body)?.[0];
+    let phrase = /\b(?:extension|more time|extra time|extend(?: the| my)? (?:deadline|due date))\s+(?:on|for)\s+(?:the |my )?(.+?)$/.exec(body)?.[1] ?? /\b(?:turn|hand|submit)(?:ting)? (?:in )?(?:the |my )?(.+?) (?:in )?late\b/.exec(body)?.[1];
+    if (phrase) {
+      phrase = phrase.replace(extra ?? "(?!)", " ").replace(/\b(?:by|of|for)\s*$/, "").replace(/\b(?:in|for) (?:my |the )?(?:class|course)\b/, " ").trim();
+      if (cls) phrase = phrase.replace(cls.name.toLowerCase(), " ").trim();
+      if (phrase) {
+        const t = resolveTarget(env, phrase, "open-work");
+        if (t.kind !== "one") return null;
+        item = t.item;
+      }
+    }
+    if (!item && cls) {
+      const soon = ctx.items.filter((i) => i.categoryId === cls!.id && isOpen(i) && +new Date(i.at) >= +now && +new Date(i.at) < +addDays(now, 14)).sort(byAt);
+      if (soon.length !== 1) return null;
+      item = soon[0];
+    }
+    if (!item) return null;
+    const itemCls = categoryOf(env, item);
+    if (cls && itemCls && itemCls.id !== cls.id) return null;
+    cls = itemCls ?? cls;
+  } else {
+    if (!cls) return null;
+    const ref = findDayRef(body, now);
+    if (ref?.kind === "range") return null;
+    if (ref?.kind === "day") {
+      subjectDay = format(ref.day, "EEEE, MMM d");
+      dayText = /^(?:today|tomorrow|tonight)$/.test(ref.label) ? `${ref.label === "tonight" ? "tonight" : ref.label} (${subjectDay})` : `on ${subjectDay}`;
+    } else if (kind === "absence") return null;
+    if (kind === "meeting") {
+      extra = /\b(?:about|to (?:talk about|discuss|go over|review|ask about))\s+(.+?)$/.exec(body)?.[1]?.replace(/\b(?:today|tomorrow|this week|next week|on [a-z]+day)\b/g, "").trim();
+      if (extra && (extra.length > 60 || /\b(?:professor|prof|instructor|ta)\b/.test(extra))) return null;
+      // "about meeting in office hours" is the request itself, not a topic.
+      if (extra && /\b(?:meet(?:ing)?|office hours|appointment|a time)\b/.test(extra)) extra = undefined;
+      if (extra && cls) extra = extra.replace(new RegExp(`\\b(?:in |for )?${cls.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`), "").trim() || undefined;
+    }
+  }
+  if (!cls) return null;
+  const info = cls.syllabus;
+  const person = recipient(info, wantTa);
+  if (wantTa && !person) return null;
+  const policy =
+    kind === "extension"
+      ? info?.policies.find((p) => /\blate|extension|deadline/i.test(p.topic))
+      : kind === "absence"
+        ? info?.policies.find((p) => /attend|absen/i.test(p.topic))
+        : undefined;
+  const dueText = item ? `${format(new Date(item.at), "EEEE, MMM d")}${describeWhen(env, item).includes(" at ") ? ` at ${fmtTime(new Date(item.at), ctx.clock24h)}` : ""}` : undefined;
+  return {
+    text: draftEmail({
+      kind,
+      className: cls.name,
+      courseLabel: info?.courseCode?.trim() || cls.name,
+      person,
+      itemTitle: item?.title,
+      dueText,
+      dayText,
+      subjectDay,
+      extra,
+      reason,
+      policy,
+    }),
+  };
+}
+
+const EXAM_WORD = /\b(?:exam|midterm|final|quiz|test)\b/i;
+const STUDY_FOCUS: Record<number, string[]> = {
+  1: ["Review notes and work practice problems"],
+  2: ["Go through notes and key concepts", "Practice problems and weak spots"],
+  3: ["Go through notes and key concepts", "Work practice problems", "Practice exam and weak spots"],
+  4: ["Go through notes and key concepts", "Work practice problems", "Rework what you missed", "Practice exam and final review"],
+};
+
+/** "make me a study plan for the midterm", "help me study for econ". */
+function studyPlanIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  const m = /^(?:make (?:me )?|create (?:me )?|build (?:me )?|give me |write (?:me )?|draft (?:me )?|put together )?(?:an? )?(?:study (?:plan|schedule)|plan (?:out )?(?:my )?(?:studying|study sessions)|plan to study)\s+for\s+(?:the |my |our )?(.+)$/.exec(q) ??
+    /^(?:help me |how should i )?(?:study|prepare|prep|get ready)\s+for\s+(?:the |my |our )?(.+)$/.exec(q);
+  if (!m) return undefined;
+  // "study for econ tomorrow" is one block on one day — the planner's job.
+  if (findDayRef(m[1], now)) return undefined;
+  const phrase = m[1].replace(/\b(?:this|next) (?:week|weekend)\b/, "").trim();
+  const cls = findClass(env, phrase);
+  let exam: Item | undefined;
+  const upcomingExams = (c?: Category) =>
+    ctx.items.filter((i) => i.type === "event" && EXAM_WORD.test(i.title) && +new Date(i.at) > +now && (!c || i.categoryId === c.id)).sort(byAt);
+  const rest = cls ? phrase.replace(cls.name.toLowerCase(), " ").replace(/\b(?:class|course|exam|test)\b/g, " ").trim() : phrase;
+  if (cls && !rest) {
+    const list = upcomingExams(cls);
+    if (!list.length) return { text: `I don't see an upcoming exam for ${bold(cls.name)} on your calendar. Add it (like "econ final Dec 10 at 9am") and I'll plan study time before it.` };
+    exam = list[0];
+  } else {
+    const t = resolveTarget(env, phrase, "any");
+    if (t.kind === "many") {
+      const future = t.items.filter((i) => +new Date(i.at) > +now);
+      if (future.length !== 1) return null;
+      exam = future[0];
+    } else if (t.kind === "one") exam = t.item;
+    else return null;
+  }
+  if (!exam || +new Date(exam.at) <= +now) return null;
+  // A study plan for an assignment is a work plan — that's the planner's job.
+  if (exam.type !== "event") return undefined;
+
+  const examDay = startOfDay(new Date(exam.at));
+  const days = differenceInCalendarDays(examDay, startOfDay(now));
+  if (days < 1) return { text: `${bold(exam.title)} is today at ${fmtTime(new Date(exam.at), ctx.clock24h)} — too soon for a plan. Use the time you have for a quick pass over your notes and a few practice problems.` };
+  const already = ctx.items.filter((i) => i.type === "event" && i.title === `Study for: ${exam!.title}` && +new Date(i.at) >= +now);
+  const want = Math.min(4, days) - already.length;
+  if (want <= 0) {
+    return { text: `You already have ${plural(already.length, "study session")} blocked for ${bold(exam.title)}: ${joinNatural(already.map((i) => bold(`${dayName(new Date(i.at), now)} ${fmtTime(new Date(i.at), ctx.clock24h)}`)))}. Want me to add another?` };
+  }
+  const minutes = /\b(?:final|midterm)\b/i.test(exam.title) ? 90 : /\bquiz\b/i.test(exam.title) ? 45 : 60;
+  const span = Math.min(days, 8);
+  const taken: Array<[Date, Date]> = already.map((i) => [new Date(i.at), new Date(i.endAt ?? i.at)]);
+  const placed: Array<[Date, Date]> = [];
+  for (let k = 0; k < want; k += 1) {
+    // Evenly spaced, the last one the day before.
+    const ideal = addDays(examDay, -(1 + Math.round(((want - 1 - k) * (span - 1)) / Math.max(1, want - 1))));
+    const order = [0, 1, -1, 2, -2, 3, -3].map((d) => addDays(ideal, d)).filter((d) => +d >= +startOfDay(now) && +d < +examDay);
+    for (const d of order) {
+      if (placed.some(([s]) => isSameDay(s, d))) continue;
+      const gap = openSlots(env, d, taken, PLAN_FROM, PLAN_TO).find(([a, b]) => +b - +a >= minutes * 60_000 && +a >= +now);
+      if (gap) {
+        const slot: [Date, Date] = [gap[0], addMinutes(gap[0], minutes)];
+        placed.push(slot);
+        taken.push([slot[0], addMinutes(slot[1], 15)]);
+        break;
+      }
+    }
+  }
+  if (!placed.length) return { text: `I couldn't find a free ${hoursText(minutes)} before ${bold(exam.title)} — your calendar is full until then. Want me to look for shorter sessions?` };
+  placed.sort((a, b) => +a[0] - +b[0]);
+  const focus = STUDY_FOCUS[placed.length + already.length].slice(already.length);
+  const lines = placed.map(([s, e], i) => `- **${cap(dayName(s, now))}** ${fmtTime(s, ctx.clock24h)}–${fmtTime(e, ctx.clock24h)} — ${focus[i] ?? "Review"}`);
+  const actions: AssistantAction[] = placed.map(([s, e], i) => ({
+    kind: "create",
+    summary: `Block ${dayName(s, now)}, ${fmtTime(s, ctx.clock24h)}–${fmtTime(e, ctx.clock24h)} to study for “${exam!.title}”`,
+    draft: {
+      type: "event",
+      title: `Study for: ${exam!.title}`,
+      categoryId: exam!.categoryId,
+      at: s.toISOString(),
+      endAt: e.toISOString(),
+      reminders: [],
+      ...(focus[i] ? { description: focus[i] } : {}),
+    },
+  }));
+  const short = placed.length < want ? ` I could only fit ${plural(placed.length, "session")} — the rest of your time before it is booked.` : "";
+  return {
+    text: `Here's a study plan for ${bold(exam.title)} (${describeWhen(env, exam)}) — ${plural(placed.length, "session")} of ${hoursText(minutes)}, building up to the day before.${already.length ? ` That's on top of the ${plural(already.length, "session")} you already have.` : ""}${short}\n${lines.join("\n")}\n\nConfirm the sessions you want below.`,
+    actions,
+  };
+}
+
+/** Distress that isn't about the calendar — the model handles these with care. */
+const CRISIS = /\b(?:give up|giving up|can't cope|cannot cope|can't do this anymore|cannot do this anymore|hopeless|depress\w*|suicid\w*|kill myself|hurt myself|self[- ]harm|panic attacks?|want to die|end it all|crying|breakdown|anxiety|anxious|burn(?:ed|t) out|exhausted|lonely|hate myself|worthless)\b/;
+
+/** "I'm so behind", "I'm overwhelmed with homework, what do I drop?" — triage from the calendar. */
+function behindIntent(env: Env): Outcome {
+  const { q, now, ctx } = env;
+  const feeling = /\b(?:overwhelm(?:ed|ing)?|stress(?:ed|ing)?(?: out)?|swamped|drowning|buried|so behind|really behind|falling behind|way behind|behind on (?:everything|my work|homework|school|assignments)|too much (?:to do|work|homework|due|going on|on my plate)|so much (?:to do|work|homework|due))\b/.test(q);
+  if (!feeling) return undefined;
+  if (CRISIS.test(q)) return null;
+  // Triage only when they ask where to start or say they're behind; a feeling
+  // on its own ("I'm so stressed about this week") deserves the model's reply.
+  const asksDirection = /\b(?:what (?:do|should|can) i (?:drop|skip|do first|start with|focus on|work on first|tackle first|cut|let go of|push|put off)|where (?:do|should) i (?:start|begin)|what (?:comes|goes|should i do) first|what can wait|how do i catch up|help me (?:get|catch) (?:back )?(?:on track|up))\b/.test(q);
+  const behind = /\b(?:so behind|really behind|falling behind|way behind|behind on (?:everything|my work|homework|school|assignments))\b/.test(q);
+  if (!asksDirection && !behind) return null;
+  // Anything longer than a sentence or two is a conversation, not a triage request.
+  if (q.split(" ").length > 22) return null;
+
+  const open = ctx.items.filter(isOpen);
+  const overdue = open.filter((i) => isOverdueAt(i, now)).sort(byAt);
+  const soon = open.filter((i) => !isOverdueAt(i, now) && +new Date(i.at) < +addDays(startOfDay(now), 3)).sort(byAt);
+  const later = open.filter((i) => +new Date(i.at) >= +addDays(startOfDay(now), 3) && +new Date(i.at) < +addDays(startOfDay(now), 10)).sort(byAt);
+  const seed = `${q}|${now.getHours()}`;
+  if (!overdue.length && !soon.length) {
+    return {
+      text: `${pick(seed, ["That feeling is real, but your calendar is kinder than it feels:", "Here's the good news:"])} nothing is overdue and nothing is due in the next couple of days.${later.length ? ` The next deadline is ${bold(later[0].title)} (${describeWhen(env, later[0])}).` : ""} Want me to spread your work across the week so it's not all at the end? Just say **plan my week**.`,
+    };
+  }
+  const line = (i: Item) => `- ${bold(i.title)} — ${isOverdueAt(i, now) ? `overdue (was due ${dayName(new Date(i.at), now)})` : `due ${describeWhen(env, i)}`}${i.status === "doing" ? ", already started" : ""}`;
+  const first = [...overdue, ...soon].slice(0, 4);
+  const lead = pick(seed, ["That's a lot at once — let's make it smaller.", "Okay, let's take it one thing at a time.", "Let's cut this down to what actually matters right now."]);
+  const firstText = `\n\n**Focus on these first:**\n${first.map(line).join("\n")}`;
+  const rest = overdue.length + soon.length - first.length;
+  const more = rest > 0 ? `\n\n${plural(rest, "other thing")} ${rest === 1 ? "is" : "are"} also due in the next few days, but start with the list above.` : "";
+  const waitItems = later.slice(0, 3);
+  const canWait = waitItems.length ? `\n\n**These can wait:** ${joinNatural(waitItems.map((i) => `${bold(i.title)} (${describeWhen(env, i)})`))}.` : "";
+  const task = open.find((i) => i.type === "task");
+  const drop = /\b(?:drop|skip|let go|push off|put off)\b/.test(q) && task
+    ? ` Tasks are the easiest to move — say something like **push ${task.title.toLowerCase()} to next week**.`
+    : "";
+  return {
+    text: `${lead}${firstText}${more}${canWait}\n\nWant me to block time for these? Say **plan my week** and I'll fit work sessions around your classes.${drop}`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Entry                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -2966,6 +3383,31 @@ export function tryLocalAnswer(
     }
   }
 
+  // "88" after we asked for their current grade.
+  if (depth === 0 && pendingGrade) {
+    const g = pendingGrade;
+    pendingGrade = null;
+    if (lastAssistant?.text === g.prompt) {
+      const r = expand(normalize(raw) || raw);
+      const num = /^(?:(?:i have|i am at|it is|about|around|like|roughly|currently|an?)\s+)*(\d+(?:\.\d+)?)\s*(?:%|percent)?$/.exec(r)?.[1];
+      if (num && Number(num) <= 110) return { text: neededText(g, Number(num)) };
+    }
+  }
+
+  // "7pm" after we asked what time something is.
+  if (depth === 0 && pendingAdd) {
+    const p = pendingAdd;
+    pendingAdd = null;
+    if (lastAssistant?.text === p.prompt) {
+      const r = expand(normalize(raw) || raw);
+      if (/^(?:never ?mind|nvm|cancel|forget (?:it|about it)|no|nope|don't|do not|skip it)\b/.test(r)) return { text: "No problem — I won't add it." };
+      const when = r.replace(/^(?:it is|it's|its|how about|make it|let's say|say|um|uh)\s+/, "").replace(/^(\d{1,2}(?::\d{2})?)$/, "at $1");
+      if (when.split(" ").length <= 7 && (findDayRef(when, now) || findTime(when) || /\ball[- ]day\b/.test(when))) {
+        return tryLocalAnswer(`${p.text} ${when}`, [], ctx, now, 1);
+      }
+    }
+  }
+
   if (/\n/.test(raw) || raw.length > 160) {
     const list = pastedListIntent({ ctx, now, raw, n: raw, q: expand(raw), history });
     return list ?? null;
@@ -2976,6 +3418,16 @@ export function tryLocalAnswer(
   if (!n) n = raw.replace(/[?!.]+$/, "").trim();
   if (!n) return null;
   let q = expand(n);
+
+  // Asks with one right answer that the reasoning gate below would send away:
+  // math, grade math, emails from a template, study plans, and "I'm so behind".
+  if (depth === 0) {
+    const early: Env = { ctx, now, raw, n, q, history };
+    for (const step of [mathIntent, gradeIntent, emailIntent, studyPlanIntent, behindIntent]) {
+      const out = step(early);
+      if (out !== undefined) return out;
+    }
+  }
 
   const emotional = /\b(?:stress|overwhelm|anxious|anxiety|panic|worried|burn(?:ed|t)? out|give up|can't cope)\w*/.test(q);
   if (NEEDS_REASONING.test(q) && (emotional || !REASONING_OK.test(q))) return null;
