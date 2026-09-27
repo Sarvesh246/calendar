@@ -1,10 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { CalendarClock, Play, Undo2 } from "lucide-react";
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 
@@ -83,12 +81,8 @@ function ActionButton({
   children: React.ReactNode;
 }) {
   return (
-    <motion.button
+    <button
       type="button"
-      // The press responds on contact rather than on release, so a tap never
-      // feels like it is waiting to find out whether it was a swipe.
-      whileTap={{ scale: 0.88 }}
-      transition={motionTokens.springSnappy}
       aria-label={label}
       aria-pressed={active}
       title={label}
@@ -101,13 +95,13 @@ function ActionButton({
       onPointerDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       className={cn(
-        "press-none flex h-11 w-10 shrink-0 items-center justify-center rounded-lg",
-        "transition-colors duration-[var(--motion-standard)]",
+        "press-pop flex h-11 w-10 shrink-0 items-center justify-center rounded-lg",
+        "transition-[color,background-color,scale] duration-[var(--motion-standard)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         active ? "bg-accent-soft text-accent" : "text-ink-soft active:bg-surface-sunken"
       )}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }
