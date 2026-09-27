@@ -125,12 +125,13 @@ function CompleteButton({
             className="complete-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-good"
           />
         )}
-        <motion.span
-          whileTap={{ scale: 0.82 }}
-          transition={motionTokens.springSnappy}
+        {/* The squeeze is CSS, not a framer whileTap: every card in a list
+            carried a gesture whose listeners cost real time to attach and tear
+            down each time a list mounted or swapped (Agenda Cards ↔ Rows). */}
+        <span
           className={cn(
-            "relative flex h-5 w-5 items-center justify-center rounded-full border-2",
-            "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+            "relative flex h-5 w-5 items-center justify-center rounded-full border-2 group-active/status:scale-[0.82] group-active/status:duration-[80ms]",
+            "transition-[background-color,border-color,scale] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
             status === "doing" &&
@@ -152,7 +153,7 @@ function CompleteButton({
               </motion.span>
             )}
           </AnimatePresence>
-        </motion.span>
+        </span>
       </span>
     </button>
   );

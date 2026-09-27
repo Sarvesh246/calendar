@@ -11,6 +11,7 @@ import {
 } from "@/lib/store";
 import { describeSaveStatus, type SaveStatusView } from "@/lib/save-status";
 import { motion as motionTokens } from "@/lib/motion";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 
 /** How long a purely reassuring message stays up. */
@@ -38,6 +39,9 @@ export function SaveStatusPill() {
 
   const view = describeSaveStatus({ mode, syncStatus, online, queued, error: cloudError });
   const [visible, setVisible] = useState(false);
+  // The pill is phone-only (`md:hidden`). Mounting its draggable motion card on
+  // desktop anyway made framer measure the page on every save, for nothing.
+  const phone = useMediaQuery("(max-width: 767px)");
   // Mirrors `visible` for the effect: a status flip (Saved → Saving… → Saved)
   // remounts the effect and used to clear the dismiss timer, then bail because
   // we'd already "reassured" — leaving the pill stuck until you swipe it away.
@@ -111,13 +115,12 @@ export function SaveStatusPill() {
         current && !current.transient && "pr-[4.5rem]"
       )}
     >
-      <AnimatePresence mode="popLayout">
-        {visible && current && (
+      <AnimatePresence>
+        {phone && visible && current && (
           <motion.div
             key="save-status"
             role="status"
             aria-live="polite"
-            layout
             initial={{ opacity: 0, y: 10, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{

@@ -1097,7 +1097,7 @@ label {
 
 /* Release is the half you actually watch, so let it ease back a touch slower
    than it went down. */
-button:not(:disabled):not(.press-none):not(.press-surface):not([role="menuitem"]):active,
+button:not(:disabled):not(.press-none):not(.press-surface):not(.press-pop):not([role="menuitem"]):active,
 a:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 [role="button"]:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 summary:active {
@@ -1110,6 +1110,14 @@ a.press-none:active,
 [role="button"].press-none:active,
 [role="menuitem"]:active {
   scale: 1;
+}
+
+/* Small icon controls that pop on contact (card quick actions). Plain CSS on
+   purpose: a framer `whileTap` on every card in a list cost measurable time to
+   wire up and tear down whenever the list mounted. */
+button.press-pop:not(:disabled):active {
+  scale: 0.88;
+  transition-duration: 80ms;
 }
 
 /* Fields ease into focus too. Without this the accent ring and the border

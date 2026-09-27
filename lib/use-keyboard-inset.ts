@@ -299,13 +299,16 @@ export function useKeyboardInset() {
       SETTLE_MS.forEach((ms) => timers.push(setTimeout(schedule, ms)));
     };
 
-    const onFocusIn = () => {
-      if (keyboardBase === null && isTypingTarget(document.activeElement)) {
-        keyboardBase = root.clientHeight;
-      }
+    // Only a text field can raise or drop a soft keyboard. Every button click
+    // moves focus too, and running the full layout-forcing pass (plus two
+    // follow-ups) for those was a measurable stall on every tap.
+    const onFocusIn = (e: FocusEvent) => {
+      if (!isTypingTarget(e.target as Element | null)) return;
+      if (keyboardBase === null) keyboardBase = root.clientHeight;
       schedule();
     };
-    const onFocusOut = () => {
+    const onFocusOut = (e: FocusEvent) => {
+      if (!isTypingTarget(e.target as Element | null)) return;
       schedule();
       timers.push(setTimeout(schedule, 250), setTimeout(schedule, 500));
     };
