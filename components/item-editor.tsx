@@ -24,6 +24,7 @@ import { duplicateItem } from "@/lib/item-actions";
 import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sessions";
 import { WeekdayChips } from "@/components/weekday-chips";
 import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
+import { safeExternalUrl } from "@/lib/safe-url";
 
 function linkLabel(url: string): string {
   try {
@@ -539,15 +540,16 @@ export function ItemEditor({
     </DetailRow>
   );
 
-  const linkBlock = item.url && (
+  const safeItemUrl = safeExternalUrl(item.url);
+  const linkBlock = safeItemUrl && (
     <a
-      href={item.url}
+      href={safeItemUrl}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-md border border-line px-3 py-2 text-[12.5px] font-medium text-accent transition-colors hover:border-accent"
     >
       <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-      {linkLabel(item.url)}
+      {linkLabel(safeItemUrl)}
     </a>
   );
 

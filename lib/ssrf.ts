@@ -8,6 +8,10 @@ export function isBlockedHost(host: string): boolean {
     h.endsWith(".localhost") ||
     h.endsWith(".local") ||
     h.endsWith(".internal") ||
+    h.endsWith(".home.arpa") ||
+    h.endsWith(".test") ||
+    h.endsWith(".invalid") ||
+    h.endsWith(".example") ||
     h === "0.0.0.0" ||
     h === "::1" ||
     h === "metadata.google.internal"
@@ -26,11 +30,22 @@ export function isBlockedIp(ip: string): boolean {
   const v = ip.toLowerCase().replace(/^\[|\]$/g, "");
   if (v === "::1" || v === "0.0.0.0" || v === "::") return true;
   const v4 = v.startsWith("::ffff:") ? v.slice(7) : v;
-  if (/^127\./.test(v4) || /^10\./.test(v4) || /^192\.168\./.test(v4) || /^169\.254\./.test(v4)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(v4)) return true;
-  if (/^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\./.test(v4)) return true;
-  if (/^(0|fc|fd)[0-9a-f]*:/.test(v)) return true;
-  if (/^fe80:/i.test(v)) return true;
+  const octets = v4.split(".").map(Number);
+  if (octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+    const [a, b, c] = octets;
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && (b === 0 || b === 168)) return true;
+    if (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
+    return false;
+  }
+  // Only globally routable IPv6 (2000::/3) is useful for a public feed. Block
+  // unique-local, link-local, multicast, transition, documentation and other
+  // special ranges rather than trying to enumerate every reserved prefix.
+  if (v.includes(":")) return !/^[23][0-9a-f]{0,3}:/.test(v) || /^2001:db8:/i.test(v);
   return false;
 }
 
@@ -59,5 +74,10 @@ export function normalizeFeedInput(input: string): URL | null {
     return null;
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  if (url.port && !((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80"))) {
+    return null;
+  }
+  url.hash = "";
   return url;
 }

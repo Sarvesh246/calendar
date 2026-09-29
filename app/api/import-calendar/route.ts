@@ -72,6 +72,10 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "That request wasn't allowed." }, { status: 403 });
   }
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.startsWith("application/json")) {
+    return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
+  }
 
   let body: unknown;
   try {
@@ -170,7 +174,11 @@ export async function POST(request: Request) {
         if (!loc || hop === MAX_REDIRECTS) {
           return NextResponse.json({ ok: false, error: "The feed redirected too many times." }, { status: 502 });
         }
-        current = new URL(loc, current);
+        const redirected = normalizeFeedInput(new URL(loc, current).toString());
+        if (!redirected || (current.protocol === "https:" && redirected.protocol !== "https:")) {
+          return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
+        }
+        current = redirected;
         continue;
       }
       break;

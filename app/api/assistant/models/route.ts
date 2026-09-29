@@ -8,5 +8,8 @@ export async function GET(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!rateLimit(`assistant:models:${clientKey(request)}`, 20, 60_000)) return tooMany();
   const models = await availableLlmModels();
-  return NextResponse.json({ models, checkedAt: new Date().toISOString() });
+  return NextResponse.json(
+    { models, checkedAt: new Date().toISOString() },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
 }

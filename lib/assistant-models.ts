@@ -10,8 +10,6 @@ export type AssistantModelOption = {
 };
 
 const STORAGE_KEY = "datebook-assistant-model";
-const RETRY_MS = 15_000;
-let lastAttempt = 0;
 
 interface AssistantModelState {
   models: AssistantModelOption[];
@@ -29,19 +27,12 @@ export const useAssistantModelStore = create<AssistantModelState>((set, get) => 
   loading: false,
   load: async () => {
     const state = get();
-    if (state.loading) return;
-    // An empty or failed result is not final: retry (throttled) so a cold start,
-    // rate limit or offline launch doesn't pin the picker to "Auto" until relaunch.
-    if (state.loaded && state.models.length > 0) return;
-    if (state.loaded && Date.now() - lastAttempt < RETRY_MS) return;
-    lastAttempt = Date.now();
-    let selectedId = state.loaded ? state.selectedId : "auto";
-    if (!state.loaded) {
-      try {
-        selectedId = localStorage.getItem(STORAGE_KEY) || "auto";
-      } catch {
-        /* private mode */
-      }
+    if (state.loading || state.loaded) return;
+    let selectedId = "auto";
+    try {
+      selectedId = localStorage.getItem(STORAGE_KEY) || "auto";
+    } catch {
+      /* private mode */
     }
     set({ loading: true, selectedId });
     try {

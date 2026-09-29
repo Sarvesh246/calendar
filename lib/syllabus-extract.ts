@@ -9,6 +9,7 @@ export { MAX_SYLLABUS_BODY, MAX_SYLLABUS_PDF_BYTES } from "./syllabus-limits";
 /** Error codes returned by POST /api/import-syllabus. HTTP status varies. */
 export type SyllabusExtractError =
   | "assistant-not-configured"
+  | "authentication-required"
   | "assistant-busy"
   | "assistant-unreachable"
   | "forbidden"
@@ -56,6 +57,7 @@ export type SyllabusCategoryHint = { id: string; name: string };
 
 const SYLLABUS_EXTRACT_ERROR_CODES = new Set<string>([
   "assistant-not-configured",
+  "authentication-required",
   "assistant-busy",
   "assistant-unreachable",
   "forbidden",
@@ -138,6 +140,7 @@ export function syllabusErrorFromResponse(
 ): SyllabusExtractError | undefined {
   if (isSyllabusExtractError(code)) return code;
   if (status === 429) return "rate-limited";
+  if (status === 401) return "authentication-required";
   if (status === 403) return "forbidden";
   if (status === 413) return "payload-too-large";
   if (status === 503 || status === 502) return "assistant-busy";
@@ -148,6 +151,7 @@ export function syllabusErrorFromResponse(
 export function syllabusExtractErrorMessage(code: string | undefined, status: number): string {
   const maxMb = (MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1);
   if (code === "assistant-not-configured") return "Syllabus reading isn't set up on this server.";
+  if (code === "authentication-required") return "Sign in with Google to read a syllabus securely.";
   if (code === "assistant-busy") return "The reader is busy — try again in a moment.";
   if (code === "assistant-unreachable") return "Couldn't reach the syllabus reader. Try again.";
   if (code === "forbidden" || status === 403) return "This request was blocked.";

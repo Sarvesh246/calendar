@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { LlmProviderConfig } from "./providers";
 
 export type ToolCall = {
@@ -65,45 +67,16 @@ function headers(provider: LlmProviderConfig, key: string) {
     Authorization: `Bearer ${key}`,
     "Content-Type": "application/json",
   };
-  if (provider.id === "gemini-flash") result["x-goog-api-client"] = "datebook-router/1.0";
+  if (provider.id.startsWith("gemini-")) result["x-goog-api-client"] = "datebook-router/1.0";
   return result;
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
   try {
     return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ProviderRequestError(message || "Provider request timed out", 0);
-  }
-}
-
-export async function listProviderModels(provider: LlmProviderConfig, key: string): Promise<Set<string>> {
-  const response = await fetchWithTimeout(
-    `${provider.baseURL.replace(/\/$/, "")}/models`,
-    { method: "GET", headers: headers(provider, key) },
-    10_000
-  );
-  const text = await response.text();
-  if (!response.ok) {
-    throw new ProviderRequestError(
-      text.slice(0, 300),
-      response.status,
-      retryAfterMs(response.headers.get("retry-after")),
-      response.status === 404
-    );
-  }
-  let parsed: { data?: Array<{ id?: string }> };
-  try {
-    parsed = JSON.parse(text) as { data?: Array<{ id?: string }> };
   } catch {
-    throw new ProviderRequestError("Provider returned invalid model-list JSON", response.status);
+    throw new ProviderRequestError("Provider request failed", 0);
   }
-  return new Set(
-    (parsed.data ?? [])
-      .map((model) => model.id?.replace(/^models\//, ""))
-      .filter((id): id is string => Boolean(id))
-  );
 }
 
 export async function createChatCompletion(opts: {
@@ -142,7 +115,7 @@ export async function createChatCompletion(opts: {
       response.status === 404 ||
       (response.status === 400 && /model.{0,40}(not found|does not exist|unknown)/i.test(text));
     throw new ProviderRequestError(
-      text.slice(0, 500),
+      `Provider request failed (${response.status})`,
       response.status,
       retryAfterMs(response.headers.get("retry-after")),
       notFound
