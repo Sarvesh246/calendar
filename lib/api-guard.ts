@@ -1,3 +1,6 @@
+import "server-only";
+
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 /** Request timestamps per client key, trimmed to the active window. */
@@ -6,6 +9,7 @@ const hits = new Map<string, number[]>();
  *  warm serverless instance — a key whose window has fully lapsed is dropped
  *  rather than kept forever holding an empty array. */
 const MAX_TRACKED_CLIENTS = 5_000;
+let warnedMissingAtomicRateLimit = false;
 
 function evictStale(now: number, windowMs: number) {
   for (const [key, times] of hits) {
@@ -33,26 +37,46 @@ export function syllabusLimitKey(user: { id: string } | null, ip: string): strin
 
 export function clientKey(request: Request): string {
   const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]?.trim() || "unknown";
-  return request.headers.get("x-real-ip") || "local";
+  const raw = fwd?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+  // Durable quota rows should not become a long-lived IP-address log. The salt
+  // is server-only and stable across deployments; rate-limit keys remain useful
+  // without retaining the caller's network identifier in Supabase.
+  const salt =
+    process.env.RATE_LIMIT_SALT ||
+    process.env.CRON_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    "datebook-local";
+  return `client:${createHmac("sha256", salt).update(raw).digest("hex").slice(0, 24)}`;
 }
 
 /** True when the request looks like it came from this app (not a random curl). */
 export function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
-  const host = (origin || referer || "").trim();
-  if (!host) return false;
+  const source = (origin || referer || "").trim();
+  if (!source) return false;
   try {
-    return hostAllowed(new URL(host).hostname);
+    const sourceUrl = new URL(source);
+    const targetUrl = new URL(request.url);
+    const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+    if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+      return false;
+    }
+    if (sourceUrl.protocol !== "https:" && !isLocalHost(sourceUrl.hostname)) return false;
+    return sourceUrl.origin === targetUrl.origin && hostAllowed(targetUrl.hostname);
   } catch {
     return false;
   }
 }
 
+function isLocalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1";
+}
+
 function hostAllowed(hostname: string): boolean {
   const h = hostname.toLowerCase();
-  if (h === "localhost" || h === "127.0.0.1") return true;
+  if (isLocalHost(h)) return true;
   // This deployment's own hosts only. Any `*.vercel.app` used to pass, which let
   // every other site on Vercel drive the Gemini-backed routes from its visitors.
   const own = [
@@ -106,19 +130,64 @@ export async function getRequestUser(request: Request): Promise<{ id: string } |
 export function tooMany() {
   return Response.json(
     { error: "rate-limited", ok: false },
-    { status: 429, headers: { "Retry-After": "30" } }
+    { status: 429, headers: { "Retry-After": "30", "Cache-Control": "private, no-store" } }
   );
 }
 
-/** Hourly cap stored in Supabase when a service role key is present. Fail-open. */
-export async function durableHourlyLimit(key: string, max: number): Promise<boolean> {
+export function authenticationRequired() {
+  return Response.json(
+    { error: "authentication-required", ok: false },
+    { status: 401, headers: { "Cache-Control": "private, no-store" } }
+  );
+}
+
+export function isJsonRequest(request: Request): boolean {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  return contentType.startsWith("application/json");
+}
+
+/** Constant-time comparison for cron/webhook bearer credentials. */
+export function safeSecretEqual(actual: string | null, expected: string | undefined): boolean {
+  if (!actual || !expected) return false;
+  const a = Buffer.from(actual);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Hourly cap stored in Supabase when a service role key is present. */
+export async function durableHourlyLimit(
+  key: string,
+  max: number,
+  opts: { failClosed?: boolean; windowMs?: number } = {}
+): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !service) return true;
+  if (!url || !service) return !opts.failClosed;
   try {
     const sb = createClient(url, service, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const windowMs = Math.max(1_000, opts.windowMs ?? 60 * 60_000);
+    const { data: allowed, error: rpcError } = await sb.rpc("consume_rate_limit", {
+      p_key: key,
+      p_max: max,
+      p_window_seconds: Math.ceil(windowMs / 1_000),
+    });
+    if (!rpcError && typeof allowed === "boolean") return allowed;
+    // Deployments that have not applied 0016 yet still retain the per-instance
+    // user, client, and global guards above. Do not turn that rollout ordering
+    // issue into a total AI outage; fail closed for every other database error.
+    if (rpcError?.code === "PGRST202" || rpcError?.code === "42883") {
+      if (!warnedMissingAtomicRateLimit) {
+        warnedMissingAtomicRateLimit = true;
+        console.warn("[rate-limit] atomic quota migration is not applied");
+      }
+      return true;
+    }
+    if (opts.failClosed) return false;
+
+    // Backward-compatible fail-open path for non-sensitive routes while older
+    // projects apply the atomic quota migration.
     const hour = new Date();
     hour.setUTCMinutes(0, 0, 0);
     const { data } = await sb.from("rate_limits").select("count, window_start").eq("key", key).maybeSingle();
@@ -132,6 +201,6 @@ export async function durableHourlyLimit(key: string, max: number): Promise<bool
     await sb.from("rate_limits").update({ count: (data.count as number) + 1 }).eq("key", key);
     return true;
   } catch {
-    return true;
+    return !opts.failClosed;
   }
 }

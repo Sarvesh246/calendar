@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
-import { getRequestUser, sameOrigin } from "@/lib/api-guard";
+import {
+  authenticationRequired,
+  clientKey,
+  getRequestUser,
+  isJsonRequest,
+  rateLimit,
+  sameOrigin,
+  tooMany,
+} from "@/lib/api-guard";
 import { createClient } from "@supabase/supabase-js";
+import { parsePushEndpoint, validPushEndpoint, validPushKey } from "@/lib/push-endpoint";
 
 export const runtime = "nodejs";
 
@@ -8,8 +17,16 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
+  if (!isJsonRequest(request)) return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
+  if (Number(request.headers.get("content-length") ?? "0") > 8_192) {
+    return NextResponse.json({ ok: false, error: "payload-too-large" }, { status: 413 });
+  }
   const user = await getRequestUser(request);
-  if (!user) return NextResponse.json({ ok: false, error: "auth-required" }, { status: 401 });
+  if (!user) return authenticationRequired();
+  const limitKey = `push:subscribe:${user.id}:${clientKey(request)}`;
+  if (!rateLimit(limitKey, 12, 60 * 60_000) || !rateLimit(`${limitKey}:burst`, 4, 60_000)) {
+    return tooMany();
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -21,7 +38,11 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   }
-  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+  if (
+    !(await validPushEndpoint(body.endpoint)) ||
+    !validPushKey(body.keys?.p256dh, 32, 160) ||
+    !validPushKey(body.keys?.auth, 12, 64)
+  ) {
     return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   }
 
@@ -38,7 +59,10 @@ export async function POST(request: Request) {
     },
     { onConflict: "user_id,endpoint" }
   );
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[push] subscription write failed", error.code);
+    return NextResponse.json({ ok: false, error: "subscription-failed" }, { status: 500 });
+  }
 
   // One browser endpoint belongs to one account. A previous user of this
   // browser whose session was dropped rather than signed out still has a row
@@ -55,7 +79,7 @@ export async function POST(request: Request) {
       .delete()
       .eq("endpoint", body.endpoint)
       .neq("user_id", user.id);
-    if (cleanupErr) console.warn("[push] endpoint cleanup", cleanupErr.message);
+    if (cleanupErr) console.warn("[push] endpoint cleanup", cleanupErr.code);
   }
   return NextResponse.json({ ok: true });
 }
@@ -65,8 +89,9 @@ export async function DELETE(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
+  if (!isJsonRequest(request)) return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   const user = await getRequestUser(request);
-  if (!user) return NextResponse.json({ ok: false, error: "auth-required" }, { status: 401 });
+  if (!user) return authenticationRequired();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -78,7 +103,9 @@ export async function DELETE(request: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   }
-  if (!body.endpoint) return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
+  if (!parsePushEndpoint(body.endpoint)) {
+    return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
+  }
 
   const supabase = createClient(url, key, {
     global: { headers: { Authorization: request.headers.get("authorization") ?? "" } },
@@ -89,6 +116,9 @@ export async function DELETE(request: Request) {
     .delete()
     .eq("user_id", user.id)
     .eq("endpoint", body.endpoint);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[push] subscription delete failed", error.code);
+    return NextResponse.json({ ok: false, error: "subscription-failed" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

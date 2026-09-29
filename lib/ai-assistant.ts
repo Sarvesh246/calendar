@@ -408,6 +408,12 @@ export async function askAssistant(
         categories: ctx.categories.map((c) => ({ id: c.id, name: c.name, ...(c.syllabus ? { syllabus: c.syllabus } : {}) })),
       }),
     });
+    if (res.status === 401) {
+      return {
+        text: "Sign in with Google to use the cloud assistant. I can still answer common calendar questions on this device.",
+        degraded: true,
+      };
+    }
     if (res.ok) {
       const data = (await res.json()) as AssistantResponse & { error?: string };
       if (!data.error && typeof data.text === "string") {

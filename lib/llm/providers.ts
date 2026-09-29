@@ -1,3 +1,5 @@
+import "server-only";
+
 export type ProviderTier = 1 | 2;
 
 export type LlmProviderConfig = {

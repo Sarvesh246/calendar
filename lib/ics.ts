@@ -1,3 +1,5 @@
+import { safeExternalUrl } from "./safe-url";
+
 // Minimal iCalendar (RFC 5545) reader — enough to import event/assignment feeds
 // from Canvas, Google Calendar, Outlook, and similar. Recurring events (RRULE
 // DAILY/WEEKLY/MONTHLY) are expanded into concrete instances; VTODO imports as tasks.
@@ -185,7 +187,7 @@ function applyProperty(cur: CurEvent, key: string, params: Record<string, string
       break;
     }
     case "URL":
-      if (value.trim()) cur.url = value.trim();
+      cur.url = safeExternalUrl(value) ?? undefined;
       break;
     case "DTSTART":
     case "DUE":
@@ -498,7 +500,8 @@ export function serializeIcs(
     lines.push(`SUMMARY:${icsEscape(item.title)}`);
     if (item.description) lines.push(`DESCRIPTION:${icsEscape(item.description)}`);
     if (item.location) lines.push(`LOCATION:${icsEscape(item.location)}`);
-    if (item.url) lines.push(`URL:${item.url}`);
+    const safeUrl = safeExternalUrl(item.url);
+    if (safeUrl) lines.push(`URL:${safeUrl}`);
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");

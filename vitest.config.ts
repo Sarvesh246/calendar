@@ -8,6 +8,9 @@ export default defineConfig({
     include: ["lib/**/*.test.ts"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, ".") },
+    alias: {
+      "@": path.resolve(__dirname, "."),
+      "server-only": path.resolve(__dirname, "lib/test/server-only.ts"),
+    },
   },
 });

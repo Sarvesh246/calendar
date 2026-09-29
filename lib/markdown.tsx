@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { cn } from "./utils";
+import { safeExternalUrl } from "./safe-url";
 
 /**
  * Tiny Markdown renderer for the assistant's chat replies. Deliberately narrow —
@@ -36,17 +37,18 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
         </code>
       );
     } else if (m[6] != null && m[7] != null) {
-      out.push(
+      const href = safeExternalUrl(m[7]);
+      out.push(href ? (
         <a
           key={key}
-          href={m[7]}
+          href={href}
           target="_blank"
           rel="noopener noreferrer"
           className="font-medium text-accent underline decoration-accent/40 underline-offset-2"
         >
           {m[6]}
         </a>
-      );
+      ) : <span key={key}>{m[6]}</span>);
     } else if (m[9] != null) {
       out.push(<em key={key}>{m[9]}</em>);
     } else if (m[11] != null) {

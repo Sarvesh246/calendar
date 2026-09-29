@@ -32,6 +32,7 @@ jobs:
 
           while :; do
             code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 60 \
+              -X POST \
               -H "Authorization: Bearer ${CRON_SECRET}" \
               "$DISPATCH_URL")" || code="000"
 

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
-  MAX_ASSISTANT_BODY, MAX_ASSISTANT_ITEMS, MAX_ASSISTANT_MESSAGE,
-  clientKey, durableHourlyLimit, getRequestUser, rateLimit, sameOrigin, tooMany,
+  MAX_ASSISTANT_BODY, MAX_ASSISTANT_ITEMS, MAX_ASSISTANT_MESSAGE, authenticationRequired,
+  clientKey, durableHourlyLimit, getRequestUser, isJsonRequest, rateLimit, sameOrigin, tooMany,
 } from "@/lib/api-guard";
 import { isPureQuestion, normalizeActions, type AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
 import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } from "@/lib/llm/history";
@@ -195,16 +195,20 @@ async function runAgent(opts: {
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!isJsonRequest(request)) return NextResponse.json({ error: "bad-request" }, { status: 400 });
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > MAX_ASSISTANT_BODY) {
+    return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
+  }
   const user = await getRequestUser(request);
-  const ip = clientKey(request);
-  const limitKey = user ? `assistant:user:${user.id}` : `assistant:ip:${ip}`;
-  const hourly = user ? 60 : 20;
+  if (!user) return authenticationRequired();
+  const limitKey = `assistant:user:${user.id}`;
   if (
-    !rateLimit(limitKey, hourly, 60 * 60_000) ||
-    !rateLimit(`${limitKey}:burst`, 8, 60_000) ||
+    !rateLimit(limitKey, 60, 60 * 60_000) ||
+    !rateLimit(`${limitKey}:${clientKey(request)}:burst`, 8, 60_000) ||
     !rateLimit("assistant:global:minute", 240, 60_000) ||
-    !(await durableHourlyLimit(limitKey, hourly)) ||
-    !(await durableHourlyLimit("assistant:global", 3_000))
+    !(await durableHourlyLimit(limitKey, 60, { failClosed: true })) ||
+    !(await durableHourlyLimit("assistant:global", 3_000, { failClosed: true }))
   ) return tooMany();
 
   const rawText = await request.text();
@@ -223,10 +227,10 @@ export async function POST(request: Request) {
     : [];
   body.categories = Array.isArray(body.categories) ? body.categories.slice(0, 80) : [];
   const selectedId = modelId.safeParse(body.modelId).success ? body.modelId : "auto";
-  const threadId = user && uuid.safeParse(body.conversationId).success ? body.conversationId! : null;
+  const threadId = uuid.safeParse(body.conversationId).success ? body.conversationId! : null;
 
   let history = requestHistory(body);
-  if (user && threadId) {
+  if (threadId) {
     try {
       await ensureAssistantThread(user.id, threadId);
       const stored = await loadAssistantHistory(user.id, threadId);
@@ -235,7 +239,7 @@ export async function POST(request: Request) {
       if (!history.length && stored.length) history = trimHistory(stored);
       await storeAssistantMessage({ userId: user.id, threadId, role: "user", text: body.message });
     } catch (error) {
-      console.error("[assistant] history write failed", error);
+      console.error("[assistant] history write failed", error instanceof Error ? error.name : "unknown");
     }
   }
   const messages: ChatMessage[] = [
@@ -252,14 +256,14 @@ export async function POST(request: Request) {
     });
     let actions = normalizeActions(result.actions, body);
     if (isPureQuestion(body.message)) actions = actions.filter((action) => action.kind !== "create");
-    if (user && threadId) {
+    if (threadId) {
       try {
         await storeAssistantMessage({
           userId: user.id, threadId, role: "assistant", text: result.text,
           providerId: result.provider.id, model: result.provider.model,
         });
       } catch (error) {
-        console.error("[assistant] history write failed", error);
+        console.error("[assistant] history write failed", error instanceof Error ? error.name : "unknown");
       }
     }
     const fallbackNotice = result.fellBack
@@ -272,7 +276,7 @@ export async function POST(request: Request) {
       fallbackNotice,
     });
   } catch (error) {
-    console.error("[assistant] all providers unavailable", error);
+    console.error("[assistant] all providers unavailable", error instanceof Error ? error.name : "unknown");
     return NextResponse.json({ error: "assistant-unreachable" }, { status: 200 });
   }
 }

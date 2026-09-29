@@ -37,7 +37,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Push reminder dispatch
 
-Closed-app reminders are delivered by `GET /api/push/dispatch`, which the
+Closed-app reminders are delivered by authenticated `POST /api/push/dispatch`, which the
 `Push dispatch` GitHub Actions workflow calls on a schedule.
 
 Once push is configured on the deployment (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`,

@@ -51,6 +51,7 @@ export function geminiBackoffMs(
 
 export async function fetchGeminiJson(opts: {
   url: string;
+  headers?: Record<string, string>;
   body: string;
   timeoutMs: number;
   attempts?: number;
@@ -82,22 +83,25 @@ export async function fetchGeminiJson(opts: {
     try {
       const r = await fetchImpl(opts.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...opts.headers },
         body: opts.body,
         signal: AbortSignal.timeout(timeoutMs),
+        cache: "no-store",
       });
       if (r.ok) {
         try {
           return { ok: true, data: await r.json() };
-        } catch (err) {
+        } catch {
           lastStatus = r.status;
-          opts.log?.("Gemini JSON parse failed", err);
+          opts.log?.("Gemini JSON parse failed");
         }
       } else {
         lastStatus = r.status;
         retryAfterMs = parseRetryAfterMs(r.headers.get("retry-after"), now());
-        const detail = await r.text().catch(() => "");
-        opts.log?.(`Gemini error ${r.status}`, detail.slice(0, 300));
+        // Do not put provider response bodies in logs. They can contain request
+        // details or credential diagnostics and are not needed for retry logic.
+        await r.body?.cancel().catch(() => undefined);
+        opts.log?.(`Gemini error ${r.status}`);
         // A second 429 means the RPM/daily cap is really spent; more tries only burn quota.
         if (!TRANSIENT.has(r.status) || (r.status === 429 && attempt >= 1)) {
           return { ok: false, lastStatus, error: classifyGeminiFailure(lastStatus) };
@@ -105,7 +109,7 @@ export async function fetchGeminiJson(opts: {
       }
     } catch (err) {
       lastStatus = 0;
-      opts.log?.("Gemini request failed", err);
+      opts.log?.("Gemini request failed", err instanceof Error ? err.name : "unknown");
     }
 
     if (attempt + 1 >= attempts) break;

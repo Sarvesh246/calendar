@@ -3,8 +3,8 @@ import {
   MAX_SYLLABUS_BODY,
   MAX_SYLLABUS_PDF_BYTES,
   SYLLABUS_BURST,
-  SYLLABUS_HOURLY_ANON,
   SYLLABUS_HOURLY_AUTH,
+  authenticationRequired,
   clientKey,
   durableHourlyLimit,
   getRequestUser,
@@ -225,21 +225,22 @@ function validTimeZone(tz: string): boolean {
 /* ------------------------------------------------------------------ */
 
 export async function POST(request: Request) {
-  if (!KEY) {
-    return NextResponse.json({ error: "assistant-not-configured" }, { status: 200 });
-  }
   if (!sameOrigin(request)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const user = await getRequestUser(request);
+  if (!user) return authenticationRequired();
+  if (!KEY) {
+    return NextResponse.json({ error: "assistant-not-configured" }, { status: 200 });
+  }
   const ip = clientKey(request);
   const limitKey = syllabusLimitKey(user, ip);
-  const hourly = user ? SYLLABUS_HOURLY_AUTH : SYLLABUS_HOURLY_ANON;
+  const hourly = SYLLABUS_HOURLY_AUTH;
   if (
     !rateLimit(limitKey, hourly, 60 * 60 * 1000) ||
     !rateLimit(`${limitKey}:burst`, SYLLABUS_BURST, 60_000) ||
-    !(await durableHourlyLimit(limitKey, hourly))
+    !(await durableHourlyLimit(limitKey, hourly, { failClosed: true }))
   ) {
     return tooMany();
   }
@@ -311,7 +312,8 @@ export async function POST(request: Request) {
   });
 
   const gemini = await fetchGeminiJson({
-    url: `${ENDPOINT(MODEL)}?key=${KEY}`,
+    url: ENDPOINT(MODEL),
+    headers: { "x-goog-api-key": KEY },
     body: payload,
     timeoutMs: SYLLABUS_GEMINI_TIMEOUT_MS,
     attempts: SYLLABUS_GEMINI_ATTEMPTS,
