@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { motion } from "framer-motion";
 import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import { cn } from "@/lib/utils";
 
 type AppLockState = { enabled: boolean; requireAfterMinutes: number };
@@ -68,41 +67,48 @@ export function AppLockSection() {
       </div>
 
       {state?.enabled && (
-        <div
-          role="radiogroup"
-          aria-label="Re-lock timing"
-          className="grid grid-cols-2 gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:grid-cols-5"
-        >
-          {TIMING_OPTIONS.map((opt) => {
-            const active = opt.value === state.requireAfterMinutes;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => {
-                  haptic("light");
-                  update({ enabled: true, requireAfterMinutes: opt.value });
-                }}
-                className={cn(
-                  "press-none relative min-h-10 rounded-lg px-2 text-[12.5px] font-medium transition-colors",
-                  active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="settings-applock-timing"
-                    className="absolute inset-0 rounded-lg bg-accent"
-                    transition={motionTokens.spring}
-                  />
-                )}
-                <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <RelockTiming
+          minutes={state.requireAfterMinutes}
+          onChange={(requireAfterMinutes) => update({ enabled: true, requireAfterMinutes })}
+        />
       )}
+    </div>
+  );
+}
+
+function RelockTiming({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+  const { containerRef, pillRef, moveTo } = useSlidingPill(String(minutes));
+  return (
+    <div
+      ref={containerRef}
+      role="radiogroup"
+      aria-label="Re-lock timing"
+      className="relative grid grid-cols-2 gap-1 rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:grid-cols-5"
+    >
+      <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
+      {TIMING_OPTIONS.map((opt) => {
+        const active = opt.value === minutes;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            data-pill-key={String(opt.value)}
+            onClick={(e) => {
+              haptic("light");
+              if (!active) moveTo(e.currentTarget);
+              onChange(opt.value);
+            }}
+            className={cn(
+              "press-none relative min-h-10 rounded-lg px-2 text-[12.5px] font-medium transition-colors duration-[var(--motion-micro)]",
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
+            )}
+          >
+            <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

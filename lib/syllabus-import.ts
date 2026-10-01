@@ -16,6 +16,7 @@ import {
 } from "./syllabus-match";
 import { tombKey, type TombstoneMap } from "./tombstones";
 import type { Category, ImportSource, Item } from "./types";
+import type { SyllabusInfo } from "./syllabus-info";
 
 export {
   defaultSyllabusDecision,
@@ -44,6 +45,8 @@ export interface SyllabusImportRequest {
    * skip "check these".
    */
   decisions?: SyllabusRowDecision[];
+  /** Course details from the same PDF; replaces what the class had. */
+  info?: SyllabusInfo;
 }
 
 export interface SyllabusImportResult {
@@ -127,6 +130,11 @@ export function applySyllabusImportToSnapshot(
       ...categories,
       { ...pendingNew, sourceId: syllabusSourceId, updatedAt: now },
     ];
+  }
+  // A newer syllabus is the better source; an import with no details keeps the old ones.
+  if (request.info) {
+    const info = { ...request.info, importedAt: now, ...(request.fileName ? { fileName: request.fileName } : {}) };
+    categories = categories.map((c) => (c.id === categoryId ? { ...c, syllabus: info, updatedAt: now } : c));
   }
 
   const matches = matchSyllabusItems(request.drafts, items, { timeZone, categoryId });

@@ -9,6 +9,7 @@ import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
 import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay, rankItemsByDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import { beginCalendarDrag, useCalendarDrag } from "@/lib/calendar-drag";
@@ -217,32 +218,6 @@ function DayCellMobilePreview({
   );
 }
 
-/** The ring around the selected day. Before the first paint it is a plain
- *  element in the right place; once mounted it becomes a shared-layout element
- *  so picking another day slides it there. */
-function SelectionRing({
-  layoutId,
-  animateSelection,
-  className,
-}: {
-  layoutId: string;
-  animateSelection: boolean;
-  className: string;
-}) {
-  if (!animateSelection) {
-    return <span aria-hidden className={cn("pointer-events-none absolute inset-0", className)} />;
-  }
-  return (
-    <motion.span
-      layoutId={layoutId}
-      aria-hidden
-      initial={false}
-      transition={motionTokens.spring}
-      className={cn("pointer-events-none absolute inset-0", className)}
-    />
-  );
-}
-
 function MonthGridPanel({
   anchor,
   byDay,
@@ -276,11 +251,29 @@ function MonthGridPanel({
   // any relayout) updates every cell in the panel from that one measurement.
   const onMeasure = useCallback((h: number) => setChipArea((prev) => (prev === h ? prev : h)), []);
 
+  // The selection ring is one element per grid that slides between cells on
+  // the compositor (see lib/sliding-pill.ts), instead of a shared-layout span
+  // re-measured inside every cell. Desktop rings the whole cell; the phone
+  // rings just the date.
+  const selectedKey = showSelectionRing && selectedDate ? dayKey(selectedDate) : null;
+  const { containerRef: gridRef, pillRef: ringRef, moveTo: moveRing } = useSlidingPill(selectedKey, {
+    keyAttr: "data-drop-day",
+    mark: false,
+  });
+  const { pillRef: dotRingRef, moveTo: moveDotRing } = useSlidingPill(selectedKey, {
+    keyAttr: "data-ring-day",
+    mark: false,
+    container: gridRef,
+  });
+
   return (
     <div
-      className="month-grid-panel grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
+      ref={gridRef}
+      className="month-grid-panel relative grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
       style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
     >
+      <span ref={ringRef} aria-hidden className="sliding-pill z-[2] hidden rounded-lg ring-2 ring-inset ring-accent sm:block" />
+      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] rounded-full ring-2 ring-accent sm:hidden" />
       {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
         const today = isToday(date);
@@ -290,8 +283,16 @@ function MonthGridPanel({
           <button
             key={`${anchor.toISOString()}-${date.toISOString()}`}
             data-drop-day={dayKey(date)}
-            onClick={() => {
+            onClick={(e) => {
               haptic("light");
+              if (showSelectionRing && !selected) {
+                const cell = e.currentTarget;
+                if (animateSelection) {
+                  moveRing(cell);
+                  const dot = cell.querySelector<HTMLElement>("[data-ring-day]");
+                  if (dot) moveDotRing(dot);
+                }
+              }
               onSelectDate(date);
             }}
             aria-pressed={selected ?? false}
@@ -312,24 +313,7 @@ function MonthGridPanel({
               !inMonth && "opacity-55"
             )}
           >
-            {/* Desktop selection wraps the whole cell. It used to be an inset
-                ring around just the date, sized to the text line — which drew
-                straight through the digits. */}
-            {selected && showSelectionRing && (
-              <SelectionRing
-                layoutId="month-selected-day-desktop"
-                animateSelection={animateSelection}
-                className="hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
-              />
-            )}
-            <span className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
-              {selected && showSelectionRing && (
-                <SelectionRing
-                  layoutId="month-selected-day"
-                  animateSelection={animateSelection}
-                  className="rounded-full ring-2 ring-accent sm:hidden"
-                />
-              )}
+            <span data-ring-day={dayKey(date)} className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
               <span
                 className={cn(
                   "month-day-date relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",

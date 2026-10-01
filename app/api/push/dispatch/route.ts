@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { safeSecretEqual } from "@/lib/api-guard";
+import { parsePushEndpoint } from "@/lib/push-endpoint";
 import {
   DEFAULT_CLASS_REMINDER_MINUTES,
   classReminderFor,
@@ -28,7 +30,7 @@ function chunk<T>(rows: T[], size: number): T[][] {
   return out;
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
 
@@ -38,15 +40,15 @@ export async function GET(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const pushConfigured = !!(vapidPublic && vapidPrivate && service && url);
 
-  if (pushConfigured && (!secret || auth !== `Bearer ${secret}`)) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+  if (!secret) {
+    return NextResponse.json({ ok: false, error: "not-configured" }, { status: 503 });
   }
-  if (secret && auth !== `Bearer ${secret}`) {
+  if (!safeSecretEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
   if (!pushConfigured) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "push-not-configured" });
+    return NextResponse.json({ ok: false, error: "not-configured" }, { status: 503 });
   }
 
   webpush.setVapidDetails("mailto:datebook@local", vapidPublic, vapidPrivate);
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
       .range(from, from + PAGE_SIZE - 1);
     if (itemsErr) {
       console.error("[push] items", itemsErr.message);
-      return NextResponse.json({ ok: false, error: itemsErr.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "dispatch-failed" }, { status: 500 });
     }
     const page = (data ?? []) as Record<string, unknown>[];
     items.push(...page);
@@ -155,7 +157,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.from("reminder_sends").select("key").in("key", batch);
     if (error) {
       console.error("[push] reminder_sends", error.message);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "dispatch-failed" }, { status: 500 });
     }
     for (const r of data ?? []) sentKeys.add(r.key as string);
   }
@@ -171,16 +173,18 @@ export async function GET(request: Request) {
       .in("user_id", batch);
     if (error) {
       console.error("[push] subscriptions", error.message);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "dispatch-failed" }, { status: 500 });
     }
     subs.push(...((data ?? []) as Record<string, unknown>[]));
   }
 
   const byUser = new Map<string, { endpoint: string; keys: { p256dh: string; auth: string } }[]>();
   for (const s of subs) {
+    const endpoint = parsePushEndpoint(s.endpoint);
+    if (!endpoint) continue;
     const list = byUser.get(s.user_id as string) ?? [];
     list.push({
-      endpoint: s.endpoint as string,
+      endpoint: endpoint.toString(),
       keys: { p256dh: s.p256dh as string, auth: s.auth as string },
     });
     byUser.set(s.user_id as string, list);

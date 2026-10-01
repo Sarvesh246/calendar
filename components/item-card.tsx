@@ -5,7 +5,6 @@ import { useMediaQuery } from "@/lib/use-media-query";
 import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import { MobileQuickActions } from "@/components/mobile-quick-actions";
-import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen, Play, Square } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -24,18 +23,11 @@ import {
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import type { ItemCardChrome } from "@/lib/card-chrome";
 import type { Category, Item, ItemStatus } from "@/lib/types";
 
-const ItemEditor = dynamic(
-  () => import("@/components/item-editor").then((m) => ({ default: m.ItemEditor })),
-  { ssr: false, loading: () => (
-    <div role="status" className="mt-3 space-y-3 border-t border-line pt-3">
-      <span className="sr-only">Loading item details…</span>
-      {[0, 1, 2].map((i) => <div key={i} aria-hidden className="h-9 animate-pulse rounded-md bg-surface-sunken" />)}
-    </div>
-  ) }
-);
+import { ItemEditor } from "@/components/item-editor-lazy";
 
 export type { ItemCardChrome };
 
@@ -133,12 +125,13 @@ function CompleteButton({
             className="complete-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-good"
           />
         )}
-        <motion.span
-          whileTap={{ scale: 0.82 }}
-          transition={motionTokens.springSnappy}
+        {/* The squeeze is CSS, not a framer whileTap: every card in a list
+            carried a gesture whose listeners cost real time to attach and tear
+            down each time a list mounted or swapped (Agenda Cards ↔ Rows). */}
+        <span
           className={cn(
-            "relative flex h-5 w-5 items-center justify-center rounded-full border-2",
-            "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+            "relative flex h-5 w-5 items-center justify-center rounded-full border-2 group-active/status:scale-[0.82] group-active/status:duration-[80ms]",
+            "transition-[background-color,border-color,scale] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
             status === "doing" &&
@@ -160,7 +153,7 @@ function CompleteButton({
               </motion.span>
             )}
           </AnimatePresence>
-        </motion.span>
+        </span>
       </span>
     </button>
   );
@@ -169,48 +162,44 @@ function CompleteButton({
 export function StatusSegmented({
   value,
   onChange,
-  layoutScope,
 }: {
   value: ItemStatus;
   onChange: (status: ItemStatus) => void;
-  layoutScope: string;
 }) {
   const options: { value: ItemStatus; label: string }[] = [
     { value: "todo", label: "To do" },
     { value: "doing", label: "In progress" },
     { value: "done", label: "Done" },
   ];
+  const { containerRef, pillRef, moveTo } = useSlidingPill(value);
 
   return (
     <div
-      className="flex w-full items-center gap-0.5 rounded-lg border border-line bg-surface-sunken p-0.5"
+      ref={containerRef}
+      className="relative flex w-full items-center gap-0.5 rounded-lg border border-line bg-surface-sunken p-0.5"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
+      <span ref={pillRef} aria-hidden className="sliding-pill rounded-md bg-accent" />
       {options.map((opt) => {
         const active = value === opt.value;
         return (
           <button
             key={opt.value}
             type="button"
-            onClick={() => {
+            data-pill-key={opt.value}
+            onClick={(e) => {
               haptic(opt.value === "done" ? "success" : "light");
+              if (!active) moveTo(e.currentTarget);
               onChange(opt.value);
             }}
             aria-pressed={active}
             className={cn(
               "press-none relative min-h-9 flex-1 rounded-md px-2 text-[12px] font-medium",
-              "transition-colors duration-[var(--motion-standard)]",
-              active ? "text-accent-ink" : "text-ink-soft hover:text-ink"
+              "transition-colors duration-[var(--motion-micro)]",
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
             )}
           >
-            {active && (
-              <motion.span
-                layoutId={`item-status-pill-${layoutScope}`}
-                className="absolute inset-0 rounded-md bg-accent"
-                transition={motionTokens.spring}
-              />
-            )}
             <span className="relative z-[1]">{opt.label}</span>
           </button>
         );

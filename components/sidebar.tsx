@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, animate, useMotionValue, useTransform } from "framer-motion";
 import {
   CalendarClock,
@@ -72,6 +72,33 @@ export function Sidebar({ pathname }: { pathname: string }) {
   const activeViewId = useUIStore((s) => s.activeViewId);
   const filterCount = categoryFilter?.length ?? 0;
 
+  const navRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const pillPlaced = useRef(false);
+
+  // Follow the router: the pill sits on whichever row is current. A click has
+  // usually moved it already (see `RailLink`), so this is then a no-op.
+  useLayoutEffect(() => {
+    const current = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    const pill = pillRef.current;
+    if (!pill) return;
+    if (!current) {
+      pill.style.opacity = "0";
+      clearRailOn(navRef.current);
+      pillPlaced.current = false;
+      return;
+    }
+    // The first placement (and a return from a room with no row) lands in
+    // place; only moves between rows slide.
+    movePill(pill, current, pillPlaced.current);
+    pillPlaced.current = true;
+  }, [pathname, collapsed]);
+
+  const onRailNavigate = (row: HTMLElement) => {
+    if (pillRef.current) movePill(pillRef.current, row, pillPlaced.current);
+    pillPlaced.current = true;
+  };
+
   return (
     <>
       {/* Desktop floating sidebar. Width jumps once (clip), so the main column
@@ -104,7 +131,8 @@ export function Sidebar({ pathname }: { pathname: string }) {
           </button>
         </div>
 
-        <nav className="mt-2 flex flex-col gap-0.5">
+        <nav ref={navRef} className="relative mt-2 flex flex-col gap-0.5">
+          <span ref={pillRef} aria-hidden className="rail-pill pointer-events-none absolute inset-x-0 top-0 rounded-lg bg-accent opacity-0" />
           {NAV.map((item) => (
             <RailLink
               key={item.href}
@@ -113,6 +141,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
               Icon={item.icon}
               active={pathname === item.href}
               collapsed={collapsed}
+              onNavigate={onRailNavigate}
             />
           ))}
           {/* Not a tab — the full timetable isn't a daily stop — but it is a
@@ -123,6 +152,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
             Icon={CalendarClock}
             active={pathname === "/schedule"}
             collapsed={collapsed}
+            onNavigate={onRailNavigate}
           />
           {/* Sits with the views rather than buried in a menu — it's a place you
               go, not a setting you find. */}
@@ -541,11 +571,25 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
 }
 
 /**
- * A desktop rail destination. The active background is a shared `layoutId`
- * element, so moving between pages slides one pill down the rail instead of
- * cross-fading two blocks of colour — the same language the mobile bar already
- * spoke, which the rail was missing.
+ * Slide the rail's one active pill onto `row`. A CSS transform transition, not
+ * a JS spring: the compositor runs it, so it keeps gliding while the incoming
+ * page commits underneath — the spring froze for exactly those frames, which
+ * is what read as stutter.
  */
+function movePill(pill: HTMLElement, row: HTMLElement, animate: boolean) {
+  pill.classList.toggle("rail-pill-instant", !animate);
+  pill.style.height = `${row.offsetHeight}px`;
+  pill.style.transform = `translateY(${row.offsetTop}px)`;
+  pill.style.opacity = "1";
+  // The row's ink flips with the pill, not a commit later.
+  row.parentElement?.querySelectorAll("[data-rail-on]").forEach((el) => el.removeAttribute("data-rail-on"));
+  row.setAttribute("data-rail-on", "");
+}
+
+function clearRailOn(nav: HTMLElement | null) {
+  nav?.querySelectorAll("[data-rail-on]").forEach((el) => el.removeAttribute("data-rail-on"));
+}
+
 /** A rail row that opens a panel instead of navigating. Same shape as
  *  `RailLink` so the assistant reads as one of the places you can go. */
 function RailButton({
@@ -584,12 +628,15 @@ function RailLink({
   Icon,
   active,
   collapsed,
+  onNavigate,
 }: {
   href: string;
   label: string;
   Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   active: boolean;
   collapsed: boolean;
+  /** Rows that share the rail pill report clicks here; others fill themselves. */
+  onNavigate?: (row: HTMLElement) => void;
 }) {
   const router = useRouter();
   return (
@@ -598,24 +645,32 @@ function RailLink({
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       onClick={(e) => {
-        if (!isTabRoute(href) || active) return;
+        if (active || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        onNavigate?.(e.currentTarget);
+        if (!isTabRoute(href)) return;
         e.preventDefault();
-        navigateTab(router, href);
+        // Let the pill's first frame paint before the page swap commits. The
+        // swap is the heavy part (revealing a whole page); started after the
+        // paint, it runs while the transition is already under way.
+        // The timer is a floor for when frames aren't being produced at all
+        // (a backgrounded window), so the click can never be dropped.
+        let sent = false;
+        const go = () => {
+          if (sent) return;
+          sent = true;
+          navigateTab(router, href);
+        };
+        requestAnimationFrame(() => setTimeout(go, 0));
+        setTimeout(go, 50);
       }}
       className={cn(
         "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-[13.5px] font-medium",
         "transition-colors duration-[var(--motion-standard)]",
-        active ? "text-accent-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+        "text-ink-soft hover:bg-surface-sunken hover:text-ink",
+        "data-[rail-on]:text-accent-ink data-[rail-on]:hover:bg-transparent data-[rail-on]:hover:text-accent-ink",
+        !onNavigate && active && "bg-accent text-accent-ink hover:bg-accent hover:text-accent-ink"
       )}
     >
-      {active && (
-        <motion.span
-          layoutId="rail-active"
-          aria-hidden
-          className="absolute inset-0 rounded-lg bg-accent"
-          transition={motionTokens.spring}
-        />
-      )}
       <Icon className="relative z-[1] h-4 w-4 shrink-0" strokeWidth={1.9} />
       <span className="relative z-[1] flex min-w-0">
         <RailLabel collapsed={collapsed}>{label}</RailLabel>

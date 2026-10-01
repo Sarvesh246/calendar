@@ -34,7 +34,7 @@ export interface AssistantReqBody {
   clock24h?: boolean;
   weekStartsOn?: 0 | 1;
   items: SlimItem[];
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; syllabus?: unknown }[];
 }
 
 interface RawAction {

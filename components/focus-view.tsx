@@ -532,8 +532,11 @@ function FocusQueue({
   onPick: (item: Item) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  // Focus after the view's first paint: focusing inside the mount commit
+  // forced a full layout of the new view before anything could draw.
   useEffect(() => {
-    searchRef.current?.focus();
+    const id = requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(id);
   }, [searchRef]);
 
   return (

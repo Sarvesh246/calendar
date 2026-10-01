@@ -72,7 +72,10 @@ export function extractReminders(text: string): {
   for (const h of [...hits].sort((a, b) => b.start - a.start)) {
     rest = rest.slice(0, h.start) + " " + rest.slice(h.end);
   }
-  rest = rest.replace(/\bwith\s+(?:and\s+)?/gi, " ").replace(/\s{2,}/g, " ").trim();
+  // Only a "with" the reminder left dangling ("… with  and …", trailing) goes;
+  // "dinner with Sam" keeps its with.
+  if (hits.length) rest = rest.replace(/\bwith\s+(?:and\s+)?(?=\s|,|$)|\s+with\s*$/gi, " ");
+  rest = rest.replace(/\s{2,}/g, " ").trim();
 
   return { reminders, rest };
 }

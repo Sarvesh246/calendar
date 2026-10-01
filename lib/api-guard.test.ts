@@ -1,5 +1,55 @@
 import { describe, expect, it } from "vitest";
-import { guestBucketKey, ipCeiling, rateLimit, syllabusLimitKey, SYLLABUS_BURST } from "./api-guard";
+import {
+  guestBucketKey,
+  ipCeiling,
+  isJsonRequest,
+  rateLimit,
+  safeSecretEqual,
+  sameOrigin,
+  syllabusLimitKey,
+  SYLLABUS_BURST,
+} from "./api-guard";
+
+describe("request guards", () => {
+  it("accepts a same-origin browser request", () => {
+    const request = new Request("http://localhost/api/test", {
+      headers: { origin: "http://localhost", "sec-fetch-site": "same-origin" },
+    });
+    expect(sameOrigin(request)).toBe(true);
+  });
+
+  it("rejects cross-site and mismatched-host requests", () => {
+    const crossSite = new Request("http://localhost/api/test", {
+      headers: { origin: "http://localhost", "sec-fetch-site": "cross-site" },
+    });
+    const foreign = new Request("http://localhost/api/test", {
+      headers: { origin: "https://evil.example" },
+    });
+    expect(sameOrigin(crossSite)).toBe(false);
+    expect(sameOrigin(foreign)).toBe(false);
+  });
+
+  it("rejects same-site requests from a different origin", () => {
+    process.env.VERCEL_URL = "preview.example.test";
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "datebook.example.test";
+    const request = new Request("https://preview.example.test/api/test", {
+      headers: { origin: "https://datebook.example.test", "sec-fetch-site": "same-site" },
+    });
+    expect(sameOrigin(request)).toBe(false);
+    delete process.env.VERCEL_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  });
+
+  it("requires JSON content types where requested", () => {
+    expect(isJsonRequest(new Request("http://localhost", { headers: { "content-type": "application/json; charset=utf-8" } }))).toBe(true);
+    expect(isJsonRequest(new Request("http://localhost", { headers: { "content-type": "text/plain" } }))).toBe(false);
+  });
+
+  it("compares webhook secrets without accepting prefixes", () => {
+    expect(safeSecretEqual("Bearer abc", "Bearer abc")).toBe(true);
+    expect(safeSecretEqual("Bearer ab", "Bearer abc")).toBe(false);
+  });
+});
 
 describe("syllabusLimitKey", () => {
   it("keys signed-in users by id and anonymous callers by IP", () => {

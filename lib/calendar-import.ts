@@ -4,6 +4,7 @@ import { parseIcs, type IcsEvent } from "./ics";
 import { snapshotFrom } from "./source-snapshot";
 import { categoryKey } from "./merge-calendars";
 import { authHeaders } from "./auth-headers";
+import { safeExternalUrl } from "./safe-url";
 import type { Category, Item, ItemType } from "./types";
 
 export interface FetchedCalendar {
@@ -187,7 +188,7 @@ export function buildImportPlan(
       at: ev.start,
       ...(ev.description ? { description: ev.description } : {}),
       ...(ev.location ? { location: ev.location } : {}),
-      ...(ev.url ? { url: ev.url } : {}),
+      ...(safeExternalUrl(ev.url) ? { url: safeExternalUrl(ev.url)! } : {}),
       ...(ev.end ? { endAt: ev.end } : {}),
       ...(ev.allDay ? { allDay: true } : {}),
       ...(type !== "event"
