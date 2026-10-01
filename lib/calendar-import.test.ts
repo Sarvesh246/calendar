@@ -162,6 +162,33 @@ describe("buildImportPlan", () => {
     expect(plan.drafts[0].status).toBe("todo");
   });
 
+  it("marks past-due assignments done on a first sync, but not a re-sync", () => {
+    const now = new Date("2026-09-14T12:00:00.000Z");
+    const feed = {
+      calendarName: "Canvas",
+      events: [
+        {
+          uid: "past-1",
+          summary: "Essay 1 [ENGL 101]",
+          start: "2026-09-01T23:59:00.000Z",
+          allDay: false,
+        },
+        {
+          uid: "future-1",
+          summary: "Essay 2 [ENGL 101]",
+          start: "2026-09-20T23:59:00.000Z",
+          allDay: false,
+        },
+      ],
+    };
+    const first = buildImportPlan(feed, [], "source-1", true, now);
+    expect(first.drafts.find((d) => d.sourceUid === "past-1")?.status).toBe("done");
+    expect(first.drafts.find((d) => d.sourceUid === "future-1")?.status).toBe("todo");
+
+    const resync = buildImportPlan(feed, [], "source-1", false, now);
+    expect(resync.drafts.find((d) => d.sourceUid === "past-1")?.status).toBe("todo");
+  });
+
   it("imports VTODO feeds as tasks", () => {
     const plan = buildImportPlan(
       {

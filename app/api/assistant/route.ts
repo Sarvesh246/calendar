@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
-  MAX_ASSISTANT_BODY, MAX_ASSISTANT_ITEMS, MAX_ASSISTANT_MESSAGE, authenticationRequired,
-  clientKey, durableHourlyLimit, getRequestUser, isJsonRequest, rateLimit, sameOrigin, tooMany,
+  MAX_ASSISTANT_BODY,
+  MAX_ASSISTANT_ITEMS,
+  MAX_ASSISTANT_MESSAGE,
+  authenticationRequired,
+  clientKey,
+  durableHourlyLimit,
+  getRequestUser,
+  isJsonRequest,
+  rateLimit,
+  sameOrigin,
+  tooMany,
 } from "@/lib/api-guard";
 import { isPureQuestion, normalizeActions, type AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
 import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } from "@/lib/llm/history";
