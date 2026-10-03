@@ -44,3 +44,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Skipper — machine-local artifacts (hook scratch + derived index), never commit
+.claude/.skipper-*
+.skipper/*
+!.skipper/receipts/
