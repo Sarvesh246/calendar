@@ -44,6 +44,7 @@ export function PlanningTray({
   const setMinutes = useWorkspacePrefs((s) => s.setSessionMinutes);
   const openInspector = useUIStore((s) => s.openInspector);
   const now = useNow();
+  const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
   const canDrop = mode === "week";
 
@@ -62,8 +63,15 @@ export function PlanningTray({
     const today = startOfDay(now);
     const week = addDays(today, 7).getTime();
     const horizon = addDays(today, HORIZON_DAYS).getTime();
+    const needle = query.trim().toLowerCase();
     const open = items
       .filter((i) => i.type !== "event" && i.status !== "done" && !i.workFor)
+      .filter(
+        (i) =>
+          !needle ||
+          i.title.toLowerCase().includes(needle) ||
+          (categories.get(i.categoryId)?.name ?? "").toLowerCase().includes(needle)
+      )
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
     const overdue: Item[] = [];
     const soon: Item[] = [];
@@ -77,7 +85,7 @@ export function PlanningTray({
       else beyond += 1;
     }
     return { overdue, soon, later, beyond };
-  }, [items, now]);
+  }, [items, now, query, categories]);
 
   function findTime(item: Item) {
     const due = new Date(item.at);
@@ -172,7 +180,7 @@ export function PlanningTray({
                   />
                   <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-ink">{itemDisplayTitle(item)}</p>
+                    <p title={item.title} className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{itemDisplayTitle(item)}</p>
                     <p className="truncate text-[11.5px] text-ink-faint">
                       <span className={overdue ? "font-medium text-warn" : undefined}>
                         {overdue ? "Was due " : "Due "}
@@ -232,6 +240,14 @@ export function PlanningTray({
             ))}
           </div>
         </div>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search assignments or classes"
+          aria-label="Search assignments to place"
+          className="h-8 w-full rounded-lg border border-line bg-surface px-2.5 text-[12.5px] text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        />
         {!canDrop && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[12px] text-ink">
             <span>Open the week to drop work into time.</span>
@@ -243,7 +259,10 @@ export function PlanningTray({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {empty ? (
-          <EmptyState title="Nothing to plan." sub={`Open assignments and tasks due in the next ${HORIZON_DAYS} days show up here.`} />
+          <EmptyState
+            title={query.trim() ? "No matches." : "Nothing to plan."}
+            sub={query.trim() ? "Try a different title or class." : `Open assignments and tasks due in the next ${HORIZON_DAYS} days show up here.`}
+          />
         ) : (
           <>
             {renderGroup("Overdue", groups.overdue, "warn")}
