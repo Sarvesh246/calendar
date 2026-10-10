@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { addDays, format } from "date-fns";
 import { Bell, CalendarDays, Tag } from "lucide-react";
 import { haptic } from "@/lib/haptic";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import {
   classChipLabel,
@@ -54,6 +55,8 @@ export function ComposerChips({
   const mobilePanelId = useId();
   const mobile = useMediaQuery("(max-width: 767px)");
   const reduced = prefersReducedMotion();
+  // The open field's underline slides between chips on the compositor.
+  const { containerRef: railRef, pillRef: indicatorRef } = useSlidingPill(open, { mark: false });
 
   useEffect(() => {
     if (!open) return;
@@ -193,12 +196,19 @@ export function ComposerChips({
     // overflow visible: the desktop pickers are anchored to each field and
     // would otherwise be clipped by the rounded container.
     <div ref={rootRef} className="mt-2">
-      <div className="grid grid-cols-3 gap-1 rounded-[18px] border border-line bg-surface-sunken p-1 shadow-[inset_0_1px_0_color-mix(in_srgb,white_5%,transparent)]">
+      <div
+        ref={railRef}
+        className="relative grid grid-cols-3 gap-1 rounded-[18px] border border-line bg-surface-sunken p-1 shadow-[inset_0_1px_0_color-mix(in_srgb,white_5%,transparent)]"
+      >
+        <span ref={indicatorRef} aria-hidden className="sliding-pill z-[2]">
+          <span className="absolute inset-x-2.5 bottom-0.5 h-0.5 rounded-full bg-accent" />
+        </span>
         <Chip
           icon={<CalendarDays className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={dayChipLabel(resolved.date.value, now)}
           detail="Day"
           specific={resolved.date.source !== "default"}
+          pillKey="day"
           open={open === "day"}
           onToggle={() => setOpen(open === "day" ? null : "day")}
           mobile={mobile}
@@ -213,6 +223,7 @@ export function ComposerChips({
           detail="Class"
           specific={resolved.categoryId.source !== "default" || Boolean(resolved.categoryId.value)}
           dot={categories.find((c) => c.id === resolved.categoryId.value)?.color}
+          pillKey="class"
           open={open === "class"}
           onToggle={() => setOpen(open === "class" ? null : "class")}
           mobile={mobile}
@@ -230,6 +241,7 @@ export function ComposerChips({
           }
           detail="Reminder"
           specific={resolved.reminderMinutes.value !== null}
+          pillKey="reminder"
           open={open === "reminder"}
           onToggle={() => setOpen(open === "reminder" ? null : "reminder")}
           mobile={mobile}
@@ -285,6 +297,7 @@ export function ComposerChips({
 }
 
 function Chip({
+  pillKey,
   icon,
   label,
   detail,
@@ -296,6 +309,7 @@ function Chip({
   mobile,
   mobilePanelId,
 }: {
+  pillKey: string;
   icon: React.ReactNode;
   label: string;
   detail: string;
@@ -310,7 +324,7 @@ function Chip({
   const panelId = useId();
   const reduced = prefersReducedMotion();
   return (
-    <div className="relative min-w-0">
+    <div className="relative min-w-0" data-pill-key={pillKey}>
       <button
         type="button"
         onClick={() => {
@@ -357,13 +371,6 @@ function Chip({
         <span className="block min-w-0 truncate text-[11.5px] font-semibold leading-tight">
           {label}
         </span>
-        {open && (
-          <motion.span
-            layoutId="composer-field-indicator"
-            className="absolute inset-x-2.5 bottom-0.5 h-0.5 rounded-full bg-accent"
-            transition={reduced ? { duration: 0 } : motionTokens.springSnappy}
-          />
-        )}
       </button>
 
       <AnimatePresence>

@@ -184,7 +184,8 @@ export default function CalendarPage() {
   );
 
   function step(dir: 1 | -1, immediate = false) {
-    haptic("light");
+    // A swipe has already ticked on its own release.
+    if (!immediate) haptic("selection");
     setDirection(dir);
     const update = () => setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
     if (immediate) update();
@@ -193,7 +194,7 @@ export default function CalendarPage() {
 
   function goToday() {
     const t = new Date();
-    haptic("light");
+    haptic("selection");
     setDirection(t >= anchor ? 1 : -1);
     startTransition(() => {
       setAnchor(t);
@@ -203,7 +204,7 @@ export default function CalendarPage() {
 
   function changeMode(next: CalendarMode) {
     if (next === mode) return;
-    haptic("light");
+    haptic("selection");
     startTransition(() => setCalendarMode(next));
   }
 
@@ -375,8 +376,18 @@ export default function CalendarPage() {
 
       <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row lg:items-stretch">
         <div className="relative min-h-0 w-full min-w-0 flex-1">
+          {/* Month ↔ week is a change of zoom, not a page turn: the outgoing
+              view recedes as the incoming one settles in, instead of a cut. */}
+          <AnimatePresence initial={false}>
           {mode === "month" ? (
-            <div className="absolute inset-0 flex min-h-0 flex-col">
+            <motion.div
+              key="month"
+              initial={{ opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
+              className="absolute inset-0 flex min-h-0 flex-col"
+            >
               <MonthView
                 anchor={anchor}
                 items={calendarItems}
@@ -384,8 +395,16 @@ export default function CalendarPage() {
                 onSelectDate={selectDate}
                 onSwipeMonth={(dir) => step(dir, true)}
               />
-            </div>
+            </motion.div>
           ) : (
+            <motion.div
+              key="week"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.02, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
+              className="absolute inset-0 flex min-h-0 flex-col"
+            >
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.div
                 key={`week-${periodKey}`}
@@ -420,7 +439,9 @@ export default function CalendarPage() {
                 />
               </motion.div>
             </AnimatePresence>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
 
         {!useSheet && mode === "month" && (

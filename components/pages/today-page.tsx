@@ -1,5 +1,6 @@
 "use client";
 
+import { NumberRoll } from "@/components/ui/number-roll";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -191,7 +192,7 @@ function TodayDashboard() {
     >
       <TriangleAlert className="h-4 w-4 shrink-0 text-warn" strokeWidth={2} aria-hidden />
       <span className="min-w-0 flex-1 text-[13px] font-medium text-warn">
-        {overdue.length} overdue
+        <NumberRoll value={overdue.length} /> overdue
         <span className="font-normal opacity-80"> · {overdueAgeLabel(overdue, now)}</span>
       </span>
       <span className="shrink-0 text-[12.5px] font-semibold text-warn">

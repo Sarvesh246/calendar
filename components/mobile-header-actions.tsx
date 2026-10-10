@@ -39,12 +39,20 @@ export function MobileHeaderActions(_props: { pathname: string }) {
             <div
               className={cn(
                 "grid min-w-0",
-                !reduced && "transition-[grid-template-columns] duration-[var(--motion-emphasis)] ease-[var(--ease-standard)]"
+                !reduced && "transition-[grid-template-columns] duration-[var(--spring-settle-ms)] ease-[var(--spring-settle)]"
               )}
               style={{ gridTemplateColumns: inRoom ? "0fr" : "1fr" }}
               aria-hidden={inRoom}
             >
-              <div className="min-w-0 overflow-hidden">
+              {/* Ask shrinks and fades as its slot closes, so it leaves rather
+                  than being sliced off by the capsule's edge. */}
+              <div
+                className={cn(
+                  "min-w-0 overflow-hidden",
+                  !reduced && "transition-[opacity,scale] duration-200 ease-[var(--ease-standard)]",
+                  inRoom ? "scale-75 opacity-0" : "scale-100 opacity-100"
+                )}
+              >
                 <Button
                   variant="tertiary"
                   size="sm"

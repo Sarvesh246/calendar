@@ -299,18 +299,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-modal={!desktop ? true : undefined}
             aria-label={!desktop ? "Add item" : undefined}
             tabIndex={-1}
-            initial={{ opacity: 0, y: -10, scale: 0.97 }}
+            // It comes from the + you pressed (bottom right) and goes back to
+            // it: rises and grows out of that corner rather than dropping in
+            // from above, so the panel and the button read as one object.
+            initial={{ opacity: 0, y: 28, scale: 0.92 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{
               opacity: 0,
-              y: -8,
-              scale: 0.98,
-              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+              y: 18,
+              scale: 0.95,
+              transition: { duration: motionTokens.exit, ease: motionTokens.ease },
             }}
-            transition={motionTokens.spring}
+            transition={{ y: motionTokens.nudge, scale: motionTokens.nudge, opacity: { duration: 0.14 } }}
             style={{
               top: "calc(env(safe-area-inset-top) + 4.25rem)",
-              transformOrigin: "top center",
+              transformOrigin: "90% 100%",
               willChange: "transform, opacity",
             }}
             className={cn(

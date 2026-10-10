@@ -27,6 +27,7 @@ import { dayDelta, shiftedByDays } from "@/lib/calendar-drag-math";
 import { applyBatchPatch, setStatusWithUndo, STATUS_LABEL } from "@/lib/item-actions";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
 import { haptic } from "@/lib/haptic";
+import { NumberRoll } from "@/components/ui/number-roll";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus } from "@/lib/types";
@@ -148,11 +149,12 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
                 {section.sublabel && <span className="text-ink-faint">{section.sublabel}</span>}
                 {section.count != null && (
                   <span className="ml-auto text-[11.5px] tabular-nums text-ink-faint">
-                    {section.count} {section.count === 1 ? "item" : "items"}
+                    <NumberRoll value={section.count} /> {section.count === 1 ? "item" : "items"}
                   </span>
                 )}
               </span>
             </div>
+            <AnimatePresence initial={false}>
             {section.items.map((item) => (
               <AgendaRow
                 key={item.id}
@@ -167,6 +169,7 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
                 onToggle={toggle}
               />
             ))}
+            </AnimatePresence>
           </div>
         ))}
       </div>
@@ -218,9 +221,23 @@ function AgendaRow({
   const whenText = sectionDay ? timeText : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
 
   return (
-    <div
+    <motion.div
       role="row"
       aria-selected={selected}
+      // Same departure as a card: the row fades, then gives its height back
+      // on a critically damped spring so the rows below glide up instead of
+      // the table jumping when an item is completed or filtered out.
+      exit={{
+        opacity: 0,
+        height: 0,
+        minHeight: 0,
+        overflow: "hidden",
+        transition: {
+          opacity: { duration: 0.14, ease: motionTokens.ease },
+          height: { ...motionTokens.settle, delay: 0.06 },
+          minHeight: { ...motionTokens.settle, delay: 0.06 },
+        },
+      }}
       {...itemMenuProps(item.id, menuDay)}
       onDoubleClick={(e) => {
         if (!(e.target as HTMLElement).closest("button")) openInspector(item.id);
@@ -300,7 +317,7 @@ function AgendaRow({
       <div role="cell" className="px-1">
         {work ? <StatusPicker item={item} /> : <EventState item={item} now={now} day={sectionDay} />}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

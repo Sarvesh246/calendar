@@ -13,8 +13,10 @@ function persistHydrated() {
   return useDatebookStore.persist.hasHydrated();
 }
 
-const MIN_MS = 420;
-const EXIT_MS = 480;
+// Short enough that a warm launch barely sees it; the veil lifts while the
+// landing page is already settling in underneath (see EXIT_MS).
+const MIN_MS = 260;
+const EXIT_MS = 400;
 
 /**
  * Cold-start veil. Covers the first paint so the store can hydrate and the

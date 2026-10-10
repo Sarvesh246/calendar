@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type MotionValue } from "framer-motion";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,7 @@ export function Scrim({
   tone = "default",
   pace = "emphasis",
   exitDuration = motionTokens.exit,
+  progress,
   className,
 }: {
   onClick?: () => void;
@@ -47,6 +48,12 @@ export function Scrim({
   pace?: "emphasis" | "snap";
   /** Match the panel's departure so the veil never lingers or clears early. */
   exitDuration?: number;
+  /**
+   * 0–1, driven by the sheet's position. When given, the veil is exactly as
+   * strong as the sheet is open — pull a sheet halfway down and the page
+   * comes halfway back — instead of running its own fade.
+   */
+  progress?: MotionValue<number>;
   className?: string;
 }) {
   const reduced = prefersReducedMotion();
@@ -56,9 +63,11 @@ export function Scrim({
   };
   const snap = pace === "snap" && !reduced;
 
+  const driven = progress
+    ? { style: { ...treatment, opacity: progress } }
+    : { initial: { opacity: 0.78 }, animate: { opacity: 1 }, style: treatment };
   const props = {
-    initial: { opacity: 0.78 },
-    animate: { opacity: 1 },
+    ...driven,
     exit: {
       opacity: 0,
       transition: { duration: reduced ? motionTokens.micro : exitDuration, ease: motionTokens.easeInOut },
@@ -68,7 +77,6 @@ export function Scrim({
       : snap
         ? { duration: motionTokens.micro, ease: motionTokens.ease }
         : { duration: motionTokens.emphasis, ease: motionTokens.ease },
-    style: treatment,
     className: cn(
       tone === "light" ? "overlay-scrim-light" : "overlay-scrim",
       // A labelled scrim is a full-viewport button. The global pressed-button

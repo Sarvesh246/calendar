@@ -58,7 +58,12 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
   const openInspector = useUIStore((s) => s.openInspector);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
   const [section, setSection] = useState<Section>(request.section === "reschedule" ? "reschedule" : "main");
-  const [pos, setPos] = useState({ left: request.x, top: request.y });
+  const [pos, setPos] = useState({ left: request.x, top: request.y, origin: "top left" });
+  // Which way the last section change went, so the content slides in from
+  // the side you are heading (deeper → from the right, back → from the left).
+  const depth = SECTION_DEPTH[section];
+  const [travel, setTravel] = useState({ depth, dir: 1 });
+  if (travel.depth !== depth) setTravel({ depth, dir: depth > travel.depth ? 1 : -1 });
   const [date, setDate] = useState(() => toDateInputValue(item.at));
   const ref = useRef<HTMLDivElement>(null);
   const fromKey = request.dayKey ?? dayKey(new Date(item.at));
@@ -71,9 +76,12 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
     if (!el) return;
     const { width, height } = el.getBoundingClientRect();
     const left = Math.max(8, Math.min(request.x, window.innerWidth - width - 8));
-    const top =
-      request.y + height > window.innerHeight - 8 ? Math.max(8, request.y - height) : request.y;
-    setPos((p) => (p.left === left && p.top === top ? p : { left, top }));
+    const flipUp = request.y + height > window.innerHeight - 8;
+    const top = flipUp ? Math.max(8, request.y - height) : request.y;
+    // Grow out of the corner nearest the pointer/opener, wherever the menu
+    // had to be moved to fit — so it always seems to come from what you clicked.
+    const origin = `${flipUp ? "bottom" : "top"} ${left < request.x - 1 ? "right" : "left"}`;
+    setPos((p) => (p.left === left && p.top === top && p.origin === origin ? p : { left, top, origin }));
   }, [request.x, request.y, section]);
 
   useEffect(() => {
@@ -162,15 +170,21 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
       ref={ref}
       role="menu"
       aria-label={`Actions for ${item.title}`}
-      initial={{ opacity: 0, scale: 0.96, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-      transition={motionTokens.springSnappy}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+      transition={{ scale: motionTokens.springSnappy, opacity: { duration: 0.12 } }}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ left: pos.left, top: pos.top, transformOrigin: "top left" }}
+      style={{ left: pos.left, top: pos.top, transformOrigin: pos.origin }}
       className="native-context-menu fixed z-[43] w-[232px] rounded-xl border border-line bg-surface p-1 text-[13px] text-ink shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"
     >
+      <motion.div
+        key={section}
+        initial={{ opacity: 0, x: travel.dir * 14 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ x: motionTokens.nudge, opacity: { duration: 0.14 } }}
+      >
       {section === "main" && (
         <>
           <p className="truncate px-2.5 pb-1 pt-1.5 text-[11px] font-medium text-ink-faint">{item.title}</p>
@@ -281,9 +295,12 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
           </button>
         </form>
       )}
+      </motion.div>
     </motion.div>
   );
 }
+
+const SECTION_DEPTH: Record<Section, number> = { main: 0, reschedule: 1, date: 2 };
 
 function MenuItem({
   icon: Icon,

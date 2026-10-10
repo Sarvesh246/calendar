@@ -1,35 +1,45 @@
 "use client";
 
 import { useEffect, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import type { DragControls, PanInfo } from "framer-motion";
-
-/**
- * How far a sheet has to travel before it commits to closing.
- *
- * The old 88px / 700px-per-second bar asked for a committed throw. A real
- * sheet follows the finger and lets go when the gesture *means* dismiss —
- * a short pull with speed, or a longer one without.
- */
-export const SHEET_DISMISS = { offset: 52, velocity: 520 } as const;
-export const SHEET_EXPAND = { offset: -32, velocity: -460 } as const;
+import type { DragControls } from "framer-motion";
+import { nearestSnap, project } from "./gesture";
 
 const OVERSCROLL_IGNORE = "input, textarea, select, option, [contenteditable='true']";
 
-export function shouldDismissSheet(info: PanInfo, scale = 1): boolean {
-  return info.offset.y > SHEET_DISMISS.offset * scale || info.velocity.y > SHEET_DISMISS.velocity;
-}
+/** A decisive downward flick (px/s) closes from anywhere below the top detent. */
+export const SHEET_FLICK_CLOSE = 650;
 
-export function shouldExpandSheet(info: PanInfo): boolean {
-  return info.offset.y < SHEET_EXPAND.offset || info.velocity.y < SHEET_EXPAND.velocity;
-}
+export type SheetRelease = { kind: "close" } | { kind: "snap"; index: number };
 
-export const SHEET_DRAG = {
-  drag: "y" as const,
-  dragListener: false as const,
-  dragConstraints: { top: 0, bottom: 0 },
-  dragElastic: { top: 0.04, bottom: 0.72 },
-  dragTransition: { bounceStiffness: 380, bounceDamping: 34 },
-};
+/**
+ * Where a released sheet goes. Judged on where it would coast to
+ * (`project`), so a short quick flick and a long slow pull are read on one
+ * scale: past ~40% of the way from the lowest detent to off-screen (capped at
+ * 200px) it closes, otherwise it lands on the nearest detent. A pull that is
+ * heading back up when you let go never closes.
+ *
+ * `points` are resting offsets from fully open, top first; `at` is the
+ * sheet's current offset; `height` is the sheet's height.
+ */
+export function sheetRelease({
+  at,
+  velocity,
+  height,
+  points,
+}: {
+  at: number;
+  velocity: number;
+  height: number;
+  points: number[];
+}): SheetRelease {
+  const last = points[points.length - 1] ?? 0;
+  const projected = project(at, velocity);
+  const closeAt = last + Math.min(Math.max(0, height - last) * 0.4, 200);
+  if ((velocity > SHEET_FLICK_CLOSE && at > last) || (projected > closeAt && velocity > -200)) {
+    return { kind: "close" };
+  }
+  return { kind: "snap", index: points.indexOf(nearestSnap(projected, points)) };
+}
 
 /**
  * Pull-down from the top of a sheet's scroller is the same gesture as

@@ -11,7 +11,8 @@ import {
 } from "framer-motion";
 import { Cloud, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
-import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { project } from "@/lib/gesture";
+import { releaseSpring, motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
 import type { SyncNotice } from "@/lib/sync-notice";
 import { cn } from "@/lib/utils";
@@ -121,7 +122,12 @@ function SwipeNotice({
     };
   }, [notice.id, notice.rev, notice.kind]);
 
-  function flyAway(toX: number, toY: number) {
+  /**
+   * Throw the banner off the way the finger was going, at the speed it was
+   * going. A fixed ease-in used to restart it from rest at the hand-off, so a
+   * flicked banner visibly caught for a frame before it left.
+   */
+  function flyAway(toX: number, toY: number, vx = 0, vy = 0) {
     if (dismissed.current) return;
     dismissed.current = true;
     haptic("light");
@@ -129,9 +135,10 @@ function SwipeNotice({
       onDismissRef.current();
       return;
     }
+    const away = { restDelta: 2, restSpeed: 60 };
     void Promise.all([
-      animate(x, toX, { duration: 0.18, ease: [0.4, 0, 1, 1] }),
-      animate(y, toY, { duration: 0.18, ease: [0.4, 0, 1, 1] }),
+      animate(x, toX, { ...releaseSpring(vx, 1, 0.3), ...away }),
+      animate(y, toY, { ...releaseSpring(vy, 1, 0.3), ...away }),
     ]).then(() => onDismissRef.current());
   }
 
@@ -160,7 +167,9 @@ function SwipeNotice({
         dragListener={false}
         dragControls={dragControls}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={{ left: 0.78, right: 0.78, top: 0.88, bottom: 0.28 }}
+        // Free sideways and upward (the ways it can leave), resisting only
+        // downward, where there is nowhere for it to go.
+        dragElastic={{ left: 1, right: 1, top: 1, bottom: 0.22 }}
         dragMomentum={false}
         dragTransition={{ bounceStiffness: 560, bounceDamping: 38 }}
         onDragStart={() => {
@@ -168,15 +177,19 @@ function SwipeNotice({
         }}
         onDragEnd={(_, info) => {
           dragging.current = false;
-          const goX = Math.abs(info.offset.x) > 56 || Math.abs(info.velocity.x) > 520;
-          const goUp = info.offset.y < -28 || info.velocity.y < -480;
-          const goDown = info.offset.y > 64 || info.velocity.y > 720;
-          if (goX) {
-            flyAway(Math.sign(info.offset.x || info.velocity.x || 1) * 420, info.offset.y);
-          } else if (goUp) {
-            flyAway(info.offset.x, -160);
-          } else if (goDown) {
-            flyAway(info.offset.x, 170);
+          const { velocity: v } = info;
+          // Judged on where the banner would coast to, not where it is.
+          const px = project(x.get(), v.x);
+          const py = project(y.get(), v.y);
+          if (Math.abs(px) > 90 && Math.abs(px) >= Math.abs(py)) {
+            flyAway(Math.sign(px) * 440, y.get() + v.y * 0.1, v.x, v.y);
+          } else if (py < -44) {
+            flyAway(x.get(), -180, v.x, v.y);
+          } else if (py > 110) {
+            flyAway(x.get(), 180, v.x, v.y);
+          } else {
+            void animate(x, 0, releaseSpring(v.x, 0.8, 0.34));
+            void animate(y, 0, releaseSpring(v.y, 0.8, 0.34));
           }
         }}
         role="status"
