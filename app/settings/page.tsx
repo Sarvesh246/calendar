@@ -909,7 +909,9 @@ function CollapsibleCard({
         // import controls) but must not take focus.
         inert={open ? undefined : true}
       >
-        <div className="min-h-0 overflow-hidden">
+        {/* `contain: paint` keeps a collapsed card's content from stretching the
+            page: overflow:hidden alone still lets it count toward scroll height. */}
+        <div className="min-h-0 overflow-hidden [contain:paint]">
           <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
             {children}
           </div>
