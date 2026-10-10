@@ -26,6 +26,7 @@ import { minuteLabel, slotLabel } from "@/lib/slot-label";
 import { applyItemPatch, dayLabelFor, rescheduleToDay } from "@/lib/item-actions";
 import { handleItemMenuKey, itemMenuProps } from "@/lib/item-menu";
 import { formatDuration } from "@/lib/work-sessions";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 const DEFAULT_START_HOUR = 7;
 const DEFAULT_END_HOUR = 22;
@@ -290,7 +291,7 @@ function DropGhost({ dayKey: key, startHour, clock24h }: { dayKey: string; start
       <p className="truncate font-medium text-ink">{preview.title ?? "New event"}</p>
       {!due && height > 30 && (
         <p className="truncate tabular-nums text-ink-soft">
-          {minuteLabel(key, preview.startMin, clock24h)} – {minuteLabel(key, preview.endMin, clock24h)}
+          {minuteLabel(key, preview.startMin, clock24h)}–{minuteLabel(key, preview.endMin, clock24h)}
         </p>
       )}
     </div>
@@ -414,7 +415,7 @@ function TimedBlock({
       }}
       onKeyDown={(e) => handleItemMenuKey(e, item.id, key)}
       {...itemMenuProps(item.id, key)}
-      title={`${item.title} · ${formatTime(item.at, clock24h)}${item.endAt ? ` – ${formatTime(item.endAt, clock24h)}` : ""}`}
+      title={`${itemDisplayTitle(item)} · ${formatTime(item.at, clock24h)}${item.endAt ? `–${formatTime(item.endAt, clock24h)}` : ""}`}
       style={{
         top,
         height,
@@ -435,12 +436,12 @@ function TimedBlock({
       )}
     >
       <p className="truncate font-medium" style={{ color }}>
-        {item.title}
+        {itemDisplayTitle(item)}
       </p>
       {height > 32 && (
         <p className="truncate tabular-nums text-ink-faint">
           {formatTime(item.at, clock24h)}
-          {height > 48 && item.endAt ? ` – ${formatTime(item.endAt, clock24h)}` : ""}
+          {height > 48 && item.endAt ? `–${formatTime(item.endAt, clock24h)}` : ""}
         </p>
       )}
       {canResize && (
@@ -531,7 +532,7 @@ function AllDayChip({
       )}
       style={{ "--cat": color } as React.CSSProperties}
     >
-      {item.title}
+      {itemDisplayTitle(item)}
     </button>
   );
 }

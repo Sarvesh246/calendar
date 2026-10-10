@@ -6,6 +6,7 @@ import { Bookmark, Check, Plus, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useWorkspacePrefs } from "@/lib/workspace-prefs";
+import { SidebarSectionHeader } from "./sidebar-section";
 import {
   BUILT_IN_VIEWS,
   VIEW_KINDS,
@@ -19,6 +20,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { ItemStatus, ItemType } from "@/lib/types";
+import { classLabel } from "@/lib/course-label";
 
 export function useAllViews(): SavedView[] {
   const saved = useWorkspacePrefs((s) => s.savedViews);
@@ -34,15 +36,13 @@ export function SidebarViews() {
   const [editing, setEditing] = useState(false);
 
   return (
-    <div className="mt-6 flex flex-col gap-0.5">
-      <div className="flex items-center justify-between px-2.5">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">Views</p>
-        <div className="flex items-center gap-1">
+    <div className="flex flex-col gap-0.5">
+      <SidebarSectionHeader label="Views">
           {activeId && (
             <button
               type="button"
               onClick={() => applyView(null)}
-              className="text-[11.5px] font-medium text-accent hover:underline"
+              className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
             >
               Clear
             </button>
@@ -53,12 +53,11 @@ export function SidebarViews() {
             aria-expanded={editing}
             aria-label="Save a view"
             title="Save a view"
-            className="flex h-5 w-5 items-center justify-center rounded text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
           >
             <Plus className={cn("h-3.5 w-3.5 transition-transform duration-[var(--motion-standard)]", editing && "rotate-45")} strokeWidth={2} />
           </button>
-        </div>
-      </div>
+      </SidebarSectionHeader>
 
       <AnimatePresence initial={false}>
         {editing && <ViewEditor key="editor" onDone={() => setEditing(false)} />}
@@ -77,9 +76,9 @@ export function SidebarViews() {
               aria-pressed={active}
               title={viewSummary(view)}
               className={cn(
-                "press-none flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px]",
-                "transition-colors duration-[var(--motion-standard)]",
-                active ? "bg-surface-sunken text-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink",
+                "press-none flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]",
+                "transition-colors duration-[var(--motion-micro)]",
+                active ? "bg-surface-sunken font-medium text-ink" : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink",
                 !view.builtIn && "pr-7"
               )}
             >
@@ -88,7 +87,7 @@ export function SidebarViews() {
                 initial={false}
                 animate={{ scale: active ? 1 : 0.85 }}
                 transition={motionTokens.springSnappy}
-                className={cn("flex shrink-0", active ? "text-accent" : "text-ink-faint")}
+                className={cn("flex w-4 shrink-0 justify-center", active ? "text-accent" : "text-ink-faint")}
               >
                 <Bookmark className="h-3.5 w-3.5" strokeWidth={1.9} fill={active ? "currentColor" : "none"} />
               </motion.span>
@@ -132,7 +131,7 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
   const [range, setRange] = useState<ViewRange>(current?.range ?? "any");
   const classIds = categoryFilter ?? [];
   const [useClasses, setUseClasses] = useState(classIds.length > 0);
-  const classNames = categories.filter((c) => classIds.includes(c.id)).map((c) => c.name);
+  const classNames = categories.filter((c) => classIds.includes(c.id)).map((c) => classLabel(c));
 
   function save(e: React.FormEvent) {
     e.preventDefault();

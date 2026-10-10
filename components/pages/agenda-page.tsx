@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import { addDays, format, startOfDay } from "date-fns";
+import { addDays, format, isTomorrow, startOfDay } from "date-fns";
 import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -13,13 +13,11 @@ import { useMediaQuery } from "@/lib/use-media-query";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
   dayKey,
-  dayLabel,
   groupItemsByDay,
   isOverdue,
   isOverdueAt,
   itemOccupiesDay,
   openWorkDueOnDay,
-  weekWorkloadFromByDay,
   workDueOnDay,
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
@@ -31,9 +29,10 @@ import type { AgendaStickySection } from "@/lib/agenda-sticky";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OnboardingCard } from "@/components/onboarding-card";
 import { FeedHealthBanner } from "@/components/feed-health-banner";
-import { haptic } from "@/lib/haptic";
+import { AgendaWeek } from "@/components/agenda-week";
+import { Segmented } from "@/components/ui/segmented";
+import { categoryNameLookup, summarizeWeek } from "@/lib/agenda-week";
 import { cn } from "@/lib/utils";
-import { useSlidingPill } from "@/lib/sliding-pill";
 import type { Item } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
@@ -66,14 +65,15 @@ export default function AgendaPage() {
   const weekStartsOn = useDatebookStore((s) => s.settings.weekStartsOn);
   const chrome = useItemCardChrome();
   const categoriesById = useCategoriesById();
+  const categories = useDatebookStore((s) => s.categories);
   const desktop = useMediaQuery("(min-width: 768px)");
   const layout = useWorkspacePrefs((s) => s.agendaLayout);
   const setLayout = useWorkspacePrefs((s) => s.setAgendaLayout);
-  const { containerRef: layoutBarRef, pillRef: layoutPillRef, moveTo: moveLayoutPill } = useSlidingPill(layout);
   const [view, setView] = useState<AgendaView>("upcoming");
-  const { containerRef: viewBarRef, pillRef: viewPillRef, moveTo: moveViewPill } = useSlidingPill(view);
-  // Rows are a desk layout; a phone always gets cards.
-  const rows = desktop && layout === "rows";
+  // Rows are a desk layout: they need the room for five aligned columns, so
+  // anything narrower than a laptop (phones, tablets) gets cards.
+  const wide = useMediaQuery("(min-width: 1024px)");
+  const rows = wide && layout === "rows";
 
   const overdue = useMemo(
     () =>
@@ -120,9 +120,9 @@ export default function AgendaPage() {
     return { groups: result, later: laterItems, byDay };
   }, [items, now]);
 
-  const heat = useMemo(
-    () => weekWorkloadFromByDay(byDay, now, weekStartsOn),
-    [byDay, now, weekStartsOn]
+  const week = useMemo(
+    () => summarizeWeek(byDay, now, weekStartsOn, categoryNameLookup(categories)),
+    [byDay, now, weekStartsOn, categories]
   );
 
   const [overdueLimit, setOverdueLimit] = useState(FIRST_PAINT_OVERDUE);
@@ -201,93 +201,58 @@ export default function AgendaPage() {
   const rowSections = useMemo<AgendaRowSection[]>(() => {
     if (!rows) return [];
     const out: AgendaRowSection[] = [];
-    if (visibleOverdue.length) out.push({ id: "overdue", label: `Overdue · ${overdue.length}`, tone: "warn", items: visibleOverdue });
+    if (visibleOverdue.length) {
+      out.push({ id: "overdue", label: "Overdue", count: overdue.length, tone: "warn", items: visibleOverdue });
+    }
     for (const g of visibleGroups) {
-      const label = dayLabel(g.date);
       out.push({
         id: g.key,
-        label: label === format(g.date, "EEEE, MMMM d") ? label : `${label} · ${format(g.date, "MMM d")}`,
+        label: isTomorrow(g.date) ? "Tomorrow" : format(g.date, "EEEE"),
+        sublabel: format(g.date, "MMM d"),
+        count: g.items.length,
         tone: "faint",
         items: g.items,
         dayKey: g.key,
       });
     }
-    if (visibleLater.length) out.push({ id: "later", label: "Later", tone: "faint", items: visibleLater });
+    if (visibleLater.length) {
+      out.push({ id: "later", label: "Later", sublabel: `after ${format(addDays(startOfDay(now), HORIZON_DAYS - 1), "MMM d")}`, count: later.length, tone: "faint", items: visibleLater });
+    }
     return out;
-  }, [rows, overdue.length, visibleOverdue, visibleGroups, visibleLater]);
+  }, [rows, overdue.length, later.length, visibleOverdue, visibleGroups, visibleLater, now]);
 
   const todayLink = <AgendaTodayDropdown items={todayRows} />;
 
   return (
     <div className={cn("mx-auto flex w-full flex-col gap-6", rows ? "max-w-[1080px]" : "max-w-[880px]")}>
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agenda</h1>
-          <p className="mt-1 text-[13px] text-ink-soft">Everything ahead, one day at a time.</p>
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.015em] text-ink">Agenda</h1>
+          <p className="mt-1 text-[13.5px] text-ink-soft">
+            {view === "history" ? "What you've finished, most recent first." : "Everything ahead, one day at a time."}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <div ref={layoutBarRef} role="radiogroup" aria-label="Agenda layout" className="relative hidden items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 md:flex">
-            <span ref={layoutPillRef} aria-hidden className="sliding-pill rounded-md bg-accent" />
-            {LAYOUTS.map(({ value, label, Icon }) => {
-              const active = layout === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  data-pill-key={value}
-                  onClick={(e) => {
-                    if (active) return;
-                    haptic("light");
-                    moveLayoutPill(e.currentTarget);
-                    startTransition(() => setLayout(value));
-                  }}
-                  className={cn(
-                    "press-none relative flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium",
-                    "transition-colors duration-[var(--motion-micro)]",
-                    "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
-                  )}
-                >
-                  <Icon className="relative z-[1] h-3.5 w-3.5" strokeWidth={1.9} />
-                  <span className="relative z-[1]">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Segmented
+            label="Agenda view"
+            value={view}
+            options={VIEWS}
+            onChange={setView}
+            size={desktop ? "desk" : "touch"}
+            fill={!desktop}
+            className="w-full md:w-auto"
+          />
+          {view === "upcoming" && (
+            <Segmented
+              label="Agenda layout"
+              value={layout}
+              options={LAYOUTS}
+              onChange={setLayout}
+              className="hidden lg:inline-flex"
+            />
+          )}
         </div>
       </header>
-
-      <div
-        ref={viewBarRef}
-        role="radiogroup"
-        aria-label="Agenda view"
-        className="relative grid grid-cols-2 gap-0.5 rounded-xl border border-line bg-surface p-0.5 md:w-fit"
-      >
-        <span ref={viewPillRef} aria-hidden className="sliding-pill rounded-[10px] bg-accent" />
-        {VIEWS.map(({ value, label }) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={view === value}
-            data-pill-key={value}
-            onClick={(e) => {
-              if (view === value) return;
-              haptic("light");
-              moveViewPill(e.currentTarget);
-              startTransition(() => setView(value));
-            }}
-            className={cn(
-              "press-none relative flex min-h-10 items-center justify-center rounded-[10px] px-5 text-[13.5px] font-semibold",
-              "transition-colors duration-[var(--motion-micro)]",
-              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
-            )}
-          >
-            <span className="relative z-[1]">{label}</span>
-          </button>
-        ))}
-      </div>
 
       {view === "history" ? (
         <div key="history" className="route-enter">
@@ -295,38 +260,13 @@ export default function AgendaPage() {
         </div>
       ) : (
         <div key="upcoming" className="route-enter flex flex-col gap-6">
-      <div>
-        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-          This week
-        </p>
-        <div className="flex gap-1">
-          {heat.map((d) => (
-            <button
-              key={d.date.toISOString()}
-              type="button"
-              onClick={() => {
-                setCalendarFocusDate(dayKey(d.date));
-                router.push("/calendar");
-              }}
-              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors hover:bg-surface-sunken/60"
-              title={`Open ${format(d.date, "EEE, MMM d")} on calendar · ${d.count} open`}
-            >
-              <span className={cn("text-[10px] uppercase", d.isToday ? "font-medium text-accent" : "text-ink-faint")}>
-                {format(d.date, "EEEEE")}
-              </span>
-              <span
-                className={cn(
-                  "h-1.5 w-full rounded-full",
-                  d.intensity === 0 && "bg-surface-sunken",
-                  d.intensity === 1 && "bg-good",
-                  d.intensity >= 2 && d.intensity <= 3 && "bg-accent",
-                  d.intensity >= 4 && "bg-warn"
-                )}
-              />
-            </button>
-          ))}
-        </div>
-      </div>
+      <AgendaWeek
+        days={week}
+        onOpenDay={(d) => {
+          setCalendarFocusDate(d.key);
+          router.push("/calendar");
+        }}
+      />
 
       {isEmpty && (
         <>
@@ -378,7 +318,7 @@ export default function AgendaPage() {
             <div className="flex flex-col gap-6">
               {visibleOverdue.length > 0 && (
                 <section id="agenda-overdue" className="agenda-day">
-                  <p className="mb-2.5 text-[12px] font-medium text-warn">Overdue · {overdue.length}</p>
+                  <DayHeading label="Overdue" count={overdue.length} tone="warn" />
                   <div className="flex flex-col gap-2">
                     <AnimatePresence initial={false}>
                       {visibleOverdue.map((item) => (
@@ -404,16 +344,13 @@ export default function AgendaPage() {
               {todayLink}
 
               {visibleGroups.map((group) => {
-                const label = dayLabel(group.date);
-                const showDate = label === "Tomorrow";
                 return (
                   <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
-                    <p className="mb-2.5 flex items-baseline gap-2 text-[12px] font-medium text-ink-faint">
-                      {label}
-                      {showDate && (
-                        <span className="font-normal text-ink-faint/70">{format(group.date, "MMM d")}</span>
-                      )}
-                    </p>
+                    <DayHeading
+                      label={isTomorrow(group.date) ? "Tomorrow" : format(group.date, "EEEE")}
+                      sublabel={format(group.date, "MMM d")}
+                      count={group.items.length}
+                    />
                     <div className="flex flex-col gap-2">
                       <AnimatePresence initial={false}>
                         {group.items.map((item) => (
@@ -442,7 +379,7 @@ export default function AgendaPage() {
 
               {visibleLater.length > 0 && (
                 <section id="agenda-later" className="agenda-day">
-                  <p className="mb-2.5 text-[12px] font-medium text-ink-faint">Later</p>
+                  <DayHeading label="Later" count={later.length} />
                   <div className="flex flex-col gap-2">
                     <AnimatePresence initial={false}>
                       {visibleLater.map((item) => (
@@ -472,6 +409,29 @@ export default function AgendaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Date group heading for the card layout — same words as the rows table. */
+function DayHeading({
+  label,
+  sublabel,
+  count,
+  tone = "faint",
+}: {
+  label: string;
+  sublabel?: string;
+  count: number;
+  tone?: "warn" | "faint";
+}) {
+  return (
+    <h2 className="mb-2.5 flex items-baseline gap-2 px-0.5 text-[13px]">
+      <span className={cn("font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>{label}</span>
+      {sublabel && <span className="text-ink-faint">{sublabel}</span>}
+      <span className="ml-auto text-[12px] tabular-nums text-ink-faint">
+        {count} {count === 1 ? "item" : "items"}
+      </span>
+    </h2>
   );
 }
 

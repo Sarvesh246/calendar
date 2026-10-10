@@ -32,7 +32,9 @@ import { useResolvedPathname } from "@/lib/tab-nav";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/keyboard-shortcuts";
 import { cn } from "@/lib/utils";
+import { classLabel } from "@/lib/course-label";
 
 type Phase = "idle" | "preview" | "ask" | "bulk";
 
@@ -402,11 +404,12 @@ export function QuickAddBar({
         data-field-group=""
         className={cn(
           "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
-          toolbar && "border-0 bg-transparent py-0 pl-2 pr-0",
+          toolbar && "h-10 rounded-lg border-0 bg-transparent py-0 pl-3 pr-0.5 hover:bg-surface-sunken/40",
+          toolbar && focused && "bg-surface-sunken/60 hover:bg-surface-sunken/60",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
           // The bar itself is the focus indicator for the field inside it, so it
           // has to be unmistakable rather than a half-tinted hairline.
-          focused && "border-accent"
+          focused && !toolbar && "border-accent"
         )}
       >
         <motion.span
@@ -474,14 +477,23 @@ export function QuickAddBar({
             <X className="h-4 w-4" strokeWidth={2} />
           </Button>
         )}
+        {/* In the desktop toolbar an empty field shows how to reach it
+            instead of a disabled button that looks clickable. */}
+        {toolbar && !ready && !focused && (
+          <span aria-hidden className="mr-2 hidden shrink-0 lg:inline-flex">
+            <Kbd>N</Kbd>
+          </span>
+        )}
         <button
           type="button"
           data-primary-action=""
           onClick={submit}
           disabled={!ready}
+          title="Add (Enter)"
           aria-label="Add"
           className={cn(
             "press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full md:h-9 md:w-9",
+            toolbar && !ready && "hidden",
             "transition-[background-color,color] duration-[var(--motion-standard)]",
             ready
               ? "bg-accent text-accent-ink hover:opacity-90"
@@ -583,7 +595,7 @@ export function QuickAddBar({
                   className="cat-surface flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px]"
                 >
                   <Tag className="h-3 w-3" strokeWidth={1.75} />
-                  {category.name}
+                  {classLabel(category)}
                 </span>
               )}
               {!mobile && parsed.reminderLabel && (

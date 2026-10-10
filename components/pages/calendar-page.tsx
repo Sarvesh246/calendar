@@ -22,8 +22,7 @@ import { DaySheet } from "@/components/day-sheet";
 import { Button } from "@/components/ui/button";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
-import { useSlidingPill } from "@/lib/sliding-pill";
-import { cn } from "@/lib/utils";
+import { Segmented } from "@/components/ui/segmented";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 /**
@@ -106,7 +105,6 @@ export default function CalendarPage() {
   const [jumpOpen, setJumpOpen] = useState(false);
   // Which way the period last moved, so the grid can leave the way it came.
   const [direction, setDirection] = useState<1 | -1>(1);
-  const { containerRef: modeBarRef, pillRef: modePillRef, moveTo: moveModePill } = useSlidingPill(mode);
 
   useEffect(() => {
     if (!calendarFocusDate) return;
@@ -304,13 +302,14 @@ export default function CalendarPage() {
         </DateJump>
 
         <div className="flex items-center justify-between gap-2 sm:justify-end">
-          <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+          <div className="flex items-center gap-0.5 rounded-[10px] border border-line bg-surface p-0.5">
             <Button
               variant="tertiary"
               size="iconSm"
               onClick={() => step(-1)}
               aria-label={mode === "month" ? "Previous month" : "Previous week"}
               title="Previous (←)"
+              className="h-[30px] w-[30px] rounded-[7px]"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -318,7 +317,7 @@ export default function CalendarPage() {
               type="button"
               onClick={goToday}
               title="Today (T)"
-              className="h-9 rounded-md px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
+              className="h-[30px] rounded-[7px] px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
             >
               Today
             </button>
@@ -328,42 +327,22 @@ export default function CalendarPage() {
               onClick={() => step(1)}
               aria-label={mode === "month" ? "Next month" : "Next week"}
               title="Next (→)"
+              className="h-[30px] w-[30px] rounded-[7px]"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
           <div className="flex items-center gap-2">
-            <div
-              ref={modeBarRef}
-              className="relative flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5"
-            >
-              <span
-                ref={modePillRef}
-                aria-hidden
-                className="sliding-pill rounded-md bg-accent"
-              />
-              {(["month", "week"] as CalendarMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  data-pill-key={m}
-                  onClick={(e) => {
-                    if (m !== mode) moveModePill(e.currentTarget);
-                    changeMode(m);
-                  }}
-                  aria-pressed={mode === m}
-                  title={`${m === "month" ? "Month" : "Week"} (${m === "month" ? "M" : "W"})`}
-                  className={cn(
-                    "press-none relative h-9 rounded-md px-3.5 text-[13px] font-medium capitalize",
-                    "transition-colors duration-[var(--motion-micro)]",
-                    "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
-                  )}
-                >
-                  <span className="relative z-[1]">{m}</span>
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Calendar view"
+              value={mode}
+              onChange={changeMode}
+              options={[
+                { value: "month", label: "Month", title: "Month (M)" },
+                { value: "week", label: "Week", title: "Week (W)" },
+              ]}
+            />
             {wide && (
               <Button
                 variant="secondary"

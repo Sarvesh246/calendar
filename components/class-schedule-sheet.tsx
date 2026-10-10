@@ -30,6 +30,7 @@ import { motion as motionTokens } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { WeekdayChips } from "@/components/weekday-chips";
 import type { Item } from "@/lib/types";
+import { classLabel } from "@/lib/course-label";
 
 export { WeekdayChips };
 
@@ -436,7 +437,7 @@ function ClassScheduleSheetBody() {
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {classLabel(c)}
                   </option>
                 ))}
               </select>

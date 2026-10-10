@@ -5,6 +5,7 @@ import { summarizeItemWhen, type SummaryTone } from "@/lib/item-summary";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
+import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 export const CHIP_TONE: Record<SummaryTone, string> = {
   warn: "bg-warn-soft text-warn",
@@ -35,7 +36,7 @@ export function ItemSummaryHeader({ item }: { item: Item }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-2.5 text-[12.5px] font-semibold text-ink">
           <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
-          <span className="min-w-0 truncate">{category?.name ?? "No class"}</span>
+          <span className="min-w-0 truncate">{classLabel(category)}</span>
         </span>
         <span className="text-[12px] font-medium text-ink-faint">
           {item.workFor ? "Planned work" : TYPE_NAME[item.type]}
@@ -47,7 +48,7 @@ export function ItemSummaryHeader({ item }: { item: Item }) {
           finished ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
         )}
       >
-        {item.title}
+        {itemDisplayTitle(item, category)}
       </h3>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <p className="text-[14px] text-ink-soft">

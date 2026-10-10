@@ -176,7 +176,7 @@ function SummaryStrip({
       // be cut off by the tile it is the whole point of.
       wide: true,
       label: "Your window",
-      value: `${formatClock(Math.floor(earliestMin / 60), earliestMin % 60, clock24h)} – ${formatClock(
+      value: `${formatClock(Math.floor(earliestMin / 60), earliestMin % 60, clock24h)}–${formatClock(
         Math.floor(latestMin / 60),
         latestMin % 60,
         clock24h

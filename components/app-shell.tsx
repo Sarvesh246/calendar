@@ -198,7 +198,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <QuickAddBar embedded toolbar />
                 </div>
               )}
-              {desktop && <div aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-line lg:mx-1" />}
+              {desktop && <div aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line" />}
               <div className="ml-auto flex shrink-0 items-center gap-0.5 lg:gap-1">
                 <FocusSessionChip />
                 {/* The assistant used to be reachable only from inside the
@@ -209,6 +209,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   size="sm"
                   onClick={() => setAIDrawerOpen(true)}
                   aria-label="Ask the assistant"
+                  title="Ask the assistant (A)"
                   className="h-10 rounded-lg border-0 bg-transparent px-3 hover:bg-surface-sunken"
                 >
                   <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
@@ -222,7 +223,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setCommandPaletteOpen(true)}
                   aria-label="Search"
                   aria-keyshortcuts="Control+K Meta+K"
-                  className="hidden h-10 w-40 items-center gap-2 rounded-lg bg-surface-sunken/70 pl-3 pr-2 text-[13px] text-ink-faint transition-[background-color,color,width] duration-[var(--motion-standard)] hover:bg-surface-sunken hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-52 2xl:w-60"
+                  title="Search everything"
+                  className="hidden h-10 w-40 items-center gap-2 rounded-lg border border-line/70 bg-surface-sunken/50 pl-3 pr-2 text-[13px] text-ink-faint transition-[background-color,color,width] duration-[var(--motion-standard)] hover:bg-surface-sunken hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex xl:w-52 2xl:w-60"
                 >
                   <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="flex-1 text-left">Search…</span>
