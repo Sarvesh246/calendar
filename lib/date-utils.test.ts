@@ -18,6 +18,7 @@ import {
   nextOpenAssignment,
   openItemsOnDay,
   openWorkDueOnDay,
+  workDueOnDay,
   rankDayItems,
   wallTimeInZoneToIso,
   weekWorkload,
@@ -165,7 +166,22 @@ describe("openWorkDueOnDay and leftoverOverdue", () => {
   });
 });
 
+describe("workDueOnDay", () => {
+  it("keeps finished work on its day, after what is still open", () => {
+    const day = new Date(2026, 8, 10, 12, 0, 0);
+    const done = base({ id: "done", at: new Date(2026, 8, 10, 8, 0, 0).toISOString(), status: "done" });
+    const open = base({ id: "open", at: new Date(2026, 8, 10, 20, 0, 0).toISOString(), status: "todo" });
+    const other = base({ id: "other", at: new Date(2026, 8, 11, 8, 0, 0).toISOString(), status: "todo" });
+    expect(workDueOnDay([done, open, other], day).map((i) => i.id)).toEqual(["open", "done"]);
+  });
+});
+
 describe("formatDaySummary", () => {
+  it("celebrates a day that is entirely done", () => {
+    expect(formatDaySummary(0, 0, 0, 0, 3)).toBe("All done · 3 completed");
+    expect(formatDaySummary(0, 2, 0, 0, 1)).toBe("2 due · 1 done");
+  });
+
   it("joins the counts that matter and stays quiet when empty", () => {
     expect(formatDaySummary(0, 0, 0)).toBe("Clear day");
     expect(formatDaySummary(1, 0, 0)).toBe("1 event");

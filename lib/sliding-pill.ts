@@ -38,7 +38,15 @@ interface Box {
   h: number;
 }
 
-/** `el`'s box in `container`'s coordinates, through any nested offset parents. */
+/**
+ * `el`'s box in `container`'s coordinates, through any nested offset parents.
+ *
+ * Deliberately layout-based (offsets), not `getBoundingClientRect`: cells and
+ * pages animate in with transforms, and a rect measured mid-animation parks
+ * the pill where the element is *passing*, not where it will rest. Each offset
+ * parent's border is added back, because `offsetLeft` is measured from the
+ * padding edge — skipping it left rings a pixel off their date.
+ */
 function boxOf(el: HTMLElement, container: HTMLElement | null): Box {
   let x = 0;
   let y = 0;
@@ -46,7 +54,12 @@ function boxOf(el: HTMLElement, container: HTMLElement | null): Box {
   while (node && node !== container) {
     x += node.offsetLeft;
     y += node.offsetTop;
-    node = node.offsetParent as HTMLElement | null;
+    const parent = node.offsetParent as HTMLElement | null;
+    if (parent && parent !== container) {
+      x += parent.clientLeft;
+      y += parent.clientTop;
+    }
+    node = parent;
   }
   return { x, y, w: el.offsetWidth, h: el.offsetHeight };
 }

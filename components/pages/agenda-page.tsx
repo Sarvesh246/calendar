@@ -1,7 +1,6 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { addDays, format, startOfDay } from "date-fns";
@@ -21,8 +20,11 @@ import {
   itemOccupiesDay,
   openWorkDueOnDay,
   weekWorkloadFromByDay,
+  workDueOnDay,
 } from "@/lib/date-utils";
 import { ItemCard } from "@/components/item-card";
+import { AgendaTodayDropdown } from "@/components/agenda-today";
+import { HistoryList } from "@/components/history-list";
 import { AgendaRows, type AgendaRowSection } from "@/components/agenda-rows";
 import { AgendaSticky } from "@/components/agenda-sticky";
 import type { AgendaStickySection } from "@/lib/agenda-sticky";
@@ -44,6 +46,12 @@ const FIRST_PAINT_LATER = 24;
 const LATER_PAGE_SIZE = 24;
 const NO_ITEMS: Item[] = [];
 
+type AgendaView = "upcoming" | "history";
+const VIEWS: { value: AgendaView; label: string }[] = [
+  { value: "upcoming", label: "Upcoming" },
+  { value: "history", label: "History" },
+];
+
 const LAYOUTS: { value: AgendaLayout; label: string; Icon: typeof LayoutList }[] = [
   { value: "cards", label: "Cards", Icon: LayoutList },
   { value: "rows", label: "Rows", Icon: Rows3 },
@@ -62,6 +70,8 @@ export default function AgendaPage() {
   const layout = useWorkspacePrefs((s) => s.agendaLayout);
   const setLayout = useWorkspacePrefs((s) => s.setAgendaLayout);
   const { containerRef: layoutBarRef, pillRef: layoutPillRef, moveTo: moveLayoutPill } = useSlidingPill(layout);
+  const [view, setView] = useState<AgendaView>("upcoming");
+  const { containerRef: viewBarRef, pillRef: viewPillRef, moveTo: moveViewPill } = useSlidingPill(view);
   // Rows are a desk layout; a phone always gets cards.
   const rows = desktop && layout === "rows";
 
@@ -77,6 +87,19 @@ export default function AgendaPage() {
     const today = startOfDay(now);
     const events = items.filter((it) => it.type === "event" && itemOccupiesDay(it, today)).length;
     return events + openWorkDueOnDay(items, today).length;
+  }, [items, now]);
+
+  // The whole of today for the dropdown: events, plus work due today with the
+  // finished items kept (crossed out) so a completed day still reads back.
+  const todayRows = useMemo(() => {
+    const today = startOfDay(now);
+    const events = items.filter((it) => it.type === "event" && itemOccupiesDay(it, today));
+    const work = workDueOnDay(items, today);
+    const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
+    return [
+      ...[...events, ...work.filter((i) => i.status !== "done")].sort(byTime),
+      ...work.filter((i) => i.status === "done"),
+    ];
   }, [items, now]);
 
   const { groups, later, byDay } = useMemo(() => {
@@ -193,17 +216,7 @@ export default function AgendaPage() {
     return out;
   }, [rows, overdue.length, visibleOverdue, visibleGroups, visibleLater]);
 
-  const todayLink = todayCount > 0 && (
-    <Link
-      href="/today"
-      className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-ink-soft hover:border-line-strong"
-    >
-      <span>Today</span>
-      <span className="font-medium text-ink">
-        {todayCount} item{todayCount === 1 ? "" : "s"} · Open Today
-      </span>
-    </Link>
-  );
+  const todayLink = <AgendaTodayDropdown items={todayRows} />;
 
   return (
     <div className={cn("mx-auto flex w-full flex-col gap-6", rows ? "max-w-[1080px]" : "max-w-[880px]")}>
@@ -245,6 +258,43 @@ export default function AgendaPage() {
         </div>
       </header>
 
+      <div
+        ref={viewBarRef}
+        role="radiogroup"
+        aria-label="Agenda view"
+        className="relative grid grid-cols-2 gap-0.5 rounded-xl border border-line bg-surface p-0.5 md:w-fit"
+      >
+        <span ref={viewPillRef} aria-hidden className="sliding-pill rounded-[10px] bg-accent" />
+        {VIEWS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={view === value}
+            data-pill-key={value}
+            onClick={(e) => {
+              if (view === value) return;
+              haptic("light");
+              moveViewPill(e.currentTarget);
+              startTransition(() => setView(value));
+            }}
+            className={cn(
+              "press-none relative flex min-h-10 items-center justify-center rounded-[10px] px-5 text-[13.5px] font-semibold",
+              "transition-colors duration-[var(--motion-micro)]",
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
+            )}
+          >
+            <span className="relative z-[1]">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {view === "history" ? (
+        <div key="history" className="route-enter">
+          <HistoryList />
+        </div>
+      ) : (
+        <div key="upcoming" className="route-enter flex flex-col gap-6">
       <div>
         <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
           This week
@@ -280,6 +330,7 @@ export default function AgendaPage() {
 
       {isEmpty && (
         <>
+          {todayLink}
           <OnboardingCard />
           <FeedHealthBanner />
           <ListEmptyState
@@ -416,6 +467,8 @@ export default function AgendaPage() {
               )}
             </div>
           )}
+        </div>
+      )}
         </div>
       )}
     </div>

@@ -273,7 +273,7 @@ function MonthGridPanel({
       style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
     >
       <span ref={ringRef} aria-hidden className="sliding-pill z-[2] hidden rounded-lg ring-2 ring-inset ring-accent sm:block" />
-      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] rounded-full ring-2 ring-accent sm:hidden" />
+      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] scale-[1.2] rounded-full ring-2 ring-accent sm:hidden" />
       {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
         const today = isToday(date);

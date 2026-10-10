@@ -4,7 +4,6 @@ import { useCallback, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
-import { format } from "date-fns";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
@@ -15,6 +14,7 @@ import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/li
 import { Reveal } from "@/components/ui/reveal";
 import { SheetHandle } from "@/components/sheet-handle";
 import { Scrim } from "@/components/ui/scrim";
+import { ItemSummaryHeader } from "@/components/item-summary-header";
 import type { Item } from "@/lib/types";
 
 /**
@@ -30,7 +30,7 @@ import type { Item } from "@/lib/types";
  * flick it down. All four always work, everywhere, and the grabber means what
  * it looks like it means.
  */
-export function MobileItemSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function MobileItemSheet({ title, note, onClose, children }: { title: string; /** A quiet line above the content. */ note?: string; onClose: () => void; children: React.ReactNode }) {
   // The sheet owns its own dismissal so it can finish animating before the
   // parent unmounts it. Callers still just pass `onClose`; it now fires when
   // the sheet has actually left, not when the gesture started — which is what
@@ -41,13 +41,13 @@ export function MobileItemSheet({ title, onClose, children }: { title: string; o
 
   return createPortal(
     <AnimatePresence onExitComplete={onClose}>
-      {open && <MobileItemSheetBody title={title} close={close}>{children}</MobileItemSheetBody>}
+      {open && <MobileItemSheetBody title={title} note={note} close={close}>{children}</MobileItemSheetBody>}
     </AnimatePresence>,
     document.body
   );
 }
 
-function MobileItemSheetBody({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) {
+function MobileItemSheetBody({ title, note, close, children }: { title: string; note?: string; close: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
@@ -105,7 +105,7 @@ function MobileItemSheetBody({ title, close, children }: { title: string; close:
         {/* `px-1 -mx-1` so a focus ring — which is drawn 2px *outside* the
             field — isn't shaved off by this scroll container's edges. A ring
             clipped on three sides reads as a rendering bug, not as focus. */}
-        <div ref={scrollRef} className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1">{title === "Edit item" && <p className="text-[12px] text-ink-soft">Changes save as you edit.</p>}{children}</div>
+        <div ref={scrollRef} className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1">{note && <p className="mb-2 text-[12px] text-ink-faint">{note}</p>}{children}</div>
       </motion.div>
     </div>
   );
@@ -161,9 +161,7 @@ export function MobileTaskActions({
 
   const body = (
     <>
-      <p className="mb-3 text-[12px] text-ink-soft">
-        {isEvent ? "Starts" : "Due"}: {format(new Date(item.at), "EEE, MMM d · p")}
-      </p>
+      <ItemSummaryHeader item={item} />
 
       {!isEvent && (
         <>
@@ -201,7 +199,7 @@ export function MobileTaskActions({
           {isEvent ? "Move" : "Reschedule"}
         </button>
         <button className={`${control} flex-1`} onClick={onEdit}>
-          Edit item
+          Edit details
         </button>
       </div>
 
@@ -244,7 +242,7 @@ export function MobileTaskActions({
 
   if (embedded) return body;
   return (
-    <MobileItemSheet title={item.title} onClose={onClose}>
+    <MobileItemSheet title="Details" onClose={onClose}>
       {body}
     </MobileItemSheet>
   );

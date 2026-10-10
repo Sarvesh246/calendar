@@ -49,13 +49,14 @@ function MobileInspector({ item, onClose }: { item: Item; onClose: () => void })
   const category = useDatebookStore((s) => s.categories.find((c) => c.id === item.categoryId));
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   return (
-    <MobileItemSheet title="Edit item" onClose={onClose}>
+    <MobileItemSheet title="Details" note="Changes save as you edit." onClose={onClose}>
       <ItemEditor
         key={item.id}
         item={item}
         category={category}
         clock24h={clock24h}
         StatusSegmented={StatusSegmented}
+        variant="inspector"
         onCollapse={onClose}
       />
     </MobileItemSheet>
