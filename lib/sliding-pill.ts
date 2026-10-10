@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
-import { prefersReducedMotion } from "./motion";
+import { prefersReducedMotion, springEasing, supportsLinearEasing } from "./motion";
 
 /**
  * The selected-segment highlight shared by every segmented control, tab strip
@@ -27,9 +27,25 @@ import { prefersReducedMotion } from "./motion";
  *       className="… data-[pill-on]:text-accent-ink">
  */
 
-/** iOS-like ease-out: quick to leave, long settle. */
+/** iOS-like ease-out: quick to leave, long settle. The fallback curve. */
 export const PILL_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 export const PILL_MS = 340;
+
+let pillTiming: { easing: string; duration: number } | null = null;
+/**
+ * The real thing where the engine supports it: a spring (response 0.34s,
+ * damping 0.78) rendered as a `linear()` curve, so the highlight leans a
+ * couple of pixels past its target and settles back — the way a native
+ * segmented control lands — while still running on the compositor.
+ */
+function pillTimingNow() {
+  if (!pillTiming) {
+    pillTiming = supportsLinearEasing()
+      ? springEasing(0.34, 0.78, 32)
+      : { easing: PILL_EASE, duration: PILL_MS };
+  }
+  return pillTiming;
+}
 
 interface Box {
   x: number;
@@ -165,7 +181,7 @@ export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends
           { transform: `translate(${start.x}px, ${start.y}px) scale(${sx}, ${sy})` },
           { transform: `translate(${to.x}px, ${to.y}px)` },
         ],
-        { duration: PILL_MS, easing: PILL_EASE }
+        pillTimingNow()
       );
     },
     [mark, getContainer]

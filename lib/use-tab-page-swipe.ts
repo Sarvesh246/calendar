@@ -1,9 +1,10 @@
 "use client";
 
-import { animate, useMotionValue, type MotionValue } from "framer-motion";
+import { animate, motionValue, useMotionValue, type MotionValue } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { haptic } from "@/lib/haptic";
+import { VelocityTracker } from "@/lib/gesture";
 import { prefersReducedMotion } from "@/lib/motion";
 import { skipNextPageEnter } from "@/lib/page-enter";
 import { navigateTab } from "@/lib/tab-nav";
@@ -19,6 +20,15 @@ import {
 
 type Axis = "undecided" | "x" | "y";
 
+/**
+ * Where the pager is, in tabs (1.4 = 40% of the way from the second tab to the
+ * third), and whether a swipe is driving it. The tab bar's pill follows this
+ * while a page is being dragged, so the indicator slides with your thumb and
+ * lands with the page instead of jumping once the swipe has finished.
+ */
+export const pagerPosition = motionValue(0);
+export const pagerLive = motionValue(0);
+
 export function useTabPageSwipe(
   hostRef: RefObject<HTMLElement | null>,
   active: TabRoute | null,
@@ -26,7 +36,10 @@ export function useTabPageSwipe(
 ): {
   x: MotionValue<number>;
   peekX: MotionValue<number>;
+  trailingX: MotionValue<number>;
   peek: TabRoute | null;
+  /** The page a committed swipe just left — kept on screen until it has slid away. */
+  trailing: TabRoute | null;
   dragging: boolean;
   /** True while a swipe transform is on the page — including the settle spring. */
   offsetting: boolean;
@@ -34,15 +47,32 @@ export function useTabPageSwipe(
   const router = useRouter();
   const x = useMotionValue(0);
   const peekX = useMotionValue(0);
+  const trailingX = useMotionValue(0);
   const [peek, setPeek] = useState<TabRoute | null>(null);
+  const [trailing, setTrailing] = useState<TabRoute | null>(null);
   const [dragging, setDragging] = useState(false);
   const [offsetting, setOffsetting] = useState(false);
   const axis = useRef<Axis>("undecided");
-  const start = useRef({ x: 0, y: 0, t: 0 });
-  const last = useRef({ x: 0, t: 0 });
-  const velocity = useRef(0);
+  const start = useRef({ x: 0, y: 0 });
+  const tracker = useRef(new VelocityTracker());
   const pointerId = useRef<number | null>(null);
+  /** Index of the page `x` is currently moving (changes at commit). */
+  const boundIndex = useRef(0);
+  /** Which way the trailing page sits from the active one (−1 left, +1 right). */
+  const trailingSide = useRef(0);
+  const width = useRef(0);
   const reduced = prefersReducedMotion();
+
+  useEffect(() => {
+    const unsubscribe = x.on("change", (v) => {
+      const w = width.current;
+      if (w > 0) {
+        pagerPosition.set(boundIndex.current - v / w);
+        trailingX.set(v + trailingSide.current * w);
+      }
+    });
+    return unsubscribe;
+  }, [x, trailingX]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -56,15 +86,20 @@ export function useTabPageSwipe(
       setDragging(false);
     };
 
+    const settleDone = () => {
+      setOffsetting(false);
+      setTrailing(null);
+      pagerLive.set(0);
+    };
+
     const onDown = (e: PointerEvent) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       if (document.documentElement.classList.contains("scroll-locked")) return;
       if (pageSwipeIgnores(e.target)) return;
       pointerId.current = e.pointerId;
       axis.current = "undecided";
-      start.current = { x: e.clientX, y: e.clientY, t: e.timeStamp };
-      last.current = { x: e.clientX, t: e.timeStamp };
-      velocity.current = 0;
+      start.current = { x: e.clientX, y: e.clientY };
+      tracker.current.reset(e.clientX, e.timeStamp);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -73,10 +108,7 @@ export function useTabPageSwipe(
       if (index < 0) return;
       const dx = e.clientX - start.current.x;
       const dy = e.clientY - start.current.y;
-      const dt = e.timeStamp - last.current.t;
-      if (dt > 0 && dt < 64) velocity.current = ((e.clientX - last.current.x) / dt) * 1000;
-      else if (dt >= 64) velocity.current = 0;
-      last.current = { x: e.clientX, t: e.timeStamp };
+      tracker.current.add(e.clientX, e.timeStamp);
 
       if (axis.current === "undecided") {
         const adx = Math.abs(dx);
@@ -88,9 +120,19 @@ export function useTabPageSwipe(
         }
         if (adx > ady * 1.15) {
           axis.current = "x";
+          // Catch a page that is still settling from the last swipe: grab it
+          // where it is rather than letting it jump home first.
+          x.stop();
+          width.current = widthOf();
+          boundIndex.current = index;
+          trailingSide.current = 0;
+          setTrailing(null);
+          pagerLive.set(1);
           setDragging(true);
           setOffsetting(true);
           host.setPointerCapture?.(e.pointerId);
+          // Measure from here so the page doesn't jump by the axis slop.
+          start.current = { x: e.clientX - (x.get() || 0), y: e.clientY };
         } else {
           return;
         }
@@ -98,12 +140,12 @@ export function useTabPageSwipe(
       if (axis.current !== "x") return;
       if (e.cancelable) e.preventDefault();
 
-      const visual = rubberbandPageX(dx, index, TAB_ROUTES.length);
+      const w = width.current || widthOf();
+      const drag = e.clientX - start.current.x;
+      const visual = rubberbandPageX(drag, index, TAB_ROUTES.length, w);
       x.set(visual);
-      const next = neighbourTab(index, dx);
-      setPeek(next);
-      const width = widthOf();
-      peekX.set(visual + (dx >= 0 ? -width : width));
+      setPeek(neighbourTab(index, drag));
+      peekX.set(visual + (drag >= 0 ? -w : w));
     };
 
     const finish = (e: PointerEvent) => {
@@ -111,21 +153,17 @@ export function useTabPageSwipe(
       const locked = axis.current;
       const index = TAB_ROUTES.indexOf(active);
       const dx = e.clientX - start.current.x;
-      const vx = velocity.current;
+      const vx = tracker.current.velocity(e.timeStamp);
       reset();
       if (host.hasPointerCapture?.(e.pointerId)) host.releasePointerCapture(e.pointerId);
-      if (locked !== "x" || index < 0) {
-        x.set(0);
-        setPeek(null);
-        return;
-      }
+      if (locked !== "x" || index < 0) return;
 
-      const width = widthOf();
+      const w = width.current || widthOf();
       const nextIndex = commitPageFromGesture({
         startIndex: index,
         dx,
         vx,
-        width,
+        width: w,
         count: TAB_ROUTES.length,
       });
       const to = TAB_ROUTES[nextIndex];
@@ -145,31 +183,38 @@ export function useTabPageSwipe(
           x.set(0);
           peekX.set(0);
           setPeek(null);
-          setOffsetting(false);
+          settleDone();
           return;
         }
-        void animate(x, 0, spring).then(() => setOffsetting(false));
-        const home = dx >= 0 ? -width : width;
+        void animate(x, 0, spring).then(settleDone);
+        const home = x.get() >= 0 ? -w : w;
         void animate(peekX, home, spring).then(() => setPeek(null));
         return;
       }
 
       swallowClick();
-      haptic("light");
+      haptic("selection");
       skipNextPageEnter();
       if (reduced) {
         x.set(0);
         peekX.set(0);
         setPeek(null);
-        setOffsetting(false);
+        settleDone();
         navigateTab(router, to);
         return;
       }
-      const remaining = rubberbandPageX(dx, index, TAB_ROUTES.length) + (dx >= 0 ? -width : width);
+      // Re-centre on the incoming page: it keeps exactly the offset it had as
+      // the peek, the page you left becomes the trailing one beside it, and
+      // both ride the same spring home together.
+      const dir = nextIndex - index;
+      const remaining = x.get() + dir * w;
+      boundIndex.current = nextIndex;
+      trailingSide.current = -dir;
+      setTrailing(active);
+      setPeek(null);
       navigateTab(router, to);
       x.set(remaining);
-      setPeek(null);
-      void animate(x, 0, spring).then(() => setOffsetting(false));
+      void animate(x, 0, spring).then(settleDone);
     };
 
     host.addEventListener("pointerdown", onDown);
@@ -189,5 +234,5 @@ export function useTabPageSwipe(
     };
   }, [active, enabled, hostRef, peekX, reduced, router, x]);
 
-  return { x, peekX, peek, dragging, offsetting };
+  return { x, peekX, trailingX, peek, trailing, dragging, offsetting };
 }

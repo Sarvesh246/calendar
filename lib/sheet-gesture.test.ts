@@ -1,39 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { shouldDismissSheet, shouldExpandSheet, SHEET_DISMISS, SHEET_EXPAND } from "./sheet-gesture";
-import type { PanInfo } from "framer-motion";
+import { SHEET_FLICK_CLOSE, sheetRelease } from "./sheet-gesture";
 
-function pan(y: number, vy: number): PanInfo {
-  return {
-    offset: { x: 0, y },
-    velocity: { x: 0, y: vy },
-    delta: { x: 0, y },
-    point: { x: 0, y },
-  } as PanInfo;
-}
+const one = { height: 500, points: [0] };
+const two = { height: 700, points: [0, 380] };
 
-describe("shouldDismissSheet", () => {
-  it("commits on a short pull that still cleared the offset", () => {
-    expect(shouldDismissSheet(pan(SHEET_DISMISS.offset + 1, 0))).toBe(true);
+describe("sheetRelease", () => {
+  it("lets a short slow drag spring home", () => {
+    expect(sheetRelease({ ...one, at: 24, velocity: 80 })).toEqual({ kind: "snap", index: 0 });
   });
 
-  it("lets a short drag snap back", () => {
-    expect(shouldDismissSheet(pan(24, 80))).toBe(false);
+  it("closes a long slow pull", () => {
+    expect(sheetRelease({ ...one, at: 260, velocity: 0 })).toEqual({ kind: "close" });
   });
 
-  it("commits on a flick even before the offset", () => {
-    expect(shouldDismissSheet(pan(20, SHEET_DISMISS.velocity + 10))).toBe(true);
+  it("closes a quick flick before it has travelled far", () => {
+    expect(sheetRelease({ ...one, at: 30, velocity: SHEET_FLICK_CLOSE + 50 })).toEqual({ kind: "close" });
   });
 
-  it("scales the offset for a taller detent", () => {
-    expect(shouldDismissSheet(pan(SHEET_DISMISS.offset + 1, 0), 1.4)).toBe(false);
-    expect(shouldDismissSheet(pan(SHEET_DISMISS.offset * 1.4 + 1, 0), 1.4)).toBe(true);
+  it("stays when the pull is heading back up at release", () => {
+    expect(sheetRelease({ ...one, at: 260, velocity: -600 })).toEqual({ kind: "snap", index: 0 });
   });
-});
 
-describe("shouldExpandSheet", () => {
-  it("opens the full detent on an upward throw", () => {
-    expect(shouldExpandSheet(pan(SHEET_EXPAND.offset - 1, 0))).toBe(true);
-    expect(shouldExpandSheet(pan(-8, SHEET_EXPAND.velocity - 1))).toBe(true);
-    expect(shouldExpandSheet(pan(-8, 0))).toBe(false);
+  it("lands a throw on the detent it was heading for", () => {
+    expect(sheetRelease({ ...two, at: 300, velocity: -900 })).toEqual({ kind: "snap", index: 0 });
+    expect(sheetRelease({ ...two, at: 120, velocity: 900 })).toEqual({ kind: "snap", index: 1 });
+  });
+
+  it("closes from the lower detent, not from the upper one", () => {
+    expect(sheetRelease({ ...two, at: 120, velocity: 300 })).toEqual({ kind: "snap", index: 0 });
+    expect(sheetRelease({ ...two, at: 520, velocity: 200 })).toEqual({ kind: "close" });
   });
 });

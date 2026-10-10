@@ -1,5 +1,6 @@
 "use client";
 
+import { NumberRoll } from "@/components/ui/number-roll";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
@@ -429,7 +430,7 @@ function DayHeading({
       <span className={cn("font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>{label}</span>
       {sublabel && <span className="text-ink-faint">{sublabel}</span>}
       <span className="ml-auto text-[12px] tabular-nums text-ink-faint">
-        {count} {count === 1 ? "item" : "items"}
+        <NumberRoll value={count} /> {count === 1 ? "item" : "items"}
       </span>
     </h2>
   );

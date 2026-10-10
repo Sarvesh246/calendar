@@ -36,10 +36,21 @@ export type { ItemCardChrome };
  * Height collapse is CSS grid `0fr`/`1fr` (see `.item-card-presence`); Framer
  * only fades so it never measures `height: auto` across the list.
  */
+/**
+ * A card that leaves (completed and hidden, filtered, deleted) fades first and
+ * then gives its height back on a critically damped spring — the cards below
+ * glide up and land. The old 160ms ease-in collapse ended at full speed, so
+ * the list slammed into place.
+ */
 const CARD_EXIT = {
   opacity: 0,
+  scale: 0.98,
   gridTemplateRows: "0fr",
-  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+  transition: {
+    opacity: { duration: 0.14, ease: motionTokens.ease },
+    scale: { duration: 0.18, ease: motionTokens.ease },
+    gridTemplateRows: { ...motionTokens.settle, delay: 0.06 },
+  },
 };
 
 export const ItemCard = memo(function ItemCard({
@@ -128,9 +139,13 @@ function CompleteButton({
         {/* The squeeze is CSS, not a framer whileTap: every card in a list
             carried a gesture whose listeners cost real time to attach and tear
             down each time a list mounted or swapped (Agenda Cards ↔ Rows). */}
+        {/* Keyed on the burst so the pop replays on every completion: the
+            circle fills and springs past full size, then settles. */}
         <span
+          key={burst}
           className={cn(
             "relative flex h-5 w-5 items-center justify-center rounded-full border-2 group-active/status:scale-[0.82] group-active/status:duration-[80ms]",
+            burst > 0 && status === "done" && "status-pop",
             "transition-[background-color,border-color,scale] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
@@ -143,10 +158,13 @@ function CompleteButton({
             {status === "done" && (
               <motion.span
                 key="check"
-                initial={{ scale: 0, opacity: 0, rotate: -25 }}
+                initial={{ scale: 0.2, opacity: 0, rotate: -30 }}
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={motionTokens.springSnappy}
+                exit={{ scale: 0.4, opacity: 0, transition: { duration: motionTokens.micro } }}
+                // Under-damped on purpose: the tick lands a little big and
+                // settles — the small reward that makes ticking things off
+                // satisfying.
+                transition={{ ...motionTokens.pop, opacity: { duration: 0.1 } }}
                 className="flex items-center justify-center"
               >
                 <Check className="h-3 w-3 text-[var(--accent-ink)]" strokeWidth={3.25} />
@@ -189,7 +207,7 @@ export function StatusSegmented({
             type="button"
             data-pill-key={opt.value}
             onClick={(e) => {
-              haptic(opt.value === "done" ? "success" : "light");
+              haptic(opt.value === "done" ? "success" : "selection");
               if (!active) moveTo(e.currentTarget);
               onChange(opt.value);
             }}

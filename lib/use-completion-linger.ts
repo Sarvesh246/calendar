@@ -25,7 +25,9 @@ import type { Item } from "./types";
  */
 
 /** Covers the complete-circle ripple plus the strike-through that follows it. */
-const LINGER_MS = 560;
+// Long enough to watch the tick pop, the strike-through draw and the title
+// dim — and to register "done" — before the card gives its place back.
+const LINGER_MS = 780;
 
 export function useCompletionLinger(items: Item[]): Item[] {
   const [lingering, setLingering] = useState<Item[]>([]);

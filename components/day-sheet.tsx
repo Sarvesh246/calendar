@@ -1,9 +1,9 @@
 "use client";
 
 import { useMediaQuery } from "@/lib/use-media-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
@@ -14,10 +14,12 @@ import { MobileTaskActions } from "@/components/mobile-item-sheet";
 import { ListEmptyState } from "@/components/list-empty-state";
 import { OverlapNotices } from "@/components/overlap-notice";
 import { haptic } from "@/lib/haptic";
-import { shouldDismissSheet, shouldExpandSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { useSheetPhysics } from "@/lib/use-sheet-physics";
 import { Scrim } from "@/components/ui/scrim";
 import { SheetHandle } from "@/components/sheet-handle";
-import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion, releaseSpring } from "@/lib/motion";
+import { project } from "@/lib/gesture";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
 import type { FilterBreakdown } from "@/lib/filters";
@@ -35,11 +37,11 @@ const headingVariants = {
 
 type Detent = "compact" | "full";
 
-/** Compact stops well short of the month grid; full is for reading a long day. */
-const DETENT_HEIGHT: Record<Detent, string> = {
-  compact: "min(46dvh, 420px)",
-  full: "min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 0.5rem))",
-};
+/** Full is for reading a long day; compact stops well short of the month grid. */
+const FULL_HEIGHT = "min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 0.5rem))";
+const compactHeight = () => Math.min(window.innerHeight * 0.46, 420);
+/** How much of the page the scrim covers at the compact detent. */
+const COMPACT_DIM = 0.35;
 
 function useBelowLg() {
   const [below, setBelow] = useState(false);
@@ -76,8 +78,6 @@ export function DaySheet({
   const panelRef = useRef<HTMLDivElement>(null);
   useDialogFocus(panelRef, visible);
   useLockBodyScroll(visible);
-  const dragControls = useDragControls();
-  const closeGuard = useRef(false);
   const headingId = useId();
   const relative = dayLabel(date);
   const isRelative = relative === "Today" || relative === "Tomorrow" || relative === "Yesterday";
@@ -107,12 +107,40 @@ export function DaySheet({
    */
   const [detent, setDetent] = useState<Detent>("compact");
   const expanded = detent === "full";
-  const setExpanded = (value: boolean) => setDetent(value ? "full" : "compact");
   const listRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
+  /**
+   * The detents are positions, not heights. The sheet is always full height
+   * and the compact detent is the same sheet slid down — so a drag moves it
+   * continuously between the two (and on down to closing) under the finger,
+   * and the release lands on whichever detent the throw was heading for. A
+   * height change can't be dragged; it could only be decided on release.
+   */
+  const sheet = useSheetPhysics({
+    panelRef,
+    onClosed: onClose,
+    detents: () => {
+      if (!window.matchMedia("(max-width: 767px)").matches) return [0];
+      const h = panelRef.current?.offsetHeight ?? window.innerHeight;
+      return [0, Math.max(0, h - compactHeight())];
+    },
+    initialDetent: phone ? 1 : 0,
+    onDetent: (index) => setDetent(index === 0 ? "full" : "compact"),
+  });
+  const { dragControls, dragging } = sheet;
+  const closeSheet = sheet.close;
+  const setExpanded = (value: boolean) => sheet.snapTo(value ? 0 : 1);
+  // At the compact detent the month has to stay legible — it is the thing
+  // you are stepping through days *against* — so the veil is lighter there,
+  // and it follows the sheet continuously in between.
+  const scrim = useTransform(sheet.y, (v) => {
+    const h = panelRef.current?.offsetHeight || 1;
+    if (!phone) return Math.max(0, Math.min(1, 1 - v / h));
+    const off = Math.max(1, h - compactHeight());
+    if (v <= off) return 1 - (1 - COMPACT_DIM) * Math.max(0, v / off);
+    return Math.max(0, COMPACT_DIM * (1 - (v - off) / Math.max(1, h - off)));
+  });
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState(false);
-  const reduced = prefersReducedMotion();
   useSheetOverscroll(listRef, dragControls, visible, detent === "compact");
   const chrome = useItemCardChrome();
   const categories = useCategoriesById();
@@ -136,78 +164,124 @@ export function DaySheet({
   }
   const direction = travel.dir;
 
-  useEffect(() => {
-    closeGuard.current = false;
-    listRef.current?.scrollTo(0, 0);
+  // A new day starts on its list, not on whatever item the last one had open.
+  // Reset during render (same pattern as `travel` above) rather than in an
+  // effect, so the old item never paints for a frame on the new day.
+  const [shownDay, setShownDay] = useState(dayKeyValue);
+  if (shownDay !== dayKeyValue) {
+    setShownDay(dayKeyValue);
     setActiveItemId(null);
     setEditingItem(false);
+  }
+  useEffect(() => {
+    listRef.current?.scrollTo(0, 0);
   }, [date]);
+
+  // ---- Stepping days by swipe ------------------------------------------
+  const dayX = useMotionValue(0);
+  const dayAxis = useRef<"x" | "y" | null>(null);
+  const dayPanned = useRef(false);
+  const stepVelocity = useRef(0);
+  const swipeDays = phone && Boolean(onStep) && !activeItem;
+
+  // Every day change — swipe, chevrons, the calendar behind — brings the new
+  // day in from the side it lies on, carrying a swipe's release speed.
+  const shownDayKey = useRef(dayKeyValue);
+  useLayoutEffect(() => {
+    if (shownDayKey.current === dayKeyValue) return;
+    shownDayKey.current = dayKeyValue;
+    const velocity = stepVelocity.current;
+    stepVelocity.current = 0;
+    dayX.stop();
+    if (prefersReducedMotion()) {
+      dayX.set(0);
+      return;
+    }
+    const w = listRef.current?.clientWidth ?? 360;
+    dayX.set(direction * w * 0.32);
+    void animate(dayX, 0, releaseSpring(velocity, 0.92, 0.4));
+  }, [dayKeyValue, direction, dayX]);
+
+  function onDayPanStart() {
+    dayAxis.current = null;
+    dayPanned.current = false;
+  }
+
+  function onDayPan(_: PointerEvent, info: PanInfo) {
+    if (!swipeDays) return;
+    const { x: dx, y: dy } = info.offset;
+    if (dayAxis.current === null) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        dayAxis.current = "x";
+        dayPanned.current = true;
+        dayX.stop();
+      } else if (Math.abs(dy) > 10) {
+        dayAxis.current = "y";
+      }
+    }
+    if (dayAxis.current === "x") dayX.set(dx);
+  }
+
+  function onDayPanEnd(_: PointerEvent, info: PanInfo) {
+    const locked = dayAxis.current;
+    dayAxis.current = null;
+    // Cleared after the click that follows this release has been swallowed.
+    if (dayPanned.current) window.setTimeout(() => (dayPanned.current = false), 0);
+    if (locked !== "x" || !onStep) return;
+    const w = listRef.current?.clientWidth ?? 360;
+    const at = dayX.get();
+    const v = info.velocity.x;
+    const projected = project(at, v);
+    if (Math.abs(projected) > w * 0.3 && Math.sign(projected) === Math.sign(at)) {
+      haptic("selection");
+      stepVelocity.current = v;
+      onStep(projected < 0 ? 1 : -1);
+      return;
+    }
+    void animate(dayX, 0, releaseSpring(v, 0.86, 0.36));
+  }
 
   useEffect(() => {
     if (!visible) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeSheet();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, onClose]);
+  }, [visible, closeSheet]);
 
   if (!visible || typeof document === "undefined") return null;
 
-  const close = () => {
-    if (closeGuard.current) return;
-    closeGuard.current = true;
-    onClose();
-  };
+  const close = () => closeSheet();
 
   return createPortal(
     <div className="fixed inset-0 z-[60] lg:hidden">
       {/* Dimmed in proportion to how much the sheet is covering. At the compact
           detent the month has to stay legible — it is the thing you are
           stepping through days *against*. */}
-      <Scrim onClick={close} amount={expanded ? 1 : 0.35} />
+      <Scrim onClick={close} progress={scrim} exitDuration={sheet.gone ? 0 : motionTokens.exit} />
       <motion.div
         role="dialog"
         ref={panelRef}
         tabIndex={-1}
         aria-modal="true"
         aria-labelledby={headingId}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-        transition={motionTokens.springGentle}
-        drag="y"
-        dragListener={false}
-        dragControls={dragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: expanded ? 0.04 : 0.55, bottom: 0.72 }}
-        dragTransition={{ bounceStiffness: 380, bounceDamping: 34 }}
-        onDragStart={() => setDragging(true)}
-        onDragEnd={(_, info) => {
-          setDragging(false);
-          if (shouldExpandSheet(info)) {
-            if (!expanded) haptic("light");
-            setDetent("full");
-            return;
-          }
-          if (shouldDismissSheet(info)) {
-            haptic("light");
-            // From full, a downward drag steps to compact rather than closing —
-            // one gesture, one change, and the way back up is obvious.
-            if (expanded) setDetent("compact");
-            else close();
-          }
-        }}
+        exit={
+          sheet.gone
+            ? { opacity: 1, transition: { duration: 0 } }
+            : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
+        }
+        {...sheet.dragProps}
         className="mobile-action-sheet absolute inset-x-0 bottom-0 z-[60] flex max-h-[min(92dvh,calc(100dvh-0.5rem))] flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface"
         style={{
+          ...sheet.dragProps.style,
           paddingBottom: "max(0.75rem, var(--safe-bottom))",
           minHeight: !phone ? "min(72dvh, 640px)" : undefined,
-          height: !phone ? undefined : DETENT_HEIGHT[detent],
-          transition: dragging || reduced ? "none" : "height var(--motion-emphasis) var(--ease-standard)",
+          height: !phone ? undefined : FULL_HEIGHT,
         }}
       >
         <div
-          className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-0.5 active:cursor-grabbing"
+          className="flex shrink-0 cursor-grab touch-none select-none flex-col items-center pt-0.5 active:cursor-grabbing"
           onPointerDown={(e) => startSheetDrag(dragControls, e)}
         >
           <SheetHandle dragControls={dragControls} dragging={dragging} className="py-2" />
@@ -218,7 +292,7 @@ export function DaySheet({
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); onStep(-1); }}
+                onClick={(e) => { e.stopPropagation(); haptic("selection"); onStep(-1); }}
                 aria-label="Previous day"
                 className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
               >
@@ -268,7 +342,7 @@ export function DaySheet({
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); onStep(1); }}
+                  onClick={(e) => { e.stopPropagation(); haptic("selection"); onStep(1); }}
                   aria-label="Next day"
                   className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
                 >
@@ -353,7 +427,21 @@ export function DaySheet({
               />
             )
           ) : (
-            <>
+            <motion.div
+              // Swipe the day sideways to step through days, the way the
+              // calendar itself pages months. Vertical stays the list's.
+              style={{ x: dayX, touchAction: "pan-y" }}
+              onPanStart={onDayPanStart}
+              onPan={onDayPan}
+              onPanEnd={onDayPanEnd}
+              onClickCapture={(e) => {
+                // A swipe that ends over a card is not a tap on it.
+                if (dayPanned.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+            >
               {onAdd && !phone && (
                 <button
                   type="button"
@@ -387,26 +475,14 @@ export function DaySheet({
                       onMobileOpen={(opened) => {
                         setEditingItem(false);
                         setActiveItemId(opened.id);
-                        if (detent === "compact") setDetent("full");
+                        if (detent === "compact") setExpanded(true);
                       }}
                       {...chrome}
                     />
                   ))}
                 </div>
               )}
-              {phone && detent === "compact" && items.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic("light");
-                    setDetent("full");
-                  }}
-                  className="mt-3 mb-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13px] font-medium text-accent"
-                >
-                  Show more
-                </button>
-              )}
-            </>
+            </motion.div>
           )}
         </div>
       </motion.div>

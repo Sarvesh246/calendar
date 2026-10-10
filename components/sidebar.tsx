@@ -31,6 +31,8 @@ import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
 import { navigateTab } from "@/lib/tab-nav";
 import { commitTabFromGesture, pillSpringForVelocity } from "@/lib/tab-swipe";
+import { rubberbandClamp, VelocityTracker } from "@/lib/gesture";
+import { pagerLive, pagerPosition } from "@/lib/use-tab-page-swipe";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -291,8 +293,10 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const startX = useRef(0);
   const indexAtStart = useRef(activeIndex);
   const didDrag = useRef(false);
-  const velocityX = useRef(0);
-  const lastMove = useRef({ x: 0, t: 0 });
+  const tracker = useRef(new VelocityTracker());
+  /** The tab the pill is over mid-scrub, so each crossing can tick. */
+  const scrubIndex = useRef(activeIndex);
+  const [scrubbing, setScrubbing] = useState<number | null>(null);
   // True while the click that follows a pointerup is one this bar already
   // acted on. It expires on its own so a gesture that dies without a pointerup
   // — or a keyboard activation — still reaches the link's own handler.
@@ -315,7 +319,17 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const pillInset = 4;
   const trackWidth = Math.max(0, navWidth - pillInset * 2);
   const tabWidth = trackWidth / NAV.length;
-  const pillX = useTransform([baseX, dragX], ([b, d]) => (b as number) + (d as number));
+  // While a page swipe is driving the pager the pill rides it, so the
+  // indicator slides under your thumb and lands with the page.
+  const tabWidthRef = useRef(tabWidth);
+  useLayoutEffect(() => {
+    tabWidthRef.current = tabWidth;
+  }, [tabWidth]);
+  const pillX = useTransform([baseX, dragX, pagerPosition, pagerLive], ([b, d, p, live]) =>
+    (live as number) > 0 && !dragging.current
+      ? (p as number) * tabWidthRef.current
+      : (b as number) + (d as number)
+  );
 
   // The spring itself is chosen from the finger's leftover speed so a throw
   // overshoots once and a slow drag settles without a second bounce.
@@ -339,7 +353,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
 
   function navigateTo(index: number) {
     if (index === currentIndex) return;
-    haptic("light");
+    haptic("selection");
     settlePillTo(index);
     navigateTab(router, NAV[index].href);
   }
@@ -380,6 +394,15 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
       return;
     }
     if (settleTarget.current === target) return; // already on its way there
+    // A page swipe is carrying the pill; when it hands back, the pill must
+    // already be home rather than replaying the trip.
+    if (pagerLive.get() > 0) {
+      settleTarget.current = null;
+      baseX.stop();
+      baseX.set(target);
+      dragX.set(0);
+      return;
+    }
     if (Math.abs(baseX.get() + dragX.get() - target) < 0.5) return;
     settlePillTo(activeIndex);
     // settlePillTo is stable for a given tabWidth; listing it would restart
@@ -404,8 +427,8 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     pointerId.current = e.pointerId;
     startX.current = e.clientX;
     indexAtStart.current = activeIndex;
-    velocityX.current = 0;
-    lastMove.current = { x: e.clientX, t: e.timeStamp };
+    scrubIndex.current = activeIndex;
+    tracker.current.reset(e.clientX, e.timeStamp);
     // Capture from the first frame: without it Chromium hands a horizontal
     // drag over to its own gesture handling and fires `pointercancel` two
     // moves in, which is the swipe dying halfway across the bar.
@@ -415,22 +438,33 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   function onPointerMove(e: React.PointerEvent) {
     if (!dragging.current || pointerId.current !== e.pointerId || !tabWidth) return;
     const dx = e.clientX - startX.current;
-    const dt = e.timeStamp - lastMove.current.t;
-    if (dt > 0) velocityX.current = ((e.clientX - lastMove.current.x) / dt) * 1000;
-    lastMove.current = { x: e.clientX, t: e.timeStamp };
+    tracker.current.add(e.clientX, e.timeStamp);
     if (Math.abs(dx) > 6) didDrag.current = true;
     const min = -(indexAtStart.current * tabWidth);
     const max = (NAV.length - 1 - indexAtStart.current) * tabWidth;
-    if (dx > max) dragX.set(max + (dx - max) * 0.28);
-    else if (dx < min) dragX.set(min + (dx - min) * 0.28);
-    else dragX.set(dx);
+    const offset = rubberbandClamp(dx, min, max, tabWidth);
+    dragX.set(offset);
+    if (!didDrag.current) return;
+    // Light up the tab under the pill as it passes, with a detent tick —
+    // the picker-wheel feel of a native segmented scrub.
+    const over = Math.max(
+      0,
+      Math.min(NAV.length - 1, Math.round(indexAtStart.current + offset / tabWidth))
+    );
+    if (over !== scrubIndex.current) {
+      scrubIndex.current = over;
+      haptic("selection");
+    }
+    setScrubbing(over);
   }
 
   function onPointerUp(e: React.PointerEvent) {
     if (!dragging.current || pointerId.current !== e.pointerId) return;
     dragging.current = false;
     setIsDragging(false);
+    setScrubbing(null);
     pointerId.current = null;
+    const velocity = tracker.current.velocity(e.timeStamp);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
@@ -452,7 +486,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
       ? commitTabFromGesture({
           startIndex: indexAtStart.current,
           offset: dragX.get(),
-          velocity: velocityX.current,
+          velocity,
           tabWidth,
           count: NAV.length,
         })
@@ -462,18 +496,20 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // Either way the pill settles on a spring from where it was released; a
     // navigation just changes which tab it settles on. The spring carries the
     // throw's leftover speed so a flick bounces and a careful drag does not.
-    settlePillTo(clamped, velocityX.current);
+    settlePillTo(clamped, velocity);
     if (clamped !== currentIndex) {
-      haptic("light");
+      // A scrub already ticked its way here; a tap gets its one tick now.
+      if (!didDrag.current || scrubIndex.current !== clamped) haptic("selection");
       navigateTab(router, NAV[clamped].href);
     } else if (!didDrag.current) {
-      haptic("light");
+      haptic("selection");
     }
   }
 
   function onPointerCancel() {
     dragging.current = false;
     setIsDragging(false);
+    setScrubbing(null);
     pointerId.current = null;
     // The gesture never reached pointerup, so nothing was decided here — leave
     // the click for the link below rather than swallowing it.
@@ -509,13 +545,15 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
               <motion.span
                 className="mobile-tab-pill absolute inset-y-0 left-0"
                 style={{ width: tabWidth, x: pillX, willChange: "transform" }}
-                animate={{ scale: isDragging ? 1.015 : 1 }}
-                transition={pillSpringForVelocity(0)}
+                // The pill swells into a lens while held, like the Liquid
+                // Glass tab bar, and settles back on release.
+                animate={{ scale: isDragging ? 1.06 : 1 }}
+                transition={motionTokens.nudge}
               />
             )}
           </span>
           {NAV.map((item, index) => {
-            const active = pathname === item.href;
+            const active = scrubbing !== null ? scrubbing === index : pathname === item.href;
             const Icon = item.icon;
             return (
               <Link
@@ -548,13 +586,20 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                   )}
                   strokeWidth={active ? 2.1 : 1.85}
                 />
-                <span
-                  className={cn(
-                    "transition-colors duration-[var(--motion-standard)]",
-                    active ? "font-semibold text-ink" : "text-ink-faint"
-                  )}
-                >
-                  {item.label}
+                {/* The bold weight is always reserved underneath, so the label
+                    doesn't shift sideways when it becomes the active one. */}
+                <span className="grid">
+                  <span aria-hidden className="invisible col-start-1 row-start-1 font-semibold">
+                    {item.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "col-start-1 row-start-1 text-center transition-colors duration-[var(--motion-standard)]",
+                      active ? "font-semibold text-ink" : "text-ink-faint"
+                    )}
+                  >
+                    {item.label}
+                  </span>
                 </span>
               </Link>
             );

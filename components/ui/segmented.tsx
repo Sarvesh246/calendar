@@ -64,7 +64,7 @@ export function Segmented<T extends string>({
             data-pill-key={v}
             onClick={(e) => {
               if (active) return;
-              haptic("light");
+              haptic("selection");
               moveTo(e.currentTarget);
               startTransition(() => onChange(v));
             }}

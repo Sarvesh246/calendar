@@ -104,33 +104,67 @@ export function TabPageHost({ pathname }: { pathname: string }) {
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
+  // While a swipe is on screen the neighbour (or the page just left) floats
+  // beside the active one. Each is lined up with the scroll offset it will
+  // have once it is the real page, so nothing jumps vertically at the moment
+  // the swipe commits — the peek already shows exactly where you'll land.
+  const scrollY = typeof window === "undefined" ? 0 : window.scrollY;
+  const floatTop = (href: TabRoute, from: number) => Math.round(from - recallScroll(href));
+
   return (
     <div
       ref={hostRef}
       className={cn(
         "relative min-w-0 touch-pan-y",
         active === "/calendar" && "flex min-h-0 flex-1 flex-col",
-        swipe.dragging && "overflow-hidden touch-none"
+        swipe.dragging && "touch-none",
+        // `clip`, not `hidden`: hidden makes the host a scroll container, which
+        // unpins every `position: sticky` header on the page mid-swipe.
+        pageLive && "overflow-clip"
       )}
+      style={
+        // A short page must still cover the screen while a long neighbour
+        // floats over it, or the neighbour is clipped mid-viewport.
+        pageLive && active !== "/calendar" ? { minHeight: `calc(100dvh + ${scrollY}px)` } : undefined
+      }
     >
       {TAB_ROUTES.map((href) => {
-        if (!mounted[href] && href !== pathname && href !== swipe.peek) return null;
-        const Page = pages[href];
         const isActive = active === href;
-        const isPeek = swipe.peek === href;
+        const isPeek = swipe.peek === href && !isActive;
+        const isTrailing = swipe.trailing === href && !isActive && !isPeek;
+        if (!mounted[href] && href !== pathname && !isPeek && !isTrailing) return null;
+        const Page = pages[href];
+        const floating = isPeek || isTrailing;
+        const top = isPeek
+          ? floatTop(href, scrollY)
+          : isTrailing && active
+            ? floatTop(href, recallScroll(active))
+            : 0;
         return (
-          <Activity key={href} mode={isActive || isPeek ? "visible" : "hidden"}>
+          <Activity key={href} mode={isActive || floating ? "visible" : "hidden"}>
           <motion.div
             ref={isActive ? enterRef : undefined}
             className={cn(
               href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
-              isPeek && "pointer-events-none absolute inset-0 overflow-auto overscroll-contain"
+              floating && "pointer-events-none absolute inset-x-0"
             )}
             style={
               isActive && pageLive
                 ? { x: swipe.x, willChange: "transform" }
-                : isPeek
-                  ? { x: swipe.peekX, willChange: "transform" }
+                : floating
+                  ? {
+                      x: isPeek ? swipe.peekX : swipe.trailingX,
+                      top,
+                      willChange: "transform",
+                      // The calendar is a viewport-height page; floated, it
+                      // has to be told how tall that is.
+                      ...(href === "/calendar"
+                        ? {
+                            height:
+                              "calc(100dvh - var(--mobile-header-height) - var(--safe-bottom) - var(--tab-bar-rest) - 5.75rem)",
+                          }
+                        : null),
+                    }
                   : undefined
             }
           >

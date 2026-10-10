@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
+import { useAnimatedCollapse } from "@/lib/use-animated-collapse";
 import Link from "next/link";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
@@ -864,18 +865,19 @@ function CollapsibleCard({
   defaultOpen?: boolean;
 }) {
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
-  const reduced = prefersReducedMotion();
+  const bodyRef = useAnimatedCollapse<HTMLDivElement>(open);
 
-  // CSS grid rows, not Framer `height: "auto"`. Everyday (and Reminders) nest
-  // `layoutId` pills inside this body — measuring auto-height while those
-  // layout projections run looped updates and threw React #185 on Settings.
+  // A measured spring on the body's height, not CSS grid rows: `0fr` ↔
+  // `max-content` can't be interpolated, so the card used to sit still for
+  // half the transition and then snap. Not Framer `height: "auto"` either —
+  // Everyday (and Reminders) nest pills inside this body, and measuring
+  // auto-height while those layout projections ran threw React #185.
   return (
     <section
       id={id}
       className={cn(
-        // `self-start` + content-sized height so `grid-rows-[1fr]` (the
-        // open accordion track) cannot resolve against a stretched
-        // min-height ancestor and pad a blank region under the card.
+        // `self-start` + content-sized height so the open body cannot resolve
+        // against a stretched min-height ancestor and pad a blank region.
         "h-auto min-h-0 w-full self-start overflow-hidden rounded-lg border border-line/80 bg-surface",
         ANCHOR_OFFSET
       )}
@@ -898,13 +900,11 @@ function CollapsibleCard({
       </button>
 
       <div
-        className={cn(
-          "grid h-max content-start",
-          // `1fr` in an auto-height grid still expands to leftover min-height
-          // on iOS WebKit. `max-content` keeps the open track content-sized.
-          open ? "grid-rows-[minmax(0,max-content)]" : "grid-rows-[0fr]",
-          !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
-        )}
+        ref={bodyRef}
+        data-open={open}
+        // The class covers the first paint (before the hook takes over the
+        // inline height) so a closed card never flashes open.
+        className="overflow-hidden data-[open=false]:h-0"
         // Closed sections stay in the tree (so open/close doesn't remount
         // import controls) but must not take focus.
         inert={open ? undefined : true}
