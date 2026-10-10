@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { motion } from "framer-motion";
 import { format, isSameDay, isToday } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { groupItemsByDay, dayKey, dayLabel, formatTime, isEventEnded, rankDayItems } from "@/lib/date-utils";
+import { groupItemsByDay, dayKey, dayLabel, formatTime, formatTimeSpan, isEventEnded, rankDayItems } from "@/lib/date-utils";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
@@ -206,7 +206,7 @@ export function WeekView({
                 key={day.toISOString()}
                 data-drop-day={key}
                 className={cn(
-                  "week-allday-cell flex min-h-8 min-w-0 flex-col gap-1 border-l border-line p-1 transition-colors duration-[var(--motion-micro)]",
+                  "week-allday-cell flex min-h-9 min-w-0 flex-col gap-[3px] border-l border-line p-1 transition-colors duration-[var(--motion-micro)]",
                   isToday(day) && "bg-accent-soft/40"
                 )}
               >
@@ -228,7 +228,7 @@ export function WeekView({
                     aria-haspopup="dialog"
                     aria-label={`Show ${overflow} more on ${format(day, "EEEE, MMMM d")}`}
                     onClick={(e) => setOverflowFor({ day, rect: e.currentTarget.getBoundingClientRect() })}
-                    className="truncate rounded px-1.5 py-0.5 text-left text-[10.5px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="truncate rounded px-[7px] py-0.5 text-left text-[10.5px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     +{overflow} more
                   </button>
@@ -286,13 +286,19 @@ export function WeekView({
                       absEnd: session.endMin,
                     };
                   })
-                ).map(({ item, startMin, durationMin, col, colCount, absStart, absEnd }) => (
+                ).map(({ item, startMin, durationMin, col, colCount, absStart, absEnd }) => {
+                  const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
+                  // A block that starts in the last minutes of the day (an
+                  // 11:59 PM deadline) must still fit inside the grid, not hang
+                  // off its bottom edge and get clipped.
+                  const top = Math.min(Math.max(0, (startMin / 60) * HOUR_HEIGHT), Math.max(0, hours.length * HOUR_HEIGHT - height - 2));
+                  return (
                   <TimedBlock
                     key={item.id}
                     item={item}
                     day={day}
-                    top={Math.max(0, (startMin / 60) * HOUR_HEIGHT)}
-                    height={Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2)}
+                    top={top}
+                    height={height}
                     color={colorOf(item.categoryId)}
                     widthPct={100 / colCount}
                     col={col}
@@ -303,7 +309,8 @@ export function WeekView({
                     absEnd={absEnd}
                     onSelect={() => select(item, day)}
                   />
-                ))}
+                  );
+                })}
                 {isToday(day) && <NowLine now={now} startHour={startHour} endHour={endHour} />}
                 <DropGhost dayKey={key} startHour={startHour} clock24h={clock24h} />
               </div>
@@ -624,8 +631,8 @@ function TimedBlock({
       </p>
       {height > 32 && (
         <p className="truncate tabular-nums text-ink-soft">
-          {formatTime(item.at, clock24h)}
-          {height > 40 && item.endAt ? `–${formatTime(item.endAt, clock24h)}` : ""}
+          {/* Side-by-side blocks are narrow; the start alone fits, the full span is in the tooltip. */}
+          {height > 40 && widthPct === 100 ? formatTimeSpan(item.at, item.endAt, clock24h) : formatTime(item.at, clock24h).replace(/\s?(AM|PM)$/i, "")}
         </p>
       )}
       {height > 72 && item.location && <p className="truncate text-ink-soft">{item.location}</p>}
@@ -710,7 +717,7 @@ function AllDayChip({
       onKeyDown={(e) => handleItemMenuKey(e, item.id, key)}
       {...itemMenuProps(item.id, key)}
       className={cn(
-        "cal-chip flex min-w-0 cursor-grab items-center gap-1 px-1.5 py-0.5 text-left text-[10.5px] font-medium transition-opacity duration-[var(--motion-micro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        "cal-chip flex min-h-[22px] min-w-0 cursor-grab items-center gap-1.5 rounded-[5px] px-1.5 py-0.5 text-left text-[10.5px] font-medium transition-opacity duration-[var(--motion-micro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         work && "cal-chip-task",
         (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-70",
         lifted && "opacity-30"
@@ -718,8 +725,14 @@ function AllDayChip({
       title={`${work ? (item.type === "task" ? "Task" : "Due") : "All day"} · ${itemDisplayTitle(item)}${work && !item.allDay ? ` · ${formatTime(item.at, clock24h)}` : ""}`}
       style={{ "--cat": color } as React.CSSProperties}
     >
-      <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
-      <span className={cn("min-w-0 truncate", item.status === "done" && "line-through")}>{itemDisplayTitle(item)}</span>
+      {/* Finished work gets a hollow dot, not a strike-through: a struck line
+          on top of a dashed border reads as noise at this size. */}
+      <span
+        aria-hidden
+        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        style={item.status === "done" ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : { background: color }}
+      />
+      <span className="min-w-0 truncate">{itemDisplayTitle(item)}</span>
     </button>
   );
 }
