@@ -52,18 +52,21 @@ export function DateJump({
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Jump to a date (D)"
-        className="group -mx-1.5 flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-left transition-colors duration-[var(--motion-standard)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label="Jump to a date"
+        className="group -mx-1.5 flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-left transition-colors duration-[var(--motion-standard)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {children}
-        <span className="hidden text-[12px] font-medium text-ink-faint sm:inline">Jump</span>
-        <ChevronDown
+        {/* The chevron alone says "this is a picker"; the old text label sat on
+            a different baseline from the title and read as an afterthought. */}
+        <span
           aria-hidden
-          className={cn(
-            "h-4 w-4 shrink-0 text-ink-faint transition-transform duration-[var(--motion-standard)] group-hover:text-ink-soft",
-            open && "rotate-180"
-          )}
-          strokeWidth={2}
-        />
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-faint transition-colors duration-[var(--motion-standard)] group-hover:text-ink-soft"
+        >
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", open && "rotate-180")}
+            strokeWidth={2.25}
+          />
+        </span>
       </button>
       {(open || present) && (
         <JumpPanel

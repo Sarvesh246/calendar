@@ -336,6 +336,7 @@ export function DaySheet({
                   category={activeItem.categoryId ? categories.get(activeItem.categoryId) : undefined}
                   clock24h={chrome.clock24h}
                   StatusSegmented={StatusSegmented}
+                  variant="inspector"
                   onCollapse={() => {
                     setEditingItem(false);
                     setActiveItemId(null);

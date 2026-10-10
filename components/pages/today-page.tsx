@@ -24,6 +24,7 @@ import {
   nextOpenAssignment,
   openWorkDueOnDay,
   relativeDueLabel,
+  workDueOnDay,
   timeOfDayGreeting,
 } from "@/lib/date-utils";
 import { classCountdownWindowMs } from "@/lib/class-reminder";
@@ -95,12 +96,18 @@ function TodayDashboard() {
   const overdue = useMemo(() => leftoverOverdue(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const todayList = useMemo(() => {
     const events = today.filter((i) => i.type === "event");
-    const dueToday = openWorkDueOnDay(items, day);
-    return [...events, ...dueToday].sort(
-      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
-    );
+    const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
+    // Finished work stays on the day it was due, crossed out, below what is
+    // still open — it is how the day reads back as an accomplishment.
+    const due = workDueOnDay(items, day);
+    const open = [...events, ...due.filter((i) => i.status !== "done")].sort(byTime);
+    return [...open, ...due.filter((i) => i.status === "done")];
   }, [today, items, day]);
   const dueTodayCount = useMemo(() => openWorkDueOnDay(items, day).length, [items, day]);
+  const doneTodayCount = useMemo(
+    () => workDueOnDay(items, day).filter((i) => i.status === "done").length,
+    [items, day]
+  );
   const eventsCount = today.filter((i) => i.type === "event").length;
 
   // Measured against the *unfiltered* day, so "Clear day" can never be a filter
@@ -125,7 +132,8 @@ function TodayDashboard() {
             mobile ? 0 : overdue.length,
             todayBreakdown.hiddenByCategory +
               todayBreakdown.hiddenByCompletion +
-              todayBreakdown.hiddenByView
+              todayBreakdown.hiddenByView,
+            doneTodayCount
           )}
         </p>
       </div>

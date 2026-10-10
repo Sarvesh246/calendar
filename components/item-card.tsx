@@ -576,12 +576,13 @@ function EventCard({
         />
       )}
       {mobile && sheetOpen && (
-        <MobileItemSheet title="Edit item" onClose={() => setSheetOpen(false)}>
+        <MobileItemSheet title="Details" note="Changes save as you edit." onClose={() => setSheetOpen(false)}>
           <ItemEditor
             item={item}
             category={category}
             clock24h={clock24h}
             StatusSegmented={StatusSegmented}
+            variant="inspector"
             onCollapse={() => setSheetOpen(false)}
           />
         </MobileItemSheet>
@@ -727,12 +728,13 @@ function AssignmentCard({
         />
       )}
       {mobile && actions === "edit" && (
-        <MobileItemSheet title="Edit item" onClose={() => setActions(null)}>
+        <MobileItemSheet title="Details" note="Changes save as you edit." onClose={() => setActions(null)}>
           <ItemEditor
             item={item}
             category={category}
             clock24h={clock24h}
             StatusSegmented={StatusSegmented}
+            variant="inspector"
             onCollapse={() => setActions(null)}
           />
         </MobileItemSheet>
