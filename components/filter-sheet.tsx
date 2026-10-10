@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { viewSummary } from "@/lib/views";
 import { useAllViews, ViewEditor } from "@/components/saved-views";
+import { classLabel } from "@/lib/course-label";
 
 export function FilterButton({ className }: { className?: string }) {
   const filter = useUIStore((s) => s.categoryFilter);
@@ -42,6 +43,7 @@ export function FilterButton({ className }: { className?: string }) {
         setFilterOpen(true);
       }}
       aria-label={active ? `Filters — ${summary.label}. Change filters` : "Filter"}
+      title={active ? `Filters: ${summary.label}` : "Filter"}
       className={cn("relative", className, active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent")}
     >
       <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
@@ -220,7 +222,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                     }}
                     dot={cat.color}
                   >
-                    {cat.name}
+                    {classLabel(cat)}
                   </FilterRow>
                 );
               })}

@@ -24,6 +24,8 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useAuth } from "./auth-provider";
 import { SidebarViews } from "./saved-views";
+import { SidebarSectionHeader } from "./sidebar-section";
+import { useCourseLabels } from "@/lib/course-label";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
@@ -71,6 +73,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
   const clearCategoryFilter = useUIStore((s) => s.clearCategoryFilter);
   const activeViewId = useUIStore((s) => s.activeViewId);
   const filterCount = categoryFilter?.length ?? 0;
+  const courseLabels = useCourseLabels();
 
   const navRef = useRef<HTMLElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
@@ -107,8 +110,8 @@ export function Sidebar({ pathname }: { pathname: string }) {
         className="sticky top-4 hidden h-[calc(100dvh-2.5rem)] shrink-0 self-start overflow-hidden rounded-xl border border-line bg-surface md:block"
         style={{ width: collapsed ? 68 : 220 }}
       >
-        <aside className="flex h-full w-full flex-col gap-1 overflow-y-auto overflow-x-hidden p-3">
-        <div className="flex items-center justify-between px-1 py-1.5">
+        <aside className="flex h-full w-full flex-col overflow-hidden p-2.5">
+        <div className="flex h-10 shrink-0 items-center justify-between pl-2.5 pr-0.5">
           <AnimatePresence initial={false}>
             {!collapsed && (
               <motion.span
@@ -116,7 +119,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -6 }}
                 transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
-                className="whitespace-nowrap text-[17px] font-semibold text-ink"
+                className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] text-ink"
               >
                 Datebook
               </motion.span>
@@ -124,14 +127,15 @@ export function Sidebar({ pathname }: { pathname: string }) {
           </AnimatePresence>
           <button
             onClick={() => setSidebarCollapsed(!collapsed)}
-            className="ml-auto rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} /> : <PanelLeftClose className="h-4 w-4" strokeWidth={1.9} />}
           </button>
         </div>
 
-        <nav ref={navRef} className="relative mt-2 flex flex-col gap-0.5">
+        <nav ref={navRef} aria-label="Main" className="relative mt-3 flex shrink-0 flex-col gap-0.5">
           <span ref={pillRef} aria-hidden className="rail-pill pointer-events-none absolute inset-x-0 top-0 rounded-lg bg-accent opacity-0" />
           {NAV.map((item) => (
             <RailLink
@@ -164,6 +168,8 @@ export function Sidebar({ pathname }: { pathname: string }) {
           />
         </nav>
 
+        {/* Views and classes scroll on their own; navigation and the footer
+            stay put however long the class list grows. */}
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.div
@@ -171,53 +177,60 @@ export function Sidebar({ pathname }: { pathname: string }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: motionTokens.micro }}
-              className="flex flex-col gap-0.5"
+              className="sidebar-scroll -mx-2.5 mt-5 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden px-2.5 pb-3"
             >
               <SidebarViews />
-              <div className="mt-6 flex items-center justify-between px-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-                  Classes
-                </p>
-                {filterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearCategoryFilter}
-                    className="text-[11.5px] font-medium text-accent hover:underline"
-                  >
-                    Show all
-                  </button>
-                )}
-              </div>
-              {categories
-                .filter((c) => !c.archived)
-                .map((cat) => {
-                  const active = categoryFilter?.includes(cat.id) ?? false;
-                  return (
+              <div className="flex flex-col gap-0.5">
+                <SidebarSectionHeader label="Classes">
+                  {filterCount > 0 && (
                     <button
-                      key={cat.id}
-                      onClick={() => toggleCategoryFilter(cat.id)}
-                      aria-pressed={active}
-                      className={cn(
-                        "press-none group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px]",
-                        "transition-colors duration-[var(--motion-standard)]",
-                        active ? "bg-surface-sunken text-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
-                      )}
+                      type="button"
+                      onClick={clearCategoryFilter}
+                      className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
                     >
-                      <motion.span
-                        aria-hidden
-                        initial={false}
-                        animate={{ scale: active ? 1 : 0.72 }}
-                        transition={motionTokens.springSnappy}
-                        className="h-2 w-2 shrink-0 rounded-full ring-2 ring-transparent transition-[box-shadow]"
-                        style={{
-                          background: cat.color,
-                          boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${cat.color} 22%, transparent)` : "none",
-                        }}
-                      />
-                      <span className="truncate">{cat.name}</span>
+                      Show all
                     </button>
-                  );
-                })}
+                  )}
+                </SidebarSectionHeader>
+                {categories
+                  .filter((c) => !c.archived)
+                  .map((cat) => {
+                    const active = categoryFilter?.includes(cat.id) ?? false;
+                    const course = courseLabels.of(cat);
+                    const label = course?.label ?? cat.name;
+                    const tip = [course?.full ?? cat.name, course?.detail && course.detail !== course.full ? course.detail : null]
+                      .filter(Boolean)
+                      .join(" — ");
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => toggleCategoryFilter(cat.id)}
+                        aria-pressed={active}
+                        aria-label={`Show only ${label}`}
+                        title={tip}
+                        className={cn(
+                          "press-none group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]",
+                          "transition-colors duration-[var(--motion-micro)]",
+                          active ? "bg-surface-sunken font-medium text-ink" : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink"
+                        )}
+                      >
+                        <span aria-hidden className="flex w-4 shrink-0 justify-center">
+                          <motion.span
+                            initial={false}
+                            animate={{ scale: active ? 1.15 : 1 }}
+                            transition={motionTokens.springSnappy}
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              background: cat.color,
+                              boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${cat.color} 24%, transparent)` : "none",
+                            }}
+                          />
+                        </span>
+                        <span className="min-w-0 truncate">{label}</span>
+                      </button>
+                    );
+                  })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -239,7 +252,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
           </button>
         )}
 
-        <div className="mt-auto flex flex-col gap-0.5">
+        <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-line pt-2">
           <SyncChip collapsed={collapsed} />
           <RailLink
             href="/settings"

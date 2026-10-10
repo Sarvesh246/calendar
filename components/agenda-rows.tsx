@@ -19,8 +19,10 @@ import { format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useCategoriesById } from "@/lib/card-chrome";
-import { classMeetingTitle } from "@/lib/class-schedule";
-import { dayKey, formatTime, isOverdue, toDateInputValue } from "@/lib/date-utils";
+import { isClassMeeting } from "@/lib/class-schedule";
+import { itemDisplayTitle, useCourseLabels, type CourseLabel } from "@/lib/course-label";
+import { dayKey, formatTime, formatTimeSpan, isEventEnded, isOverdue, toDateInputValue } from "@/lib/date-utils";
+import { useNow } from "@/lib/use-now";
 import { dayDelta, shiftedByDays } from "@/lib/calendar-drag-math";
 import { applyBatchPatch, setStatusWithUndo, STATUS_LABEL } from "@/lib/item-actions";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
@@ -32,14 +34,20 @@ import type { Category, Item, ItemStatus } from "@/lib/types";
 export interface AgendaRowSection {
   id: string;
   label: string;
+  /** Quieter second half of the heading — the date beside "Tomorrow". */
+  sublabel?: string;
+  /** Total in the group (may exceed `items` while the list is still filling). */
+  count?: number;
   tone: "warn" | "faint";
   items: Item[];
   /** The day the section is for — a multi-day event moves from there. */
   dayKey?: string;
 }
 
+// Checkbox · title · class · when · status. The class column folds into the
+// title's second line below `lg` rather than squeezing every column.
 const GRID =
-  "grid items-center grid-cols-[2.25rem_minmax(0,1fr)_8.75rem_8.5rem] lg:grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,10rem)_9.5rem_8.75rem]";
+  "grid items-center grid-cols-[2.5rem_minmax(0,1fr)_9rem_8.5rem] lg:grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,11rem)_10rem_8.5rem]";
 
 const STATUSES: ItemStatus[] = ["todo", "doing", "done"];
 
@@ -50,6 +58,8 @@ const STATUSES: ItemStatus[] = ["todo", "doing", "done"];
  */
 export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
   const categories = useCategoriesById();
+  const labels = useCourseLabels();
+  const now = useNow();
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const anchor = useRef<string | null>(null);
@@ -109,7 +119,7 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
         <div role="rowgroup">
           <div
             role="row"
-            className={cn(GRID, "rounded-t-xl border-b border-line px-1 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-faint")}
+            className={cn(GRID, "h-10 rounded-t-xl border-b border-line px-1 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint")}
           >
             <div role="columnheader" className="flex justify-center">
               <SelectBox
@@ -119,20 +129,28 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
                 onToggle={() => setSelected(allSelected ? new Set() : new Set(ordered))}
               />
             </div>
-            <div role="columnheader" className="px-1">Title</div>
+            <div role="columnheader" className="pl-6 pr-1">Title</div>
             <div role="columnheader" className="hidden px-2 lg:block">Class</div>
-            <div role="columnheader" className="px-2">Due</div>
-            <div role="columnheader" className="px-2">Status</div>
+            <div role="columnheader" className="px-2.5">When</div>
+            <div role="columnheader" className="px-2.5">Status</div>
           </div>
         </div>
         {sections.map((section) => (
           <div key={section.id} role="rowgroup" id={`agenda-${section.id}`} className="agenda-day">
-            <div role="row" className="border-b border-line bg-surface-sunken/40 px-3 py-1.5">
+            <div role="row" className={cn(GRID, "h-9 border-b border-line bg-surface-sunken/35 px-1")}>
               <span
                 role="rowheader"
-                className={cn("text-[11.5px] font-medium", section.tone === "warn" ? "text-warn" : "text-ink-soft")}
+                className="col-[2/-1] flex items-baseline gap-2 pl-6 pr-3 text-[12.5px]"
               >
-                {section.label}
+                <span className={cn("font-semibold", section.tone === "warn" ? "text-warn" : "text-ink")}>
+                  {section.label}
+                </span>
+                {section.sublabel && <span className="text-ink-faint">{section.sublabel}</span>}
+                {section.count != null && (
+                  <span className="ml-auto text-[11.5px] tabular-nums text-ink-faint">
+                    {section.count} {section.count === 1 ? "item" : "items"}
+                  </span>
+                )}
               </span>
             </div>
             {section.items.map((item) => (
@@ -140,6 +158,8 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
                 key={item.id}
                 item={item}
                 category={categories.get(item.categoryId)}
+                course={labels.of(categories.get(item.categoryId))}
+                now={now}
                 dayKey={section.dayKey}
                 clock24h={clock24h}
                 selected={selected.has(item.id)}
@@ -160,6 +180,8 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
 function AgendaRow({
   item,
   category,
+  course,
+  now,
   dayKey: sectionDay,
   clock24h,
   selected,
@@ -168,6 +190,8 @@ function AgendaRow({
 }: {
   item: Item;
   category: Category | undefined;
+  course: CourseLabel | undefined;
+  now: Date;
   dayKey?: string;
   clock24h: boolean;
   selected: boolean;
@@ -181,7 +205,17 @@ function AgendaRow({
   const at = new Date(item.at);
   const menuDay = sectionDay ?? dayKey(at);
   const Glyph = item.type === "event" ? Clock : item.type === "assignment" ? FileText : ListTodo;
-  const displayTitle = classMeetingTitle(item, category);
+  const displayTitle = itemDisplayTitle(item, category);
+  const classLabel = course?.label ?? "No class";
+  const done = work && status === "done";
+  // Inside a day group the date is already the heading; only the Overdue and
+  // Later groups need it on every row.
+  const timeText = item.allDay
+    ? "All day"
+    : work
+      ? formatTime(item.at, clock24h)
+      : formatTimeSpan(item.at, item.endAt, clock24h);
+  const whenText = sectionDay ? timeText : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
 
   return (
     <div
@@ -193,9 +227,9 @@ function AgendaRow({
       }}
       className={cn(
         GRID,
-        "group/row min-h-11 border-b border-line/70 px-1 text-[13px] last:border-b-0",
+        "group/row min-h-11 border-b border-line/60 px-1 text-[13.5px] last:border-b-0",
         "transition-colors duration-[var(--motion-micro)]",
-        selected ? "bg-accent-soft/70" : "hover:bg-surface-sunken/40"
+        selected ? "bg-accent-soft/70" : "hover:bg-surface-sunken/45"
       )}
     >
       <div role="cell" className="flex justify-center">
@@ -208,20 +242,30 @@ function AgendaRow({
       </div>
 
       <div role="cell" className="relative flex min-w-0 items-center gap-2 px-1">
-        <Glyph aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.8} />
-        <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() => openInspector(item.id)}
-            onKeyDown={(e) => handleItemMenuKey(e, item.id, menuDay)}
-            className={cn(
-              "block max-w-full truncate rounded text-left font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              status === "done" && work ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
+        <Glyph
+          aria-label={item.type === "event" ? (isClassMeeting(item, category?.name) ? "Class" : "Event") : item.type === "assignment" ? "Assignment" : "Task"}
+          className={cn("h-3.5 w-3.5 shrink-0", overdue ? "text-warn" : "text-ink-faint")}
+          strokeWidth={1.8}
+        />
+        <div className="min-w-0 flex-1 py-1.5">
+          <span className="flex min-w-0 items-baseline gap-2">
+            <button
+              type="button"
+              onClick={() => openInspector(item.id)}
+              onKeyDown={(e) => handleItemMenuKey(e, item.id, menuDay)}
+              title={displayTitle !== item.title ? item.title : undefined}
+              className={cn(
+                "min-w-0 truncate rounded text-left font-medium underline-offset-[3px] decoration-line-strong hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                done ? "text-ink-faint" : "text-ink"
+              )}
+            >
+              {displayTitle}
+            </button>
+            {item.location && (
+              <span className="hidden min-w-0 shrink truncate text-[12px] text-ink-faint xl:inline">{item.location}</span>
             )}
-          >
-            {displayTitle}
-          </button>
-          <p className="truncate text-[11.5px] text-ink-faint lg:hidden">{category?.name ?? "No class"}</p>
+          </span>
+          <p className="truncate text-[12px] text-ink-faint lg:hidden">{classLabel}</p>
         </div>
         <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-[var(--motion-micro)] group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100">
           <RowIconButton label="Open details" onClick={() => openInspector(item.id)}>
@@ -233,41 +277,58 @@ function AgendaRow({
         </div>
       </div>
 
-      <div role="cell" className="hidden min-w-0 items-center gap-2 px-2 lg:flex">
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
-        <span className="truncate text-ink-soft">{category?.name ?? "No class"}</span>
+      <div role="cell" className="hidden min-w-0 items-center gap-2 px-2 lg:flex" title={course?.full}>
+        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "var(--ink-faint)" }} />
+        <span className={cn("truncate text-[13px]", done ? "text-ink-faint" : "text-ink-soft")}>{classLabel}</span>
       </div>
 
       <div role="cell" className="min-w-0 px-1">
         <button
           type="button"
           aria-haspopup="menu"
-          aria-label={`${work ? "Due" : "When"}: ${format(at, "EEEE, MMMM d")}. Change date`}
+          aria-label={`${work ? "Due" : "When"}: ${format(at, "EEEE, MMMM d")}${item.allDay ? "" : `, ${timeText}`}. Change date`}
           onClick={(e) => openItemMenuAt(e.currentTarget, item.id, { dayKey: menuDay, section: "reschedule" })}
           className={cn(
-            "flex h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[12.5px] tabular-nums transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            overdue ? "font-medium text-warn" : "text-ink-soft"
+            "flex h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[13px] tabular-nums transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            overdue ? "font-medium text-warn" : done ? "text-ink-faint" : "text-ink-soft"
           )}
         >
-          <span className="truncate">
-            {format(at, "EEE, MMM d")}
-            {!item.allDay && <span className="text-ink-faint"> · {formatTime(item.at, clock24h)}</span>}
-          </span>
+          <span className="truncate">{whenText}</span>
         </button>
       </div>
 
       <div role="cell" className="px-1">
-        {work ? (
-          <StatusPicker item={item} />
-        ) : (
-          <span className="px-1.5 text-[12px] tabular-nums text-ink-faint">
-            {item.allDay
-              ? "All day"
-              : `${formatTime(item.at, clock24h)}${item.endAt ? `–${formatTime(item.endAt, clock24h)}` : ""}`}
-          </span>
-        )}
+        {work ? <StatusPicker item={item} /> : <EventState item={item} now={now} day={sectionDay} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * An event has no to-do status, but it does have a state: still ahead, on
+ * right now, or over. Shown in the status column so the column always answers
+ * "where does this stand" — never a time range wedged into the wrong field.
+ */
+function EventState({ item, now, day }: { item: Item; now: Date; day?: string }) {
+  const on = day ? new Date(`${day}T12:00:00`) : new Date(item.at);
+  const ended = isEventEnded(item, now, on);
+  const live = !ended && !item.allDay && new Date(item.at).getTime() <= now.getTime();
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 px-2.5 text-[12px] font-medium",
+        live ? "text-accent" : "text-ink-faint"
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          live ? "bg-accent" : ended ? "bg-line-strong" : "border border-ink-faint"
+        )}
+      />
+      {live ? "Now" : ended ? "Ended" : "Scheduled"}
+    </span>
   );
 }
 
@@ -536,6 +597,7 @@ type BatchMenu = "move" | "class" | "date" | null;
 /** Change many selected items at once — one Undo for the lot. */
 function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
   const categories = useDatebookStore((s) => s.categories);
+  const labels = useCourseLabels();
   const [menu, setMenu] = useState<BatchMenu>(null);
   const [date, setDate] = useState(() => toDateInputValue(items[0]?.at ?? new Date().toISOString()));
   const ref = useRef<HTMLDivElement>(null);
@@ -585,7 +647,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
     applyBatchPatch(
       items,
       (i) => (i.categoryId === category.id ? null : { categoryId: category.id }),
-      (n) => `Moved ${plural(n)} to ${category.name}`
+      (n) => `Moved ${plural(n)} to ${labels.label(category)}`
     );
     setMenu(null);
   }
@@ -712,7 +774,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
                   .map((c) => (
                     <PopoverItem key={c.id} onClick={() => setClass(c)}>
                       <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
-                      <span className="truncate">{c.name}</span>
+                      <span className="truncate" title={c.name}>{labels.label(c)}</span>
                     </PopoverItem>
                   ))}
               </div>

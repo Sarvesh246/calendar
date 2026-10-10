@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
 import type { Category } from "@/lib/types";
+import { classLabel } from "@/lib/course-label";
 
 /**
  * The three things about a new item you are most likely to want to correct,
@@ -158,7 +159,7 @@ export function ComposerChips({
               setOpen(null);
             }}
           >
-            {cat.name}
+            {classLabel(cat)}
           </Choice>
         ))}
     </Choices>

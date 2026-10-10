@@ -18,6 +18,7 @@ import {
   nextOpenAssignment,
   openItemsOnDay,
   openWorkDueOnDay,
+  workDueOnDay,
   rankDayItems,
   wallTimeInZoneToIso,
   weekWorkload,
@@ -129,7 +130,16 @@ describe("nextOpenAssignment", () => {
     const sooner = base({ id: "3", at: new Date("2026-09-01T12:00:00").toISOString() });
     const done = base({ id: "4", status: "done", at: new Date("2026-08-01T12:00:00").toISOString() });
     const event = base({ id: "5", type: "event", at: new Date("2026-08-15T12:00:00").toISOString() });
-    expect(nextOpenAssignment([later, sooner, done, event])?.id).toBe("3");
+    const now = new Date("2026-08-20T12:00:00");
+    expect(nextOpenAssignment([later, sooner, done, event], now)?.id).toBe("3");
+  });
+
+  it("never offers overdue work as what's due next", () => {
+    const now = new Date("2026-09-01T18:00:00");
+    const overdue = base({ id: "6", at: new Date("2026-08-30T23:59:00").toISOString() });
+    const ahead = base({ id: "7", at: new Date("2026-09-01T23:59:00").toISOString() });
+    expect(nextOpenAssignment([overdue, ahead], now)?.id).toBe("7");
+    expect(nextOpenAssignment([overdue], now)).toBeUndefined();
   });
 });
 
@@ -165,7 +175,22 @@ describe("openWorkDueOnDay and leftoverOverdue", () => {
   });
 });
 
+describe("workDueOnDay", () => {
+  it("keeps finished work on its day, after what is still open", () => {
+    const day = new Date(2026, 8, 10, 12, 0, 0);
+    const done = base({ id: "done", at: new Date(2026, 8, 10, 8, 0, 0).toISOString(), status: "done" });
+    const open = base({ id: "open", at: new Date(2026, 8, 10, 20, 0, 0).toISOString(), status: "todo" });
+    const other = base({ id: "other", at: new Date(2026, 8, 11, 8, 0, 0).toISOString(), status: "todo" });
+    expect(workDueOnDay([done, open, other], day).map((i) => i.id)).toEqual(["open", "done"]);
+  });
+});
+
 describe("formatDaySummary", () => {
+  it("celebrates a day that is entirely done", () => {
+    expect(formatDaySummary(0, 0, 0, 0, 3)).toBe("All done · 3 completed");
+    expect(formatDaySummary(0, 2, 0, 0, 1)).toBe("2 due · 1 done");
+  });
+
   it("joins the counts that matter and stays quiet when empty", () => {
     expect(formatDaySummary(0, 0, 0)).toBe("Clear day");
     expect(formatDaySummary(1, 0, 0)).toBe("1 event");

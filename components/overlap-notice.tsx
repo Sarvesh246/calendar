@@ -10,6 +10,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { overlapLabel, type OverlapGroup } from "@/lib/overlap";
 import { cn } from "@/lib/utils";
+import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 /**
  * "Two of these are at the same time" — in words, on a screen too narrow to
@@ -85,10 +86,10 @@ export function OverlapNotice({ group }: { group: OverlapGroup }) {
                     <span className="min-w-0 flex-1">
                       {/* Wraps rather than truncates: the whole point of opening
                           this is to read both titles in full. */}
-                      <span className="block text-[13px] font-medium text-ink">{item.title}</span>
+                      <span className="block text-[13px] font-medium text-ink">{itemDisplayTitle(item, category)}</span>
                       <span className="block text-[11.5px] tabular-nums text-ink-soft">
                         {rangeLabel(item.at, item.endAt, clock24h)}
-                        {category && ` · ${category.name}`}
+                        {category && ` · ${classLabel(category)}`}
                       </span>
                     </span>
                   </li>

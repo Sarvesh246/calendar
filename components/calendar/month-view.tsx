@@ -15,6 +15,7 @@ import { useNow } from "@/lib/use-now";
 import { beginCalendarDrag, useCalendarDrag } from "@/lib/calendar-drag";
 import { dayLabelFor, rescheduleToDay } from "@/lib/item-actions";
 import { itemMenuProps } from "@/lib/item-menu";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 const WEEKDAY_LABELS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_LABELS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -30,10 +31,10 @@ function chipLabel(item: Item, clock24h: boolean) {
   if (item.allDay) return item.title;
   const d = new Date(item.at);
   if (Number.isNaN(d.getTime())) return item.title;
-  if (clock24h) return `${format(d, "H:mm")} ${item.title}`;
+  if (clock24h) return `${format(d, "H:mm")} ${itemDisplayTitle(item)}`;
   const h = d.getHours();
   const hour12 = h % 12 || 12;
-  return `${hour12}${h >= 12 ? "p" : "a"} ${item.title}`;
+  return `${hour12}${h >= 12 ? "p" : "a"} ${itemDisplayTitle(item)}`;
 }
 
 function fitCountVertical(
@@ -209,7 +210,7 @@ function DayCellMobilePreview({
   const markers = [...new Map([event, due, ...open].filter((i): i is Item => Boolean(i)).map(i => [i.id, i])).values()].slice(0, 3);
 
   return (
-    <div className="month-day-preview flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
+    <div className="month-day-preview mt-1 flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
       <div className="flex items-center gap-1" aria-label={`${open.filter(i => i.type === "event").length} scheduled, ${open.filter(i => i.type !== "event").length} due`}>
         {markers.map(i => <span key={i.id} className={cn("h-1.5 w-1.5", i.type === "event" ? "rounded-full" : "rounded-[1px] rotate-45")} style={{ background: colorOf(i.categoryId) }} />)}
       </div>
@@ -273,7 +274,10 @@ function MonthGridPanel({
       style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
     >
       <span ref={ringRef} aria-hidden className="sliding-pill z-[2] hidden rounded-lg ring-2 ring-inset ring-accent sm:block" />
-      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] rounded-full ring-2 ring-accent sm:hidden" />
+      {/* A hairline halo with a little air around the date. Grown by a
+          transparent spread, never `scale`: the `scale` property multiplies
+          the pill's translate too, which pushed the ring off its date. */}
+      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] rounded-full shadow-[0_0_0_2px_transparent,0_0_0_3px_var(--accent)] sm:hidden" />
       {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
         const today = isToday(date);
@@ -316,8 +320,14 @@ function MonthGridPanel({
             <span data-ring-day={dayKey(date)} className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
               <span
                 className={cn(
-                  "month-day-date relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold tabular-nums",
-                  "transition-colors duration-[var(--motion-standard)]",
+                  "month-day-date relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold leading-none tabular-nums",
+
+                  "transition-[color,background-color,box-shadow] duration-[var(--motion-standard)]",
+                  // Selected today on a phone: the badge's fill grows out to
+                  // meet the ring (spread overlaps it by half a pixel so no
+                  // seam shows), reading as one solid disc instead of a
+                  // badge floating inside a ring.
+                  today && selected && "max-sm:shadow-[0_0_0_2.5px_var(--accent)]",
                   // Bigger than the old 12px, and today keeps its filled badge
                   // on desktop too, so "where am I" is answered at a glance.
                   "sm:h-[22px] sm:w-[22px] sm:min-w-0 sm:text-[13px]",
@@ -328,7 +338,10 @@ function MonthGridPanel({
                       : "text-ink-faint"
                 )}
               >
-                {format(date, "d")}
+                {/* Its own block, trimmed to the numerals' cap height, so the
+                    flex centring centres the digits themselves rather than the
+                    font's ascender/descender padding (which sat them low). */}
+                <span className="block [text-box:trim-both_cap_alphabetic]">{format(date, "d")}</span>
               </span>
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />

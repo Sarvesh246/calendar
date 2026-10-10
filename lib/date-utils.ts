@@ -150,6 +150,17 @@ export function openWorkDueOnDay(items: Item[], day: Date): Item[] {
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
+/**
+ * Everything due on `day`, finished or not. Open work keeps its time order and
+ * completed work follows it, so ticking something off moves it to the bottom of
+ * the day — still there, crossed out — instead of making it vanish.
+ */
+export function workDueOnDay(items: Item[], day: Date): Item[] {
+  const due = items.filter((i) => isDueOnDay(i, day));
+  const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
+  return [...due.filter((i) => i.status !== "done").sort(byTime), ...due.filter((i) => i.status === "done").sort(byTime)];
+}
+
 /** Overdue work whose due day is before `day` — leftover, not "due today". */
 export function leftoverOverdue(items: Item[], day = new Date()): Item[] {
   return items
@@ -492,9 +503,10 @@ export function rankItemsByDay(byDay: Map<string, Item[]>, now = new Date()) {
 }
 
 /** Soonest open assignment or task — overdue first, then upcoming due dates. */
-export function nextOpenAssignment(items: Item[]): Item | undefined {
+/** The soonest open work that is still ahead — overdue work has its own section. */
+export function nextOpenAssignment(items: Item[], now = new Date()): Item | undefined {
   return items
-    .filter((i) => i.type !== "event" && i.status !== "done")
+    .filter((i) => i.type !== "event" && i.status !== "done" && !isOverdueAt(i, now))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
 }
 
@@ -579,12 +591,15 @@ export function formatDaySummary(
   due: number,
   overdue: number,
   /** How many of the day's things the filters are hiding, if any. */
-  hidden = 0
+  hidden = 0,
+  /** Work due today that is already finished. */
+  done = 0
 ) {
   const parts: string[] = [];
   if (overdue) parts.push(`${overdue} overdue`);
   if (events) parts.push(`${events} event${events === 1 ? "" : "s"}`);
   if (due) parts.push(`${due} due`);
+  if (done) parts.push(due || events || overdue ? `${done} done` : `All done · ${done} completed`);
   // "Clear day" on a day that is only clear because a filter emptied it is the
   // headline contradicting the empty state directly underneath it.
   if (parts.length === 0 && hidden > 0) {
@@ -592,4 +607,23 @@ export function formatDaySummary(
   }
   if (parts.length === 0) return "Clear day";
   return parts.join(" · ");
+}
+
+/**
+ * A start–end time span the way the Schedule writes it: one meridiem when both
+ * ends share it (`10:20–11:10 AM`), both when they don't (`11:30 AM–1:00 PM`).
+ * Spans that cross midnight or have no end fall back to the start time.
+ */
+export function formatTimeSpan(startIso: string, endIso: string | undefined, clock24h: boolean) {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return NO_DATE;
+  const from = formatTime(startIso, clock24h);
+  if (!endIso) return from;
+  const end = new Date(endIso);
+  if (Number.isNaN(end.getTime()) || end <= start || !isSameDay(start, end)) return from;
+  const to = formatTime(endIso, clock24h);
+  if (clock24h || start.getHours() >= 12 === end.getHours() >= 12) {
+    return `${from.replace(/\s?(AM|PM)$/i, "")}–${to}`;
+  }
+  return `${from}–${to}`;
 }

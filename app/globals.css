@@ -1205,6 +1205,14 @@ select {
 }
 
 /* Desktop rail's active pill (see `movePill` in sidebar.tsx). */
+/* The rail's views + classes region scrolls on its own. A short fade at each
+   edge says "there's more" without a hard line cutting a row in half. */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+}
+
 .rail-pill {
   transition:
     transform 340ms cubic-bezier(0.32, 0.72, 0, 1),
@@ -1542,12 +1550,15 @@ html.calendar-dragging * {
 .item-card-presence {
   display: grid;
   grid-template-rows: 1fr;
-  contain: layout paint;
+  contain: layout;
 }
 
+/* Clips while the card's height collapses on exit, but lets the settled
+   card's 1px border paint even when its box lands on a half pixel. */
 .item-card-presence-inner {
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: 2px;
 }
 
 .item-card {
@@ -1576,6 +1587,11 @@ html.calendar-dragging * {
 .agenda-day {
   content-visibility: auto;
   contain-intrinsic-size: auto 8rem;
+  /* content-visibility paints within the section's own box; at a fractional
+     device scale that clipped the last card's bottom border. A couple of
+     pixels of slack, given back by the margin, keeps it whole. */
+  padding-bottom: 2px;
+  margin-bottom: -2px;
 }
 
 /* Cell density follows available height, including landscape and split view.

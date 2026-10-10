@@ -14,6 +14,7 @@ import { MobileItemSheet } from "@/components/mobile-item-sheet";
 import { ItemCard } from "@/components/item-card";
 import { Reveal } from "@/components/ui/reveal";
 import { motion as motionTokens } from "@/lib/motion";
+import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 const recentKey = "datebook-recent-searches";
 
@@ -180,11 +181,11 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
                   setSelected(i.id);
                 }}
               >
-                <span className="text-[14px] font-medium">{i.title}</span>
+                <span className="text-[14px] font-medium">{itemDisplayTitle(i)}</span>
                 <span className="text-[12px] text-ink-soft">
                   {format(new Date(i.at), "EEE, MMM d, yyyy")}
                   {!i.allDay && ` · ${format(new Date(i.at), "p")}`} ·{" "}
-                  {categoriesById.get(i.categoryId ?? "")?.name ?? "No class"} ·{" "}
+                  {classLabel(categoriesById.get(i.categoryId ?? ""))} ·{" "}
                   {i.type === "event"
                     ? "Scheduled"
                     : i.status === "done"
@@ -214,10 +215,10 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
       )}
 
       {current && (
-        <MobileItemSheet title={current.title} onClose={() => setSelected(null)}>
+        <MobileItemSheet title={itemDisplayTitle(current)} onClose={() => setSelected(null)}>
           <p className="mb-3 text-[13px] text-ink-soft">
             {dayKey(new Date(current.at))} ·{" "}
-            {categoriesById.get(current.categoryId ?? "")?.name ?? "No class"}
+            {classLabel(categoriesById.get(current.categoryId ?? ""))}
           </p>
           <ItemCard
             item={current}

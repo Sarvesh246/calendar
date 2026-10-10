@@ -38,17 +38,65 @@ interface Box {
   h: number;
 }
 
-/** `el`'s box in `container`'s coordinates, through any nested offset parents. */
-function boxOf(el: HTMLElement, container: HTMLElement | null): Box {
+/**
+ * `el`'s box in `container`'s coordinates, through any nested offset parents.
+ *
+ * Deliberately layout-based (offsets), not raw `getBoundingClientRect`: cells
+ * and pages animate in with transforms, and a rect measured mid-animation
+ * parks the pill where the element is *passing*, not where it will rest. Each
+ * offset parent's border is added back, because `offsetLeft` is measured from
+ * the padding edge — skipping it left rings a pixel off their date.
+ *
+ * Offsets (and `clientLeft`) are whole pixels, though, and a seven-column grid
+ * is not, so `boxOf` refines this against the pill's real origin below.
+ */
+function offsetBox(el: HTMLElement, container: HTMLElement | null): Box {
   let x = 0;
   let y = 0;
   let node: HTMLElement | null = el;
   while (node && node !== container) {
     x += node.offsetLeft;
     y += node.offsetTop;
-    node = node.offsetParent as HTMLElement | null;
+    const parent = node.offsetParent as HTMLElement | null;
+    if (parent && parent !== container) {
+      x += parent.clientLeft;
+      y += parent.clientTop;
+    }
+    node = parent;
   }
   return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+}
+
+// Rounding at two or three nesting levels plus a border can add up to just
+// over a pixel; anything further apart is a transform in flight or a pill
+// that isn't displayed, and the offsets win.
+const ROUNDING_SLACK = 2;
+
+function refine(offset: number, measured: number) {
+  return Math.abs(measured - offset) < ROUNDING_SLACK ? measured : offset;
+}
+
+/**
+ * The sub-pixel box, measured from where the pill's own coordinate space
+ * actually starts (its rect minus the translate it currently has), so no
+ * rounded offset or border width is involved. Each value is only taken when it
+ * agrees with the offset box to within rounding — a transform in flight, or a
+ * pill that isn't displayed at this breakpoint, falls back to the offsets.
+ */
+function boxOf(el: HTMLElement, container: HTMLElement | null, pill: HTMLElement): Box {
+  const base = offsetBox(el, container);
+  const transform = getComputedStyle(pill).transform;
+  const m = transform && transform !== "none" ? new DOMMatrixReadOnly(transform) : null;
+  const pr = pill.getBoundingClientRect();
+  const er = el.getBoundingClientRect();
+  const ox = pr.left - (m?.m41 ?? 0);
+  const oy = pr.top - (m?.m42 ?? 0);
+  return {
+    x: refine(base.x, er.left - ox),
+    y: refine(base.y, er.top - oy),
+    w: refine(base.w, er.width),
+    h: refine(base.h, er.height),
+  };
 }
 
 export interface SlidingPillOptions {
@@ -93,7 +141,7 @@ export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends
     (el: HTMLElement, animate: boolean) => {
       const pill = pillRef.current;
       if (!pill) return;
-      const to = boxOf(el, getContainer());
+      const to = boxOf(el, getContainer(), pill);
       const from = current.current;
       target.current = el;
       if (mark) markOn(el, getContainer());
@@ -156,7 +204,7 @@ export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends
       const el = target.current;
       const pill = pillRef.current;
       if (!el || !pill || !el.isConnected || anim.current?.playState === "running") return;
-      const box = boxOf(el, container);
+      const box = boxOf(el, container, pill);
       const cur = current.current;
       if (cur && cur.x === box.x && cur.y === box.y && cur.w === box.w && cur.h === box.h) return;
       place(pill, box);

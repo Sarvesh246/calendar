@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronUp, Copy, ExternalLink, MapPin, Repeat, Shapes, Tag, Timer, Trash2, Type, X } from "lucide-react";
+import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ChevronUp, Copy, ExternalLink, MapPin, Repeat, Shapes, Tag, Timer, Trash2, Type, X } from "lucide-react";
+import { Reveal } from "@/components/ui/reveal";
+import { summarizeItemWhen } from "@/lib/item-summary";
+import { CHIP_TONE, TYPE_NAME } from "@/components/item-summary-header";
+import { useNow } from "@/lib/use-now";
 import { motion } from "framer-motion";
 import { motion as motionTokens } from "@/lib/motion";
 import { useDatebookStore } from "@/lib/store";
@@ -25,6 +29,7 @@ import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sess
 import { WeekdayChips } from "@/components/weekday-chips";
 import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 import { safeExternalUrl } from "@/lib/safe-url";
+import { classLabel } from "@/lib/course-label";
 
 function linkLabel(url: string): string {
   try {
@@ -178,6 +183,9 @@ export function ItemEditor({
   const [description, setDescription] = useState(item.description ?? "");
   const [customOffset, setCustomOffset] = useState("30");
   const inspector = variant === "inspector";
+  const [moreOpen, setMoreOpen] = useState(false);
+  const now = useNow();
+  const summary = summarizeItemWhen(item, now, clock24h);
 
   // Re-seed a draft only when its own field changes underneath it (a sync, an
   // undo), so a remote edit to the notes can't wipe a title you're mid-typing.
@@ -248,16 +256,25 @@ export function ItemEditor({
   );
 
   const titleBlock = inspector ? (
-    <input
+    // A textarea that grows with its text: a long assignment name is read in
+    // full instead of being cut off at the edge of a one-line input.
+    <textarea
       id="inspector-title"
+      rows={1}
       value={title}
-      onChange={(e) => setTitle(e.target.value)}
+      onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
       onBlur={commitTitle}
       onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).blur();
+        }
       }}
       aria-label="Title"
-      className="field-inline -mx-2 w-[calc(100%+1rem)] bg-transparent px-2 py-1 text-[19px] font-semibold leading-snug text-ink"
+      className={cn(
+        "field-inline -mx-2 block w-[calc(100%+1rem)] resize-none bg-transparent px-2 py-1 text-[22px] font-semibold leading-tight tracking-tight text-ink [field-sizing:content]",
+        item.status === "done" && item.type !== "event" && "text-ink-soft line-through decoration-ink-faint"
+      )}
     />
   ) : (
     <DetailRow icon={<Type className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Title">
@@ -295,11 +312,14 @@ export function ItemEditor({
 
   const whenBlock = (
     <DetailRow icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />} label={isEvent ? "When" : "Due"}>
-      <p className="mb-1.5 text-ink-faint">
-        {Number.isNaN(start.getTime()) ? "" : start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-        <span> · </span>
-        {timeLabel}
-      </p>
+      {/* The inspector already says this in words at the top. */}
+      {!inspector && (
+        <p className="mb-1.5 text-ink-faint">
+          {Number.isNaN(start.getTime()) ? "" : start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+          <span> · </span>
+          {timeLabel}
+        </p>
+      )}
       <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
       {item.allDay ? (
         <input
@@ -555,6 +575,78 @@ export function ItemEditor({
 
   const workBlock = <WorkLinks item={item} clock24h={clock24h} />;
 
+  // The first thing on the detail screen: which class, what kind of thing, what
+  // it's called, when, and whether it needs you — readable without parsing a
+  // form. The pill is a real <select> underneath, so changing class stays one tap.
+  const classPill = (
+    <label className="relative inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-line bg-surface-sunken py-1 pl-2.5 pr-2 text-[12.5px] font-semibold text-ink transition-colors duration-[var(--motion-micro)] focus-within:ring-2 focus-within:ring-accent hover:border-line-strong">
+      <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
+      <span className="min-w-0 truncate">{classLabel(category)}</span>
+      <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
+      <select
+        aria-label="Class"
+        value={item.categoryId ?? ""}
+        onChange={(e) => patch({ categoryId: e.target.value })}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      >
+        {!category && <option value="">No class</option>}
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+        {category && !categories.some((c) => c.id === category.id) && (
+          <option value={category.id}>{category.name}</option>
+        )}
+      </select>
+    </label>
+  );
+
+  const heroBlock = (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {classPill}
+        <span className="text-[12px] font-medium text-ink-faint">
+          {item.workFor ? "Planned work" : TYPE_NAME[item.type]}
+        </span>
+      </div>
+      {titleBlock}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        <p className="text-[14px] text-ink-soft">
+          {summary.date}
+          {summary.date && summary.time ? " · " : ""}
+          {summary.time}
+        </p>
+        <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", CHIP_TONE[summary.chip.tone])}>
+          {summary.chip.label}
+        </span>
+      </div>
+      {!isEvent && (
+        <StatusSegmented value={item.status ?? "todo"} onChange={(status) => setItemStatus(item.id, status)} />
+      )}
+      {linkBlock}
+    </div>
+  );
+
+  const moreToggle = (
+    <button
+      type="button"
+      aria-expanded={moreOpen}
+      onClick={() => {
+        haptic("light");
+        setMoreOpen((v) => !v);
+      }}
+      className="press-none flex min-h-11 w-full items-center justify-between rounded-lg px-1 text-[13px] font-medium text-ink-soft transition-colors duration-[var(--motion-micro)] hover:text-ink"
+    >
+      Reminders, repeat &amp; type
+      <ChevronDown
+        aria-hidden
+        className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", moreOpen && "rotate-180")}
+        strokeWidth={2}
+      />
+    </button>
+  );
+
   return (
     <div
       className={cn("flex flex-col gap-3", !inspector && "mt-3 border-t border-line pt-3")}
@@ -563,21 +655,25 @@ export function ItemEditor({
     >
       {inspector ? (
         <>
-          {titleBlock}
+          {heroBlock}
           {importedNote}
-          {whenBlock}
-          {classBlock}
-          {statusBlock}
+          <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-3">
+            {whenBlock}
+            {detailsBlock}
+            {(isEvent || item.location) && locationBlock}
+          </div>
           {workBlock}
-          <p className="mt-2 border-t border-line pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-            More
-          </p>
-          {detailsBlock}
-          {locationBlock}
-          {typeBlock}
-          {remindersBlock}
-          {repeatBlock}
-          {linkBlock}
+          <div>
+            {moreToggle}
+            <Reveal open={moreOpen}>
+              <div className="flex flex-col gap-4 pb-1 pt-2">
+                {!isEvent && !item.location && locationBlock}
+                {typeBlock}
+                {remindersBlock}
+                {repeatBlock}
+              </div>
+            </Reveal>
+          </div>
         </>
       ) : (
         <>

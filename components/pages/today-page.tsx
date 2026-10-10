@@ -8,7 +8,7 @@ import { AnimatePresence } from "framer-motion";
 import { Bell, CalendarClock, Link2, Minimize2, TriangleAlert } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion } from "@/lib/motion";
-import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, format, isSameDay, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
@@ -24,6 +24,7 @@ import {
   nextOpenAssignment,
   openWorkDueOnDay,
   relativeDueLabel,
+  workDueOnDay,
   timeOfDayGreeting,
 } from "@/lib/date-utils";
 import { classCountdownWindowMs } from "@/lib/class-reminder";
@@ -44,6 +45,7 @@ import { useNow } from "@/lib/use-now";
 import { isClassMeeting } from "@/lib/class-schedule";
 import { notificationPermission } from "@/lib/reminders";
 import { useHasMounted } from "@/lib/use-has-mounted";
+import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 /** From here up Today splits into a main column and a supporting one. */
 const WIDE_QUERY = "(min-width: 1280px)";
@@ -95,12 +97,18 @@ function TodayDashboard() {
   const overdue = useMemo(() => leftoverOverdue(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const todayList = useMemo(() => {
     const events = today.filter((i) => i.type === "event");
-    const dueToday = openWorkDueOnDay(items, day);
-    return [...events, ...dueToday].sort(
-      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
-    );
+    const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
+    // Finished work stays on the day it was due, crossed out, below what is
+    // still open — it is how the day reads back as an accomplishment.
+    const due = workDueOnDay(items, day);
+    const open = [...events, ...due.filter((i) => i.status !== "done")].sort(byTime);
+    return [...open, ...due.filter((i) => i.status === "done")];
   }, [today, items, day]);
   const dueTodayCount = useMemo(() => openWorkDueOnDay(items, day).length, [items, day]);
+  const doneTodayCount = useMemo(
+    () => workDueOnDay(items, day).filter((i) => i.status === "done").length,
+    [items, day]
+  );
   const eventsCount = today.filter((i) => i.type === "event").length;
 
   // Measured against the *unfiltered* day, so "Clear day" can never be a filter
@@ -125,7 +133,8 @@ function TodayDashboard() {
             mobile ? 0 : overdue.length,
             todayBreakdown.hiddenByCategory +
               todayBreakdown.hiddenByCompletion +
-              todayBreakdown.hiddenByView
+              todayBreakdown.hiddenByView,
+            doneTodayCount
           )}
         </p>
       </div>
@@ -194,7 +203,7 @@ function TodayDashboard() {
   const overdueSection = overdue.length > 0 && (!mobile || reviewOverdue) && (
     <section id="today-overdue" className="scroll-mt-[calc(var(--mobile-header-height)+0.75rem)]">
       <div className="flex items-center justify-between">
-        <SectionLabel>Overdue · {overdue.length}</SectionLabel>
+        <SectionLabel tone="warn">Overdue <span className="font-normal text-ink-faint">· {overdue.length}</span></SectionLabel>
         {mobile && (
           <button
             type="button"
@@ -256,7 +265,7 @@ function TodayDashboard() {
 
   const comingUpSection = (
     <section>
-      <SectionLabel>Coming up{comingUp.length ? ` · ${comingUp.length}` : ""}</SectionLabel>
+      <SectionLabel>Coming up{comingUp.length ? <span className="font-normal text-ink-faint"> · {comingUp.length}</span> : null}</SectionLabel>
       {comingUp.length === 0 ? (
         <Link
           href="/agenda"
@@ -369,7 +378,7 @@ function HappeningNowSection({
     () => happeningNowStack(items, now, categories, classCountdownWindowMs(classReminderMinutes)),
     [items, now, categories, classReminderMinutes]
   );
-  const nextAssignment = useMemo(() => nextOpenAssignment(items), [items]);
+  const nextAssignment = useMemo(() => nextOpenAssignment(items, now), [items, now]);
   const showDueNext =
     nextAssignment &&
     !liveNow.some((i) => i.id === nextAssignment.id) &&
@@ -391,19 +400,24 @@ function HappeningNowSection({
         <p className="mt-2 px-0.5 text-[13px] text-ink-soft">
           <span className="font-medium text-ink">Due next</span>
           {" · "}
-          {nextAssignment.title}
+          {itemDisplayTitle(nextAssignment)}
           {" · "}
           {nextAssignment.allDay
             ? relativeDueLabel(nextAssignment.at, { allDay: true })
-            : formatTime(nextAssignment.at, clock24h)}
+            : `${isSameDay(new Date(nextAssignment.at), now) ? "" : `${format(new Date(nextAssignment.at), "EEE")} `}${formatTime(nextAssignment.at, clock24h)}`}
         </p>
       )}
     </section>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-2 text-[12px] font-medium text-ink-faint">{children}</p>;
+/** Same heading shape as the Agenda's day groups: a name, then a quiet count. */
+function SectionLabel({ children, tone = "ink" }: { children: React.ReactNode; tone?: "ink" | "warn" }) {
+  return (
+    <h2 className={cn("mb-2.5 px-0.5 text-[13px] font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>
+      {children}
+    </h2>
+  );
 }
 
 /** After dismissing onboarding with an empty calendar, point at Import once. */
@@ -436,7 +450,7 @@ function TodayNextStepTips() {
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const openClassSchedule = useUIStore((s) => s.openClassSchedule);
-  const nameOf = (id?: string) => (id ? categories.find((c) => c.id === id)?.name : undefined);
+  const nameOf = (id?: string) => (id ? classLabel(categories.find((c) => c.id === id), "") || undefined : undefined);
   const hasMeetings = items.some((i) => isClassMeeting(i, nameOf(i.categoryId)));
   const remindersOff =
     mounted &&
@@ -506,7 +520,7 @@ function CompactRow({
             status === "done" ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
           )}
         >
-          {item.title}
+          {itemDisplayTitle(item)}
         </span>
         {status === "doing" && <span className="block text-[11.5px] text-accent">In progress</span>}
       </span>

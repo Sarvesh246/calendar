@@ -32,6 +32,7 @@ import { useAllViews } from "@/components/saved-views";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 import { useModKeyLabel } from "@/components/keyboard-shortcuts";
 import { motion as motionTokens } from "@/lib/motion";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 function sortPaletteItems(items: Item[]) {
   const cutoff = startOfDay(new Date()).getTime();
@@ -318,7 +319,7 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                       className="cmdk-row min-h-11"
                     >
                       <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      <span className="truncate">{item.title}</span>
+                      <span className="truncate">{itemDisplayTitle(item, category)}</span>
                       <span className="ml-auto shrink-0 pl-2 text-[11.5px] normal-case tracking-normal text-ink-faint">
                         {format(new Date(item.at), "MMM d")}
                       </span>
@@ -347,7 +348,7 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                       className="cmdk-row min-h-11"
                     >
                       <Minimize2 className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      <span className="truncate">Focus on this · {item.title}</span>
+                      <span className="truncate">Focus on this · {itemDisplayTitle(item)}</span>
                     </Command.Item>
                   ))}
               </Command.Group>

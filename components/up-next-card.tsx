@@ -18,6 +18,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
+import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 export type UpNextMode = "live" | "soon" | "next";
 
@@ -215,7 +216,7 @@ export function UpNextStack({
                     <button
                       key={item.id}
                       type="button"
-                      aria-label={`Show ${item.title}`}
+                      aria-label={`Show ${itemDisplayTitle(item)}`}
                       aria-current={i === safeIndex ? "true" : undefined}
                       onClick={() => setIndex(i)}
                       className={cn(
@@ -309,7 +310,7 @@ function UpNextFace({
         {eyebrow}
       </p>
       <div className="mt-2 flex items-baseline justify-between gap-3">
-        <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{item.title}</h3>
+        <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{itemDisplayTitle(item, category)}</h3>
         <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
           {aside}
         </span>
@@ -323,7 +324,7 @@ function UpNextFace({
         {category && (
           <span className="flex items-center gap-1.5 text-[12px] text-ink-faint">
             <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-            {category.name}
+            {classLabel(category)}
           </span>
         )}
       </div>

@@ -16,6 +16,7 @@ import { MobileItemSheet } from "@/components/mobile-item-sheet";
 import type { Item } from "@/lib/types";
 
 import { ItemEditor } from "@/components/item-editor-lazy";
+import { classLabel } from "@/lib/course-label";
 
 const TYPE_LABEL: Record<Item["type"], string> = {
   event: "Event",
@@ -49,13 +50,14 @@ function MobileInspector({ item, onClose }: { item: Item; onClose: () => void })
   const category = useDatebookStore((s) => s.categories.find((c) => c.id === item.categoryId));
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   return (
-    <MobileItemSheet title="Edit item" onClose={onClose}>
+    <MobileItemSheet title="Details" note="Changes save as you edit." onClose={onClose}>
       <ItemEditor
         key={item.id}
         item={item}
         category={category}
         clock24h={clock24h}
         StatusSegmented={StatusSegmented}
+        variant="inspector"
         onCollapse={onClose}
       />
     </MobileItemSheet>
@@ -117,7 +119,7 @@ function InspectorPanel({ item }: { item: Item }) {
         />
         <p className="min-w-0 flex-1 truncate text-[12px] font-medium text-ink-soft">
           {item.workFor ? "Planned work" : TYPE_LABEL[item.type]}
-          {category ? ` · ${category.name}` : ""}
+          {category ? ` · ${classLabel(category)}` : ""}
         </p>
         {item.type !== "event" && (item.status ?? "todo") !== "done" && (
           <button
