@@ -1699,3 +1699,14 @@ html.calendar-dragging * {
 html.native-model-picker .assistant-web-model-selector {
   visibility: hidden;
 }
+
+/* Half-hour guide inside each week-grid hour row — fainter than the hour rule. */
+.week-hour-slot {
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(50% - 0.5px),
+    color-mix(in srgb, var(--line) 55%, transparent) calc(50% - 0.5px),
+    color-mix(in srgb, var(--line) 55%, transparent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
