@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
 import { cn } from "@/lib/utils";
 import type { Category, Item } from "@/lib/types";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 const HORIZON_DAYS = 30;
 
@@ -171,7 +172,7 @@ export function PlanningTray({
                   />
                   <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-ink">{item.title}</p>
+                    <p className="truncate text-[13px] font-medium text-ink">{itemDisplayTitle(item)}</p>
                     <p className="truncate text-[11.5px] text-ink-faint">
                       <span className={overdue ? "font-medium text-warn" : undefined}>
                         {overdue ? "Was due " : "Due "}

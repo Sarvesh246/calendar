@@ -9,7 +9,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen, Play, Square } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { classMeetingTitle } from "@/lib/class-schedule";
+import { itemDisplayTitle } from "@/lib/course-label";
 import { registerItemExpander } from "@/lib/item-focus";
 import { dayKey } from "@/lib/date-utils";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
@@ -309,7 +309,10 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
       className={cn(
         "card-quick-actions hidden shrink-0 items-center gap-0.5 rounded-lg border border-line/80 bg-surface-sunken/80 p-0.5 md:flex",
         "opacity-55 transition-opacity duration-[var(--motion-micro)]",
-        "group-hover/card:opacity-100 group-focus-within/card:opacity-100"
+        "group-hover/card:opacity-100 group-focus-within/card:opacity-100",
+        // A narrow card (the Calendar's day pane) can't spare the room: the
+        // actions float over its corner on hover instead of squeezing the title.
+        "@max-md/card:absolute @max-md/card:right-10 @max-md/card:top-2 @max-md/card:z-[2] @max-md/card:bg-surface-elevated @max-md/card:opacity-0 @max-md/card:shadow-[var(--shadow-md)]"
       )}
       onClick={stop}
       onKeyDown={stop}
@@ -402,7 +405,7 @@ function CardFrame({
           {...rest}
           data-page-swipe="off"
           className={cn(
-            "item-card group/card press-none press-surface shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
+            "item-card group/card @container/card press-none press-surface relative shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
             dimmed && "opacity-[0.62]",
             rest.className
@@ -459,7 +462,7 @@ function EventCard({
   const { expanded, toggle, collapse, keyToggle } = useExpandable(item.id);
   const { remaining, ended } = useEventPhase(item, day);
   const showCompleteStyle = useCompleteStyle(ended);
-  const displayTitle = classMeetingTitle(item, category);
+  const displayTitle = itemDisplayTitle(item, category);
 
   const openDetails = () => {
     if (mobile) {
@@ -521,7 +524,7 @@ function EventCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 min-w-0 max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
@@ -533,7 +536,7 @@ function EventCard({
               animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
               transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
               style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-[1.5px] rounded-full bg-current"
+              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
             />
           </p>
           {remaining && !ended && (
@@ -670,7 +673,7 @@ function AssignmentCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 min-w-0 max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
@@ -682,7 +685,7 @@ function AssignmentCard({
               animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
               transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
               style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-[1.5px] rounded-full bg-current"
+              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
             />
           </p>
           <p

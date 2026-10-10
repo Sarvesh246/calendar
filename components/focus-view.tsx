@@ -36,6 +36,7 @@ import {
 } from "@/lib/focus-session";
 import { exitFocusRoom, useFocusSessionStore } from "@/lib/focus-session-store";
 import type { Item } from "@/lib/types";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 function useTick(enabled: boolean, ms: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -409,7 +410,7 @@ function FocusStage({
           className="w-full max-w-[28rem] rounded-xl border border-line bg-surface-sunken px-3 py-2 text-left text-[12.5px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
         >
           <span className="font-medium text-ink">Class heads-up</span>
-          <span className="mt-0.5 block truncate">{headsUp.title}</span>
+          <span className="mt-0.5 block truncate">{itemDisplayTitle(headsUp)}</span>
         </button>
       )}
       <motion.div
@@ -427,7 +428,7 @@ function FocusStage({
           </p>
         )}
         <h1 className="mt-2 max-w-[22ch] text-[30px] font-semibold leading-tight text-ink sm:text-[36px]">
-          {active.title}
+          {itemDisplayTitle(active)}
         </h1>
         <p className="mt-2 text-[15px] text-ink-soft" suppressHydrationWarning>
           {due}
@@ -482,7 +483,7 @@ function FocusStage({
 
       {suggested && (
         <button type="button" onClick={onAdoptSuggested} className="text-[13px] text-ink-faint hover:text-ink-soft">
-          Suggested · {suggested.title}
+          Suggested · {itemDisplayTitle(suggested)}
         </button>
       )}
     </div>
@@ -606,7 +607,7 @@ function QueueRow({
           style={{ background: category?.color ?? "#8a8a94" }}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-medium text-ink">{item.title}</span>
+          <span className="block truncate text-[13.5px] font-medium text-ink">{itemDisplayTitle(item)}</span>
           <span className="block truncate text-[11.5px] text-ink-faint">
             {doing ? "In progress" : item.type === "event" ? "Event" : relativeDueLabel(item.at, { allDay: item.allDay })}
           </span>

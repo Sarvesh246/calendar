@@ -4,13 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown } from "lucide-react";
 import { haptic } from "@/lib/haptic";
-import { formatTime } from "@/lib/date-utils";
+import { formatTime, formatTimeSpan, isEventEnded } from "@/lib/date-utils";
+import { useNow } from "@/lib/use-now";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { handleItemMenuKey, itemMenuProps } from "@/lib/item-menu";
 import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 import type { Item } from "@/lib/types";
+import { itemDisplayTitle } from "@/lib/course-label";
 
 /**
  * Today, folded into the top of the Agenda.
@@ -24,10 +26,12 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
   const openInspector = useUIStore((s) => s.openInspector);
+  const now = useNow();
 
   if (items.length === 0) return null;
 
-  const isDone = (i: Item) => i.type !== "event" && i.status === "done";
+  // Work is done when it's ticked off; a class or event is done once it's over.
+  const isDone = (i: Item) => (i.type === "event" ? isEventEnded(i, now) : i.status === "done");
   const done = items.filter(isDone).length;
   const left = items.length - done;
   const summary =
@@ -60,6 +64,8 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
         <div className="border-t border-line">
           {items.map((item) => {
             const finished = isDone(item);
+            const event = item.type === "event";
+            const live = event && !finished && !item.allDay && new Date(item.at).getTime() <= now.getTime();
             const color = categories.find((c) => c.id === item.categoryId)?.color ?? "#8a8a94";
             return (
               <button
@@ -70,26 +76,47 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
                 {...itemMenuProps(item.id)}
                 className="flex min-h-11 w-full items-center gap-3 border-t border-line px-4 py-2 text-left transition-colors duration-[var(--motion-micro)] first:border-t-0 hover:bg-surface-sunken/50 focus-visible:bg-surface-sunken/50 focus-visible:outline-none"
               >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
-                    finished ? "bg-good text-white" : "border"
-                  )}
-                  style={finished ? undefined : { borderColor: color }}
-                >
-                  {finished && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
-                </span>
+                {event ? (
+                  // Scheduled time, not a to-do: a colour bar like the
+                  // calendar's event chips, so there's nothing to tick.
+                  <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center">
+                    <span
+                      className={cn("h-4 w-[3px] rounded-full", finished && "opacity-40")}
+                      style={{ background: color }}
+                    />
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
+                      finished ? "bg-good text-white" : "border"
+                    )}
+                    style={finished ? undefined : { borderColor: color }}
+                  >
+                    {finished && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
+                  </span>
+                )}
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate text-[13.5px] font-medium",
-                    finished ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
+                    finished ? "text-ink-faint" : "text-ink",
+                    finished && !event && "line-through decoration-ink-faint"
                   )}
                 >
-                  {item.title}
+                  {itemDisplayTitle(item)}
                 </span>
+                {event && (finished || live) && (
+                  <span className={cn("shrink-0 text-[12px] font-medium", live ? "text-accent" : "text-ink-faint")}>
+                    {live ? "Now" : "Ended"}
+                  </span>
+                )}
                 <span className="shrink-0 text-[12px] tabular-nums text-ink-faint">
-                  {item.allDay ? "All day" : formatTime(item.at, clock24h)}
+                  {item.allDay
+                    ? "All day"
+                    : event
+                      ? formatTimeSpan(item.at, item.endAt, clock24h)
+                      : formatTime(item.at, clock24h)}
                 </span>
               </button>
             );

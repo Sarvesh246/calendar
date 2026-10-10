@@ -6,6 +6,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { formatMeetingSummary, savedClassMeetings, type SavedClassMeeting } from "@/lib/class-schedule";
 import { haptic } from "@/lib/haptic";
 import type { Category } from "@/lib/types";
+import { classLabel } from "@/lib/course-label";
 
 function removeMeeting(meeting: SavedClassMeeting) {
   haptic("warn");
@@ -109,7 +110,7 @@ export function ClassTimesRoster() {
           key={cat.id}
           className="rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-1.5"
         >
-          <p className="pt-1 text-[12.5px] font-medium text-ink">{cat.name}</p>
+          <p className="pt-1 text-[12.5px] font-medium text-ink">{classLabel(cat)}</p>
           {meetings.map((meeting) => (
             <SavedMeetingRow
               key={meeting.repeatId}

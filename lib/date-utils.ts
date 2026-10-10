@@ -503,9 +503,10 @@ export function rankItemsByDay(byDay: Map<string, Item[]>, now = new Date()) {
 }
 
 /** Soonest open assignment or task — overdue first, then upcoming due dates. */
-export function nextOpenAssignment(items: Item[]): Item | undefined {
+/** The soonest open work that is still ahead — overdue work has its own section. */
+export function nextOpenAssignment(items: Item[], now = new Date()): Item | undefined {
   return items
-    .filter((i) => i.type !== "event" && i.status !== "done")
+    .filter((i) => i.type !== "event" && i.status !== "done" && !isOverdueAt(i, now))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
 }
 
@@ -606,4 +607,23 @@ export function formatDaySummary(
   }
   if (parts.length === 0) return "Clear day";
   return parts.join(" · ");
+}
+
+/**
+ * A start–end time span the way the Schedule writes it: one meridiem when both
+ * ends share it (`10:20–11:10 AM`), both when they don't (`11:30 AM–1:00 PM`).
+ * Spans that cross midnight or have no end fall back to the start time.
+ */
+export function formatTimeSpan(startIso: string, endIso: string | undefined, clock24h: boolean) {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return NO_DATE;
+  const from = formatTime(startIso, clock24h);
+  if (!endIso) return from;
+  const end = new Date(endIso);
+  if (Number.isNaN(end.getTime()) || end <= start || !isSameDay(start, end)) return from;
+  const to = formatTime(endIso, clock24h);
+  if (clock24h || start.getHours() >= 12 === end.getHours() >= 12) {
+    return `${from.replace(/\s?(AM|PM)$/i, "")}–${to}`;
+  }
+  return `${from}–${to}`;
 }

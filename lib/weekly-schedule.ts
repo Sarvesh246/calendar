@@ -1,6 +1,7 @@
 import { addDays, startOfDay, startOfWeek } from "date-fns";
 import type { Category, Item } from "./types";
-import { classMeetingTitle, isGenericCategoryName } from "./class-schedule";
+import { isGenericCategoryName } from "./class-schedule";
+import { itemDisplayTitle } from "./course-name";
 
 /**
  * Your week, as a repeating shape rather than a list of dates.
@@ -85,7 +86,7 @@ export function buildWeeklySchedule(
     if (!Number.isFinite(startedAt) || startedAt < from || startedAt > to) continue;
 
     const category = categoryById.get(item.categoryId);
-    const title = classMeetingTitle(item, category).trim();
+    const title = itemDisplayTitle(item, category).trim();
     if (!title) continue;
 
     const startMin = minutesOfDay(start);

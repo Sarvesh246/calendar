@@ -29,6 +29,7 @@ import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sess
 import { WeekdayChips } from "@/components/weekday-chips";
 import { isNativeWrapper, postToNative, useNativeMessage } from "@/lib/native-bridge";
 import { safeExternalUrl } from "@/lib/safe-url";
+import { classLabel } from "@/lib/course-label";
 
 function linkLabel(url: string): string {
   try {
@@ -580,7 +581,7 @@ export function ItemEditor({
   const classPill = (
     <label className="relative inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-line bg-surface-sunken py-1 pl-2.5 pr-2 text-[12.5px] font-semibold text-ink transition-colors duration-[var(--motion-micro)] focus-within:ring-2 focus-within:ring-accent hover:border-line-strong">
       <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
-      <span className="min-w-0 truncate">{category?.name ?? "No class"}</span>
+      <span className="min-w-0 truncate">{classLabel(category)}</span>
       <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
       <select
         aria-label="Class"
