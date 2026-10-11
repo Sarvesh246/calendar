@@ -421,7 +421,6 @@ function CardFrame({
       <div className="item-card-presence-inner">
         <div
           {...rest}
-          data-page-swipe="off"
           className={cn(
             "item-card group/card @container/card press-none press-surface relative shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
