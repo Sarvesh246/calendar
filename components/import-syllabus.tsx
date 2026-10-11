@@ -1,5 +1,6 @@
 "use client";
 
+import { classLabel as courseLabel } from "@/lib/course-label";
 import {
   createContext,
   useCallback,
@@ -167,7 +168,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       return {
         ...current,
         forceCategoryId: categoryId,
-        classLabel: category.name,
+        classLabel: courseLabel(category),
         warning: resolved.status === "forced" ? resolved.warning : undefined,
         matches,
         decisions,
@@ -333,7 +334,7 @@ export function ImportSyllabus() {
             <option value="">Choose a class…</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name}
+                {courseLabel(cat)}
               </option>
             ))}
           </select>

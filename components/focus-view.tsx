@@ -36,7 +36,7 @@ import {
 } from "@/lib/focus-session";
 import { exitFocusRoom, useFocusSessionStore } from "@/lib/focus-session-store";
 import type { Item } from "@/lib/types";
-import { itemDisplayTitle } from "@/lib/course-label";
+import { classLabel, itemDisplayTitle } from "@/lib/course-label";
 
 function useTick(enabled: boolean, ms: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -229,7 +229,7 @@ function FocusRoom({
   const stage = (
     <FocusStage
       active={active}
-      categoryName={category?.name}
+      categoryName={category ? classLabel(category) : undefined}
       categoryColor={category?.color}
       clock24h={clock24h}
       headsUp={headsUp}
