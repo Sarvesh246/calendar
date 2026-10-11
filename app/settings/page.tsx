@@ -1,6 +1,7 @@
 "use client";
 
 import { classLabel } from "@/lib/course-label";
+import { useAuth } from "@/components/auth-provider";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
@@ -72,6 +73,8 @@ function downloadFile(name: string, blob: Blob) {
 
 export default function SettingsPage() {
   const reducedMotion = prefersReducedMotion();
+  const { user: accountUser, configured: cloudConfigured } = useAuth();
+  const syncStatus = useDatebookStore((s) => s.syncStatus);
   const settings = useDatebookStore((s) => s.settings);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categories = useDatebookStore((s) => s.categories);
@@ -229,7 +232,17 @@ export default function SettingsPage() {
         <div className="order-1 min-w-0">
       <CollapsibleCard
         title="Account & sync"
-        sub="Sign in to back up and sync across devices."
+        // Says where things stand, not what to do — "Sign in to back up" read
+        // as a nag to someone already signed in and synced.
+        sub={
+          accountUser
+            ? syncStatus === "error"
+              ? "Signed in — your latest changes haven't synced yet."
+              : "Backed up to your account and syncing across devices."
+            : cloudConfigured
+              ? "Sign in to back up and sync across devices."
+              : "Everything is saved on this device."
+        }
         storageKey="account"
         defaultOpen
       >

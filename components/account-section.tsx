@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "./auth-provider";
+import { friendlySyncError } from "@/lib/sync-error-copy";
 import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +35,14 @@ export function AccountSection() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2.5">
           <div className="min-w-0">
-            <p className="truncate text-[13.5px] font-medium text-ink">{user.email}</p>
+            {displayName(user) ? (
+              <>
+                <p className="truncate text-[13.5px] font-medium text-ink">{displayName(user)}</p>
+                <p className="truncate text-[12px] text-ink-soft">{user.email}</p>
+              </>
+            ) : (
+              <p className="truncate text-[13.5px] font-medium text-ink">{user.email}</p>
+            )}
             <SyncLine status={syncStatus} error={cloudError} />
           </div>
           <button
@@ -46,9 +54,11 @@ export function AccountSection() {
         </div>
         {syncStatus === "error" ? (
           <div className="flex flex-col gap-2 rounded-lg border border-warn/40 bg-warn/5 px-3 py-2.5">
-            <p className="text-[12.5px] leading-relaxed text-warn">
-              {cloudError ?? "Something went wrong syncing."}
-            </p>
+            <p className="text-[12.5px] leading-relaxed text-warn">{friendlySyncError(cloudError)}</p>
+            {cloudError && (
+              // The server's own words, for a bug report — not the headline.
+              <p className="break-words font-mono text-[10.5px] leading-snug text-ink-faint">{cloudError}</p>
+            )}
             <button
               onClick={() => retrySync()}
               className="self-start rounded-md border border-line px-2.5 py-1.5 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
@@ -147,7 +157,8 @@ function SyncLine({ status, error }: { status: string; error: string | null }) {
     connecting: { icon: <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />, label: "Connecting…", cls: "text-ink-faint" },
     syncing: { icon: <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={2} />, label: "Syncing…", cls: "text-ink-faint" },
     synced: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Synced", cls: "text-good" },
-    error: { icon: <CloudOff className="h-3 w-3" strokeWidth={2} />, label: error ?? "Sync error", cls: "text-warn" },
+    // Short and human here; the box below the account row carries the detail.
+    error: { icon: <CloudOff className="h-3 w-3" strokeWidth={2} />, label: error ? "Not synced yet" : "Sync error", cls: "text-warn" },
     merge: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Choose how to merge…", cls: "text-ink" },
     idle: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Ready", cls: "text-ink-faint" },
   };
@@ -158,4 +169,11 @@ function SyncLine({ status, error }: { status: string; error: string | null }) {
       {s.label}
     </span>
   );
+}
+
+/** The Google account's name, when it has one — friendlier than the address alone. */
+function displayName(user: { user_metadata?: Record<string, unknown> }): string | null {
+  const meta = user.user_metadata ?? {};
+  const name = meta.full_name ?? meta.name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
 }

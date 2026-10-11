@@ -1626,6 +1626,25 @@ html.calendar-dragging * {
   contain: layout paint;
 }
 
+/* Completion strike-through, drawn left to right on every wrapped line of a
+   title (each line fragment gets its own copy of the stroke). */
+.strike-text {
+  background-image: linear-gradient(
+    color-mix(in srgb, currentColor 70%, transparent),
+    color-mix(in srgb, currentColor 70%, transparent)
+  );
+  background-repeat: no-repeat;
+  background-position: 0 56%;
+  background-size: 0% 1px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-size var(--motion-standard) var(--ease-standard);
+}
+
+.strike-text[data-struck] {
+  background-size: 100% 1px;
+}
+
 /* A card you just added: one accent wash, opacity only, so the compositor
    runs it while the list settles around the new row. */
 .item-card-arrived::after {
