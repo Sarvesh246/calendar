@@ -1,5 +1,6 @@
 "use client";
 
+import { classLabel as courseLabel } from "@/lib/course-label";
 import { motion } from "framer-motion";
 import { CalendarDays, Check } from "lucide-react";
 import { format } from "date-fns";
@@ -110,7 +111,7 @@ export function SyllabusPreview({
               <option value="">Choose a class…</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.name}
+                  {courseLabel(cat)}
                 </option>
               ))}
             </select>

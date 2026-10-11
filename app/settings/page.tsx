@@ -1,5 +1,6 @@
 "use client";
 
+import { classLabel } from "@/lib/course-label";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
@@ -832,8 +833,8 @@ function CategoryDeleteConfirm({
     <div className="flex flex-wrap items-center gap-2 border-t border-line/60 pt-2">
       <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink-soft">
         {count > 0 && home
-          ? `Move ${count} item${count === 1 ? "" : "s"} to ${home.name} and delete ${category.name}?`
-          : `Delete ${category.name}?`}
+          ? `Move ${count} item${count === 1 ? "" : "s"} to ${classLabel(home)} and delete ${classLabel(category)}?`
+          : `Delete ${classLabel(category)}?`}
       </span>
       <button
         type="button"
