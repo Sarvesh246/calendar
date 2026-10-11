@@ -351,10 +351,10 @@ function ClassScheduleSheetBody() {
     Boolean(categoryId) && savedClassMeetings(items, categoryId).length > 0;
 
   return (
-        <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
+        <div className={cn("viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden", sheet.leaving && "pointer-events-none")}>
           <Scrim
             label="Dismiss"
-            onClick={dismiss}
+            onPointerDown={dismiss}
             progress={sheet.scrimOpacity}
             exitDuration={sheet.gone ? 0 : motionTokens.exit}
           />

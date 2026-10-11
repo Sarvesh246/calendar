@@ -13,7 +13,7 @@ import {
   CalendarSearch,
   Keyboard,
   ListChecks,
-  Minimize2,
+  Focus as FocusIcon,
   Plus,
   Settings,
   Sparkles,
@@ -221,7 +221,7 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
             value="focus room work session"
             className="cmdk-row min-h-11"
           >
-            <Minimize2 className="h-4 w-4" strokeWidth={1.75} /> Focus <Hint>F</Hint>
+            <FocusIcon className="h-4 w-4" strokeWidth={1.75} /> Focus <Hint>F</Hint>
           </Command.Item>
           <Command.Item onSelect={() => go("/today")} className="cmdk-row min-h-11">
             <Sun className="h-4 w-4" strokeWidth={1.75} /> Today <Hint>1</Hint>
@@ -347,7 +347,7 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                       }}
                       className="cmdk-row min-h-11"
                     >
-                      <Minimize2 className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      <FocusIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                       <span className="truncate">Focus on this · {itemDisplayTitle(item)}</span>
                     </Command.Item>
                   ))}

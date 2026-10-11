@@ -13,7 +13,16 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
     const candidates = () => [...panel.querySelectorAll<HTMLElement>(focusable)]
       .filter((el) => el.getClientRects().length > 0 && !el.closest('[inert], [hidden]'));
     const frame = requestAnimationFrame(() => {
-      if (!panel.contains(document.activeElement)) (candidates()[0] ?? panel).focus({ preventScroll: true });
+      if (panel.contains(document.activeElement)) return;
+      const asked = panel.querySelector<HTMLElement>("[data-autofocus]");
+      // On touch, land on the dialog itself. The first control is usually a
+      // close button or a picker, and focusing it there draws a focus ring
+      // nobody asked for (or, for a field, raises the keyboard). Screen
+      // readers still start inside the dialog.
+      const touch = window.matchMedia("(pointer: coarse)").matches;
+      if (touch && !panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
+      const target = asked ?? (touch ? panel : candidates()[0] ?? panel);
+      target.focus({ preventScroll: true });
     });
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;

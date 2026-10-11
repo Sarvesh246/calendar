@@ -89,6 +89,9 @@ export function BootSplash() {
       >
           <span aria-hidden className="boot-splash-bloom" />
           <span className="boot-splash-plate relative flex h-[96px] w-[96px] items-center justify-center rounded-[26px]">
+            {/* A plain img on purpose: the splash paints before hydration, and
+                next/image's lazy, optimised path would leave the plate empty. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icon-192.png"
               alt=""

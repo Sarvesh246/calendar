@@ -29,6 +29,7 @@ import { useCourseLabels } from "@/lib/course-label";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { isTabRoute } from "@/lib/tab-routes";
+import { readViewState } from "@/lib/view-state";
 import { navigateTab } from "@/lib/tab-nav";
 import { commitTabFromGesture, pillSpringForVelocity } from "@/lib/tab-swipe";
 import { rubberbandClamp, VelocityTracker } from "@/lib/gesture";
@@ -285,7 +286,13 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   // has to park somewhere, but "tap Today" from one of those pages is a real
   // navigation, not a tap on the tab you are already on.
   const currentIndex = NAV.findIndex((i) => i.href === pathname);
-  const activeIndex = Math.max(0, currentIndex);
+  // In a room the pill waits under the tab Done will return to, faded, so
+  // leaving the room fades it back in place instead of sliding it over.
+  const inRoom = currentIndex < 0;
+  const roomReturn = inRoom
+    ? NAV.findIndex((i) => i.href === readViewState().lastTab)
+    : -1;
+  const activeIndex = inRoom ? Math.max(0, roomReturn) : currentIndex;
   const dragX = useMotionValue(0);
   const baseX = useMotionValue(0);
   const dragging = useRef(false);
@@ -547,8 +554,11 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                 style={{ width: tabWidth, x: pillX, willChange: "transform" }}
                 // The pill swells into a lens while held, like the Liquid
                 // Glass tab bar, and settles back on release.
-                animate={{ scale: isDragging ? 1.06 : 1 }}
-                transition={motionTokens.nudge}
+                animate={{
+                  scale: isDragging ? 1.06 : inRoom && scrubbing === null ? 0.94 : 1,
+                  opacity: inRoom && !isDragging ? 0 : 1,
+                }}
+                transition={{ scale: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
               />
             )}
           </span>

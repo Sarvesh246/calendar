@@ -253,13 +253,21 @@ export function DaySheet({
   if (!visible || typeof document === "undefined") return null;
 
   const close = () => closeSheet();
+  // The sheet slides away under the composer rather than vanishing.
+  const add = onAdd
+    ? () => {
+        closeSheet();
+        onAdd();
+      }
+    : undefined;
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] lg:hidden">
+    <div className={cn("fixed inset-0 z-[60] lg:hidden", sheet.leaving && "pointer-events-none")}>
       {/* Dimmed in proportion to how much the sheet is covering. At the compact
           detent the month has to stay legible — it is the thing you are
           stepping through days *against*. */}
-      <Scrim onClick={close} progress={scrim} exitDuration={sheet.gone ? 0 : motionTokens.exit} />
+      {/* Dismisses on press: the page is yours again the instant you touch it. */}
+      <Scrim onPointerDown={close} progress={scrim} exitDuration={sheet.gone ? 0 : motionTokens.exit} />
       <motion.div
         role="dialog"
         ref={panelRef}
@@ -356,7 +364,7 @@ export function DaySheet({
                   onClick={(e) => {
                     e.stopPropagation();
                     haptic("light");
-                    onAdd();
+                    add?.();
                   }}
                   aria-label="Add to this day"
                   className="press-none flex h-11 w-11 items-center justify-center rounded-full text-accent active:bg-accent-soft"
@@ -442,10 +450,10 @@ export function DaySheet({
                 }
               }}
             >
-              {onAdd && !phone && (
+              {add && !phone && (
                 <button
                   type="button"
-                  onClick={onAdd}
+                  onClick={add}
                   className="mb-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[13px] font-medium text-ink-soft transition-colors active:border-accent active:bg-accent-soft active:text-accent"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -459,8 +467,8 @@ export function DaySheet({
                   hiddenByCategory={breakdown?.hiddenByCategory ?? 0}
                   hiddenByCompletion={breakdown?.hiddenByCompletion ?? 0}
                   hiddenByView={breakdown?.hiddenByView ?? 0}
-                  canAdd={Boolean(onAdd)}
-                  onAdd={onAdd}
+                  canAdd={Boolean(add)}
+                  onAdd={add}
                 />
               ) : (
                 <div className="flex flex-col gap-2">

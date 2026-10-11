@@ -78,6 +78,8 @@ export function SaveStatusPill() {
     if (!transient) {
       // Queued / offline / error — stay up until the state resolves (or dismiss).
       visibleRef.current = true;
+      // Driven by the flush queue and a dismiss timer, not derivable in render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }

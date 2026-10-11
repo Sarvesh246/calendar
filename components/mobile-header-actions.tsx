@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * stays short and Settings/Schedule stay one tap away — no More drawer.
  * Hiding Ask morphs the capsule width; it does not snap.
  */
-export function MobileHeaderActions(_props: { pathname: string }) {
+export function MobileHeaderActions() {
   const router = useRouter();
   const pathname = useResolvedPathname();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);

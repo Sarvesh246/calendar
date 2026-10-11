@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Bell, CalendarClock, Cloud, Link2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useHasMounted } from "@/lib/use-has-mounted";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/components/auth-provider";
 import { GoogleSignInButton } from "@/components/account-section";
 import { useUIStore } from "@/lib/ui-store";
@@ -31,7 +31,23 @@ export function OnboardingCard() {
       {show && (
         <motion.div
           key="onboarding"
-          exit={{ opacity: 0, height: 0, marginBottom: 0, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+          // The height *and* its padding and border spring shut: with
+          // border-box sizing, `height: 0` alone stops at the padding and the
+          // last 34px vanished in one frame. A spring, not an ease-in, so the
+          // page below glides up instead of slamming into place.
+          exit={
+            prefersReducedMotion()
+              ? { opacity: 0, transition: { duration: motionTokens.micro } }
+              : {
+                  opacity: 0,
+                  height: 0,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  marginBottom: 0,
+                  borderWidth: 0,
+                  transition: { default: motionTokens.settle, opacity: { duration: 0.12 } },
+                }
+          }
           className="overflow-hidden rounded-xl border border-line bg-surface px-4 py-4"
         >
           <div className="flex items-start justify-between gap-3">

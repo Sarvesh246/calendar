@@ -275,11 +275,15 @@ export default function CalendarPage() {
       ? `m-${format(anchor, "yyyy-MM")}`
       : `w-${format(startOfWeek(anchor, { weekStartsOn }), "yyyy-MM-dd")}`;
 
-  function addToSelected() {
-    setSheetOpen(false);
+  function openComposerForSelected() {
     setQuickAddDateKey(dayKey(selectedDate));
     setQuickAddPrefill("");
     setQuickAddOpen(true);
+  }
+
+  function addToSelected() {
+    setSheetOpen(false);
+    openComposerForSelected();
   }
 
   return (
@@ -477,21 +481,22 @@ export default function CalendarPage() {
         )}
       </div>
 
-      <AnimatePresence>
-        {/* Week mode needs it too: between `md` and `lg` the week grid is
-            showing but the side pane isn't. */}
-        {sheetOpen && (useSheet || mode === "week") && (
-          <DaySheet
-            onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
-            date={selectedDate}
-            items={selectedItems}
-            onClose={() => setSheetOpen(false)}
-            onAdd={addToSelected}
-            breakdown={selectedBreakdown}
-            overlaps={selectedOverlaps}
-          />
-        )}
-      </AnimatePresence>
+      {/* Week mode needs it too: between `md` and `lg` the week grid is
+          showing but the side pane isn't. No AnimatePresence: the sheet owns
+          its departure and reports back once it is off screen. Presence would
+          also wait on every animated card inside it before letting go, which
+          kept the page scroll-locked for half a second after it had left. */}
+      {sheetOpen && (useSheet || mode === "week") && (
+        <DaySheet
+          onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
+          date={selectedDate}
+          items={selectedItems}
+          onClose={() => setSheetOpen(false)}
+          onAdd={openComposerForSelected}
+          breakdown={selectedBreakdown}
+          overlaps={selectedOverlaps}
+        />
+      )}
     </div>
   );
 }
