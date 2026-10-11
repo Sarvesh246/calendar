@@ -1,5 +1,6 @@
 "use client";
 
+import { useUIStore } from "@/lib/ui-store";
 import { collapseTiming } from "@/lib/use-animated-collapse";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
@@ -416,9 +417,22 @@ function DeckCard({
   }, [id, x]);
   // A card under the finger tilts with it, like one held at the bottom edge.
   const rotate = useTransform(x, [-320, 0, 320], [-7, 0, 7]);
+  // A swipe that ends over the card is not a tap on it.
+  const dragged = useRef(false);
   return (
     <motion.div
       ref={ref}
+      onPointerDownCapture={() => {
+        dragged.current = false;
+      }}
+      onDragStart={() => {
+        dragged.current = true;
+      }}
+      onClickCapture={(e) => {
+        if (!dragged.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       custom={change}
       variants={deckVariants}
       initial="enter"
@@ -499,8 +513,25 @@ function UpNextFace({
       ? classCountdownLabel(start, now)
       : formatDistanceToNowStrict(start, { addSuffix: false });
 
+  // The most prominent thing on Today opens like every other card does.
+  const open = () => {
+    haptic("light");
+    useUIStore.getState().openInspector(item.id);
+  };
+
   return (
-    <div className="rounded-lg border border-line bg-surface p-5">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${itemDisplayTitle(item)} — open details`}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        open();
+      }}
+      className="press-surface cursor-pointer rounded-lg border border-line bg-surface p-5"
+    >
       <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
         {started && <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-accent" />}
         {eyebrow}
