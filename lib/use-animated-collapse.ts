@@ -5,7 +5,7 @@ import { prefersReducedMotion, springEasing, supportsLinearEasing } from "./moti
 
 let timing: { easing: string; duration: number } | null = null;
 /** Critically damped: a disclosure that bounced would bounce the whole page. */
-function collapseTiming() {
+export function collapseTiming() {
   if (!timing) {
     timing = supportsLinearEasing()
       ? springEasing(0.36, 1, 24)

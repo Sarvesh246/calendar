@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { collapseTiming } from "@/lib/use-animated-collapse";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
@@ -146,6 +147,45 @@ export function UpNextStack({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count, expanded, current?.id]);
 
+  // Show all / Show one changes how tall the deck is. The container springs
+  // between the two heights so the day below glides instead of jumping by the
+  // difference in one frame. (The outgoing view is popped out of flow, so the
+  // container's natural height is already the incoming one's.)
+  const shellRef = useRef<HTMLDivElement>(null);
+  const shellHeight = useRef(0);
+  const hasDeck = count > 0;
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    shellHeight.current = el.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      if (el.getAnimations().length === 0) shellHeight.current = el.offsetHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasDeck]);
+  const shownExpanded = useRef(expanded);
+  useLayoutEffect(() => {
+    if (shownExpanded.current === expanded) return;
+    shownExpanded.current = expanded;
+    const el = shellRef.current;
+    if (!el || prefersReducedMotion()) return;
+    const from = shellHeight.current;
+    const to = el.offsetHeight;
+    if (Math.abs(to - from) < 1) return;
+    el.getAnimations().forEach((a) => a.cancel());
+    el.style.overflow = "clip";
+    const { easing, duration } = collapseTiming();
+    const anim = el.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration, easing });
+    anim.finished.then(
+      () => {
+        el.style.overflow = "";
+        shellHeight.current = el.offsetHeight;
+      },
+      () => {}
+    );
+  }, [expanded]);
+
   if (count === 0 || !current) return null;
 
   function modeOf(item: Item): UpNextMode {
@@ -166,7 +206,7 @@ export function UpNextStack({
   const reduce = prefersReducedMotion();
 
   return (
-    <div data-page-swipe="off">
+    <div ref={shellRef} data-page-swipe="off">
       <AnimatePresence initial={false} mode="popLayout">
         {expanded && count > 1 ? (
           <motion.div
