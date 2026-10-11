@@ -1682,23 +1682,27 @@ html.calendar-dragging * {
 
 @container (max-height: 64px) {
   .month-day-chips { display: none; }
+  /* The same dots a phone shows, set beside the date they belong to. A bare
+     "+1" pinned to the cell's far edge only appeared on busy days and read as
+     belonging to the next day's number. */
   .month-day-preview {
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
     position: absolute;
-    right: 4px;
-    bottom: 4px;
+    left: 34px;
+    top: 9px;
+    max-width: calc(100% - 38px);
+    overflow: hidden;
   }
-  .month-day-preview > div { display: none; }
   .month-day-date-wrap, .month-day-date {
     height: 22px;
     width: 22px;
     min-width: 22px;
     font-size: 12px;
   }
-}
-
-@container (max-height: 36px) {
-  .month-day-preview { bottom: auto; top: 7px; }
 }
 
 /* ---------------------------------------------------------------------- */
