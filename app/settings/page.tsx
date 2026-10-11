@@ -1194,7 +1194,7 @@ function ClassReminderPicker({
           initial={{ opacity: 0, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
-          transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
           className="px-0.5 text-[12.5px] leading-relaxed text-ink-faint"
         >
           {minutes > 0 ? (

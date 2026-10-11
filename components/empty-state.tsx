@@ -32,7 +32,7 @@ export function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+      transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
       className={cn(
         "flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-line text-center",
         compact ? "px-3 py-6" : "px-4 py-8 sm:py-10",

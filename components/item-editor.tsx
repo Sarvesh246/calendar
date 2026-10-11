@@ -641,7 +641,7 @@ export function ItemEditor({
       Reminders, repeat &amp; type
       <ChevronDown
         aria-hidden
-        className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", moreOpen && "rotate-180")}
+        className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", moreOpen && "rotate-180")}
         strokeWidth={2}
       />
     </button>

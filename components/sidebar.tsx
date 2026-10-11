@@ -57,7 +57,7 @@ function RailLabel({ collapsed, children }: { collapsed: boolean; children: Reac
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -6 }}
-          transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
           className="truncate whitespace-nowrap"
         >
           {children}
@@ -131,7 +131,7 @@ export function Sidebar({ pathname }: { pathname: string }) {
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -6 }}
-                transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
                 className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] text-ink"
               >
                 Datebook
