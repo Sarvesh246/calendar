@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { Check, RotateCcw } from "lucide-react";
-import { useEffect } from "react";
+import { usePausableTimeout } from "@/lib/use-pausable-timeout";
 import { DismissibleSnack, SnackDismissButton } from "@/components/dismissible-snack";
 import { useActionUndo } from "@/lib/action-undo";
 import { haptic } from "@/lib/haptic";
@@ -19,13 +19,9 @@ export function MobileActionUndo() {
   const action = useActionUndo((s) => s.action);
   const set = useActionUndo((s) => s.set);
 
-  useEffect(() => {
-    if (!action) return;
-    const timer = window.setTimeout(() => {
-      if (useActionUndo.getState().action === action) set(null);
-    }, UNDO_WINDOW_MS);
-    return () => window.clearTimeout(timer);
-  }, [action, set]);
+  const { held, holdProps } = usePausableTimeout(action?.stamp ?? null, UNDO_WINDOW_MS, () => {
+    if (useActionUndo.getState().action === action) set(null);
+  });
 
   return (
     <AnimatePresence>
@@ -38,6 +34,7 @@ export function MobileActionUndo() {
           exit={{ opacity: 0, y: 8, scale: 0.96 }}
           transition={motionTokens.spring}
           onDismiss={() => set(null)}
+          {...holdProps}
           className="pointer-events-auto relative flex w-full max-w-[420px] items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface py-2.5 pl-3.5 pr-1.5 text-[13px] text-ink"
         >
           <Check className="h-3.5 w-3.5 shrink-0 text-good" strokeWidth={2.5} />
@@ -58,7 +55,7 @@ export function MobileActionUndo() {
           <span
             aria-hidden
             className="toast-drain absolute inset-x-0 bottom-0 h-[2px] origin-left bg-accent/50"
-            style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }}
+            style={{ animationDuration: `${UNDO_WINDOW_MS}ms`, animationPlayState: held ? "paused" : "running" }}
           />
         </DismissibleSnack>
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useJustAdded } from "@/lib/just-added";
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
@@ -404,13 +405,18 @@ function CollapsedDescription({ show, text }: { show: boolean; text?: string }) 
 }
 
 function CardFrame({
+  itemId,
   dimmed,
   children,
   ...rest
 }: {
+  itemId: string;
   dimmed: boolean;
   children: React.ReactNode;
 } & React.HTMLAttributes<HTMLDivElement>) {
+  // A card you just created washes with the accent once, so you can see where
+  // it landed in the list.
+  const arrived = useJustAdded(itemId);
   return (
     <motion.div
       className="item-card-presence"
@@ -425,6 +431,7 @@ function CardFrame({
             "item-card group/card @container/card press-none press-surface relative shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
             dimmed && "opacity-[0.62]",
+            arrived && "item-card-arrived",
             rest.className
           )}
         >
@@ -492,6 +499,7 @@ function EventCard({
 
   return (
     <CardFrame
+      itemId={item.id}
       dimmed={showCompleteStyle}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
@@ -654,6 +662,7 @@ function AssignmentCard({
 
   return (
     <CardFrame
+      itemId={item.id}
       dimmed={showCompleteStyle}
       role="button"
       tabIndex={0}
