@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveActivitySnapshot, upcomingReminderFires } from "./native-snapshot";
+import { buildLiveActivitySnapshot, buildNativeSnapshot, upcomingReminderFires } from "./native-snapshot";
 import type { FocusSession } from "./focus-session";
 import type { Category, Item } from "./types";
 
@@ -171,5 +171,25 @@ describe("buildLiveActivitySnapshot", () => {
   it("generates a URL-safe item deep link", () => {
     const state = live([event({ id: "course/a b" })], new Date(2026, 8, 21, 15, 0));
     expect(state.deepLink).toBe("datebook://open?intent=item&item=course%2Fa%20b");
+  });
+});
+
+describe("buildNativeSnapshot class names", () => {
+  it("shows widgets and Spotlight the tidy class label, not the feed code", () => {
+    const now = new Date(2026, 8, 11, 10, 0);
+    const categories: Category[] = [{ id: "m", name: "MATH-150:533,534,535", color: "#e85d8a" }];
+    const snap = buildNativeSnapshot({
+      items: [due({ categoryId: "m", at: new Date(2026, 8, 11, 18, 0).toISOString() })],
+      categories,
+      importSources: [],
+      clock24h: false,
+      focus: null,
+      now,
+    });
+    const text = JSON.stringify([snap.today, snap.upNext, snap.assignments, snap.spotlight.map((s) => s.subtitle)]);
+    expect(text).toContain("MATH 150");
+    expect(text).not.toContain("533,534,535");
+    // Spotlight still matches someone typing the feed's own code.
+    expect(snap.spotlight[0].keywords).toContain("MATH-150:533,534,535");
   });
 });
