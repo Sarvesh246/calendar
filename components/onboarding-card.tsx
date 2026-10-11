@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, CalendarClock, Cloud, Link2, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
@@ -22,7 +23,16 @@ export function OnboardingCard() {
   // calendar flashed "Datebook starts empty" until the persisted state landed.
   const mounted = useHasMounted();
 
-  const show = mounted && !dismissed && itemCount === 0 && sourceCount === 0;
+  // Dismissing collapses this card first and saves the setting once it has
+  // gone. Writing settings re-renders everything subscribed to them, and doing
+  // it on the tap stalled the first frames of the collapse.
+  const [hiding, setHiding] = useState(false);
+  const dismiss = () => {
+    setHiding(true);
+    window.setTimeout(() => updateSettings({ onboardingDismissed: true }), prefersReducedMotion() ? 0 : 480);
+  };
+
+  const show = mounted && !dismissed && !hiding && itemCount === 0 && sourceCount === 0;
 
   return (
     // Dismissing used to unmount the card outright, so the page below jumped up
@@ -59,7 +69,7 @@ export function OnboardingCard() {
             </div>
             <button
               type="button"
-              onClick={() => updateSettings({ onboardingDismissed: true })}
+              onClick={dismiss}
               aria-label="Dismiss"
               className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink"
             >
