@@ -16,9 +16,20 @@ import { cn } from "@/lib/utils";
  */
 export function NumberRoll({ value, className }: { value: number; className?: string }) {
   // Direction from the previous value, worked out during render so the very
-  // first frame of the roll already goes the right way.
-  const [state, setState] = useState({ value, dir: 1 });
-  if (state.value !== value) setState({ value, dir: value > state.value ? 1 : -1 });
+  // first frame of the roll already goes the right way. Each column (ones,
+  // tens…) keeps a revision that ticks whenever its digit changes: keying the
+  // rolling digit by its *value* collided when a count went 1 → 0 → 1 inside
+  // one roll (the old "1" still leaving as the new "1" arrived).
+  const [state, setState] = useState(() => ({ value, dir: 1, revs: placesOf(value).map(() => 0) }));
+  if (state.value !== value) {
+    const before = placesOf(state.value);
+    const after = placesOf(value);
+    setState({
+      value,
+      dir: value > state.value ? 1 : -1,
+      revs: after.map((digit, place) => (before[place] === digit ? state.revs[place] ?? 0 : (state.revs[place] ?? 0) + 1)),
+    });
+  }
   const dir = state.dir;
   const digits = String(value).split("");
 
@@ -26,27 +37,35 @@ export function NumberRoll({ value, className }: { value: number; className?: st
     <span className={cn("relative inline-flex tabular-nums", className)}>
       <span className="sr-only">{value}</span>
       <span aria-hidden className="inline-flex">
-        {digits.map((digit, i) => (
-          // Keyed by place (ones, tens…) so a digit keeps its column.
-          <span key={digits.length - i} className="relative inline-flex overflow-hidden">
-            <AnimatePresence initial={false} mode="popLayout" custom={dir}>
-              <motion.span
-                key={digit}
-                custom={dir}
-                variants={rollVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                className="inline-block"
-              >
-                {digit}
-              </motion.span>
-            </AnimatePresence>
-          </span>
-        ))}
+        {digits.map((digit, i) => {
+          const place = digits.length - 1 - i;
+          return (
+            // Keyed by place (ones, tens…) so a digit keeps its column.
+            <span key={place} className="relative inline-flex overflow-hidden">
+              <AnimatePresence initial={false} mode="popLayout" custom={dir}>
+                <motion.span
+                  key={state.revs[place] ?? 0}
+                  custom={dir}
+                  variants={rollVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="inline-block"
+                >
+                  {digit}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          );
+        })}
       </span>
     </span>
   );
+}
+
+/** Digits by place value, ones first. */
+function placesOf(n: number): string[] {
+  return String(n).split("").reverse();
 }
 
 const rollVariants = {

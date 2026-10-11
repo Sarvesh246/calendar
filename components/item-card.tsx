@@ -132,7 +132,7 @@ function CompleteButton({
       <span className="relative flex h-5 w-5 items-center justify-center">
         {burst > 0 && (
           <span
-            key={burst}
+            key={`ripple-${burst}`}
             aria-hidden
             className="complete-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-good"
           />
@@ -143,7 +143,9 @@ function CompleteButton({
         {/* Keyed on the burst so the pop replays on every completion: the
             circle fills and springs past full size, then settles. */}
         <span
-          key={burst}
+          // Its own key space: sharing `burst` with the ripple beside it gave
+          // two siblings the same key, which React may drop or duplicate.
+          key={`circle-${burst}`}
           className={cn(
             "relative flex h-5 w-5 items-center justify-center rounded-full border-2 group-active/status:scale-[0.82] group-active/status:duration-[80ms]",
             burst > 0 && status === "done" && "status-pop",
@@ -554,15 +556,11 @@ function EventCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {displayTitle}
-            <motion.span
-              aria-hidden
-              initial={false}
-              animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
-              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
-            />
+            {/* Struck line by line: a single absolute line sat in the gap
+                between the two lines of a wrapped title. */}
+            <span className="strike-text" data-struck={showCompleteStyle || undefined}>
+              {displayTitle}
+            </span>
           </p>
           {remaining && !ended && (
             <p className="mt-0.5 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
@@ -704,15 +702,11 @@ function AssignmentCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {item.title}
-            <motion.span
-              aria-hidden
-              initial={false}
-              animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
-              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
-            />
+            {/* Struck line by line: a single absolute line sat in the gap
+                between the two lines of a wrapped title. */}
+            <span className="strike-text" data-struck={showCompleteStyle || undefined}>
+              {item.title}
+            </span>
           </p>
           <p
             className={cn(
