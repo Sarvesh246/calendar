@@ -300,7 +300,7 @@ export function AssistantConversation({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+              transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
               className="flex items-center gap-2 px-1"
             >
               <div className="flex items-center gap-1">

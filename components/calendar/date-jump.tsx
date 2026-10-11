@@ -63,7 +63,7 @@ export function DateJump({
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-faint transition-colors duration-[var(--motion-standard)] group-hover:text-ink-soft"
         >
           <ChevronDown
-            className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", open && "rotate-180")}
+            className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", open && "rotate-180")}
             strokeWidth={2.25}
           />
         </span>

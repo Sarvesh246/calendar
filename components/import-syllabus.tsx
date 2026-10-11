@@ -538,7 +538,7 @@ function StatusLine({ show, status }: { show: boolean; status: Status }) {
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
           className={cn(
             "flex items-start gap-1.5 text-[12.5px]",
             status.kind === "error" ? "text-warn" : "text-good"

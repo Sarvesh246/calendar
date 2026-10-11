@@ -301,7 +301,7 @@ export default function CalendarPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
                 className="block whitespace-nowrap"
               >
                 {mode === "month"
@@ -417,7 +417,7 @@ export default function CalendarPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
                 className="absolute inset-0 flex min-h-0 flex-col"
               >
                 <WeekView

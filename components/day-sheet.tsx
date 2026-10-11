@@ -332,7 +332,7 @@ export function DaySheet({
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                  transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
                   className={cn(phone && (onStep || activeItem) ? "text-center" : "text-left")}
                 >
                   <p id={headingId} className="truncate text-[16px] font-semibold text-ink">

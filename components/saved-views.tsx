@@ -55,7 +55,7 @@ export function SidebarViews() {
             title="Save a view"
             className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
           >
-            <Plus className={cn("h-3.5 w-3.5 transition-transform duration-[var(--motion-standard)]", editing && "rotate-45")} strokeWidth={2} />
+            <Plus className={cn("h-3.5 w-3.5 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", editing && "rotate-45")} strokeWidth={2} />
           </button>
       </SidebarSectionHeader>
 
@@ -165,7 +165,7 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-      transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+      transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
       aria-label="New view"
       className="mx-0.5 my-1.5 flex flex-col gap-2.5 rounded-lg border border-line bg-surface-sunken/50 p-2.5"
     >

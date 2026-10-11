@@ -559,7 +559,7 @@ export function QuickAddBar({
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
             className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-lg border border-line bg-surface p-4"
           >
             <p className="text-[13px] text-ink-soft">
