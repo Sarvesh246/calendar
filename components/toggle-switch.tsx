@@ -26,6 +26,8 @@ export function ToggleSwitch({
       }}
       className={cn(
         "press-none relative inline-flex h-7 w-[3.25rem] shrink-0 cursor-pointer items-center rounded-full p-0.5",
+        // A 44pt touch target around a 28px switch, without changing its look.
+        "before:absolute before:-inset-x-1.5 before:-inset-y-2 before:content-['']",
         "transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-base)]",
         checked ? "bg-accent" : "bg-surface-sunken"

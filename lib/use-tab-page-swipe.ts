@@ -179,6 +179,9 @@ export function useTabPageSwipe(
       };
 
       if (nextIndex === index) {
+        // A swipe that springs back still began over something tappable —
+        // most of the page is cards — and lifting over one must not open it.
+        swallowClick();
         if (reduced) {
           x.set(0);
           peekX.set(0);
