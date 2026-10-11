@@ -12,6 +12,7 @@ import {
   isSynthesizedClassReminder,
 } from "./class-reminder";
 import { isClassScheduleItem, isClassMeeting } from "./class-schedule";
+import { categoryLabel } from "./course-name";
 import { effectiveReminders, reminderBody, reminderKey } from "./reminders";
 import type { FocusSession } from "./focus-session";
 import { activeSegment, isRunning, itemElapsedMs, sessionElapsedMs } from "./focus-session";
@@ -113,6 +114,12 @@ function catColor(categories: Category[], id: string) {
 
 function catName(categories: Category[], id: string) {
   return categories.find((c) => c.id === id)?.name ?? "";
+}
+
+/** What a person reads — "MATH 150", not the feed's "MATH-150:533,534,535". */
+function catLabel(categories: Category[], id: string) {
+  const category = categories.find((c) => c.id === id);
+  return category ? categoryLabel(categories, category) : "";
 }
 
 function timeLabel(iso: string, clock24h: boolean) {
@@ -220,7 +227,7 @@ export function buildNativeSnapshot(opts: {
       i.allDay
         ? "All day"
         : timeLabel(i.at, clock24h) +
-          (catName(categories, i.categoryId) ? ` · ${catName(categories, i.categoryId)}` : "")
+          (catLabel(categories, i.categoryId) ? ` · ${catLabel(categories, i.categoryId)}` : "")
     )
   );
 
@@ -307,8 +314,9 @@ export function buildNativeSnapshot(opts: {
     .map((i) => ({
       id: i.id,
       title: i.title,
-      subtitle: [catName(categories, i.categoryId), format(new Date(i.at), "MMM d")].filter(Boolean).join(" · "),
-      keywords: [i.title, catName(categories, i.categoryId), i.location, i.type].filter(Boolean) as string[],
+      subtitle: [catLabel(categories, i.categoryId), format(new Date(i.at), "MMM d")].filter(Boolean).join(" · "),
+      // Both spellings, so Spotlight finds "math 150" and the feed's own code.
+      keywords: [i.title, catLabel(categories, i.categoryId), catName(categories, i.categoryId), i.location, i.type].filter(Boolean) as string[],
     }));
 
   const horizon = now.getTime() + 14 * 24 * 60 * 60_000;
