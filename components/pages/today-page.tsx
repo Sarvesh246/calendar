@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { useMediaQuery } from "@/lib/use-media-query";
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { Bell, CalendarClock, Link2, Minimize2, TriangleAlert } from "lucide-react";
+import { Bell, CalendarClock, Focus as FocusIcon, Link2, TriangleAlert } from "lucide-react";
 import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion } from "@/lib/motion";
 import { addDays, differenceInCalendarDays, format, isSameDay, startOfDay } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
+import { useJustCompleted } from "@/lib/just-completed";
 import { findOverlapGroups } from "@/lib/overlap";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import {
@@ -95,7 +96,8 @@ function TodayDashboard() {
   const comingUp = useMemo(() => comingUpItems(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
   const greeting = timeOfDayGreeting(now);
 
-  const overdue = useMemo(() => leftoverOverdue(items, day), [items, dk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const justDone = useJustCompleted();
+  const overdue = useMemo(() => leftoverOverdue(items, day, justDone), [items, dk, justDone]); // eslint-disable-line react-hooks/exhaustive-deps
   const todayList = useMemo(() => {
     const events = today.filter((i) => i.type === "event");
     const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
@@ -152,8 +154,8 @@ function TodayDashboard() {
           aria-label="Focus"
           className="shrink-0 gap-1.5 md:mt-5"
         >
-          <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-          <span className="hidden min-[400px]:inline">Focus</span>
+          <FocusIcon className="h-3.5 w-3.5" strokeWidth={1.9} />
+          <span className="hidden min-[340px]:inline">Focus</span>
         </Button>
       )}
     </header>

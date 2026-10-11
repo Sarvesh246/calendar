@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import { useAnimatedCollapse } from "@/lib/use-animated-collapse";
@@ -647,9 +647,13 @@ function CategoryEditor({
   const nameRef = useRef(name);
   const titleRef = useRef(classTitle);
   const catRef = useRef(cat);
-  nameRef.current = name;
-  titleRef.current = classTitle;
-  catRef.current = cat;
+  // Mirrored after commit for the unmount flush below, which needs the latest
+  // values without re-subscribing.
+  useLayoutEffect(() => {
+    nameRef.current = name;
+    titleRef.current = classTitle;
+    catRef.current = cat;
+  });
 
   useEffect(() => {
     if (!nameFocus.current) setName(cat.name);
@@ -1318,9 +1322,12 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => {
+  // A new value from outside (a preset, a reset) replaces whatever was typed.
+  const [shownValue, setShownValue] = useState(value);
+  if (shownValue !== value) {
+    setShownValue(value);
     setDraft(value);
-  }, [value]);
+  }
 
   function emit(raw: string) {
     const next = normalizeThemeHex(raw);

@@ -274,10 +274,14 @@ export function ImportSyllabus() {
   const classReady = Boolean(classId) || categories.length === 0;
   const onlyClassId = categories.length === 1 ? categories[0].id : "";
 
-  useEffect(() => {
-    if (!onlyClassId) return;
-    setClassId((current) => (current === onlyClassId ? current : onlyClassId));
-  }, [onlyClassId]);
+  // With a single class there is nothing to choose; pick it (again, if the
+  // list changes to a different single class). Adjusted during render so the
+  // picker never paints a frame with nothing selected.
+  const [pickedOnly, setPickedOnly] = useState("");
+  if (pickedOnly !== onlyClassId) {
+    setPickedOnly(onlyClassId);
+    if (onlyClassId && classId !== onlyClassId) setClassId(onlyClassId);
+  }
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];

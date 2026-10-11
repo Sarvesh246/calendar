@@ -4,7 +4,7 @@ import { animate, useDragControls, useMotionValue, useTransform, type PanInfo } 
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { haptic } from "@/lib/haptic";
 import { sheetRelease } from "@/lib/sheet-gesture";
-import { motion as motionTokens, prefersReducedMotion, releaseSpring } from "@/lib/motion";
+import { appleSpring, prefersReducedMotion, releaseSpring } from "@/lib/motion";
 
 /**
  * Every bottom sheet's physics, in one place.
@@ -20,7 +20,14 @@ import { motion as motionTokens, prefersReducedMotion, releaseSpring } from "@/l
  *    down uncovers the page halfway.
  */
 
-const OPEN = motionTokens.settle;
+/** Rises with a little weight and lands; the shadow under the sheet covers the overshoot. */
+const OPEN = appleSpring(0.4, 0.88);
+/**
+ * A close nobody threw (scrim tap, ×, Escape) still leaves at speed. Starting a
+ * close from rest is an ease-in — the sheet visibly hesitates before it goes,
+ * which reads as lag on the one tap that should feel instant.
+ */
+const TAP_CLOSE_VELOCITY = 1400;
 
 export interface SheetPhysicsOptions {
   panelRef: RefObject<HTMLElement | null>;
@@ -48,7 +55,10 @@ export function useSheetPhysics({
   const y = useMotionValue(4000);
   const [dragging, setDragging] = useState(false);
   const [gone, setGone] = useState(false);
+  /** True from the moment a close starts: the sheet stops taking taps and lets go of the page. */
+  const [leaving, setLeaving] = useState(false);
   const closing = useRef(false);
+  const closingDone = useRef(false);
   const detentIndex = useRef(initialDetent);
   const reduced = prefersReducedMotion();
 
@@ -73,8 +83,19 @@ export function useSheetPhysics({
       y.set(target);
       return;
     }
-    y.set(heightOf());
-    void animate(y, target, OPEN);
+    // `jump`, not `set`: a set from the parked offset would register as a
+    // huge upward velocity, and the spring below inherits it — the sheet
+    // would be flung off the top of the screen and fall back in from above.
+    y.jump(heightOf());
+    // One frame late on purpose. The frame a sheet mounts is the busiest one
+    // it will ever have — its contents' effects, focus, lazy panels — and a
+    // spring started inside it loses that whole stall at once, so the sheet
+    // lurched a hundred pixels on its second frame. Starting after it, every
+    // frame of the rise gets painted.
+    requestAnimationFrame(() => {
+      if (closing.current) return;
+      void animate(y, target, { ...OPEN, velocity: 0 });
+    });
   });
 
   const finish = useCallback(() => {
@@ -101,25 +122,50 @@ export function useSheetPhysics({
     [onDetent, pointsOf, reduced, y]
   );
 
-  /** Slide the sheet away (carrying `velocity`, px/s) and then call `onClosed`. */
+  /**
+   * Slide the sheet away and then call `onClosed`. `velocity` (px/s) is the
+   * finger's, when a drag let go; anything else — a scrim tap, the × button,
+   * Escape, or an event object from an `onClick={close}` — is a tap close.
+   */
   const close = useCallback(
-    (velocity = 0) => {
+    (release?: unknown) => {
+      const thrown = typeof release === "number" && Number.isFinite(release);
+      const velocity = thrown ? release : 0;
       if (closing.current) return;
       if (canClose && !canClose()) {
         snapTo(detentIndex.current, velocity);
         return;
       }
       closing.current = true;
+      setLeaving(true);
       if (reduced) {
         finish();
         return;
       }
       const h = heightOf();
-      void animate(y, h + 24, {
-        ...releaseSpring(Math.max(0, velocity), 1, 0.36),
+      // Stop as soon as it is off screen; nobody sees the tail of the spring.
+      const off = h + 8;
+      // A drag keeps the finger's speed (lifted a touch if it was let go
+      // slowly, so it never stalls on the way out); a tap gets a decisive push.
+      const launch = thrown ? Math.max(velocity, 500) : TAP_CLOSE_VELOCITY;
+      // Aimed well past the edge so it is still travelling when it leaves,
+      // instead of decelerating into the bottom of the screen.
+      void animate(y, h + Math.max(160, h * 0.3), {
+        ...releaseSpring(launch, 1, 0.32),
         restDelta: 2,
         restSpeed: 40,
-      }).then(finish);
+        onUpdate: (v) => {
+          if (v >= off && !closingDone.current) {
+            closingDone.current = true;
+            y.stop();
+            finish();
+          }
+        },
+      }).then(() => {
+        if (closingDone.current) return;
+        closingDone.current = true;
+        finish();
+      });
     },
     [canClose, finish, heightOf, reduced, snapTo, y]
   );
@@ -156,5 +202,5 @@ export function useSheetPhysics({
     style: { y, willChange: "transform" as const },
   };
 
-  return { y, scrimOpacity, dragging, dragControls, dragProps, close, snapTo, gone, closing };
+  return { y, scrimOpacity, dragging, dragControls, dragProps, close, snapTo, gone, closing, leaving };
 }

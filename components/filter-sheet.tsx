@@ -110,10 +110,10 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
   );
 
   return (
-        <div className="viewport-pinned-overlay fixed inset-0 z-50">
+        <div className={cn("viewport-pinned-overlay fixed inset-0 z-50", sheet.leaving && "pointer-events-none")}>
           <Scrim
             label="Close filter"
-            onClick={onClose}
+            onPointerDown={onClose}
             progress={sheet.scrimOpacity}
             exitDuration={sheet.gone ? 0 : motionTokens.exit}
           />
@@ -140,15 +140,15 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
           >
             <SheetHandle dragControls={dragControls} dragging={dragging} />
             <div
-              className="mb-3 flex cursor-grab touch-none select-none items-center justify-between gap-2 active:cursor-grabbing"
+              className="mb-4 flex cursor-grab touch-none select-none items-center justify-between gap-2 active:cursor-grabbing"
               onPointerDown={(e) => startSheetDrag(dragControls, e)}
             >
               <div className="min-w-0">
-                <p className="text-[15px] font-semibold text-ink">Filters</p>
+                <p className="text-[16px] font-semibold text-ink">Filters</p>
                 {/* What's on, right where you turn it off — the sheet showed
                     ticks only, which say what is selected but never that
                     anything is being hidden. */}
-                <p className="truncate text-[12px] text-ink-soft">
+                <p className="mt-0.5 truncate text-[12.5px] text-ink-soft">
                   {summary.active ? summary.label : "Showing everything"}
                 </p>
               </div>
@@ -162,10 +162,13 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
               </Button>
             </div>
             <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <p className="mb-2 text-[15px] font-semibold text-ink">Views</p>
+            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Views</p>
             <div className="mb-4 flex flex-col gap-1">
               {views.map((view) => {
                 const active = view.id === activeViewId;
+                // "In progress — In progress" says nothing twice.
+                const detail = viewSummary(view);
+                const showDetail = detail.trim().toLowerCase() !== view.name.trim().toLowerCase();
                 return (
                   <FilterRow
                     key={view.id}
@@ -176,7 +179,7 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
                     }}
                   >
                     {view.name}
-                    <span className="block truncate text-[11.5px] text-ink-faint">{viewSummary(view)}</span>
+                    {showDetail && <span className="block truncate text-[11.5px] text-ink-faint">{detail}</span>}
                   </FilterRow>
                 );
               })}
@@ -195,7 +198,7 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
                 </button>
               )}
             </div>
-            <p className="mb-2 text-[15px] font-semibold text-ink">Classes</p>
+            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Classes</p>
             <div className="flex flex-col gap-1">
               <FilterRow
                 selected={!filter && !activeViewId}

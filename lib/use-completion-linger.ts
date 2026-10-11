@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useDatebookStore } from "./store";
 import { prefersReducedMotion } from "./motion";
 import type { Item } from "./types";
@@ -24,16 +24,17 @@ import type { Item } from "./types";
  * the list without the item.
  */
 
-/** Covers the complete-circle ripple plus the strike-through that follows it. */
-// Long enough to watch the tick pop, the strike-through draw and the title
-// dim — and to register "done" — before the card gives its place back.
-const LINGER_MS = 780;
+import { LINGER_MS } from "./just-completed";
 
 export function useCompletionLinger(items: Item[]): Item[] {
   const [lingering, setLingering] = useState<Item[]>([]);
   const previous = useRef<Item[]>(items);
 
-  useEffect(() => {
+  // Layout effects, not passive ones: the render that drops a completed item
+  // is corrected before the browser paints it. A passive effect let that one
+  // frame through — the card started to leave, the count ticked down, and then
+  // both snapped back for the linger.
+  useLayoutEffect(() => {
     const present = new Set(items.map((i) => i.id));
     const dropped = previous.current.filter((i) => !present.has(i.id));
     previous.current = items;
@@ -66,7 +67,7 @@ export function useCompletionLinger(items: Item[]): Item[] {
 
   // Drop anything that has come back on its own (undo, a re-filter), so an
   // undone item is never rendered twice.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (lingering.length === 0) return;
     const present = new Set(items.map((i) => i.id));
     if (!lingering.some((i) => present.has(i.id))) return;

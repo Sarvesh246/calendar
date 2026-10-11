@@ -9,6 +9,7 @@ import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
+import { useJustCompleted } from "@/lib/just-completed";
 import { useWorkspacePrefs, type AgendaLayout } from "@/lib/workspace-prefs";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
@@ -16,7 +17,7 @@ import {
   dayKey,
   groupItemsByDay,
   isOverdue,
-  isOverdueAt,
+  isOverdueOrJustFinished,
   itemOccupiesDay,
   openWorkDueOnDay,
   workDueOnDay,
@@ -76,12 +77,13 @@ export default function AgendaPage() {
   const wide = useMediaQuery("(min-width: 1024px)");
   const rows = wide && layout === "rows";
 
+  const justDone = useJustCompleted();
   const overdue = useMemo(
     () =>
       items
-        .filter((item) => isOverdueAt(item, now))
+        .filter((item) => isOverdueOrJustFinished(item, now, justDone))
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [items, now]
+    [items, now, justDone]
   );
 
   const todayCount = useMemo(() => {

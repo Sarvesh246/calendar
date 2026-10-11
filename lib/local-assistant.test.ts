@@ -108,7 +108,7 @@ describe("local assistant — reading the calendar", () => {
   it("answers by weekday and date", () => {
     expect(text("what do I have on monday")).toContain("CS 101 Lecture");
     expect(text("anything on oct 6?")).toContain("Dentist appointment");
-    expect(text("what's on the 6th")).toBeNull; // ordinal resolves without throwing
+    expect(() => text("what's on the 6th")).not.toThrow(); // ordinal resolves without throwing
   });
 
   it("answers ranges", () => {

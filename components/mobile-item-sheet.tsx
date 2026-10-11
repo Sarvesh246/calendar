@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { createContext, useCallback, useContext, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
@@ -66,8 +67,8 @@ function MobileItemSheetBody({ title, note, onClosed, children }: { title: strin
 
   return (
     <SheetCloseContext.Provider value={close}>
-    <div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
-      <Scrim onClick={close} progress={sheet.scrimOpacity} />
+    <div className={cn("fixed inset-0 z-[70]", sheet.leaving && "pointer-events-none")} onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
+      <Scrim onPointerDown={close} progress={sheet.scrimOpacity} />
       <motion.div
         ref={ref}
         role="dialog"
@@ -174,7 +175,11 @@ function TaskActionsBody({
               <button
                 key={value}
                 aria-pressed={status === value}
-                className={`${control} ${status === value ? "border-transparent bg-accent text-accent-ink" : "border-transparent bg-transparent"}`}
+                className={cn(
+                  control,
+                  "transition-colors duration-[var(--motion-micro)]",
+                  status === value ? "border-transparent bg-accent font-medium text-accent-ink" : "border-transparent bg-transparent"
+                )}
                 onClick={() => {
                   changeMobileStatus(item, value);
                   finish();
@@ -193,10 +198,10 @@ function TaskActionsBody({
       )}
 
       <div className="my-3 flex gap-2">
-        <button className={`${control} flex-1`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button className={cn(control, "flex-1 transition-colors duration-[var(--motion-micro)]", open && "border-accent text-accent")} aria-expanded={open} onClick={() => setOpen(!open)}>
           {isEvent ? "Move" : "Reschedule"}
         </button>
-        <button className={`${control} flex-1`} onClick={onEdit}>
+        <button className={cn(control, "flex-1")} onClick={onEdit}>
           Edit details
         </button>
       </div>
@@ -279,13 +284,17 @@ function RescheduleGroup({
           <input
             aria-label={`${title}: pick a date`}
             type="date"
-            className={`${control} min-w-0 flex-1 text-[16px]`}
+            className={cn(control, "min-w-0 flex-1 text-[16px]")}
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
         </label>
         <button
-          className={`${control} shrink-0 ${tone === "warn" ? "border-transparent bg-warn text-[var(--accent-ink)]" : "border-transparent bg-accent text-accent-ink"}`}
+          className={cn(
+            control,
+            "shrink-0 border-transparent text-accent-ink",
+            tone === "warn" ? "bg-warn" : "bg-accent"
+          )}
           disabled={!date}
           onClick={() => onApply(date)}
         >

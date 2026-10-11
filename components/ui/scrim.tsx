@@ -22,9 +22,11 @@ const DIM = { default: 0.34, light: 0.26 } as const;
  * and lets the compositor reuse one blurred layer instead of rasterizing a new
  * blur radius on every frame.
  *
- * Start every full scrim partly visible. Starting at zero briefly exposes live
- * text while the panel is already on screen, especially on a busy compositor.
- * `snap` gets to full strength faster for the + composer.
+ * A free-running scrim fades up from nothing on a short decelerating curve:
+ * starting it part-way visible (it used to begin at 78%) read as a pop rather
+ * than a fade. Opacity is the only thing animating, so the fade stays on the
+ * compositor however busy the page is. `snap` is quicker still, for veils
+ * behind small popovers.
  */
 export function Scrim({
   onClick,
@@ -65,7 +67,7 @@ export function Scrim({
 
   const driven = progress
     ? { style: { ...treatment, opacity: progress } }
-    : { initial: { opacity: 0.78 }, animate: { opacity: 1 }, style: treatment };
+    : { initial: { opacity: 0 }, animate: { opacity: 1 }, style: treatment };
   const props = {
     ...driven,
     exit: {
@@ -76,7 +78,7 @@ export function Scrim({
       ? { duration: motionTokens.micro }
       : snap
         ? { duration: motionTokens.micro, ease: motionTokens.ease }
-        : { duration: motionTokens.emphasis, ease: motionTokens.ease },
+        : { duration: 0.2, ease: motionTokens.ease },
     className: cn(
       tone === "light" ? "overlay-scrim-light" : "overlay-scrim",
       // A labelled scrim is a full-viewport button. The global pressed-button

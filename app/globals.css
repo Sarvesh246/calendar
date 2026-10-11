@@ -914,6 +914,12 @@ button, a, [role="button"], summary, input, textarea, select, label {
   outline-offset: 2px;
 }
 
+/* A dialog holding focus itself (where touch devices park it on open) is not
+   a control; outlining the whole sheet would be noise. */
+[role="dialog"][tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 /* …except inside a control that already shows focus for what it contains.
    This rule is unlayered, so it outranks every Tailwind `outline-none`
    utility no matter the specificity — which is why an input styled with

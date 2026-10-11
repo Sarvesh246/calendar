@@ -13,7 +13,7 @@ import {
   ChevronRight,
   CircleDashed,
   Copy,
-  Minimize2,
+  Focus as FocusIcon,
   PanelRightOpen,
   PlayCircle,
   Trash2,
@@ -192,7 +192,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
             Open details
           </MenuItem>
           {work && status !== "done" && (
-            <MenuItem icon={Minimize2} onSelect={() => run(() => focusOnThis(item.id, router))}>
+            <MenuItem icon={FocusIcon} onSelect={() => run(() => focusOnThis(item.id, router))}>
               Focus on this
             </MenuItem>
           )}
