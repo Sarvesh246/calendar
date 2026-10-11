@@ -67,6 +67,95 @@ describe("category edits", () => {
   });
 });
 
+describe("explicit class removal", () => {
+  function addDestination() {
+    useDatebookStore.setState({ categories: [
+      ...store().categories,
+      { id: "cat-2", name: "ENGR 102", color: "#007AFF" },
+      { id: "cat-3", name: "History", color: "#FF9500" },
+    ] });
+  }
+
+  it("deletes every item in the class and tombstones it without moving anything", () => {
+    addDestination();
+    const a = addTask("Current assignment");
+    const b = addTask("Completed assignment");
+    store().setItemStatus(b.id, "done");
+    const elsewhere = store().addItem({ categoryId: "cat-2", title: "Keep", type: "task", at: a.at });
+    const before = localSnapshot();
+    expect(store().deleteCategory("cat-1", { kind: "delete-items" })).toBe(true);
+    expect(store().items).toEqual([elsewhere]);
+    for (const id of [a.id, b.id]) expect(store().deletions[tombKey("item", id)]).toBeTruthy();
+    expect(store().deletions[tombKey("category", "cat-1")]).toBeTruthy();
+    const merged = mergeCalendars(localSnapshot(), before, store().deletions);
+    expect(merged.items.map((i) => i.id)).toEqual([elsewhere.id]);
+    expect(merged.categories.some((c) => c.id === "cat-1")).toBe(false);
+  });
+
+  it("moves items only into the explicitly selected destination and preserves their data", () => {
+    addDestination();
+    const item = addTask("Keep my progress");
+    store().setItemStatus(item.id, "done");
+    const before = store().items[0];
+    expect(store().deleteCategory("cat-1", { kind: "move-items", targetCategoryId: "cat-3" })).toBe(true);
+    expect(store().items[0]).toMatchObject({ ...before, categoryId: "cat-3", updatedAt: expect.any(String) });
+    expect(store().deletions[tombKey("item", item.id)]).toBeUndefined();
+    expect(store().categories.some((c) => c.id === "cat-1")).toBe(false);
+  });
+
+  it("refuses missing, self and archived destinations without changing the store", () => {
+    addDestination();
+    addTask("Do not lose me");
+    store().updateCategory("cat-2", { archived: true });
+    const before = localSnapshot();
+    for (const targetCategoryId of ["missing", "cat-1", "cat-2"]) {
+      expect(store().deleteCategory("cat-1", { kind: "move-items", targetCategoryId })).toBe(false);
+      expect(localSnapshot()).toEqual(before);
+    }
+  });
+
+  it("refuses to delete the last class or a class that no longer exists", () => {
+    addTask("Keep");
+    expect(store().deleteCategory("cat-1", { kind: "delete-items" })).toBe(false);
+    addDestination();
+    const before = localSnapshot();
+    expect(store().deleteCategory("missing", { kind: "delete-items" })).toBe(false);
+    expect(localSnapshot()).toEqual(before);
+  });
+
+  it("archives without deleting or moving items and can be restored", () => {
+    const item = addTask("Keep hidden");
+    store().updateCategory("cat-1", { archived: true });
+    expect(store().items).toEqual([item]);
+    expect(store().deletions).toEqual({});
+    expect(store().categories[0].archived).toBe(true);
+    store().updateCategory("cat-1", { archived: false });
+    expect(store().categories[0].archived).toBe(false);
+  });
+
+  it("removes an entire stored repeating class series", () => {
+    addDestination();
+    store().addItem({ categoryId: "cat-1", title: "Class", type: "event", at: "2026-10-10T17:00:00.000Z",
+      repeat: { freq: "weekly", until: "2026-11-10T17:00:00.000Z" } });
+    const ids = store().items.map((i) => i.id);
+    expect(ids.length).toBeGreaterThan(1);
+    store().deleteCategory("cat-1", { kind: "delete-items" });
+    expect(store().items).toEqual([]);
+    for (const id of ids) expect(store().deletions[tombKey("item", id)]).toBeTruthy();
+  });
+
+  it("prevents an earlier item Undo from restoring into the removed class", () => {
+    addDestination();
+    const item = addTask("Old undo");
+    store().deleteItem(item.id);
+    expect(store().lastDeleted).not.toBeNull();
+    store().deleteCategory("cat-1", { kind: "delete-items" });
+    expect(store().lastDeleted).toBeNull();
+    store().restoreLastDeleted();
+    expect(store().items).toEqual([]);
+  });
+});
+
 describe("edit timestamps", () => {
   it("stamps a new item and moves the stamp on every edit", async () => {
     const item = addTask("Lab report");

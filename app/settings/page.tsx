@@ -653,7 +653,6 @@ function CategoryEditor({
   onConfirmDeleteId: (id: string | null) => void;
 }) {
   const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const [name, setName] = useState(cat.name);
   const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
   const nameFocus = useRef(false);
@@ -811,11 +810,7 @@ function CategoryEditor({
         <CategoryDeleteConfirm
           category={cat}
           categories={categories}
-          onConfirm={() => {
-            haptic("warn");
-            deleteCategory(cat.id);
-            onConfirmDeleteId(null);
-          }}
+          onConfirm={() => onConfirmDeleteId(null)}
           onCancel={() => onConfirmDeleteId(null)}
         />
       )}
@@ -834,35 +829,86 @@ function CategoryDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const count = useDatebookStore(
-    (s) => s.items.filter((i) => i.categoryId === category.id).length
-  );
-  // Mirrors `deleteCategory`'s choice of new home, so the prompt can name it.
-  const home =
-    categories.find((c) => c.id !== category.id && !c.archived) ??
-    categories.find((c) => c.id !== category.id);
+  const items = useDatebookStore((s) => s.items);
+  const sources = useDatebookStore((s) => s.importSources);
+  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
+  const updateCategory = useDatebookStore((s) => s.updateCategory);
+  const [choice, setChoice] = useState<"delete-items" | "archive" | "move-items" | null>(null);
+  const [targetId, setTargetId] = useState("");
+  const [error, setError] = useState("");
+  const count = items.filter((i) => i.categoryId === category.id).length;
+  const destinations = categories.filter((c) => c.id !== category.id && !c.archived);
+  const validTarget = destinations.some((c) => c.id === targetId);
+  const feedIds = new Set(sources.filter((s) => /^https?:\/\//i.test(s.url)).map((s) => s.id));
+  const hasFeedItems = items.some((i) => i.categoryId === category.id && i.sourceId && feedIds.has(i.sourceId));
+  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
+
+  function confirm() {
+    if (!choice || (choice === "move-items" && !validTarget)) return;
+    if (choice === "archive") {
+      updateCategory(category.id, { archived: true });
+      haptic("success");
+    } else {
+      const removed = deleteCategory(category.id, choice === "delete-items"
+        ? { kind: "delete-items" }
+        : { kind: "move-items", targetCategoryId: targetId });
+      if (!removed) {
+        setError("The class or destination changed. Choose an available class and try again.");
+        return;
+      }
+      haptic("warn");
+    }
+    onConfirm();
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-line/60 pt-2">
-      <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink-soft">
-        {count > 0 && home
-          ? `Move ${count} item${count === 1 ? "" : "s"} to ${classLabel(home)} and delete ${classLabel(category)}?`
-          : `Delete ${classLabel(category)}?`}
-      </span>
+    <div className="flex min-w-0 flex-col gap-3 border-t border-line/60 pt-3">
+      <fieldset className="flex min-w-0 flex-col gap-2">
+        <legend className="mb-2 text-[13px] font-medium text-ink">What should happen to {classLabel(category)}?</legend>
+        <p className="mb-1 text-[12px] leading-snug text-ink-soft">{itemLabel} {count === 1 ? "belongs" : "belong"} to this class, including past and completed items.</p>
+        {([
+          ["delete-items", "Delete class and its items", `Permanently remove this class and all ${itemLabel}.`],
+          ["archive", "Archive class", "Keep the class and its items, hidden from active views. You can restore it later."],
+          ["move-items", "Move items to another class", "Keep the items in a class you choose, then delete this class."],
+        ] as const).map(([value, label, description]) => (
+          <label key={value} className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 px-3 py-2.5 has-checked:border-accent/60 has-checked:bg-accent/5">
+            <input type="radio" name={`remove-class-${category.id}`} value={value} checked={choice === value}
+              onChange={() => { setChoice(value); setError(""); }} className="mt-0.5 shrink-0 accent-accent" />
+            <span className="min-w-0"><span className="block text-[13px] font-medium text-ink">{label}</span>
+              <span className="block text-[12px] leading-snug text-ink-soft">{description}</span></span>
+          </label>
+        ))}
+      </fieldset>
+      {choice === "move-items" && (
+        <label className="flex min-w-0 flex-col gap-1 text-[12px] font-medium text-ink-soft">
+          Destination class
+          <select aria-label="Destination class" value={validTarget ? targetId : ""} onChange={(e) => { setTargetId(e.target.value); setError(""); }}
+            className="min-h-11 w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-[13px] text-ink">
+            <option value="">Choose a class</option>
+            {destinations.map((c) => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
+          </select>
+          {destinations.length === 0 && <span className="font-normal">Restore or add another class before moving items.</span>}
+        </label>
+      )}
+      {choice === "delete-items" && hasFeedItems && <p className="text-[12px] leading-snug text-ink-soft">A connected calendar feed can import these items again. Archive the class to keep them hidden.</p>}
+      {error && <p role="alert" className="text-[12px] text-warn">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={onConfirm}
-        className="min-h-9 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
+        onClick={confirm}
+        disabled={!choice || (choice === "move-items" && !validTarget)}
+        className={cn("min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40", choice === "archive" ? "bg-accent" : "bg-warn")}
       >
-        Delete
+        {choice === "archive" ? "Archive class" : choice === "move-items" ? "Move items and delete class" : choice === "delete-items" ? `Delete class and ${itemLabel}` : "Choose an action"}
       </button>
       <button
         type="button"
         onClick={onCancel}
-        className="min-h-9 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
+        className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
       >
-        Keep
+        Cancel
       </button>
+      </div>
     </div>
   );
 }
