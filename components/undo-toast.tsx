@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { RotateCcw, Trash2 } from "lucide-react";
-import { useEffect } from "react";
+import { usePausableTimeout } from "@/lib/use-pausable-timeout";
 import { DismissibleSnack, SnackDismissButton } from "@/components/dismissible-snack";
 import { useDatebookStore } from "@/lib/store";
 import { motion as motionTokens } from "@/lib/motion";
@@ -14,12 +14,7 @@ export function UndoToast() {
   const lastDeleted = useDatebookStore((s) => s.lastDeleted);
   const restoreLastDeleted = useDatebookStore((s) => s.restoreLastDeleted);
   const dismiss = () => useDatebookStore.setState({ lastDeleted: null });
-
-  useEffect(() => {
-    if (!lastDeleted) return;
-    const t = window.setTimeout(dismiss, UNDO_WINDOW_MS);
-    return () => window.clearTimeout(t);
-  }, [lastDeleted]);
+  const { held, holdProps } = usePausableTimeout(lastDeleted?.key ?? null, UNDO_WINDOW_MS, dismiss);
 
   return (
     <AnimatePresence>
@@ -33,6 +28,7 @@ export function UndoToast() {
           exit={{ opacity: 0, y: 8, scale: 0.96 }}
           transition={motionTokens.spring}
           onDismiss={dismiss}
+          {...holdProps}
           className="pointer-events-auto relative flex w-full max-w-[420px] items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface py-2.5 pl-3.5 pr-1.5 text-[13px] text-ink"
         >
           <Trash2 className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.9} />
@@ -58,7 +54,7 @@ export function UndoToast() {
           <span
             aria-hidden
             className="toast-drain absolute inset-x-0 bottom-0 h-[2px] origin-left bg-accent/50"
-            style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }}
+            style={{ animationDuration: `${UNDO_WINDOW_MS}ms`, animationPlayState: held ? "paused" : "running" }}
           />
         </DismissibleSnack>
       )}
