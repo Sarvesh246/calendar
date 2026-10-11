@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { snackDragDismisses } from "@/components/dismissible-snack";
 import { Check, CloudOff, RotateCw, TriangleAlert } from "lucide-react";
 import {
   getLocalWriteCount,
@@ -77,6 +78,8 @@ export function SaveStatusPill() {
     if (!transient) {
       // Queued / offline / error — stay up until the state resolves (or dismiss).
       visibleRef.current = true;
+      // Driven by the flush queue and a dismiss timer, not derivable in render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }
@@ -128,19 +131,21 @@ export function SaveStatusPill() {
               y: 6,
               scale: 0.96,
               filter: "blur(2px)",
-              transition: { duration: motionTokens.standard, ease: motionTokens.easeIn },
+              transition: { duration: motionTokens.standard, ease: motionTokens.ease },
             }}
-            transition={motionTokens.springGentle}
+            transition={motionTokens.nudge}
             // Flick it away, the way you would a notification. Snapping back
             // on a short drag means a half-hearted swipe never leaves the pill
             // stranded off-centre.
+            layout="position"
             drag="y"
             dragDirectionLock
             dragSnapToOrigin
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0.06, bottom: 0.7 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 28 || info.velocity.y > 420) hide();
+            // 1:1 downward, the way it leaves; resists upward.
+            dragElastic={{ top: 0.08, bottom: 1 }}
+            onDragEnd={(e, info) => {
+              if (snackDragDismisses(e, info)) hide();
             }}
             className={cn(
               "sync-notice-card pointer-events-auto flex max-w-full touch-none items-center gap-2 px-3 py-2",

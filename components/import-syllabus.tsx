@@ -1,5 +1,6 @@
 "use client";
 
+import { classLabel as courseLabel } from "@/lib/course-label";
 import {
   createContext,
   useCallback,
@@ -167,7 +168,7 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       return {
         ...current,
         forceCategoryId: categoryId,
-        classLabel: category.name,
+        classLabel: courseLabel(category),
         warning: resolved.status === "forced" ? resolved.warning : undefined,
         matches,
         decisions,
@@ -274,10 +275,14 @@ export function ImportSyllabus() {
   const classReady = Boolean(classId) || categories.length === 0;
   const onlyClassId = categories.length === 1 ? categories[0].id : "";
 
-  useEffect(() => {
-    if (!onlyClassId) return;
-    setClassId((current) => (current === onlyClassId ? current : onlyClassId));
-  }, [onlyClassId]);
+  // With a single class there is nothing to choose; pick it (again, if the
+  // list changes to a different single class). Adjusted during render so the
+  // picker never paints a frame with nothing selected.
+  const [pickedOnly, setPickedOnly] = useState("");
+  if (pickedOnly !== onlyClassId) {
+    setPickedOnly(onlyClassId);
+    if (onlyClassId && classId !== onlyClassId) setClassId(onlyClassId);
+  }
 
   function onFiles(list: FileList | null) {
     const file = list?.[0];
@@ -329,7 +334,7 @@ export function ImportSyllabus() {
             <option value="">Choose a class…</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name}
+                {courseLabel(cat)}
               </option>
             ))}
           </select>
@@ -533,7 +538,7 @@ function StatusLine({ show, status }: { show: boolean; status: Status }) {
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
           className={cn(
             "flex items-start gap-1.5 text-[12.5px]",
             status.kind === "error" ? "text-warn" : "text-good"

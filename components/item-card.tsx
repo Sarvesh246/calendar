@@ -1,5 +1,6 @@
 "use client";
 
+import { useJustAdded } from "@/lib/just-added";
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-sheet";
@@ -36,10 +37,21 @@ export type { ItemCardChrome };
  * Height collapse is CSS grid `0fr`/`1fr` (see `.item-card-presence`); Framer
  * only fades so it never measures `height: auto` across the list.
  */
+/**
+ * A card that leaves (completed and hidden, filtered, deleted) fades first and
+ * then gives its height back on a critically damped spring — the cards below
+ * glide up and land. The old 160ms ease-in collapse ended at full speed, so
+ * the list slammed into place.
+ */
 const CARD_EXIT = {
   opacity: 0,
+  scale: 0.98,
   gridTemplateRows: "0fr",
-  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+  transition: {
+    opacity: { duration: 0.14, ease: motionTokens.ease },
+    scale: { duration: 0.18, ease: motionTokens.ease },
+    gridTemplateRows: { ...motionTokens.settle, delay: 0.06 },
+  },
 };
 
 export const ItemCard = memo(function ItemCard({
@@ -120,7 +132,7 @@ function CompleteButton({
       <span className="relative flex h-5 w-5 items-center justify-center">
         {burst > 0 && (
           <span
-            key={burst}
+            key={`ripple-${burst}`}
             aria-hidden
             className="complete-ripple pointer-events-none absolute inset-0 rounded-full border-2 border-good"
           />
@@ -128,9 +140,15 @@ function CompleteButton({
         {/* The squeeze is CSS, not a framer whileTap: every card in a list
             carried a gesture whose listeners cost real time to attach and tear
             down each time a list mounted or swapped (Agenda Cards ↔ Rows). */}
+        {/* Keyed on the burst so the pop replays on every completion: the
+            circle fills and springs past full size, then settles. */}
         <span
+          // Its own key space: sharing `burst` with the ripple beside it gave
+          // two siblings the same key, which React may drop or duplicate.
+          key={`circle-${burst}`}
           className={cn(
             "relative flex h-5 w-5 items-center justify-center rounded-full border-2 group-active/status:scale-[0.82] group-active/status:duration-[80ms]",
+            burst > 0 && status === "done" && "status-pop",
             "transition-[background-color,border-color,scale] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
@@ -143,10 +161,13 @@ function CompleteButton({
             {status === "done" && (
               <motion.span
                 key="check"
-                initial={{ scale: 0, opacity: 0, rotate: -25 }}
+                initial={{ scale: 0.2, opacity: 0, rotate: -30 }}
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={motionTokens.springSnappy}
+                exit={{ scale: 0.4, opacity: 0, transition: { duration: motionTokens.micro } }}
+                // Under-damped on purpose: the tick lands a little big and
+                // settles — the small reward that makes ticking things off
+                // satisfying.
+                transition={{ ...motionTokens.pop, opacity: { duration: 0.1 } }}
                 className="flex items-center justify-center"
               >
                 <Check className="h-3 w-3 text-[var(--accent-ink)]" strokeWidth={3.25} />
@@ -189,7 +210,7 @@ export function StatusSegmented({
             type="button"
             data-pill-key={opt.value}
             onClick={(e) => {
-              haptic(opt.value === "done" ? "success" : "light");
+              haptic(opt.value === "done" ? "success" : "selection");
               if (!active) moveTo(e.currentTarget);
               onChange(opt.value);
             }}
@@ -386,13 +407,18 @@ function CollapsedDescription({ show, text }: { show: boolean; text?: string }) 
 }
 
 function CardFrame({
+  itemId,
   dimmed,
   children,
   ...rest
 }: {
+  itemId: string;
   dimmed: boolean;
   children: React.ReactNode;
 } & React.HTMLAttributes<HTMLDivElement>) {
+  // A card you just created washes with the accent once, so you can see where
+  // it landed in the list.
+  const arrived = useJustAdded(itemId);
   return (
     <motion.div
       className="item-card-presence"
@@ -403,11 +429,11 @@ function CardFrame({
       <div className="item-card-presence-inner">
         <div
           {...rest}
-          data-page-swipe="off"
           className={cn(
             "item-card group/card @container/card press-none press-surface relative shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
             dimmed && "opacity-[0.62]",
+            arrived && "item-card-arrived",
             rest.className
           )}
         >
@@ -475,6 +501,7 @@ function EventCard({
 
   return (
     <CardFrame
+      itemId={item.id}
       dimmed={showCompleteStyle}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
@@ -529,15 +556,11 @@ function EventCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {displayTitle}
-            <motion.span
-              aria-hidden
-              initial={false}
-              animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
-              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
-            />
+            {/* Struck line by line: a single absolute line sat in the gap
+                between the two lines of a wrapped title. */}
+            <span className="strike-text" data-struck={showCompleteStyle || undefined}>
+              {displayTitle}
+            </span>
           </p>
           {remaining && !ended && (
             <p className="mt-0.5 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
@@ -637,6 +660,7 @@ function AssignmentCard({
 
   return (
     <CardFrame
+      itemId={item.id}
       dimmed={showCompleteStyle}
       role="button"
       tabIndex={0}
@@ -678,15 +702,11 @@ function AssignmentCard({
               showCompleteStyle ? "text-ink-soft" : "text-ink"
             )}
           >
-            {item.title}
-            <motion.span
-              aria-hidden
-              initial={false}
-              animate={{ scaleX: showCompleteStyle ? 1 : 0 }}
-              transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
-              style={{ transformOrigin: "left center" }}
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-px rounded-full bg-current opacity-70"
-            />
+            {/* Struck line by line: a single absolute line sat in the gap
+                between the two lines of a wrapped title. */}
+            <span className="strike-text" data-struck={showCompleteStyle || undefined}>
+              {item.title}
+            </span>
           </p>
           <p
             className={cn(

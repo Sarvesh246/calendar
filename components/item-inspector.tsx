@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarSearch, Minimize2, X } from "lucide-react";
+import { CalendarSearch, Focus as FocusIcon, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -127,7 +127,7 @@ function InspectorPanel({ item }: { item: Item }) {
             onClick={() => focusOnThis(item.id, router)}
             className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
           >
-            <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+            <FocusIcon className="h-3.5 w-3.5" strokeWidth={1.9} />
             Focus on this
           </button>
         )}

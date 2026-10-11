@@ -30,6 +30,12 @@ describe("commitPageFromGesture", () => {
     ).toBe(0);
   });
 
+  it("stays home when released moving back toward it", () => {
+    expect(
+      commitPageFromGesture({ startIndex: 1, dx: -width * 0.6, vx: 900, width, count: 3 })
+    ).toBe(1);
+  });
+
   it("lets a flick take the neighbour before halfway", () => {
     expect(
       commitPageFromGesture({ startIndex: 0, dx: -40, vx: -900, width, count: 3 })
@@ -51,9 +57,17 @@ describe("commitPageFromGesture", () => {
 
 describe("rubberbandPageX", () => {
   it("yields at the first and last tab and tracks in the middle", () => {
-    expect(rubberbandPageX(100, 0, 3)).toBe(22);
-    expect(rubberbandPageX(-100, 2, 3)).toBe(-22);
-    expect(rubberbandPageX(-80, 1, 3)).toBe(-80);
+    const first = rubberbandPageX(100, 0, 3, 390);
+    expect(first).toBeGreaterThan(0);
+    expect(first).toBeLessThan(100);
+    expect(rubberbandPageX(-100, 2, 3, 390)).toBeCloseTo(-first, 6);
+    expect(rubberbandPageX(-80, 1, 3, 390)).toBe(-80);
+  });
+
+  it("stiffens the further it is pulled", () => {
+    const near = rubberbandPageX(40, 0, 3, 390) / 40;
+    const far = rubberbandPageX(400, 0, 3, 390) / 400;
+    expect(far).toBeLessThan(near);
   });
 });
 
@@ -85,9 +99,12 @@ describe("commitTabFromGesture", () => {
 });
 
 describe("pillSpringForVelocity", () => {
-  it("under-damps a throw and stays tight on a slow drag", () => {
-    expect(pillSpringForVelocity(2000).damping).toBeLessThan(pillSpringForVelocity(80).damping);
-    expect(pillSpringForVelocity(80).stiffness).toBeGreaterThan(pillSpringForVelocity(2000).stiffness);
+  it("is one spring that carries the throw's velocity", () => {
+    const slow = pillSpringForVelocity(80);
+    const fast = pillSpringForVelocity(2000);
+    expect(fast.velocity).toBe(2000);
+    expect(fast.stiffness).toBe(slow.stiffness);
+    expect(fast.damping).toBe(slow.damping);
   });
 });
 

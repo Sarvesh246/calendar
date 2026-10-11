@@ -35,7 +35,13 @@ export function Reveal({
               : {
                   height: 0,
                   opacity: 0,
-                  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+                  // Height on the same critically damped spring as the open,
+                  // so the content below glides up and lands rather than
+                  // accelerating into a hard stop; the fade leads.
+                  transition: {
+                    height: motionTokens.settle,
+                    opacity: { duration: motionTokens.micro, ease: motionTokens.ease },
+                  },
                 }
           }
           transition={reduced ? motionTokens.tweenStandard : motionTokens.springLayout}

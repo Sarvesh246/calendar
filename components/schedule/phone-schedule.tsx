@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import { formatClock, formatTimeRange, weekdayLong, weekdayShort } from "@/lib/class-schedule";
 import {
@@ -12,7 +11,7 @@ import {
   type WeeklySchedule,
 } from "@/lib/weekly-schedule";
 import { EmptyState } from "@/components/empty-state";
-import { motion as motionTokens } from "@/lib/motion";
+import { useSlidingPill } from "@/lib/sliding-pill";
 import { haptic } from "@/lib/haptic";
 import { patchViewState, readViewState } from "@/lib/view-state";
 import { cn } from "@/lib/utils";
@@ -130,6 +129,7 @@ function WeekStrip({
   selected: number;
   onSelect: (day: number) => void;
 }) {
+  const { containerRef: stripRef, pillRef, moveTo } = useSlidingPill(String(selected), { mark: false });
   const load = useMemo(() => {
     const minutes = new Map<number, number>();
     let busiest = 0;
@@ -143,10 +143,15 @@ function WeekStrip({
 
   return (
     <div
+      ref={stripRef}
       role="tablist"
       aria-label="Day of the week"
-      className="flex items-stretch gap-1 rounded-xl border border-line bg-surface p-1"
+      className="relative flex items-stretch gap-1 rounded-xl border border-line bg-surface p-1"
     >
+      {/* One highlight that slides between days on the compositor
+          (useSlidingPill), not a Framer layoutId that re-measures on the
+          same frame the timeline below re-renders. */}
+      <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent-soft ring-1 ring-accent/45" />
       {order.map((day) => {
         const blocks = byDay.get(day) ?? [];
         const minutes = load.minutes.get(day) ?? 0;
@@ -158,7 +163,11 @@ function WeekStrip({
             type="button"
             role="tab"
             aria-selected={isSelected}
-            onClick={() => onSelect(day)}
+            data-pill-key={String(day)}
+            onClick={(e) => {
+              moveTo(e.currentTarget);
+              onSelect(day);
+            }}
             // Spelled out because the visible label is a single letter, which a
             // screen reader would otherwise read as "T" twice a week.
             aria-label={
@@ -169,14 +178,6 @@ function WeekStrip({
             }
             className="press-none relative flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-1.5"
           >
-            {isSelected && (
-              <motion.span
-                layoutId="phone-schedule-day"
-                aria-hidden
-                transition={motionTokens.springSnappy}
-                className="absolute inset-0 rounded-lg bg-accent-soft ring-1 ring-accent/45"
-              />
-            )}
             <span
               aria-hidden
               className={cn(

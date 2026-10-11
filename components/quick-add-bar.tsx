@@ -17,7 +17,7 @@ import { reminderContext } from "@/lib/store-selectors";
 import { formatTime } from "@/lib/date-utils";
 import { repeatLabel } from "@/lib/repeat";
 import { format, isToday } from "date-fns";
-import { motion as motionTokens } from "@/lib/motion";
+import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { haptic } from "@/lib/haptic";
 import { clearDraft, readDraft, readJsonDraft, writeDraft, writeJsonDraft } from "@/lib/drafts";
 import {
@@ -130,6 +130,28 @@ export function QuickAddBar({
   // The original text is kept here instead.
   const rawRef = useRef<string>("");
 
+  /**
+   * On a desktop, "Add" lives in many places (a day's pane, a calendar cell,
+   * the palette) but the composer it opens is up in the toolbar. A brief glow
+   * on the field draws the eye from where you clicked to where you type.
+   */
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const cue = () => {
+    const field = fieldRef.current;
+    if (!toolbar || !field || prefersReducedMotion() || !field.animate) return;
+    // An inline animation, not a class: focusing the field re-renders its
+    // className, which would strip a class before it had played.
+    const ring = "color-mix(in srgb, var(--accent) 38%, transparent)";
+    field.animate(
+      [
+        { boxShadow: `0 0 0 0px ${ring}` },
+        { boxShadow: `0 0 0 3px ${ring}`, offset: 0.2 },
+        { boxShadow: `0 0 0 3px transparent` },
+      ],
+      { duration: 720, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+    );
+  };
+
   useEffect(() => {
     if (prefill === null) return;
     // An empty prefill means "open a blank composer", which is now the same
@@ -140,11 +162,16 @@ export function QuickAddBar({
       setText(prefill);
     }
     inputRef.current?.focus();
+    cue();
     setPrefill(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill, setPrefill]);
 
   useEffect(() => {
-    if (dateKey) inputRef.current?.focus();
+    if (!dateKey) return;
+    inputRef.current?.focus();
+    cue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey]);
 
   useEffect(() => {
@@ -399,11 +426,12 @@ export function QuickAddBar({
       className={cn("relative w-full", mobile && "mobile-quick-add rounded-xl bg-surface p-2")}
     >
       <div
+        ref={fieldRef}
         // Marks the field and its send button as one unit, so the keyboard
         // never covers the button you need to finish with.
         data-field-group=""
         className={cn(
-          "focus-within-ring flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
+          "focus-within-ring relative flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
           toolbar && "h-10 rounded-lg border-0 bg-transparent py-0 pl-3 pr-0.5 hover:bg-surface-sunken/40",
           toolbar && focused && "bg-surface-sunken/60 hover:bg-surface-sunken/60",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
@@ -531,7 +559,7 @@ export function QuickAddBar({
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+            transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
             className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-lg border border-line bg-surface p-4"
           >
             <p className="text-[13px] text-ink-soft">

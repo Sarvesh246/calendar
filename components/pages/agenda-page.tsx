@@ -1,5 +1,6 @@
 "use client";
 
+import { NumberRoll } from "@/components/ui/number-roll";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
@@ -8,6 +9,7 @@ import { LayoutList, Rows3 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useFilterBreakdown, useFilteredItems } from "@/lib/use-filtered-items";
+import { useJustCompleted } from "@/lib/just-completed";
 import { useWorkspacePrefs, type AgendaLayout } from "@/lib/workspace-prefs";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
@@ -15,7 +17,7 @@ import {
   dayKey,
   groupItemsByDay,
   isOverdue,
-  isOverdueAt,
+  isOverdueOrJustFinished,
   itemOccupiesDay,
   openWorkDueOnDay,
   workDueOnDay,
@@ -75,12 +77,13 @@ export default function AgendaPage() {
   const wide = useMediaQuery("(min-width: 1024px)");
   const rows = wide && layout === "rows";
 
+  const justDone = useJustCompleted();
   const overdue = useMemo(
     () =>
       items
-        .filter((item) => isOverdueAt(item, now))
+        .filter((item) => isOverdueOrJustFinished(item, now, justDone))
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [items, now]
+    [items, now, justDone]
   );
 
   const todayCount = useMemo(() => {
@@ -429,7 +432,7 @@ function DayHeading({
       <span className={cn("font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>{label}</span>
       {sublabel && <span className="text-ink-faint">{sublabel}</span>}
       <span className="ml-auto text-[12px] tabular-nums text-ink-faint">
-        {count} {count === 1 ? "item" : "items"}
+        <NumberRoll value={count} /> {count === 1 ? "item" : "items"}
       </span>
     </h2>
   );

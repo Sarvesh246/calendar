@@ -1,14 +1,15 @@
 "use client";
 
 import { startTransition, useRef, useState } from "react";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, SlidersHorizontal, X } from "lucide-react";
 import { summariseFilters } from "@/lib/filter-summary";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
-import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { useSheetPhysics } from "@/lib/use-sheet-physics";
 import { Scrim } from "@/components/ui/scrim";
 import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
@@ -55,8 +56,8 @@ export function FilterButton({ className }: { className?: string }) {
             key="dot"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={motionTokens.springSnappy}
+            exit={{ scale: 0, opacity: 0, transition: { duration: motionTokens.micro } }}
+            transition={motionTokens.pop}
             className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-surface"
           />
         )}
@@ -76,11 +77,14 @@ export function FilterSheet() {
   );
 }
 
-function FilterSheetBody({ onClose }: { onClose: () => void }) {
+function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dragControls = useDragControls();
-  const [dragging, setDragging] = useState(false);
+  const sheet = useSheetPhysics({ panelRef, onClosed });
+  const { dragControls, dragging } = sheet;
+  // Every way out — scrim, Escape, close, a choice that finishes the job —
+  // slides the sheet away with the same physics as a flick.
+  const onClose = () => sheet.close();
   // AnimatePresence keeps this body mounted through its exit. Keep the lock
   // until the scrim and panel are both gone, so fixed chrome cannot repaint
   // while the sheet is sliding away.
@@ -106,8 +110,13 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
   );
 
   return (
-        <div className="viewport-pinned-overlay fixed inset-0 z-50">
-          <Scrim label="Close filter" onClick={onClose} />
+        <div className={cn("viewport-pinned-overlay fixed inset-0 z-50", sheet.leaving && "pointer-events-none")}>
+          <Scrim
+            label="Close filter"
+            onPointerDown={onClose}
+            progress={sheet.scrimOpacity}
+            exitDuration={sheet.gone ? 0 : motionTokens.exit}
+          />
           <motion.div
             role="dialog"
             ref={panelRef}
@@ -117,21 +126,12 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
             }}
             aria-modal="true"
             aria-label="Filters"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-            transition={motionTokens.springGentle}
-            style={{ willChange: "transform" }}
-            {...SHEET_DRAG}
-            dragControls={dragControls}
-            onDragStart={() => setDragging(true)}
-            onDragEnd={(_, info) => {
-              setDragging(false);
-              if (shouldDismissSheet(info)) {
-                haptic("light");
-                onClose();
-              }
-            }}
+            exit={
+              sheet.gone
+                ? { opacity: 1, transition: { duration: 0 } }
+                : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
+            }
+            {...sheet.dragProps}
             // `mobile-action-sheet` rather than its own max-height: that class
             // is what keeps a sheet clear of the status bar, and this one was
             // measuring against the full visible viewport like the search sheet
@@ -140,15 +140,15 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
           >
             <SheetHandle dragControls={dragControls} dragging={dragging} />
             <div
-              className="mb-3 flex cursor-grab items-center justify-between gap-2 active:cursor-grabbing"
+              className="mb-4 flex cursor-grab touch-none select-none items-center justify-between gap-2 active:cursor-grabbing"
               onPointerDown={(e) => startSheetDrag(dragControls, e)}
             >
               <div className="min-w-0">
-                <p className="text-[15px] font-semibold text-ink">Filters</p>
+                <p className="text-[16px] font-semibold text-ink">Filters</p>
                 {/* What's on, right where you turn it off — the sheet showed
                     ticks only, which say what is selected but never that
                     anything is being hidden. */}
-                <p className="truncate text-[12px] text-ink-soft">
+                <p className="mt-0.5 truncate text-[12.5px] text-ink-soft">
                   {summary.active ? summary.label : "Showing everything"}
                 </p>
               </div>
@@ -162,10 +162,13 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
               </Button>
             </div>
             <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <p className="mb-2 text-[15px] font-semibold text-ink">Views</p>
+            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Views</p>
             <div className="mb-4 flex flex-col gap-1">
               {views.map((view) => {
                 const active = view.id === activeViewId;
+                // "In progress — In progress" says nothing twice.
+                const detail = viewSummary(view);
+                const showDetail = detail.trim().toLowerCase() !== view.name.trim().toLowerCase();
                 return (
                   <FilterRow
                     key={view.id}
@@ -176,7 +179,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                     }}
                   >
                     {view.name}
-                    <span className="block truncate text-[11.5px] text-ink-faint">{viewSummary(view)}</span>
+                    {showDetail && <span className="block truncate text-[11.5px] text-ink-faint">{detail}</span>}
                   </FilterRow>
                 );
               })}
@@ -195,7 +198,7 @@ function FilterSheetBody({ onClose }: { onClose: () => void }) {
                 </button>
               )}
             </div>
-            <p className="mb-2 text-[15px] font-semibold text-ink">Classes</p>
+            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Classes</p>
             <div className="flex flex-col gap-1">
               <FilterRow
                 selected={!filter && !activeViewId}

@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { classLabel } from "@/lib/course-label";
+import { useAuth } from "@/components/auth-provider";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
+import { useAnimatedCollapse } from "@/lib/use-animated-collapse";
 import Link from "next/link";
 import { useDatebookStore } from "@/lib/store";
 import { presetMeta, presetOrder } from "@/lib/theme-presets";
@@ -70,6 +73,8 @@ function downloadFile(name: string, blob: Blob) {
 
 export default function SettingsPage() {
   const reducedMotion = prefersReducedMotion();
+  const { user: accountUser, configured: cloudConfigured } = useAuth();
+  const syncStatus = useDatebookStore((s) => s.syncStatus);
   const settings = useDatebookStore((s) => s.settings);
   const updateSettings = useDatebookStore((s) => s.updateSettings);
   const categories = useDatebookStore((s) => s.categories);
@@ -227,7 +232,17 @@ export default function SettingsPage() {
         <div className="order-1 min-w-0">
       <CollapsibleCard
         title="Account & sync"
-        sub="Sign in to back up and sync across devices."
+        // Says where things stand, not what to do — "Sign in to back up" read
+        // as a nag to someone already signed in and synced.
+        sub={
+          accountUser
+            ? syncStatus === "error"
+              ? "Signed in — your latest changes haven't synced yet."
+              : "Backed up to your account and syncing across devices."
+            : cloudConfigured
+              ? "Sign in to back up and sync across devices."
+              : "Everything is saved on this device."
+        }
         storageKey="account"
         defaultOpen
       >
@@ -638,7 +653,6 @@ function CategoryEditor({
   onConfirmDeleteId: (id: string | null) => void;
 }) {
   const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
   const [name, setName] = useState(cat.name);
   const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
   const nameFocus = useRef(false);
@@ -646,9 +660,13 @@ function CategoryEditor({
   const nameRef = useRef(name);
   const titleRef = useRef(classTitle);
   const catRef = useRef(cat);
-  nameRef.current = name;
-  titleRef.current = classTitle;
-  catRef.current = cat;
+  // Mirrored after commit for the unmount flush below, which needs the latest
+  // values without re-subscribing.
+  useLayoutEffect(() => {
+    nameRef.current = name;
+    titleRef.current = classTitle;
+    catRef.current = cat;
+  });
 
   useEffect(() => {
     if (!nameFocus.current) setName(cat.name);
@@ -792,11 +810,7 @@ function CategoryEditor({
         <CategoryDeleteConfirm
           category={cat}
           categories={categories}
-          onConfirm={() => {
-            haptic("warn");
-            deleteCategory(cat.id);
-            onConfirmDeleteId(null);
-          }}
+          onConfirm={() => onConfirmDeleteId(null)}
           onCancel={() => onConfirmDeleteId(null)}
         />
       )}
@@ -815,35 +829,86 @@ function CategoryDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const count = useDatebookStore(
-    (s) => s.items.filter((i) => i.categoryId === category.id).length
-  );
-  // Mirrors `deleteCategory`'s choice of new home, so the prompt can name it.
-  const home =
-    categories.find((c) => c.id !== category.id && !c.archived) ??
-    categories.find((c) => c.id !== category.id);
+  const items = useDatebookStore((s) => s.items);
+  const sources = useDatebookStore((s) => s.importSources);
+  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
+  const updateCategory = useDatebookStore((s) => s.updateCategory);
+  const [choice, setChoice] = useState<"delete-items" | "archive" | "move-items" | null>(null);
+  const [targetId, setTargetId] = useState("");
+  const [error, setError] = useState("");
+  const count = items.filter((i) => i.categoryId === category.id).length;
+  const destinations = categories.filter((c) => c.id !== category.id && !c.archived);
+  const validTarget = destinations.some((c) => c.id === targetId);
+  const feedIds = new Set(sources.filter((s) => /^https?:\/\//i.test(s.url)).map((s) => s.id));
+  const hasFeedItems = items.some((i) => i.categoryId === category.id && i.sourceId && feedIds.has(i.sourceId));
+  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
+
+  function confirm() {
+    if (!choice || (choice === "move-items" && !validTarget)) return;
+    if (choice === "archive") {
+      updateCategory(category.id, { archived: true });
+      haptic("success");
+    } else {
+      const removed = deleteCategory(category.id, choice === "delete-items"
+        ? { kind: "delete-items" }
+        : { kind: "move-items", targetCategoryId: targetId });
+      if (!removed) {
+        setError("The class or destination changed. Choose an available class and try again.");
+        return;
+      }
+      haptic("warn");
+    }
+    onConfirm();
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-line/60 pt-2">
-      <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink-soft">
-        {count > 0 && home
-          ? `Move ${count} item${count === 1 ? "" : "s"} to ${home.name} and delete ${category.name}?`
-          : `Delete ${category.name}?`}
-      </span>
+    <div className="flex min-w-0 flex-col gap-3 border-t border-line/60 pt-3">
+      <fieldset className="flex min-w-0 flex-col gap-2">
+        <legend className="mb-2 text-[13px] font-medium text-ink">What should happen to {classLabel(category)}?</legend>
+        <p className="mb-1 text-[12px] leading-snug text-ink-soft">{itemLabel} {count === 1 ? "belongs" : "belong"} to this class, including past and completed items.</p>
+        {([
+          ["delete-items", "Delete class and its items", `Permanently remove this class and all ${itemLabel}.`],
+          ["archive", "Archive class", "Keep the class and its items, hidden from active views. You can restore it later."],
+          ["move-items", "Move items to another class", "Keep the items in a class you choose, then delete this class."],
+        ] as const).map(([value, label, description]) => (
+          <label key={value} className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 px-3 py-2.5 has-checked:border-accent/60 has-checked:bg-accent/5">
+            <input type="radio" name={`remove-class-${category.id}`} value={value} checked={choice === value}
+              onChange={() => { setChoice(value); setError(""); }} className="mt-0.5 shrink-0 accent-accent" />
+            <span className="min-w-0"><span className="block text-[13px] font-medium text-ink">{label}</span>
+              <span className="block text-[12px] leading-snug text-ink-soft">{description}</span></span>
+          </label>
+        ))}
+      </fieldset>
+      {choice === "move-items" && (
+        <label className="flex min-w-0 flex-col gap-1 text-[12px] font-medium text-ink-soft">
+          Destination class
+          <select aria-label="Destination class" value={validTarget ? targetId : ""} onChange={(e) => { setTargetId(e.target.value); setError(""); }}
+            className="min-h-11 w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-[13px] text-ink">
+            <option value="">Choose a class</option>
+            {destinations.map((c) => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}
+          </select>
+          {destinations.length === 0 && <span className="font-normal">Restore or add another class before moving items.</span>}
+        </label>
+      )}
+      {choice === "delete-items" && hasFeedItems && <p className="text-[12px] leading-snug text-ink-soft">A connected calendar feed can import these items again. Archive the class to keep them hidden.</p>}
+      {error && <p role="alert" className="text-[12px] text-warn">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={onConfirm}
-        className="min-h-9 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
+        onClick={confirm}
+        disabled={!choice || (choice === "move-items" && !validTarget)}
+        className={cn("min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40", choice === "archive" ? "bg-accent" : "bg-warn")}
       >
-        Delete
+        {choice === "archive" ? "Archive class" : choice === "move-items" ? "Move items and delete class" : choice === "delete-items" ? `Delete class and ${itemLabel}` : "Choose an action"}
       </button>
       <button
         type="button"
         onClick={onCancel}
-        className="min-h-9 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
+        className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
       >
-        Keep
+        Cancel
       </button>
+      </div>
     </div>
   );
 }
@@ -864,18 +929,19 @@ function CollapsibleCard({
   defaultOpen?: boolean;
 }) {
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
-  const reduced = prefersReducedMotion();
+  const bodyRef = useAnimatedCollapse<HTMLDivElement>(open);
 
-  // CSS grid rows, not Framer `height: "auto"`. Everyday (and Reminders) nest
-  // `layoutId` pills inside this body — measuring auto-height while those
-  // layout projections run looped updates and threw React #185 on Settings.
+  // A measured spring on the body's height, not CSS grid rows: `0fr` ↔
+  // `max-content` can't be interpolated, so the card used to sit still for
+  // half the transition and then snap. Not Framer `height: "auto"` either —
+  // Everyday (and Reminders) nest pills inside this body, and measuring
+  // auto-height while those layout projections ran threw React #185.
   return (
     <section
       id={id}
       className={cn(
-        // `self-start` + content-sized height so `grid-rows-[1fr]` (the
-        // open accordion track) cannot resolve against a stretched
-        // min-height ancestor and pad a blank region under the card.
+        // `self-start` + content-sized height so the open body cannot resolve
+        // against a stretched min-height ancestor and pad a blank region.
         "h-auto min-h-0 w-full self-start overflow-hidden rounded-lg border border-line/80 bg-surface",
         ANCHOR_OFFSET
       )}
@@ -898,18 +964,18 @@ function CollapsibleCard({
       </button>
 
       <div
-        className={cn(
-          "grid h-max content-start",
-          // `1fr` in an auto-height grid still expands to leftover min-height
-          // on iOS WebKit. `max-content` keeps the open track content-sized.
-          open ? "grid-rows-[minmax(0,max-content)]" : "grid-rows-[0fr]",
-          !reduced && "transition-[grid-template-rows] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
-        )}
+        ref={bodyRef}
+        data-open={open}
+        // The class covers the first paint (before the hook takes over the
+        // inline height) so a closed card never flashes open.
+        className="overflow-hidden data-[open=false]:h-0"
         // Closed sections stay in the tree (so open/close doesn't remount
         // import controls) but must not take focus.
         inert={open ? undefined : true}
       >
-        <div className="min-h-0 overflow-hidden">
+        {/* `contain: paint` keeps a collapsed card's content from stretching the
+            page: overflow:hidden alone still lets it count toward scroll height. */}
+        <div className="min-h-0 overflow-hidden [contain:paint]">
           <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
             {children}
           </div>
@@ -1174,7 +1240,7 @@ function ClassReminderPicker({
           initial={{ opacity: 0, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
-          transition={{ duration: motionTokens.micro, ease: motionTokens.ease }}
+          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
           className="px-0.5 text-[12.5px] leading-relaxed text-ink-faint"
         >
           {minutes > 0 ? (
@@ -1316,9 +1382,12 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => {
+  // A new value from outside (a preset, a reset) replaces whatever was typed.
+  const [shownValue, setShownValue] = useState(value);
+  if (shownValue !== value) {
+    setShownValue(value);
     setDraft(value);
-  }, [value]);
+  }
 
   function emit(raw: string) {
     const next = normalizeThemeHex(raw);

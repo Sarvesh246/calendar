@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { createContext, useCallback, useContext, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { haptic } from "@/lib/haptic";
-import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
-import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { useSheetPhysics } from "@/lib/use-sheet-physics";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
@@ -30,74 +30,58 @@ import type { Item } from "@/lib/types";
  * flick it down. All four always work, everywhere, and the grabber means what
  * it looks like it means.
  */
-export function MobileItemSheet({ title, note, onClose, children }: { title: string; /** A quiet line above the content. */ note?: string; onClose: () => void; children: React.ReactNode }) {
-  // The sheet owns its own dismissal so it can finish animating before the
-  // parent unmounts it. Callers still just pass `onClose`; it now fires when
-  // the sheet has actually left, not when the gesture started — which is what
-  // stops the scrim, the tab bar and the save pill all snapping back into
-  // place a frame before the card has gone.
-  const [open, setOpen] = useState(true);
-  const close = useCallback(() => setOpen(false), []);
+/**
+ * Lets anything inside a sheet close it *with* its exit — an action that
+ * finishes the job ("Done", "Move event") slides the sheet away exactly like
+ * a flick does, instead of the parent unmounting it in one frame.
+ */
+const SheetCloseContext = createContext<(() => void) | null>(null);
 
+/** Close the enclosing MobileItemSheet with its animation, if there is one. */
+export function useCloseSheet(): (() => void) | null {
+  return useContext(SheetCloseContext);
+}
+
+export function MobileItemSheet({ title, note, onClose, children }: { title: string; /** A quiet line above the content. */ note?: string; onClose: () => void; children: React.ReactNode }) {
+  // The sheet owns its own departure: `onClose` fires once it has actually
+  // left the screen, not when the gesture started — which is what stops the
+  // scrim, the tab bar and the save pill snapping back a frame before the
+  // card has gone.
   return createPortal(
-    <AnimatePresence onExitComplete={onClose}>
-      {open && <MobileItemSheetBody title={title} note={note} close={close}>{children}</MobileItemSheetBody>}
-    </AnimatePresence>,
+    <MobileItemSheetBody title={title} note={note} onClosed={onClose}>{children}</MobileItemSheetBody>,
     document.body
   );
 }
 
-function MobileItemSheetBody({ title, note, close, children }: { title: string; note?: string; close: () => void; children: React.ReactNode }) {
+function MobileItemSheetBody({ title, note, onClosed, children }: { title: string; note?: string; onClosed: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dragControls = useDragControls();
-  const [dragging, setDragging] = useState(false);
-  const reduced = prefersReducedMotion();
+  const sheet = useSheetPhysics({ panelRef: ref, onClosed });
+  const close = useCallback(() => sheet.close(), [sheet]);
   useDialogFocus(ref, true);
   useLockBodyScroll(true);
   // Search, the date pickers and the reschedule fields all live near the
   // bottom of a sheet the keyboard then covers.
   useKeepFieldVisible(ref, true);
-  useSheetOverscroll(scrollRef, dragControls);
+  useSheetOverscroll(scrollRef, sheet.dragControls);
 
   return (
-    <div className="fixed inset-0 z-[70]" onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
-      <Scrim onClick={close} exitDuration={0.26} />
+    <SheetCloseContext.Provider value={close}>
+    <div className={cn("fixed inset-0 z-[70]", sheet.leaving && "pointer-events-none")} onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
+      <Scrim onPointerDown={close} progress={sheet.scrimOpacity} />
       <motion.div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        initial={reduced ? { opacity: 0 } : { y: "100%" }}
-        animate={reduced ? { opacity: 1 } : { y: 0 }}
-        exit={
-          reduced
-            ? { opacity: 0, transition: { duration: motionTokens.exit } }
-            // Slides out, never fades: a sheet that goes translucent on the
-            // way down shows the tab bar and the page through itself for a
-            // few frames, which looks like a rendering fault rather than a
-            // dismissal. iOS slides, so this slides.
-            : { y: "100%", transition: { duration: 0.26, ease: motionTokens.easeIn } }
-        }
-        transition={motionTokens.springGentle}
-        style={{ willChange: "transform" }}
-        {...SHEET_DRAG}
-        dragControls={dragControls}
-        onDragStart={() => setDragging(true)}
-        onDragEnd={(_, info) => {
-          setDragging(false);
-          if (shouldDismissSheet(info)) {
-            haptic("light");
-            close();
-          }
-        }}
+        {...sheet.dragProps}
         className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-0.5"
       >
-        <SheetHandle dragControls={dragControls} dragging={dragging} />
+        <SheetHandle dragControls={sheet.dragControls} dragging={sheet.dragging} />
         <header
-          className="native-sheet-header flex shrink-0 cursor-grab items-center justify-between gap-3 active:cursor-grabbing"
-          onPointerDown={(e) => startSheetDrag(dragControls, e)}
+          className="native-sheet-header flex shrink-0 cursor-grab touch-none select-none items-center justify-between gap-3 active:cursor-grabbing"
+          onPointerDown={(e) => startSheetDrag(sheet.dragControls, e)}
         >
           <h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2>
           <button aria-label="Close item sheet" className="native-glass-control press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button>
@@ -108,6 +92,7 @@ function MobileItemSheetBody({ title, note, close, children }: { title: string; 
         <div ref={scrollRef} className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1">{note && <p className="mb-2 text-[12px] text-ink-faint">{note}</p>}{children}</div>
       </motion.div>
     </div>
+    </SheetCloseContext.Provider>
   );
 }
 
@@ -134,14 +119,7 @@ function nextWeekend(now = new Date()): string {
  * and its own buttons. You cannot move a deadline by accident, because moving a
  * deadline is something you have to aim at.
  */
-export function MobileTaskActions({
-  item,
-  onClose,
-  onEdit,
-  initialReschedule = false,
-  hintSwipe = true,
-  embedded = false,
-}: {
+interface TaskActionsProps {
   item: Item;
   onClose: () => void;
   onEdit: () => void;
@@ -150,16 +128,37 @@ export function MobileTaskActions({
   hintSwipe?: boolean;
   /** Render inside DaySheet (or similar) instead of nesting another portal sheet. */
   embedded?: boolean;
-}) {
+}
+
+export function MobileTaskActions(props: TaskActionsProps) {
+  if (props.embedded) return <TaskActionsBody {...props} />;
+  return (
+    <MobileItemSheet title="Details" onClose={props.onClose}>
+      <TaskActionsBody {...props} />
+    </MobileItemSheet>
+  );
+}
+
+function TaskActionsBody({
+  item,
+  onClose,
+  onEdit,
+  initialReschedule = false,
+  hintSwipe = true,
+  embedded = false,
+}: TaskActionsProps) {
   const [open, setOpen] = useState(initialReschedule);
   const status = item.status ?? "todo";
   const isEvent = item.type === "event";
+  const closeSheet = useCloseSheet();
+  // Inside our own sheet, leave by sliding away; embedded, the host decides.
+  const finish = () => (!embedded && closeSheet ? closeSheet() : onClose());
   const apply = (date: string, planWork: boolean) => {
     mobileReschedule(item, date, planWork);
-    onClose();
+    finish();
   };
 
-  const body = (
+  return (
     <>
       <ItemSummaryHeader item={item} />
 
@@ -176,10 +175,14 @@ export function MobileTaskActions({
               <button
                 key={value}
                 aria-pressed={status === value}
-                className={`${control} ${status === value ? "border-transparent bg-accent text-accent-ink" : "border-transparent bg-transparent"}`}
+                className={cn(
+                  control,
+                  "transition-colors duration-[var(--motion-micro)]",
+                  status === value ? "border-transparent bg-accent font-medium text-accent-ink" : "border-transparent bg-transparent"
+                )}
                 onClick={() => {
                   changeMobileStatus(item, value);
-                  onClose();
+                  finish();
                 }}
               >
                 {label}
@@ -195,10 +198,10 @@ export function MobileTaskActions({
       )}
 
       <div className="my-3 flex gap-2">
-        <button className={`${control} flex-1`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button className={cn(control, "flex-1 transition-colors duration-[var(--motion-micro)]", open && "border-accent text-accent")} aria-expanded={open} onClick={() => setOpen(!open)}>
           {isEvent ? "Move" : "Reschedule"}
         </button>
-        <button className={`${control} flex-1`} onClick={onEdit}>
+        <button className={cn(control, "flex-1")} onClick={onEdit}>
           Edit details
         </button>
       </div>
@@ -238,13 +241,6 @@ export function MobileTaskActions({
         </div>
       </Reveal>
     </>
-  );
-
-  if (embedded) return body;
-  return (
-    <MobileItemSheet title="Details" onClose={onClose}>
-      {body}
-    </MobileItemSheet>
   );
 }
 
@@ -288,13 +284,17 @@ function RescheduleGroup({
           <input
             aria-label={`${title}: pick a date`}
             type="date"
-            className={`${control} min-w-0 flex-1 text-[16px]`}
+            className={cn(control, "min-w-0 flex-1 text-[16px]")}
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
         </label>
         <button
-          className={`${control} shrink-0 ${tone === "warn" ? "border-transparent bg-warn text-[var(--accent-ink)]" : "border-transparent bg-accent text-accent-ink"}`}
+          className={cn(
+            control,
+            "shrink-0 border-transparent text-accent-ink",
+            tone === "warn" ? "bg-warn" : "bg-accent"
+          )}
           disabled={!date}
           onClick={() => onApply(date)}
         >

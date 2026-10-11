@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format, isSameDay, isToday } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
-import { groupItemsByDay, dayKey, dayLabel, formatTime, isEventEnded, rankDayItems } from "@/lib/date-utils";
+import { groupItemsByDay, dayKey, dayLabel, formatTime, formatTimeSpan, isEventEnded, rankDayItems } from "@/lib/date-utils";
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
@@ -27,6 +27,7 @@ import { applyItemPatch, dayLabelFor, rescheduleToDay } from "@/lib/item-actions
 import { handleItemMenuKey, itemMenuProps } from "@/lib/item-menu";
 import { formatDuration } from "@/lib/work-sessions";
 import { itemDisplayTitle } from "@/lib/course-label";
+import { useNow } from "@/lib/use-now";
 
 const DEFAULT_START_HOUR = 7;
 const DEFAULT_END_HOUR = 22;
@@ -54,11 +55,14 @@ function hourWindow(days: Date[], byDay: Map<string, Item[]>) {
 export function WeekView({
   days,
   items,
+  selectedDate,
   onSelectDate,
   onSelectItem,
   onCreate,
 }: {
   days: Date[];
+  /** The day whose details the side pane shows — distinct from today. */
+  selectedDate?: Date;
   items: Item[];
   onSelectDate?: (date: Date) => void;
   onSelectItem?: (item: Item, day: Date) => void;
@@ -68,10 +72,43 @@ export function WeekView({
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useDatebookStore((s) => s.categories);
   const lastPointer = useRef<string>("mouse");
+  const now = useNow();
+  const scroller = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [overflowFor, setOverflowFor] = useState<{ day: Date; rect: DOMRect } | null>(null);
+  const closeOverflow = useCallback(() => setOverflowFor(null), []);
 
   const byDay = useMemo(() => groupItemsByDay(items), [items]);
   const { startHour, endHour } = useMemo(() => hourWindow(days, byDay), [days, byDay]);
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
+  const weekKey = dayKey(days[0]);
+  const hasToday = days.some((d) => isToday(d));
+  // Open on what matters: the current time when this week has today in it,
+  // otherwise the week's first timed event — never the empty early hours.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const grid = gridRef.current;
+    if (!el || !grid) return;
+    let target: number | null = null;
+    if (hasToday) {
+      const n = new Date();
+      target = n.getHours() * 60 + n.getMinutes();
+    } else {
+      for (const day of days) {
+        for (const it of byDay.get(dayKey(day)) ?? NO_ITEMS) {
+          if (it.type !== "event" || it.allDay) continue;
+          const m = weekEventWindow(it, day).startMin;
+          target = target === null ? m : Math.min(target, m);
+        }
+      }
+    }
+    if (target === null) return;
+    // Put the target an hour below the sticky header, never past the end.
+    const y = ((target - startHour * 60 - 60) / 60) * HOUR_HEIGHT;
+    el.scrollTop = Math.max(0, y);
+    // Only a different week should re-aim the scroll, not every edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekKey, hasToday]);
   const colorOf = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.color] as const));
     return (categoryId: string) => m.get(categoryId) ?? "#8a8a94";
@@ -118,10 +155,12 @@ export function WeekView({
       <MobileWeekPager days={days} byDay={byDay} />
 
       <div
+        ref={scroller}
         data-drop-scroll
         className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface md:flex md:overflow-y-auto"
       >
-        <div data-drop-sticky className="sticky top-0 z-10 grid grid-cols-[48px_repeat(7,1fr)] border-b border-line bg-surface">
+        <div data-drop-sticky className="sticky top-0 z-10 border-b border-line bg-surface">
+        <div className="grid grid-cols-[48px_repeat(7,minmax(0,1fr))]">
           <div />
           {days.map((day) => (
             <button
@@ -129,20 +168,29 @@ export function WeekView({
               type="button"
               data-drop-head={dayKey(day)}
               onClick={() => onSelectDate?.(day)}
-              className={cn(
-                "week-day-head border-l border-line px-2 py-2 text-center transition-colors duration-[var(--motion-micro)]",
-                isToday(day) && "bg-accent-soft"
-              )}
+              aria-current={isToday(day) ? "date" : undefined}
+              aria-pressed={selectedDate ? isSameDay(day, selectedDate) : undefined}
+              className="week-day-head flex flex-col items-center gap-0.5 border-l border-line px-2 py-1.5 transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
-              <p className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">{format(day, "EEE")}</p>
-              <p className={cn("text-[15px] font-medium tabular-nums", isToday(day) ? "text-accent" : "text-ink")}>
+              <p className={cn("text-[10.5px] font-medium uppercase tracking-wider", isToday(day) ? "text-accent" : "text-ink-soft")}>
+                {format(day, "EEE")}
+              </p>
+              {/* Today is a filled badge; the selected day is a ring. They are
+                  different facts and can sit on different days. */}
+              <p
+                className={cn(
+                  "flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[14px] font-medium tabular-nums",
+                  isToday(day) ? "bg-accent text-white" : "text-ink",
+                  selectedDate && isSameDay(day, selectedDate) && "ring-1 ring-inset ring-accent"
+                )}
+              >
                 {format(day, "d")}
               </p>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line">
+        <div className="grid grid-cols-[48px_repeat(7,minmax(0,1fr))] border-t border-line">
           <div className="py-1.5 text-right text-[10px] text-ink-faint" />
           {days.map((day) => {
             const key = dayKey(day);
@@ -151,17 +199,16 @@ export function WeekView({
               day,
               new Date()
             );
-            const visible = dayAssignments.slice(0, 3);
+            const visible = dayAssignments.slice(0, 2);
             const overflow = dayAssignments.length - visible.length;
-            const hiddenTitles = dayAssignments
-              .slice(3)
-              .map((i) => i.title)
-              .join(", ");
             return (
               <div
                 key={day.toISOString()}
                 data-drop-day={key}
-                className="week-allday-cell flex min-h-7 flex-col gap-1 border-l border-line p-1 transition-colors duration-[var(--motion-micro)]"
+                className={cn(
+                  "week-allday-cell flex min-h-9 min-w-0 flex-col gap-[3px] border-l border-line p-1 transition-colors duration-[var(--motion-micro)]",
+                  isToday(day) && "bg-accent-soft/40"
+                )}
               >
                 {visible.map((item) => (
                   <AllDayChip
@@ -178,22 +225,24 @@ export function WeekView({
                 {overflow > 0 && (
                   <button
                     type="button"
-                    onClick={() => onSelectDate?.(day)}
-                    title={hiddenTitles}
-                    className="truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium text-ink-soft"
+                    aria-haspopup="dialog"
+                    aria-label={`Show ${overflow} more on ${format(day, "EEEE, MMMM d")}`}
+                    onClick={(e) => setOverflowFor({ day, rect: e.currentTarget.getBoundingClientRect() })}
+                    className="truncate rounded px-[7px] py-0.5 text-left text-[10.5px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    +{overflow}
+                    +{overflow} more
                   </button>
                 )}
               </div>
             );
           })}
         </div>
+        </div>
 
-        <div className="relative grid grid-cols-[48px_repeat(7,1fr)]">
+        <div ref={gridRef} className="relative grid grid-cols-[48px_repeat(7,minmax(0,1fr))]">
           <div>
             {hours.map((h) => (
-              <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line pr-2 text-right text-[10px] text-ink-faint">
+              <div key={h} style={{ height: HOUR_HEIGHT }} className="border-b border-line pr-2 text-right text-[10.5px] tabular-nums text-ink-soft">
                 {format(new Date(0, 0, 0, h), clock24h ? "HH:00" : "h a")}
               </div>
             ))}
@@ -207,7 +256,7 @@ export function WeekView({
                 data-drop-col={key}
                 data-start-hour={startHour}
                 onPointerDown={(e) => startCreate(e, day)}
-                className="relative border-l border-line"
+                className={cn("relative min-w-0 border-l border-line", isToday(day) && "bg-accent-soft/25")}
               >
                 {hours.map((h) => (
                   <button
@@ -220,7 +269,7 @@ export function WeekView({
                       if (e.detail === 0 || lastPointer.current === "touch") onCreate?.(day, h * 60, null);
                     }}
                     style={{ height: HOUR_HEIGHT }}
-                    className="block w-full border-b border-line transition-colors duration-[var(--motion-micro)] hover:bg-accent-soft/50 active:bg-accent-soft"
+                    className="week-hour-slot block w-full border-b border-line transition-colors duration-[var(--motion-micro)] hover:bg-accent-soft/50 active:bg-accent-soft"
                   />
                 ))}
                 {assignOverlapColumns(
@@ -237,13 +286,19 @@ export function WeekView({
                       absEnd: session.endMin,
                     };
                   })
-                ).map(({ item, startMin, durationMin, col, colCount, absStart, absEnd }) => (
+                ).map(({ item, startMin, durationMin, col, colCount, absStart, absEnd }) => {
+                  const height = Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2);
+                  // A block that starts in the last minutes of the day (an
+                  // 11:59 PM deadline) must still fit inside the grid, not hang
+                  // off its bottom edge and get clipped.
+                  const top = Math.min(Math.max(0, (startMin / 60) * HOUR_HEIGHT), Math.max(0, hours.length * HOUR_HEIGHT - height - 2));
+                  return (
                   <TimedBlock
                     key={item.id}
                     item={item}
                     day={day}
-                    top={Math.max(0, (startMin / 60) * HOUR_HEIGHT)}
-                    height={Math.max(22, (durationMin / 60) * HOUR_HEIGHT - 2)}
+                    top={top}
+                    height={height}
                     color={colorOf(item.categoryId)}
                     widthPct={100 / colCount}
                     col={col}
@@ -254,14 +309,148 @@ export function WeekView({
                     absEnd={absEnd}
                     onSelect={() => select(item, day)}
                   />
-                ))}
+                  );
+                })}
+                {isToday(day) && <NowLine now={now} startHour={startHour} endHour={endHour} />}
                 <DropGhost dayKey={key} startHour={startHour} clock24h={clock24h} />
               </div>
             );
           })}
         </div>
       </div>
+      {overflowFor && (
+        <DayItemsPopover
+          day={overflowFor.day}
+          anchor={overflowFor.rect}
+          items={rankDayItems(
+            (byDay.get(dayKey(overflowFor.day)) ?? NO_ITEMS).filter((i) => i.type !== "event" || i.allDay),
+            overflowFor.day,
+            now
+          )}
+          colorOf={colorOf}
+          clock24h={clock24h}
+          onClose={closeOverflow}
+          onSelect={(item) => {
+            const day = overflowFor.day;
+            closeOverflow();
+            select(item, day);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** A rule across today's column at the current time, with a dot on its left edge. */
+function NowLine({ now, startHour, endHour }: { now: Date; startHour: number; endHour: number }) {
+  const min = now.getHours() * 60 + now.getMinutes();
+  if (min < startHour * 60 || min > endHour * 60) return null;
+  const top = ((min - startHour * 60) / 60) * HOUR_HEIGHT;
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 z-[3]" style={{ top, transform: "translateY(-1px)" }}>
+      <span className="absolute -left-[4px] -top-[3px] h-2 w-2 rounded-full bg-accent" />
+      <div className="h-[2px] w-full bg-accent" />
+    </div>
+  );
+}
+
+/** Every deadline and all-day item for one day, opened from "+n more" without leaving the week. */
+function DayItemsPopover({
+  day,
+  anchor,
+  items,
+  colorOf,
+  clock24h,
+  onClose,
+  onSelect,
+}: {
+  day: Date;
+  anchor: DOMRect;
+  items: Item[];
+  colorOf: (id: string) => string;
+  clock24h: boolean;
+  onClose: () => void;
+  onSelect: (item: Item) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: -9999, top: 0, maxHeight: 320 });
+
+  // Placed after measuring, so it flips above the anchor and clamps to the
+  // viewport instead of clipping off the right or bottom edge.
+  useLayoutEffect(() => {
+    const w = 272;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(8, Math.min(anchor.left, vw - w - 8));
+    const h = ref.current?.offsetHeight ?? 200;
+    const below = vh - anchor.bottom - 12;
+    const above = anchor.top - 12;
+    const flip = h > below && above > below;
+    const maxHeight = Math.max(160, Math.min(360, flip ? above : below));
+    const top = flip ? Math.max(8, anchor.top - Math.min(h, maxHeight) - 4) : anchor.bottom + 4;
+    setPos({ left, top, maxHeight });
+  }, [anchor, items.length]);
+
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("button")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={`Due and all-day on ${format(day, "EEEE, MMMM d")}`}
+      style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight, width: 272 }}
+      className="drag-ghost fixed z-50 flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[0_12px_32px_-8px_rgb(0_0_0/0.35)]"
+    >
+      <p className="shrink-0 border-b border-line px-3 py-2 text-[12px] font-medium text-ink">
+        {format(day, "EEEE, MMM d")} · {items.length} item{items.length === 1 ? "" : "s"}
+      </p>
+      <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+        {items.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(item)}
+              className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-full" style={{ background: colorOf(item.categoryId) }} />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "block text-[12.5px] font-medium leading-snug text-ink [overflow-wrap:anywhere]",
+                    item.status === "done" && "line-through opacity-60"
+                  )}
+                >
+                  {itemDisplayTitle(item)}
+                </span>
+                <span className="block text-[11px] text-ink-soft">
+                  {item.type === "event"
+                    ? "All day"
+                    : `${item.type === "task" ? "Task" : "Due"}${item.allDay ? "" : ` ${formatTime(item.at, clock24h)}`}`}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -421,29 +610,32 @@ function TimedBlock({
         height,
         left: `calc(${col * widthPct}% + 4px)`,
         width: `calc(${widthPct}% - 8px)`,
-        backgroundColor: `color-mix(in srgb, ${color} 14%, var(--surface))`,
-        borderLeft: `2.5px ${item.workFor ? "dashed" : "solid"} ${color}`,
+        backgroundColor: `color-mix(in srgb, ${color} 18%, var(--surface))`,
+        borderLeft: `3px ${item.workFor ? "dashed" : "solid"} ${color}`,
         opacity: lifted ? 0.35 : undefined,
         zIndex: 1,
         touchAction: "none",
         ["--cat" as string]: color,
       }}
       className={cn(
-        "group/block press-none absolute cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[10.5px] leading-tight",
-        "transition-opacity duration-[var(--motion-micro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        "group/block press-none absolute cursor-grab overflow-hidden rounded-md px-1.5 py-1 text-left text-[11px] leading-tight",
+        "transition-[opacity,box-shadow] duration-[var(--motion-micro)] hover:shadow-[0_0_0_1px_var(--cat)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         item.workFor && "work-session-block",
-        ended && !lifted && "opacity-45"
+        // Finished blocks recede, but stay legible: dimming below ~0.7 pushes
+        // the text under AA contrast on the tinted fill.
+        ended && !lifted && "opacity-75"
       )}
     >
-      <p className="truncate font-medium" style={{ color }}>
+      <p className={cn("font-semibold text-ink", height > 44 ? "line-clamp-2" : "truncate")}>
         {itemDisplayTitle(item)}
       </p>
       {height > 32 && (
-        <p className="truncate tabular-nums text-ink-faint">
-          {formatTime(item.at, clock24h)}
-          {height > 48 && item.endAt ? `–${formatTime(item.endAt, clock24h)}` : ""}
+        <p className="truncate tabular-nums text-ink-soft">
+          {/* Side-by-side blocks are narrow; the start alone fits, the full span is in the tooltip. */}
+          {height > 40 && widthPct === 100 ? formatTimeSpan(item.at, item.endAt, clock24h) : formatTime(item.at, clock24h).replace(/\s?(AM|PM)$/i, "")}
         </p>
       )}
+      {height > 72 && item.location && <p className="truncate text-ink-soft">{item.location}</p>}
       {canResize && (
         <span
           data-resize
@@ -525,14 +717,22 @@ function AllDayChip({
       onKeyDown={(e) => handleItemMenuKey(e, item.id, key)}
       {...itemMenuProps(item.id, key)}
       className={cn(
-        "cal-chip cursor-grab truncate px-1.5 py-0.5 text-left text-[10px] font-medium transition-opacity duration-[var(--motion-micro)]",
+        "cal-chip flex min-h-[22px] min-w-0 cursor-grab items-center gap-1.5 rounded-[5px] px-1.5 py-0.5 text-left text-[10.5px] font-medium transition-opacity duration-[var(--motion-micro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         work && "cal-chip-task",
-        (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-45",
+        (item.status === "done" || isEventEnded(item, new Date(), day)) && "opacity-70",
         lifted && "opacity-30"
       )}
+      title={`${work ? (item.type === "task" ? "Task" : "Due") : "All day"} · ${itemDisplayTitle(item)}${work && !item.allDay ? ` · ${formatTime(item.at, clock24h)}` : ""}`}
       style={{ "--cat": color } as React.CSSProperties}
     >
-      {itemDisplayTitle(item)}
+      {/* Finished work gets a hollow dot, not a strike-through: a struck line
+          on top of a dashed border reads as noise at this size. */}
+      <span
+        aria-hidden
+        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        style={item.status === "done" ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : { background: color }}
+      />
+      <span className="min-w-0 truncate">{itemDisplayTitle(item)}</span>
     </button>
   );
 }

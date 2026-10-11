@@ -1,12 +1,12 @@
 import { TAB_ROUTES, type TabRoute } from "./tab-routes";
+import { appleSpring, type SpringTransition } from "./motion";
+import { project, rubberband } from "./gesture";
 
 const PAGE_SWIPE_IGNORE =
   'input, textarea, select, option, [contenteditable="true"], [data-page-swipe="off"], .mobile-tab-bar';
 
-export const PAGE_SWIPE_AXIS = 14;
-export const PAGE_SWIPE_HALFWAY = 0.42;
-export const PAGE_SWIPE_FLICK = 720;
-export const PAGE_SWIPE_FLICK_MIN = 28;
+export const PAGE_SWIPE_AXIS = 10;
+export const PAGE_SWIPE_HALFWAY = 0.5;
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -19,22 +19,24 @@ export function pageSwipeIgnores(target: EventTarget | null): boolean {
 }
 
 /**
- * Rubber-band a drag past the first or last tab so the page yields
- * instead of sticking, then springs home.
+ * Past the first or last tab the page yields instead of sticking — Apple's
+ * asymptotic rubber-band, so a long overdrag stiffens rather than stretching
+ * like taffy — then springs home.
  */
-export function rubberbandPageX(dx: number, index: number, count: number): number {
-  if (index <= 0 && dx > 0) return dx * 0.22;
-  if (index >= count - 1 && dx < 0) return dx * 0.22;
+export function rubberbandPageX(dx: number, index: number, count: number, width: number): number {
+  if (index <= 0 && dx > 0) return rubberband(dx, width);
+  if (index >= count - 1 && dx < 0) return rubberband(dx, width);
   return dx;
 }
 
 /**
  * Which tab a horizontal page swipe should land on.
  *
- * Slow drags respect the halfway point: release before it and the page
- * comes back; release after it and the neighbour commits. A flick with
- * real speed can take the neighbour before halfway — the same reading a
- * native pager gives a thrown card.
+ * One rule instead of "past halfway, or a fast enough flick": project where
+ * the page would coast to at the release speed and commit if that crosses the
+ * halfway point. A short quick throw and a long slow drag are judged on the
+ * same scale, and a drag that is being pulled *back* when released (velocity
+ * against the offset) stays home even if it was past halfway.
  */
 export function commitPageFromGesture({
   startIndex,
@@ -50,10 +52,10 @@ export function commitPageFromGesture({
   count: number;
 }): number {
   if (width <= 0) return startIndex;
-  const flicked = Math.abs(vx) > PAGE_SWIPE_FLICK && Math.abs(dx) > PAGE_SWIPE_FLICK_MIN;
+  const projected = project(dx, vx);
   let next = startIndex;
-  if (dx > width * PAGE_SWIPE_HALFWAY || (flicked && dx > 0 && vx > 0)) next = startIndex - 1;
-  else if (dx < -width * PAGE_SWIPE_HALFWAY || (flicked && dx < 0 && vx < 0)) next = startIndex + 1;
+  if (projected > width * PAGE_SWIPE_HALFWAY && dx > 0) next = startIndex - 1;
+  else if (projected < -width * PAGE_SWIPE_HALFWAY && dx < 0) next = startIndex + 1;
   return clamp(next, 0, count - 1);
 }
 
@@ -64,12 +66,9 @@ export function neighbourTab(index: number, dx: number): TabRoute | null {
 }
 
 /**
- * Which tab a thrown nav pill should land on.
- *
- * Position still wins for a slow drag (round to nearest). A flick that
- * has already travelled a tenth of a tab commits in the throw's
- * direction even if it hasn't crossed the midpoint — otherwise a fast
- * swipe that looks decisive snaps back, which is the stutter.
+ * Which tab a thrown nav pill should land on: where the pill would coast to,
+ * rounded to the nearest tab, never more than one tab past where the finger
+ * let go.
  */
 export function commitTabFromGesture({
   startIndex,
@@ -85,32 +84,22 @@ export function commitTabFromGesture({
   count: number;
 }): number {
   if (tabWidth <= 0) return startIndex;
-  const flicked = Math.abs(velocity) > 800 && Math.abs(offset) > tabWidth * 0.1;
-  const next = flicked
-    ? startIndex + Math.sign(offset !== 0 ? offset : velocity)
-    : startIndex + Math.round(offset / tabWidth);
+  const released = startIndex + Math.round(offset / tabWidth);
+  const coasted = startIndex + Math.round(project(offset, velocity) / tabWidth);
+  const next = clamp(coasted, released - 1, released + 1);
   return clamp(next, 0, count - 1);
 }
 
-/** Spring the pill with the finger's leftover speed, so a throw bounces. */
-export function pillSpringForVelocity(velocity: number) {
-  const abs = Math.abs(velocity);
-  if (abs > 1800) {
-    return { type: "spring" as const, stiffness: 320, damping: 20, mass: 0.8, velocity };
-  }
-  if (abs > 900) {
-    return { type: "spring" as const, stiffness: 380, damping: 26, mass: 0.7, velocity };
-  }
-  return { type: "spring" as const, stiffness: 480, damping: 36, mass: 0.55, velocity };
+/**
+ * One slightly under-damped spring that is handed the finger's leftover
+ * speed. A harder throw naturally overshoots more; a careful drag barely does.
+ * (The old version switched between three springs at speed thresholds, so two
+ * nearly identical flicks could land completely differently.)
+ */
+export function pillSpringForVelocity(velocity: number): SpringTransition {
+  return { ...appleSpring(0.36, 0.74), velocity };
 }
 
-export function pageSpringForVelocity(velocity: number) {
-  const abs = Math.abs(velocity);
-  if (abs > 1400) {
-    return { type: "spring" as const, stiffness: 300, damping: 28, mass: 0.9, velocity };
-  }
-  if (abs > 700) {
-    return { type: "spring" as const, stiffness: 380, damping: 34, mass: 0.8, velocity };
-  }
-  return { type: "spring" as const, stiffness: 460, damping: 40, mass: 0.7, velocity };
+export function pageSpringForVelocity(velocity: number): SpringTransition {
+  return { ...appleSpring(0.42, 0.9), velocity };
 }

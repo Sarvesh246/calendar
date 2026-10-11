@@ -162,9 +162,15 @@ export function workDueOnDay(items: Item[], day: Date): Item[] {
 }
 
 /** Overdue work whose due day is before `day` — leftover, not "due today". */
-export function leftoverOverdue(items: Item[], day = new Date()): Item[] {
+/**
+ * Overdue work not due on `day`. `keep` holds items finished a moment ago
+ * (see lib/just-completed.ts): they stay in the section, ticked, for the
+ * completion beat instead of vanishing the frame they were tapped.
+ */
+export function leftoverOverdue(items: Item[], day = new Date(), keep?: ReadonlySet<string>): Item[] {
+  const now = new Date();
   return items
-    .filter((i) => isOverdue(i) && !isDueOnDay(i, day))
+    .filter((i) => isOverdueOrJustFinished(i, now, keep) && !isDueOnDay(i, day))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
@@ -233,6 +239,12 @@ export function relativeDueLabel(iso: string, opts?: { allDay?: boolean }) {
 
 export function isOverdue(item: Item) {
   return isOverdueAt(item, new Date());
+}
+
+/** Overdue, or was until it was completed just now (it keeps its place). */
+export function isOverdueOrJustFinished(item: Item, now: Date, keep?: ReadonlySet<string>) {
+  if (isOverdueAt(item, now)) return true;
+  return Boolean(keep?.has(item.id)) && item.status === "done" && isOverdueAt({ ...item, status: "todo" }, now);
 }
 
 export function isOverdueAt(item: Item, now: Date) {

@@ -74,6 +74,22 @@ describe("local assistant — deferral", () => {
   });
 });
 
+describe("local assistant — what's due this week", () => {
+  it("keeps work that slipped earlier this week, but not finished work", () => {
+    const r = text("what's due this week")!;
+    expect(r).toContain("Reading response"); // Tue, still open
+    expect(r).toContain("Essay draft");
+    expect(r).not.toContain("Lab report"); // done
+  });
+
+  it("looks a week ahead when the week is down to its last day", () => {
+    const saturday = new Date(2026, 8, 26, 10, 0, 0);
+    const r = tryLocalAnswer("what's due this week", [], ctx, saturday)?.text ?? "";
+    expect(r).toMatch(/next 7 days/i);
+    expect(r).toContain("Problem Set 4"); // due the following Thursday
+  });
+});
+
 describe("local assistant — small talk", () => {
   it("answers greetings, thanks, and the clock", () => {
     expect(text("hi")).toMatch(/help|what/i);
@@ -108,7 +124,7 @@ describe("local assistant — reading the calendar", () => {
   it("answers by weekday and date", () => {
     expect(text("what do I have on monday")).toContain("CS 101 Lecture");
     expect(text("anything on oct 6?")).toContain("Dentist appointment");
-    expect(text("what's on the 6th")).toBeNull; // ordinal resolves without throwing
+    expect(() => text("what's on the 6th")).not.toThrow(); // ordinal resolves without throwing
   });
 
   it("answers ranges", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type MotionValue } from "framer-motion";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -22,9 +22,11 @@ const DIM = { default: 0.34, light: 0.26 } as const;
  * and lets the compositor reuse one blurred layer instead of rasterizing a new
  * blur radius on every frame.
  *
- * Start every full scrim partly visible. Starting at zero briefly exposes live
- * text while the panel is already on screen, especially on a busy compositor.
- * `snap` gets to full strength faster for the + composer.
+ * A free-running scrim fades up from nothing on a short decelerating curve:
+ * starting it part-way visible (it used to begin at 78%) read as a pop rather
+ * than a fade. Opacity is the only thing animating, so the fade stays on the
+ * compositor however busy the page is. `snap` is quicker still, for veils
+ * behind small popovers.
  */
 export function Scrim({
   onClick,
@@ -34,6 +36,7 @@ export function Scrim({
   tone = "default",
   pace = "emphasis",
   exitDuration = motionTokens.exit,
+  progress,
   className,
 }: {
   onClick?: () => void;
@@ -47,6 +50,12 @@ export function Scrim({
   pace?: "emphasis" | "snap";
   /** Match the panel's departure so the veil never lingers or clears early. */
   exitDuration?: number;
+  /**
+   * 0–1, driven by the sheet's position. When given, the veil is exactly as
+   * strong as the sheet is open — pull a sheet halfway down and the page
+   * comes halfway back — instead of running its own fade.
+   */
+  progress?: MotionValue<number>;
   className?: string;
 }) {
   const reduced = prefersReducedMotion();
@@ -56,9 +65,11 @@ export function Scrim({
   };
   const snap = pace === "snap" && !reduced;
 
+  const driven = progress
+    ? { style: { ...treatment, opacity: progress } }
+    : { initial: { opacity: 0 }, animate: { opacity: 1 }, style: treatment };
   const props = {
-    initial: { opacity: 0.78 },
-    animate: { opacity: 1 },
+    ...driven,
     exit: {
       opacity: 0,
       transition: { duration: reduced ? motionTokens.micro : exitDuration, ease: motionTokens.easeInOut },
@@ -67,8 +78,7 @@ export function Scrim({
       ? { duration: motionTokens.micro }
       : snap
         ? { duration: motionTokens.micro, ease: motionTokens.ease }
-        : { duration: motionTokens.emphasis, ease: motionTokens.ease },
-    style: treatment,
+        : { duration: 0.2, ease: motionTokens.ease },
     className: cn(
       tone === "light" ? "overlay-scrim-light" : "overlay-scrim",
       // A labelled scrim is a full-viewport button. The global pressed-button

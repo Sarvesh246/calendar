@@ -2,17 +2,13 @@
 
 import { lazyComponent } from "@/lib/lazy-component";
 import { registerWarmUp, warmUp } from "@/lib/warm-chunks";
-import { useDialogFocus } from "@/lib/use-dialog-focus";
-import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Keyboard, Search, Sparkles } from "lucide-react";
 import { FocusView } from "./focus-view";
 import { FocusSessionChip, FocusSessionHydrator } from "./focus-session-chip";
-import { Scrim } from "@/components/ui/scrim";
-import { motion as motionTokens } from "@/lib/motion";
 import { Sidebar } from "./sidebar";
 import { QuickAddBar } from "./quick-add-bar";
+import { FloatingComposer } from "./floating-composer";
 import { ReminderScheduler } from "./reminder-scheduler";
 import { NativeShellSync } from "./native-shell-sync";
 import { DeferredFeedSync } from "./deferred-feed-sync";
@@ -61,7 +57,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setQuickAddOpen = useUIStore((s) => s.setQuickAddOpen);
   const setQuickAddPrefill = useUIStore((s) => s.setQuickAddPrefill);
   const closeQuickAdd = useUIStore((s) => s.closeQuickAdd);
-  const quickAddOpen = useUIStore((s) => s.quickAddOpen);
   const focusMode = useUIStore((s) => s.focusMode);
   // The tapped tab, not the one the router has got around to committing —
   // see lib/tab-nav.ts. Everything below draws from this, so a switch paints
@@ -74,24 +69,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const onToday = pathname === "/today";
   const onTab = isTabRoute(pathname);
   const desktop = useMediaQuery("(min-width: 768px)");
-  // Desktop always owns one persistent composer in the command bar. Opening
-  // Add from a calendar cell or shortcut focuses and prefills that composer;
-  // only phone layouts need the floating sheet.
-  const floatingAdd = quickAddOpen && !desktop;
-  const [addPresent, setAddPresent] = useState(false);
-  useEffect(() => {
-    if (floatingAdd) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAddPresent(true);
-      return;
-    }
-    const timer = window.setTimeout(() => setAddPresent(false), motionTokens.exit * 1000 + 30);
-    return () => window.clearTimeout(timer);
-  }, [floatingAdd]);
-
-  const composerRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(composerRef, (floatingAdd || addPresent) && !desktop);
-  useLockBodyScroll((floatingAdd || addPresent) && !desktop);
   useKeyboardInset();
   const setShortcutsOpen = useUIStore((s) => s.setShortcutsOpen);
   const modKey = useModKeyLabel();
@@ -105,39 +82,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     void useWorkspacePrefs.persist.rehydrate();
   }, []);
 
+  // Leaving a page closes its composer. Only on a real change of page: the
+  // mount pass (and dev Strict Mode's replay of it) must not close a composer
+  // a launch intent below has just opened.
+  const shownPath = useRef(pathname);
   useEffect(() => {
+    if (shownPath.current === pathname) return;
+    shownPath.current = pathname;
     closeQuickAdd();
   }, [pathname, closeQuickAdd]);
 
   const enterFocus = useUIStore((s) => s.enterFocus);
   // Home Screen Quick Actions (Calendar-ios) deep-link with `?intent=…`
   // instead of a native bridge round-trip — "Today" needs nothing here since
-  // the wrapper just loads /today directly. Read once into a ref (a pure,
-  // side-effect-free read is safe during render) rather than re-reading the
-  // URL from the effect body: dev Strict Mode replays effects (close-quick-add
-  // then this one) twice in a row, and by the second pass the URL has already
-  // been stripped — re-reading it there would silently drop the intent.
-  const intentRef = useRef<string | null | undefined>(undefined);
-  const intentItemRef = useRef<string | null>(null);
-  const intentPrefillRef = useRef<string | null>(null);
-  if (intentRef.current === undefined) {
-    if (typeof window === "undefined") {
-      intentRef.current = null;
-    } else {
-      const params = new URLSearchParams(window.location.search);
-      intentRef.current = params.get("intent");
-      intentItemRef.current = params.get("item");
-      intentPrefillRef.current = params.get("prefill") ?? params.get("text");
-    }
-  }
+  // the wrapper just loads /today directly. Read once, at mount, into state:
+  // the effect strips the URL, so a replayed effect re-reading it would find
+  // nothing. `handled` keeps a replay from completing or snoozing twice.
+  const [launchIntent] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const intent = params.get("intent");
+    return intent
+      ? { intent, itemId: params.get("item"), prefill: params.get("prefill") ?? params.get("text") }
+      : null;
+  });
+  const intentHandled = useRef(false);
   useEffect(() => {
-    const intent = intentRef.current;
-    if (!intent) return;
-    const itemId = intentItemRef.current;
+    if (!launchIntent || intentHandled.current) return;
+    intentHandled.current = true;
+    const { intent, itemId, prefill } = launchIntent;
     const store = useDatebookStore.getState();
     if (intent === "compose" || intent === "add") {
-      if (intentPrefillRef.current) setQuickAddPrefill(intentPrefillRef.current);
-      else setQuickAddPrefill("");
+      setQuickAddPrefill(prefill ?? "");
       setQuickAddOpen(true);
     } else if (intent === "focus") {
       if (itemId) useFocusSessionStore.getState().ensureSession(itemId);
@@ -154,8 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     for (const key of ["intent", "item", "prefill", "text", "snooze"]) params.delete(key);
     const rest = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [launchIntent, enterFocus, setQuickAddOpen, setQuickAddPrefill]);
 
   return (
     <div
@@ -185,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {!focusMode && (
           <>
-            <MobileHeaderActions pathname={pathname} />
+            <MobileHeaderActions />
             <div
               aria-label="Workspace commands"
               className={cn(
@@ -278,49 +253,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <ViewStateSync />
-      <AnimatePresence>
-        {floatingAdd && (
-          <Scrim
-            key="quick-add-scrim"
-            label="Dismiss add"
-            tone="light"
-            pace="snap"
-            onPointerDown={closeQuickAdd}
-            className="viewport-pinned-top viewport-pinned-overlay fixed inset-0 z-[45]"
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {floatingAdd && (
-          <motion.div
-            key="quick-add-panel"
-            ref={composerRef}
-            role={!desktop ? "dialog" : undefined}
-            aria-modal={!desktop ? true : undefined}
-            aria-label={!desktop ? "Add item" : undefined}
-            tabIndex={-1}
-            initial={{ opacity: 0, y: -10, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{
-              opacity: 0,
-              y: -8,
-              scale: 0.98,
-              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
-            }}
-            transition={motionTokens.spring}
-            style={{
-              top: "calc(env(safe-area-inset-top) + 4.25rem)",
-              transformOrigin: "top center",
-              willChange: "transform, opacity",
-            }}
-            className={cn(
-              "mobile-composer viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6"
-            )}
-          >
-            <QuickAddBar />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <FloatingComposer />
       <FocusSessionHydrator />
       <FocusedItemRelay />
       <KeyboardShortcuts />

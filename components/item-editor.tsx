@@ -300,11 +300,11 @@ export function ItemEditor({
         {!category && <option value="">No class</option>}
         {categories.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}
+            {classLabel(c)}
           </option>
         ))}
         {category && !categories.some((c) => c.id === category.id) && (
-          <option value={category.id}>{category.name}</option>
+          <option value={category.id}>{classLabel(category)}</option>
         )}
       </select>
     </DetailRow>
@@ -592,11 +592,11 @@ export function ItemEditor({
         {!category && <option value="">No class</option>}
         {categories.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}
+            {classLabel(c)}
           </option>
         ))}
         {category && !categories.some((c) => c.id === category.id) && (
-          <option value={category.id}>{category.name}</option>
+          <option value={category.id}>{classLabel(category)}</option>
         )}
       </select>
     </label>
@@ -641,7 +641,7 @@ export function ItemEditor({
       Reminders, repeat &amp; type
       <ChevronDown
         aria-hidden
-        className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", moreOpen && "rotate-180")}
+        className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", moreOpen && "rotate-180")}
         strokeWidth={2}
       />
     </button>

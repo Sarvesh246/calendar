@@ -24,6 +24,7 @@ import { haptic } from "@/lib/haptic";
 import { motion as motionTokens } from "@/lib/motion";
 import { Segmented } from "@/components/ui/segmented";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { cn } from "@/lib/utils";
 
 /**
  * Where the calendar was when you last looked at it.
@@ -97,7 +98,12 @@ export default function CalendarPage() {
   const setPaneCollapsed = useWorkspacePrefs((s) => s.setPaneCollapsed);
   const paneTab = useWorkspacePrefs((s) => s.paneTab);
   const setPaneTab = useWorkspacePrefs((s) => s.setPaneTab);
-  const showPane = wide && !paneCollapsed;
+  // Seven columns need room: under 1200px the week grid can't share the row
+  // with the panel, so there the panel is an overlay you open on demand.
+  const roomy = useMediaQuery("(min-width: 1200px)");
+  const overlayPane = wide && !roomy && mode === "week";
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const showPane = wide && (overlayPane ? overlayOpen : !paneCollapsed);
 
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
@@ -155,8 +161,7 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!aiDrawerOpen || !dockable) return;
     setPaneTab("assistant");
-    setPaneCollapsed(false);
-    useUIStore.getState().setAIDrawerOpen(false);
+    setPaneCollapsed(false);    useUIStore.getState().setAIDrawerOpen(false);
   }, [aiDrawerOpen, dockable, setPaneTab, setPaneCollapsed]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
@@ -179,7 +184,8 @@ export default function CalendarPage() {
   );
 
   function step(dir: 1 | -1, immediate = false) {
-    haptic("light");
+    // A swipe has already ticked on its own release.
+    if (!immediate) haptic("selection");
     setDirection(dir);
     const update = () => setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
     if (immediate) update();
@@ -188,7 +194,7 @@ export default function CalendarPage() {
 
   function goToday() {
     const t = new Date();
-    haptic("light");
+    haptic("selection");
     setDirection(t >= anchor ? 1 : -1);
     startTransition(() => {
       setAnchor(t);
@@ -198,7 +204,7 @@ export default function CalendarPage() {
 
   function changeMode(next: CalendarMode) {
     if (next === mode) return;
-    haptic("light");
+    haptic("selection");
     startTransition(() => setCalendarMode(next));
   }
 
@@ -230,7 +236,8 @@ export default function CalendarPage() {
           step(command.dir);
           break;
         case "toggle-pane":
-          if (wide) setPaneCollapsed(!paneCollapsed);
+          if (overlayPane) setOverlayOpen((o) => !o);
+          else if (wide) setPaneCollapsed(!paneCollapsed);
           break;
         case "jump":
           setJumpOpen(true);
@@ -268,11 +275,15 @@ export default function CalendarPage() {
       ? `m-${format(anchor, "yyyy-MM")}`
       : `w-${format(startOfWeek(anchor, { weekStartsOn }), "yyyy-MM-dd")}`;
 
-  function addToSelected() {
-    setSheetOpen(false);
+  function openComposerForSelected() {
     setQuickAddDateKey(dayKey(selectedDate));
     setQuickAddPrefill("");
     setQuickAddOpen(true);
+  }
+
+  function addToSelected() {
+    setSheetOpen(false);
+    openComposerForSelected();
   }
 
   return (
@@ -290,7 +301,7 @@ export default function CalendarPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
                 className="block whitespace-nowrap"
               >
                 {mode === "month"
@@ -349,13 +360,14 @@ export default function CalendarPage() {
                 size="iconSm"
                 onClick={() => {
                   haptic("light");
-                  setPaneCollapsed(!paneCollapsed);
+                  if (overlayPane) setOverlayOpen((o) => !o);
+                  else setPaneCollapsed(!paneCollapsed);
                 }}
-                aria-label={paneCollapsed ? "Show side panel" : "Hide side panel"}
-                aria-pressed={!paneCollapsed}
-                title={`${paneCollapsed ? "Show" : "Hide"} side panel (\\)`}
+                aria-label={!showPane ? "Show side panel" : "Hide side panel"}
+                aria-pressed={showPane}
+                title={`${!showPane ? "Show" : "Hide"} side panel (\\)`}
               >
-                {paneCollapsed ? (
+                {!showPane ? (
                   <PanelRightOpen className="h-4 w-4" strokeWidth={1.9} />
                 ) : (
                   <PanelRightClose className="h-4 w-4" strokeWidth={1.9} />
@@ -366,10 +378,20 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row lg:items-stretch">
+      <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-hidden lg:flex-row lg:items-stretch">
         <div className="relative min-h-0 w-full min-w-0 flex-1">
+          {/* Month ↔ week is a change of zoom, not a page turn: the outgoing
+              view recedes as the incoming one settles in, instead of a cut. */}
+          <AnimatePresence initial={false}>
           {mode === "month" ? (
-            <div className="absolute inset-0 flex min-h-0 flex-col">
+            <motion.div
+              key="month"
+              initial={{ opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
+              className="absolute inset-0 flex min-h-0 flex-col"
+            >
               <MonthView
                 anchor={anchor}
                 items={calendarItems}
@@ -377,8 +399,16 @@ export default function CalendarPage() {
                 onSelectDate={selectDate}
                 onSwipeMonth={(dir) => step(dir, true)}
               />
-            </div>
+            </motion.div>
           ) : (
+            <motion.div
+              key="week"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.02, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
+              className="absolute inset-0 flex min-h-0 flex-col"
+            >
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.div
                 key={`week-${periodKey}`}
@@ -387,12 +417,13 @@ export default function CalendarPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: motionTokens.standard, ease: motionTokens.ease }}
+                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
                 className="absolute inset-0 flex min-h-0 flex-col"
               >
                 <WeekView
                   days={days}
                   items={calendarItems}
+                  selectedDate={selectedDate}
                   onSelectDate={selectDate}
                   onSelectItem={(item, day) => {
                     // The day list is where a tapped block opens inline; when
@@ -412,7 +443,9 @@ export default function CalendarPage() {
                 />
               </motion.div>
             </AnimatePresence>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
 
         {!useSheet && mode === "month" && (
@@ -431,32 +464,39 @@ export default function CalendarPage() {
         {/* Bound to the row height so the pane's own list — not the month
             grid — is the thing that scrolls when cards overflow. */}
         {showPane && (
-          <WorkspacePane
-            selectedDate={selectedDate}
-            selectedItems={selectedItems}
-            items={items}
-            mode={mode}
-            onAdd={addToSelected}
-            onSwitchToWeek={() => changeMode("week")}
-          />
+          <div
+            className={cn(
+              overlayPane && "absolute inset-y-0 right-0 z-20 flex rounded-xl shadow-[0_16px_40px_-12px_rgb(0_0_0/0.4)]"
+            )}
+          >
+            <WorkspacePane
+              selectedDate={selectedDate}
+              selectedItems={selectedItems}
+              items={items}
+              mode={mode}
+              onAdd={addToSelected}
+              onSwitchToWeek={() => changeMode("week")}
+            />
+          </div>
         )}
       </div>
 
-      <AnimatePresence>
-        {/* Week mode needs it too: between `md` and `lg` the week grid is
-            showing but the side pane isn't. */}
-        {sheetOpen && (useSheet || mode === "week") && (
-          <DaySheet
-            onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
-            date={selectedDate}
-            items={selectedItems}
-            onClose={() => setSheetOpen(false)}
-            onAdd={addToSelected}
-            breakdown={selectedBreakdown}
-            overlaps={selectedOverlaps}
-          />
-        )}
-      </AnimatePresence>
+      {/* Week mode needs it too: between `md` and `lg` the week grid is
+          showing but the side pane isn't. No AnimatePresence: the sheet owns
+          its departure and reports back once it is off screen. Presence would
+          also wait on every animated card inside it before letting go, which
+          kept the page scroll-locked for half a second after it had left. */}
+      {sheetOpen && (useSheet || mode === "week") && (
+        <DaySheet
+          onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
+          date={selectedDate}
+          items={selectedItems}
+          onClose={() => setSheetOpen(false)}
+          onAdd={openComposerForSelected}
+          breakdown={selectedBreakdown}
+          overlaps={selectedOverlaps}
+        />
+      )}
     </div>
   );
 }

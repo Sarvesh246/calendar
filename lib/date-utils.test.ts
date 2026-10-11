@@ -11,6 +11,7 @@ import {
   isEventEnded,
   isHappeningNow,
   isOverdue,
+  isOverdueOrJustFinished,
   itemDaySpan,
   itemOccupiesDay,
   groupItemsByDay,
@@ -51,6 +52,26 @@ describe("isOverdue", () => {
     const todayNoon = new Date();
     todayNoon.setHours(12, 0, 0, 0);
     expect(isOverdue(base({ at: todayNoon.toISOString(), allDay: true }))).toBe(false);
+  });
+});
+
+describe("isOverdueOrJustFinished", () => {
+  const past = new Date(Date.now() - 60_000).toISOString();
+  it("keeps a just-completed overdue item in its section", () => {
+    const done = base({ id: "x", at: past, status: "done" });
+    expect(isOverdueOrJustFinished(done, new Date(), new Set(["x"]))).toBe(true);
+    expect(isOverdueOrJustFinished(done, new Date(), new Set())).toBe(false);
+  });
+
+  it("never keeps something that was not overdue", () => {
+    const future = base({ id: "y", at: new Date(Date.now() + 3_600_000).toISOString(), status: "done" });
+    expect(isOverdueOrJustFinished(future, new Date(), new Set(["y"]))).toBe(false);
+  });
+
+  it("feeds leftoverOverdue", () => {
+    const done = base({ id: "z", at: new Date(Date.now() - 2 * 86_400_000).toISOString(), status: "done" });
+    expect(leftoverOverdue([done], new Date(), new Set(["z"]))).toHaveLength(1);
+    expect(leftoverOverdue([done], new Date())).toHaveLength(0);
   });
 });
 

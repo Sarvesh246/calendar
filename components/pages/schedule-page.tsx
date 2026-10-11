@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useDeferredCategoryFilter, useUIStore } from "@/lib/ui-store";
@@ -22,7 +22,12 @@ import { cn } from "@/lib/utils";
 
 /** Vertical scale of the timetable. One minute ≈ one pixel reads at a glance
  *  and keeps a normal 8am–6pm week inside a single screen on a laptop. */
+/** Hour height bounds: stretched to fill a tall window, squeezed before scrolling. */
 const PX_PER_MIN = 1.05;
+const MIN_PX_PER_MIN = 0.8;
+const MAX_PX_PER_MIN = 1.6;
+/** Room kept under the grid for the footnote and the page's bottom padding. */
+const GRID_FOOTER_SPACE = 64;
 
 export default function SchedulePage() {
   const allItems = useDatebookStore((s) => s.items);
@@ -223,7 +228,27 @@ function TimetableGrid({
   const gridStart = Math.max(0, Math.floor(schedule.earliestMin / 60) * 60);
   const gridEnd = Math.min(24 * 60, Math.ceil(schedule.latestMin / 60) * 60);
   const span = Math.max(60, gridEnd - gridStart);
-  const height = span * PX_PER_MIN;
+
+  // The grid takes the rest of the window: a short week stretches its hours to
+  // fill it, a long one squeezes them a little before it falls back to
+  // scrolling. A fixed cap clipped the last class on a laptop screen while
+  // leaving a band of empty page under the grid.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setRoom(Math.max(320, window.innerHeight - top - GRID_FOOTER_SPACE));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const ppm =
+    room == null ? PX_PER_MIN : Math.min(MAX_PX_PER_MIN, Math.max(MIN_PX_PER_MIN, room / span));
+  const height = span * ppm;
   const hours = Array.from({ length: span / 60 + 1 }, (_, i) => gridStart + i * 60);
 
   const byDay = useMemo(() => {
@@ -274,16 +299,20 @@ function TimetableGrid({
         ))}
       </div>
 
-      <div className="overflow-y-auto" style={{ maxHeight: "min(38rem, calc(100dvh - 22rem))" }}>
+      <div
+        ref={scrollerRef}
+        className="overflow-y-auto"
+        style={{ maxHeight: room ?? "min(38rem, calc(100dvh - 22rem))" }}
+      >
         <div className="grid" style={{ gridTemplateColumns: columns, height }}>
           <div className="relative">
             {hours.map((minute) => (
               <span
                 key={minute}
                 className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-[10.5px] tabular-nums text-ink-faint"
-                style={{ top: (minute - gridStart) * PX_PER_MIN }}
+                style={{ top: (minute - gridStart) * ppm }}
               >
-                {minute === gridStart ? "" : formatClock(minute / 60, 0, clock24h)}
+                {minute === gridStart || minute === gridEnd ? "" : formatClock(minute / 60, 0, clock24h)}
               </span>
             ))}
           </div>
@@ -304,14 +333,14 @@ function TimetableGrid({
                 style={{
                   backgroundImage:
                     "repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--hour-step))",
-                  ["--hour-step" as string]: `${60 * PX_PER_MIN}px`,
+                  ["--hour-step" as string]: `${60 * ppm}px`,
                 }}
               />
               {showNow && today === day && (
                 <div
                   aria-hidden
                   className="pointer-events-none absolute inset-x-0 z-[2] border-t border-accent"
-                  style={{ top: (nowMin - gridStart) * PX_PER_MIN }}
+                  style={{ top: (nowMin - gridStart) * ppm }}
                 >
                   <span className="absolute -left-[3px] -top-[4px] h-[7px] w-[7px] rounded-full bg-accent" />
                 </div>
@@ -324,8 +353,8 @@ function TimetableGrid({
                     key={block.key}
                     className="absolute p-[3px]"
                     style={{
-                      top: (block.startMin - gridStart) * PX_PER_MIN,
-                      height: minutes * PX_PER_MIN,
+                      top: (block.startMin - gridStart) * ppm,
+                      height: minutes * ppm,
                       left: `${(block.lane / block.lanes) * 100}%`,
                       width: `${100 / block.lanes}%`,
                     }}

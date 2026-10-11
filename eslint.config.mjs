@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     ".playwright-cli/**",
     "output/**",
+    // Local tool state, never shipped.
+    ".cursor/**",
+    ".playwright-mcp/**",
+    "graphify-out/**",
   ]),
 ]);
 

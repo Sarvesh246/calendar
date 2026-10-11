@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addMonths } from "date-fns";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { addMonths, differenceInCalendarMonths } from "date-fns";
 import { motion, useMotionValue, animate, useTransform, type PanInfo } from "framer-motion";
 import { isSameDay, isToday, format } from "date-fns";
 import { haptic } from "@/lib/haptic";
-import { motion as motionTokens } from "@/lib/motion";
+import { prefersReducedMotion, releaseSpring } from "@/lib/motion";
+import { project, rubberband, rubberbandClamp } from "@/lib/gesture";
 import { useDatebookStore } from "@/lib/store";
 import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay, rankItemsByDay } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
@@ -288,7 +289,7 @@ function MonthGridPanel({
             key={`${anchor.toISOString()}-${date.toISOString()}`}
             data-drop-day={dayKey(date)}
             onClick={(e) => {
-              haptic("light");
+              haptic("selection");
               if (showSelectionRing && !selected) {
                 const cell = e.currentTarget;
                 if (animateSelection) {
@@ -402,7 +403,20 @@ export function MonthView({
   // calendar shows the ring already in place instead of animating it there.
   const [ringAnimated, setRingAnimated] = useState(false);
   const [panAnchor, setPanAnchor] = useState<Date | null>(null);
+  // A month change slides the month you were looking at out of the centre,
+  // so for that slide it has to be drawn in full. Set during render (not in
+  // an effect) so the outgoing month never paints a frame without its chips.
+  const [seenAnchor, setSeenAnchor] = useState(anchor);
+  if (seenAnchor !== anchor) {
+    setSeenAnchor(anchor);
+    setPanAnchor(anchor);
+  }
   const paintNeighbors = panAnchor === anchor;
+  /** Axis the current pan locked to; a drag never switches mid-gesture. */
+  const axis = useRef<"x" | "y" | null>(null);
+  /** Finger speed at a committed release, handed to the re-centring spring. */
+  const releaseVelocity = useRef(0);
+  const shownAnchor = useRef(anchor);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -419,10 +433,37 @@ export function MonthView({
     return () => cancelAnimationFrame(id);
   }, [width, ringAnimated]);
 
-  useEffect(() => {
-    dragX.set(0);
-    return () => dragX.stop();
-  }, [anchor, dragX]);
+  useEffect(() => () => dragX.stop(), [dragX]);
+
+  /**
+   * Every month change slides — a swipe, the arrows, the keyboard, Today, a
+   * jump. The track is re-centred on the new month with an offset that puts
+   * the month you were looking at exactly where it was on screen, then
+   * springs home (carrying a swipe's release speed). So a swipe never waits
+   * for its spring to finish before the month changes, a second swipe can
+   * start mid-slide, and the buttons get the same movement as the gesture.
+   */
+  useLayoutEffect(() => {
+    const prev = shownAnchor.current;
+    shownAnchor.current = anchor;
+    const delta = differenceInCalendarMonths(anchor, prev);
+    const velocity = releaseVelocity.current;
+    releaseVelocity.current = 0;
+    if (!delta || !width || prefersReducedMotion()) {
+      dragX.stop();
+      dragX.set(0);
+      return;
+    }
+    const from =
+      Math.abs(delta) === 1
+        ? dragX.get() + delta * width
+        : // Further than one month: no real neighbour to slide from, so a
+          // short directional glide says which way time went.
+          Math.sign(delta) * width * 0.3;
+    dragX.stop();
+    dragX.set(from);
+    void animate(dragX, 0, releaseSpring(velocity, 0.92, 0.44));
+  }, [anchor, width, dragX]);
 
   // Driven by framer's own pan-gesture recognizer (a native PanSession, not
   // React's synthetic touch events) rather than raw onTouchStart/Move/End —
@@ -434,49 +475,68 @@ export function MonthView({
   // horizontal motion here is ours, so the very first frame of a swipe is as
   // smooth as the rest of it. It also picks up mouse/trackpad dragging for
   // free, which the touch-only version never supported on desktop.
+  const panBase = useRef(0);
+
+  function onPanStart() {
+    axis.current = null;
+  }
+
   function onPan(_event: PointerEvent, info: PanInfo) {
     if (!width) return;
     const { x: dx, y: dy } = info.offset;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 4) {
+    if (axis.current === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axis.current = Math.abs(dx) > Math.abs(dy) * 1.15 ? "x" : "y";
+      if (axis.current === "x") {
         didPan.current = true;
+        // Catch a month that is still sliding in, from where it is.
+        dragX.stop();
+        panBase.current = dragX.get() - dx;
         if (!paintNeighbors) setPanAnchor(anchor);
       }
-      const max = width * 0.92;
-      dragX.set(Math.max(-max, Math.min(max, dx)));
     }
+    if (axis.current !== "x") return;
+    const raw = panBase.current + dx;
+    // 1:1 across a month either way; past that there is nothing drawn, so it
+    // resists like the end of a scroll view instead of stopping dead.
+    dragX.set(
+      onSwipeMonth
+        ? rubberbandClamp(raw, -width * 0.92, width * 0.92, width * 0.12)
+        : rubberband(raw, width)
+    );
   }
 
   function onPanEnd(_event: PointerEvent, info: PanInfo) {
     if (!width) return;
-    const { x: dx, y: dy } = info.offset;
-    const vx = info.velocity.x;
-
-    const threshold = width * 0.18;
-    const fling = Math.abs(vx) > 620;
-    let commit: 1 | -1 | null = null;
-    if (onSwipeMonth && Math.abs(dx) > Math.abs(dy) * 1.15) {
-      if (dx < -threshold || (fling && vx < 0)) commit = 1;
-      else if (dx > threshold || (fling && vx > 0)) commit = -1;
-    }
+    const locked = axis.current;
+    axis.current = null;
 
     // The click that follows this pointerup (if any) fires synchronously
     // before this timeout runs, so it still sees `didPan.current` — this only
     // clears a flag nothing ended up checking (a release over the gap between
     // cells), so the next real tap is never swallowed.
     if (didPan.current) setTimeout(() => (didPan.current = false), 0);
+    if (locked !== "x") return;
+
+    const at = dragX.get();
+    const vx = info.velocity.x;
+    // Where the month would coast to: a quick flick and a long slow drag are
+    // judged on the same scale, and a drag pulled back at release stays.
+    const projected = project(at, vx);
+    let commit: 1 | -1 | null = null;
+    if (onSwipeMonth) {
+      if (projected < -width * 0.35 && at < 0) commit = 1;
+      else if (projected > width * 0.35 && at > 0) commit = -1;
+    }
 
     if (commit) {
-      haptic("light");
-      const target = commit === 1 ? -width : width;
-      void animate(dragX, target, motionTokens.springSnappy).then(() => {
-        onSwipeMonth?.(commit!);
-        dragX.set(0);
-      });
+      haptic("selection");
+      releaseVelocity.current = vx;
+      onSwipeMonth?.(commit);
       return;
     }
 
-    void animate(dragX, 0, motionTokens.springSnappy);
+    void animate(dragX, 0, releaseSpring(vx, 0.9, 0.4));
   }
 
   const guardedSelectDate = useCallback(
@@ -506,6 +566,7 @@ export function MonthView({
 
   return (
     <motion.div
+      onPanStart={onPanStart}
       onPan={onPan}
       onPanEnd={onPanEnd}
       data-page-swipe="off"

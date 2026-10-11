@@ -63,7 +63,7 @@ export function DateJump({
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-faint transition-colors duration-[var(--motion-standard)] group-hover:text-ink-soft"
         >
           <ChevronDown
-            className={cn("h-4 w-4 transition-transform duration-[var(--motion-standard)]", open && "rotate-180")}
+            className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", open && "rotate-180")}
             strokeWidth={2.25}
           />
         </span>
@@ -105,9 +105,11 @@ function JumpPanel({
   const today = new Date();
 
   // Focus straight after commit, not on the next frame: a frame never comes
-  // while the window is in the background.
+  // while the window is in the background. Not on touch, though: there the
+  // field would raise the keyboard over the month grid most people opened
+  // this to tap.
   useEffect(() => {
-    if (!active) return;
+    if (!active || window.matchMedia("(pointer: coarse)").matches) return;
     inputRef.current?.focus({ preventScroll: true });
   }, [active]);
 
@@ -168,7 +170,7 @@ function JumpPanel({
         <label htmlFor="date-jump-input" className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
           Go to
         </label>
-        <div className="mt-1 flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 transition-[border-color,box-shadow] duration-[var(--motion-standard)] focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+        <div className="focus-within-ring mt-1 flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 transition-[border-color,box-shadow] duration-[var(--motion-standard)] focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
           <input
             id="date-jump-input"
             ref={inputRef}
@@ -183,7 +185,8 @@ function JumpPanel({
             }}
             placeholder="Dec 12, next Friday, 3/15…"
             autoComplete="off"
-            className="min-h-9 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+            // 16px on phones: anything smaller and iOS zooms the page on focus.
+            className="min-h-9 min-w-0 flex-1 bg-transparent text-[16px] text-ink placeholder:text-ink-faint focus:outline-none md:text-[13px]"
           />
           <button
             type="submit"
@@ -251,7 +254,7 @@ function JumpPanel({
         })}
       </div>
       <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
-        <span className="text-[11px] text-ink-faint">
+        <span className="text-[11px] text-ink-faint pointer-coarse:invisible">
           Press <kbd className="font-sans font-medium text-ink-soft">D</kbd> to open
         </span>
         <button

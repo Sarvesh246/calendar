@@ -13,8 +13,10 @@ function persistHydrated() {
   return useDatebookStore.persist.hasHydrated();
 }
 
-const MIN_MS = 420;
-const EXIT_MS = 480;
+// Short enough that a warm launch barely sees it; the veil lifts while the
+// landing page is already settling in underneath (see EXIT_MS).
+const MIN_MS = 260;
+const EXIT_MS = 400;
 
 /**
  * Cold-start veil. Covers the first paint so the store can hydrate and the
@@ -87,6 +89,9 @@ export function BootSplash() {
       >
           <span aria-hidden className="boot-splash-bloom" />
           <span className="boot-splash-plate relative flex h-[96px] w-[96px] items-center justify-center rounded-[26px]">
+            {/* A plain img on purpose: the splash paints before hydration, and
+                next/image's lazy, optimised path would leave the plate empty. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icon-192.png"
               alt=""

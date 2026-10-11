@@ -93,6 +93,10 @@ export type SyncMode = "local" | "cloud";
 export type SyncStatus = "idle" | "connecting" | "syncing" | "synced" | "error" | "merge";
 export type CloudMergeChoice = "local" | "cloud" | "merge";
 
+export type CategoryRemoval =
+  | { kind: "delete-items" }
+  | { kind: "move-items"; targetCategoryId: string };
+
 export interface MergeOffer {
   localItems: number;
   cloudItems: number;
@@ -129,7 +133,7 @@ interface DatebookState {
 
   addCategory: (category: Omit<Category, "id">) => Category;
   updateCategory: (id: string, patch: Partial<Category>) => void;
-  deleteCategory: (id: string) => void;
+  deleteCategory: (id: string, removal: CategoryRemoval) => boolean;
 
   addReminderPreset: (preset: Omit<ReminderPreset, "id">) => ReminderPreset;
   updateReminderPreset: (id: string, patch: Partial<Omit<ReminderPreset, "id">>) => void;
@@ -387,21 +391,37 @@ export const useDatebookStore = create<DatebookState>()(
         });
       },
 
-      deleteCategory: (id) => {
-        const cats = get().categories;
-        if (cats.length <= 1) return;
-        // Re-home into a class you can still see; an archived one hides the
-        // items from the filters and the editor's class list.
-        const fallback =
-          cats.find((c) => c.id !== id && !c.archived) ?? cats.find((c) => c.id !== id);
-        if (!fallback) return;
+      deleteCategory: (id, removal) => {
+        const state = get();
+        const cats = state.categories;
+        if (cats.length <= 1 || !cats.some((c) => c.id === id) || !removal) return false;
+        if (removal.kind !== "delete-items" && removal.kind !== "move-items") return false;
+        // Never choose a destination on the user's behalf. Re-check it at execution
+        // time in case another device removed or archived it while the prompt was open.
+        if (removal.kind === "move-items" && !cats.some(
+          (c) => c.id === removal.targetCategoryId && c.id !== id && !c.archived
+        )) return false;
+        const gone = removal.kind === "delete-items"
+          ? state.items.filter((i) => i.categoryId === id).map((i) => i.id)
+          : [];
+        const stamp = nowIso();
+        const items = removal.kind === "delete-items"
+          ? state.items.filter((i) => i.categoryId !== id)
+          : state.items.map((i) => {
+              if (i.categoryId !== id) return i;
+              noteLocalWrite(i.id, stamp);
+              return { ...i, categoryId: removal.targetCategoryId, updatedAt: stamp };
+            });
         set({
           categories: cats.filter((c) => c.id !== id),
-          items: get().items.map((i) =>
-            i.categoryId === id ? { ...i, categoryId: fallback.id, updatedAt: nowIso() } : i
-          ),
-          deletions: addTombstones(get().deletions, "category", [id]),
+          items,
+          importSources: recountSyllabusItemCounts(state.importSources, items, stamp),
+          // A prior single-item Undo must not restore an item into the removed class.
+          lastDeleted: state.lastDeleted?.items.some((i) => i.categoryId === id)
+            ? null : state.lastDeleted,
+          deletions: addTombstones(addTombstones(state.deletions, "item", gone), "category", [id]),
         });
+        return true;
       },
 
       addReminderPreset: (preset) => {

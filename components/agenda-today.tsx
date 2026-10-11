@@ -56,7 +56,7 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft">{summary}</span>
         <ChevronDown
           aria-hidden
-          className={cn("h-4 w-4 shrink-0 text-ink-faint transition-transform duration-[var(--motion-standard)]", open && "rotate-180")}
+          className={cn("h-4 w-4 shrink-0 text-ink-faint transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", open && "rotate-180")}
           strokeWidth={2}
         />
       </button>

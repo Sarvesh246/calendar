@@ -9,7 +9,7 @@ import {
   sameOrigin,
   tooMany,
 } from "@/lib/api-guard";
-import { assertPublicHostname, isBlockedHost, normalizeFeedInput } from "@/lib/ssrf";
+import { fetchPublic, isBlockedHost, normalizeFeedInput, type PublicResponse } from "@/lib/ssrf";
 
 export const runtime = "nodejs";
 
@@ -132,72 +132,64 @@ export async function POST(request: Request) {
   }
 
   let current = start;
-  let res: Response | null = null;
-  try {
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      if (isBlockedHost(current.hostname)) {
-        return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
-      }
-      try {
-        await assertPublicHostname(current.hostname);
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : "";
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              reason === "unresolved-host"
-                ? "Couldn't look up that host."
-                : "That address isn't allowed.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        res = await fetch(current, {
-          redirect: "manual",
-          signal: controller.signal,
-          headers: {
-            "User-Agent": "Datebook calendar import",
-            Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8",
-          },
-        });
-      } catch (err) {
-        const aborted = err instanceof Error && err.name === "AbortError";
-        return NextResponse.json(
-          { ok: false, error: aborted ? "The feed took too long to respond." : "Couldn't reach that URL." },
-          { status: 502 }
-        );
-      } finally {
-        clearTimeout(timer);
-      }
-
-      if (res.status >= 300 && res.status < 400) {
-        const loc = res.headers.get("location");
-        if (!loc || hop === MAX_REDIRECTS) {
-          return NextResponse.json({ ok: false, error: "The feed redirected too many times." }, { status: 502 });
-        }
-        const redirected = normalizeFeedInput(new URL(loc, current).toString());
-        if (!redirected || (current.protocol === "https:" && redirected.protocol !== "https:")) {
-          return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
-        }
-        current = redirected;
-        continue;
-      }
-      break;
+  let res: PublicResponse | null = null;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (isBlockedHost(current.hostname)) {
+      return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
     }
-  } catch {
-    return NextResponse.json({ ok: false, error: "Couldn't reach that URL." }, { status: 502 });
+    try {
+      // The address is checked as the socket connects (see publicOnlyLookup),
+      // so a DNS answer can't change between the check and the request.
+      res = await fetchPublic(current, {
+        timeoutMs: TIMEOUT_MS,
+        maxBytes: MAX_BYTES,
+        headers: {
+          "User-Agent": "Datebook calendar import",
+          Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8",
+        },
+      });
+    } catch (err) {
+      const e = err as { name?: string; code?: string; message?: string };
+      const error =
+        e.name === "AbortError"
+          ? "The feed took too long to respond."
+          : e.code === "EBLOCKEDHOST"
+            ? "That address isn't allowed."
+            : e.code === "ENOTFOUND" || e.code === "EAI_AGAIN"
+              ? "Couldn't look up that host."
+              : "Couldn't reach that URL.";
+      return NextResponse.json(
+        { ok: false, error },
+        { status: e.code === "EBLOCKEDHOST" || e.code === "ENOTFOUND" ? 400 : 502 }
+      );
+    }
+
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.location;
+      if (!loc || hop === MAX_REDIRECTS) {
+        return NextResponse.json({ ok: false, error: "The feed redirected too many times." }, { status: 502 });
+      }
+      let next: string;
+      try {
+        next = new URL(loc, current).toString();
+      } catch {
+        return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
+      }
+      const redirected = normalizeFeedInput(next);
+      if (!redirected || (current.protocol === "https:" && redirected.protocol !== "https:")) {
+        return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
+      }
+      current = redirected;
+      continue;
+    }
+    break;
   }
 
   if (!res) {
     return NextResponse.json({ ok: false, error: "Couldn't reach that URL." }, { status: 502 });
   }
 
-  if (!res.ok) {
+  if (res.status < 200 || res.status >= 300) {
     const stale = cacheGet(cacheKey, STALE_FALLBACK_MS);
     if (stale) return NextResponse.json({ ok: true, text: stale, cached: true, stale: true });
     return NextResponse.json(
@@ -206,12 +198,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const declared = Number(res.headers.get("content-length") ?? "0");
-  if (declared > MAX_BYTES) {
-    return NextResponse.json({ ok: false, error: "That calendar is too large to import." }, { status: 413 });
-  }
-
-  const text = await readLimited(res, MAX_BYTES);
+  const text = res.text;
   if (text == null) {
     return NextResponse.json({ ok: false, error: "That calendar is too large to import." }, { status: 413 });
   }
@@ -224,32 +211,4 @@ export async function POST(request: Request) {
 
   cacheSet(cacheKey, text);
   return NextResponse.json({ ok: true, text });
-}
-
-async function readLimited(res: Response, maxBytes: number): Promise<string | null> {
-  const reader = res.body?.getReader();
-  if (!reader) {
-    const text = await res.text();
-    return text.length > maxBytes ? null : text;
-  }
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    size += value.byteLength;
-    if (size > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const c of chunks) {
-    bytes.set(c, offset);
-    offset += c.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
 }

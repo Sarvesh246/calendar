@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Plus, X } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
@@ -23,7 +23,8 @@ import { defaultUntilIso } from "@/lib/repeat";
 import { nanoid } from "@/lib/nanoid";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { haptic } from "@/lib/haptic";
-import { SHEET_DRAG, shouldDismissSheet, startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { startSheetDrag, useSheetOverscroll } from "@/lib/sheet-gesture";
+import { useSheetPhysics } from "@/lib/use-sheet-physics";
 import { Scrim } from "@/components/ui/scrim";
 import { SheetHandle } from "@/components/sheet-handle";
 import { motion as motionTokens } from "@/lib/motion";
@@ -154,8 +155,14 @@ function ClassScheduleSheetBody() {
   const headingId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dragControls = useDragControls();
-  const [dragging, setDragging] = useState(false);
+  // Closing is vetoed when there are unsaved meetings that fail to save — the
+  // sheet then springs back from wherever it was let go instead of leaving.
+  const sheet = useSheetPhysics({
+    panelRef,
+    onClosed: () => close(),
+    canClose: () => !dirty() || persist(),
+  });
+  const { dragControls, dragging } = sheet;
   useSheetOverscroll(scrollRef, dragControls);
 
   const [title, setTitle] = useState("");
@@ -337,45 +344,41 @@ function ClassScheduleSheetBody() {
   }
 
   function dismiss() {
-    if (dirty() && !persist()) return;
-    close();
+    sheet.close();
   }
 
   const editing =
     Boolean(categoryId) && savedClassMeetings(items, categoryId).length > 0;
 
   return (
-        <div className="viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden">
-          <Scrim label="Dismiss" onClick={dismiss} />
+        <div className={cn("viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden", sheet.leaving && "pointer-events-none")}>
+          <Scrim
+            label="Dismiss"
+            onPointerDown={dismiss}
+            progress={sheet.scrimOpacity}
+            exitDuration={sheet.gone ? 0 : motionTokens.exit}
+          />
           <motion.div
             role="dialog"
             ref={panelRef}
             aria-modal="true"
             aria-labelledby={headingId}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-            transition={motionTokens.springGentle}
+            exit={
+              sheet.gone
+                ? { opacity: 1, transition: { duration: 0 } }
+                : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
+            }
+            {...sheet.dragProps}
             style={{
-              willChange: "transform",
+              ...sheet.dragProps.style,
               maxHeight:
                 "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.25rem)",
-            }}
-            {...SHEET_DRAG}
-            dragControls={dragControls}
-            onDragStart={() => setDragging(true)}
-            onDragEnd={(_, info) => {
-              setDragging(false);
-              if (shouldDismissSheet(info)) {
-                haptic("light");
-                dismiss();
-              }
             }}
             className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface pt-0.5"
           >
             <SheetHandle dragControls={dragControls} dragging={dragging} />
             <div
-              className="flex shrink-0 cursor-grab items-start justify-between gap-3 border-b border-line/70 px-3 pb-3 active:cursor-grabbing"
+              className="flex shrink-0 cursor-grab touch-none select-none items-start justify-between gap-3 border-b border-line/70 px-3 pb-3 active:cursor-grabbing"
               onPointerDown={(e) => startSheetDrag(dragControls, e)}
             >
               <div className="min-w-0">
@@ -542,7 +545,7 @@ function ClassScheduleSheetBody() {
                   onClick={() => {
                     if (!persist()) return;
                     haptic("success");
-                    close();
+                    sheet.close();
                   }}
                   className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
                 >

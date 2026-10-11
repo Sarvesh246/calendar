@@ -1502,11 +1502,25 @@ function upcomingWork(env: Env, cls: Category | undefined, extra: (i: Item) => b
   return { text: `${head}\n${bullets(lines, 8)}${open.length > 8 ? "" : ""}` };
 }
 
-function dueBetween(env: Env, start: Date, end: Date, label: string, cls?: Category, opts: { includeOverdue?: boolean } = {}): AssistantResponse {
+function dueBetween(
+  env: Env,
+  start: Date,
+  end: Date,
+  label: string,
+  cls?: Category,
+  opts: { includeOverdue?: boolean; overdueSince?: Date } = {}
+): AssistantResponse {
   const { now } = env;
   const open = inClass(env, env.ctx.items.filter(isOpen), cls).sort(byAt);
   const inRange = open.filter((i) => +new Date(i.at) >= +start && +new Date(i.at) < +end);
-  const overdue = opts.includeOverdue ? open.filter((i) => isOverdueAt(i, now) && +new Date(i.at) < +start) : [];
+  const overdue = opts.includeOverdue
+    ? open.filter(
+        (i) =>
+          isOverdueAt(i, now) &&
+          +new Date(i.at) < +start &&
+          (!opts.overdueSince || +new Date(i.at) >= +opts.overdueSince)
+      )
+    : [];
   const all = [...overdue, ...inRange];
   const suffix = cls ? ` for ${cls.name}` : "";
   if (!all.length) return { text: `Nothing due ${label}${suffix}.` };
@@ -1578,7 +1592,22 @@ function agendaIntent(env: Env): Outcome {
       if (ref.evening) opts.evening = true;
       return dayAnswer(env, ref, opts);
     }
-    if (opts.only === "work") return dueBetween(env, ref.start < startOfDay(now) ? startOfDay(now) : ref.start, ref.end, ref.label, cls, { includeOverdue: false });
+    if (opts.only === "work") {
+      const today = startOfDay(now);
+      if (ref.label === "this week") {
+        // On the last day of the week "this week" is just today, which is
+        // rarely what a Saturday "what's due this week" means — look a week
+        // ahead instead, and say so. Work that slipped earlier this week is
+        // still part of the answer, flagged as past due.
+        const weekStart = addDays(today, -((now.getDay() - (env.ctx.weekStartsOn ?? 0) + 7) % 7));
+        const lastDay = ref.end.getTime() - today.getTime() <= 86_400_000;
+        return dueBetween(env, today, lastDay ? addDays(today, 7) : ref.end, lastDay ? "in the next 7 days" : ref.label, cls, {
+          includeOverdue: true,
+          overdueSince: weekStart,
+        });
+      }
+      return dueBetween(env, ref.start < today ? today : ref.start, ref.end, ref.label, cls, { includeOverdue: false });
+    }
     return rangeAnswer(env, ref, opts);
   }
 

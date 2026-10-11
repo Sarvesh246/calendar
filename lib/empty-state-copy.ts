@@ -50,9 +50,11 @@ export function describeEmptyState(input: EmptyStateInput): EmptyStateCopy {
     return {
       kind: "nothing",
       title: "Nothing scheduled.",
+      // The title already says it's empty; the line under it says what next,
+      // instead of "Nothing on today yet" repeating it.
       sub: canAdd
-        ? `Nothing on ${scope} yet — add something whenever you're ready.`
-        : `Nothing on ${scope} yet.`,
+        ? `${scope.charAt(0).toUpperCase()}${scope.slice(1)} is wide open — add something whenever you're ready.`
+        : "Classes you import and things you add will show up here.",
       action: canAdd ? "add" : null,
     };
   }
