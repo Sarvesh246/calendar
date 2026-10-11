@@ -72,9 +72,12 @@ export function AIDrawer() {
   if (!present) return null;
 
   return (
-    <div className="viewport-pinned-overlay fixed inset-0 z-50">
+    // Lets go of the page the moment it starts closing: taps reach the app
+    // during the exit instead of landing on a veil that is on its way out.
+    <div className={cn("viewport-pinned-overlay fixed inset-0 z-50", !open && "pointer-events-none")}>
       <motion.div
-        onClick={() => setOpen(false)}
+        // On press, like every other sheet's veil.
+        onPointerDown={() => setOpen(false)}
         style={{ opacity: veil }}
         className={cn("assistant-overlay overlay-scrim absolute inset-0", open ? "is-open" : "is-closed")}
       />
