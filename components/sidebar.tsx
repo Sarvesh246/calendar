@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useAuth } from "./auth-provider";
 import { SidebarViews } from "./saved-views";
 import { SidebarSectionHeader } from "./sidebar-section";
@@ -68,8 +69,17 @@ function RailLabel({ collapsed, children }: { collapsed: boolean; children: Reac
 
 export function Sidebar({ pathname }: { pathname: string }) {
   const categories = useDatebookStore((s) => s.categories);
-  const collapsed = useUIStore((s) => s.sidebarCollapsed);
-  const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
+  const storedCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const setStoredCollapsed = useUIStore((s) => s.setSidebarCollapsed);
+  // Between a phone and a laptop (768–1023px) a 220px rail leaves the month
+  // grid so narrow every chip truncates to "10a …". There the rail starts
+  // folded; expanding it lasts for the session without touching the saved
+  // desktop preference.
+  const narrow = useMediaQuery("(max-width: 1023px)");
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  const collapsed = narrow ? !narrowExpanded : storedCollapsed;
+  const setSidebarCollapsed = (next: boolean) =>
+    narrow ? setNarrowExpanded(!next) : setStoredCollapsed(next);
   const setAIDrawerOpen = useUIStore((s) => s.setAIDrawerOpen);
   const categoryFilter = useUIStore((s) => s.categoryFilter);
   const toggleCategoryFilter = useUIStore((s) => s.toggleCategoryFilter);
