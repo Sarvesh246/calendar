@@ -19,6 +19,7 @@
 ## Hard rules
 
 * Verify before shipping: `npx tsc --noEmit`, lint the touched files, and check previewable changes in the browser. Then commit and push to `main`.
+* Commit messages are Conventional Commits (`feat(scope): subject`), enforced by a husky hook and CI; never add `Co-Authored-By` or "Generated with" trailers. Husky also runs lint-staged and a staged secret scan, so do not bypass hooks.
 * Never rename persisted store keys (`datebook-store`, `category`, `viewFilter`); user-facing copy says **Classes** and **Views**.
 * New DB columns need a numbered migration **and** an entry in `STRIPPABLE_COLS` (`lib/db-sync.ts`).
 * Animate `transform` / `opacity` only on hot paths; selected-segment highlights use `useSlidingPill` (`lib/sliding-pill.ts`), not framer `layoutId`.
