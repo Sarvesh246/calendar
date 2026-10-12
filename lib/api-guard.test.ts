@@ -39,8 +39,16 @@ describe("request guards", () => {
   });
 
   it("requires JSON content types where requested", () => {
-    expect(isJsonRequest(new Request("http://localhost", { headers: { "content-type": "application/json; charset=utf-8" } }))).toBe(true);
-    expect(isJsonRequest(new Request("http://localhost", { headers: { "content-type": "text/plain" } }))).toBe(false);
+    expect(
+      isJsonRequest(
+        new Request("http://localhost", {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isJsonRequest(new Request("http://localhost", { headers: { "content-type": "text/plain" } })),
+    ).toBe(false);
   });
 
   it("compares webhook secrets without accepting prefixes", () => {

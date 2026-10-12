@@ -4,8 +4,7 @@ const TRANSIENT = new Set([429, 500, 502, 503, 504]);
 export type GeminiFailureCode = "assistant-busy" | "assistant-unreachable";
 
 export type GeminiFetchResult =
-  | { ok: true; data: unknown }
-  | { ok: false; lastStatus: number; error: GeminiFailureCode };
+  { ok: true; data: unknown } | { ok: false; lastStatus: number; error: GeminiFailureCode };
 
 export function isAbortError(err: unknown): boolean {
   return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
@@ -39,7 +38,7 @@ export function parseRetryAfterMs(header: string | null, now = Date.now()): numb
 /** `retryIndex` is 0 after the first failure. */
 export function geminiBackoffMs(
   retryIndex: number,
-  opts?: { retryAfterMs?: number; random?: () => number }
+  opts?: { retryAfterMs?: number; random?: () => number },
 ): number {
   if (opts?.retryAfterMs && opts.retryAfterMs > 0) {
     return Math.min(Math.max(opts.retryAfterMs, 750), RETRY_AFTER_CAP_MS);

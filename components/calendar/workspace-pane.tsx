@@ -24,11 +24,14 @@ const AssistantConversation = lazyComponent<ComponentProps<typeof AssistantConve
   () => import("@/components/assistant-conversation").then((m) => m.AssistantConversation),
   function AssistantLoading() {
     return (
-      <div role="status" className="flex flex-1 items-center justify-center text-[12px] text-ink-faint">
+      <div
+        role="status"
+        className="flex flex-1 items-center justify-center text-[12px] text-ink-faint"
+      >
         Loading assistant…
       </div>
     );
-  }
+  },
 );
 registerWarmUp(AssistantConversation.preload);
 
@@ -67,7 +70,10 @@ function PanePanel({
 const MAX_VIEWPORT_SHARE = 0.45;
 
 function maxForViewport() {
-  return Math.max(PANE_MIN_WIDTH, Math.min(PANE_MAX_WIDTH, Math.floor(window.innerWidth * MAX_VIEWPORT_SHARE)));
+  return Math.max(
+    PANE_MIN_WIDTH,
+    Math.min(PANE_MAX_WIDTH, Math.floor(window.innerWidth * MAX_VIEWPORT_SHARE)),
+  );
 }
 
 /**
@@ -98,13 +104,15 @@ export function WorkspacePane({
   const asideRef = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number; latest: number } | null>(null);
   const [resizing, setResizing] = useState(false);
-  const activeIndex = Math.max(0, TABS.findIndex((t) => t.id === tab));
+  const activeIndex = Math.max(
+    0,
+    TABS.findIndex((t) => t.id === tab),
+  );
 
   // Panels seen so far this session. Grown during render (not in an effect) so
   // the first visit mounts in the same commit that flips the tab.
   const [visited, setVisited] = useState<ReadonlySet<PaneTab>>(() => new Set([tab]));
   if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
-
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !asideRef.current) return;
@@ -130,7 +138,8 @@ export function WorkspacePane({
     const d = drag.current;
     if (!d) return;
     drag.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     setResizing(false);
     document.documentElement.classList.remove("pane-resizing");
     setWidth(d.latest);
@@ -192,7 +201,11 @@ export function WorkspacePane({
 
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface">
         <div className="shrink-0 border-b border-line p-1.5">
-          <div role="tablist" aria-label="Side panel content" className="relative flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5">
+          <div
+            role="tablist"
+            aria-label="Side panel content"
+            className="relative flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5"
+          >
             {/* One pill that slides with a CSS transform. It runs on the
                 compositor, so it keeps gliding even while the next panel mounts
                 — a JS layout animation froze mid-slide on that same frame. */}
@@ -224,10 +237,16 @@ export function WorkspacePane({
                   className={cn(
                     "press-none relative flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-[12.5px] font-medium",
                     "transition-colors duration-[var(--motion-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                    active ? "text-ink" : "text-ink-soft hover:text-ink"
+                    active ? "text-ink" : "text-ink-soft hover:text-ink",
                   )}
                 >
-                  <Icon className={cn("relative z-[1] h-3.5 w-3.5", id === "assistant" && "text-accent")} strokeWidth={1.9} />
+                  <Icon
+                    className={cn(
+                      "relative z-[1] h-3.5 w-3.5",
+                      id === "assistant" && "text-accent",
+                    )}
+                    strokeWidth={1.9}
+                  />
                   <span className="relative z-[1]">{label}</span>
                 </button>
               );
@@ -240,7 +259,12 @@ export function WorkspacePane({
               switching back is a display toggle instead of a rebuild. */}
           {visited.has("day") && (
             <PanePanel id="day" show={tab === "day"} className="p-4">
-              <DayAgenda className="min-h-0 flex-1" date={selectedDate} items={selectedItems} onAdd={onAdd} />
+              <DayAgenda
+                className="min-h-0 flex-1"
+                date={selectedDate}
+                items={selectedItems}
+                onAdd={onAdd}
+              />
             </PanePanel>
           )}
           {visited.has("plan") && (

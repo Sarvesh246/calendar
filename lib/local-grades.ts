@@ -28,7 +28,10 @@ function words(s: string): string[] {
 }
 
 /** The grading row a phrase names: "the final" → "Final exam", "psets" → "Problem sets". */
-export function findComponent(grading: SyllabusGradeWeight[], phrase: string): SyllabusGradeWeight | null {
+export function findComponent(
+  grading: SyllabusGradeWeight[],
+  phrase: string,
+): SyllabusGradeWeight | null {
   const want = words(phrase.replace(/\bpsets?\b/g, "problem set").replace(/\bhw\b/g, "homework"));
   if (!want.length) return null;
   const hits = grading.filter((g) => {
@@ -41,7 +44,10 @@ export function findComponent(grading: SyllabusGradeWeight[], phrase: string): S
 const STANDARD: Record<string, number> = { a: 90, b: 80, c: 70, d: 60 };
 
 /** Lowest score for a letter: from the syllabus scale if it has one, else the usual 90/80/70/60. */
-export function letterFloor(scale: SyllabusGradeCutoff[], letter: string): { floor: number; fromSyllabus: boolean } | null {
+export function letterFloor(
+  scale: SyllabusGradeCutoff[],
+  letter: string,
+): { floor: number; fromSyllabus: boolean } | null {
   const want = letter.trim().toUpperCase();
   const row = scale.find((g) => g.grade.trim().toUpperCase() === want);
   const lo = row ? /(\d+(?:\.\d+)?)/.exec(row.range)?.[1] : undefined;
@@ -71,8 +77,12 @@ export function neededScore(current: number, target: number, weight: number): nu
  */
 export function weightedSoFar(
   grading: SyllabusGradeWeight[],
-  scores: Array<{ phrase: string; score: number }>
-): { average: number; used: Array<{ component: string; weight: number; score: number }>; covered: number } | null {
+  scores: Array<{ phrase: string; score: number }>,
+): {
+  average: number;
+  used: Array<{ component: string; weight: number; score: number }>;
+  covered: number;
+} | null {
   const used: Array<{ component: string; weight: number; score: number }> = [];
   for (const s of scores) {
     const row = findComponent(grading, s.phrase);

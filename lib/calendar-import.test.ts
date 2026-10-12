@@ -23,7 +23,7 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.newCategories).toHaveLength(1);
     expect(plan.newCategories[0].name).toBe("ENGL 101");
@@ -47,16 +47,14 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.newCategories).toHaveLength(1);
     expect(plan.newCategories[0].name).toBe("Canvas");
   });
 
   it("reuses a category whose name was lost instead of duplicating it", () => {
-    const existing = [
-      { id: "c-blank", name: "", color: "#007AFF", sourceId: "source-1" },
-    ];
+    const existing = [{ id: "c-blank", name: "", color: "#007AFF", sourceId: "source-1" }];
     const plan = buildImportPlan(
       {
         calendarName: null,
@@ -70,7 +68,7 @@ describe("buildImportPlan", () => {
         ],
       },
       existing,
-      "source-1"
+      "source-1",
     );
     expect(plan.newCategories).toHaveLength(1);
     expect(plan.newCategories[0].name).toBe("Imported");
@@ -90,7 +88,7 @@ describe("buildImportPlan", () => {
         ],
       },
       repaired,
-      "source-1"
+      "source-1",
     );
     expect(second.newCategories).toHaveLength(0);
     expect(second.drafts[0].categoryId).toBe("c-blank");
@@ -114,7 +112,7 @@ describe("buildImportPlan", () => {
         ],
       },
       existing,
-      "source-1"
+      "source-1",
     );
     expect(plan.newCategories).toHaveLength(0);
     expect(plan.drafts[0].categoryId).toBe("cat-1");
@@ -136,7 +134,7 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.drafts[0].type).toBe("event");
     expect(plan.drafts[0].status).toBeUndefined();
@@ -156,7 +154,7 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.drafts[0].type).toBe("assignment");
     expect(plan.drafts[0].status).toBe("todo");
@@ -177,7 +175,7 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.drafts[0].type).toBe("task");
     expect(plan.drafts[0].status).toBe("todo");
@@ -199,7 +197,7 @@ describe("buildImportPlan", () => {
         ],
       },
       [],
-      "source-1"
+      "source-1",
     );
     expect(plan.drafts[0].status).toBe("done");
   });

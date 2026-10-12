@@ -22,7 +22,7 @@ export function SheetHandle({
     <div
       className={cn(
         "flex shrink-0 cursor-grab touch-none flex-col items-center py-2.5 active:cursor-grabbing",
-        className
+        className,
       )}
       onPointerDown={(e) => startSheetDrag(dragControls, e)}
     >

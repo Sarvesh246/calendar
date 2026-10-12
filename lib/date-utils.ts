@@ -54,7 +54,7 @@ function tzOffsetMs(instant: Date, timeZone: string): number {
     num("day"),
     hour,
     num("minute"),
-    num("second")
+    num("second"),
   );
   return asUTC - instant.getTime();
 }
@@ -64,7 +64,7 @@ export function wallTimeInZoneToIso(
   dateKey: string,
   hour: number,
   minute: number,
-  timeZone: string
+  timeZone: string,
 ): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const utcGuess = Date.UTC(y, m - 1, d, hour, minute, 0);
@@ -158,7 +158,10 @@ export function openWorkDueOnDay(items: Item[], day: Date): Item[] {
 export function workDueOnDay(items: Item[], day: Date): Item[] {
   const due = items.filter((i) => isDueOnDay(i, day));
   const byTime = (a: Item, b: Item) => new Date(a.at).getTime() - new Date(b.at).getTime();
-  return [...due.filter((i) => i.status !== "done").sort(byTime), ...due.filter((i) => i.status === "done").sort(byTime)];
+  return [
+    ...due.filter((i) => i.status !== "done").sort(byTime),
+    ...due.filter((i) => i.status === "done").sort(byTime),
+  ];
 }
 
 /** Overdue work whose due day is before `day` — leftover, not "due today". */
@@ -167,7 +170,11 @@ export function workDueOnDay(items: Item[], day: Date): Item[] {
  * (see lib/just-completed.ts): they stay in the section, ticked, for the
  * completion beat instead of vanishing the frame they were tapped.
  */
-export function leftoverOverdue(items: Item[], day = new Date(), keep?: ReadonlySet<string>): Item[] {
+export function leftoverOverdue(
+  items: Item[],
+  day = new Date(),
+  keep?: ReadonlySet<string>,
+): Item[] {
   const now = new Date();
   return items
     .filter((i) => isOverdueOrJustFinished(i, now, keep) && !isDueOnDay(i, day))
@@ -244,7 +251,11 @@ export function isOverdue(item: Item) {
 /** Overdue, or was until it was completed just now (it keeps its place). */
 export function isOverdueOrJustFinished(item: Item, now: Date, keep?: ReadonlySet<string>) {
   if (isOverdueAt(item, now)) return true;
-  return Boolean(keep?.has(item.id)) && item.status === "done" && isOverdueAt({ ...item, status: "todo" }, now);
+  return (
+    Boolean(keep?.has(item.id)) &&
+    item.status === "done" &&
+    isOverdueAt({ ...item, status: "todo" }, now)
+  );
 }
 
 export function isOverdueAt(item: Item, now: Date) {
@@ -270,7 +281,7 @@ export function thisOrNextWeekday(dow: Day, from = new Date()) {
  */
 export function eventSessionBounds(
   item: Item,
-  now = new Date()
+  now = new Date(),
 ): { start: Date; end: Date } | null {
   if (item.type !== "event") return null;
   const start = new Date(item.at);
@@ -328,16 +339,12 @@ export function isHappeningNow(item: Item, now = new Date()): boolean {
 
 function categoryNameOf(
   item: Item,
-  categories: Pick<Category, "id" | "name">[]
+  categories: Pick<Category, "id" | "name">[],
 ): string | undefined {
   return categories.find((c) => c.id === item.categoryId)?.name;
 }
 
-function byClassThenStart(
-  a: Item,
-  b: Item,
-  categories: Pick<Category, "id" | "name">[]
-): number {
+function byClassThenStart(a: Item, b: Item, categories: Pick<Category, "id" | "name">[]): number {
   const ac = isClassMeeting(a, categoryNameOf(a, categories)) ? 0 : 1;
   const bc = isClassMeeting(b, categoryNameOf(b, categories)) ? 0 : 1;
   if (ac !== bc) return ac - bc;
@@ -348,7 +355,7 @@ function byClassThenStart(
 export function happeningNow(
   items: Item[],
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
 ): Item[] {
   return items
     .filter((i) => i.status !== "done" && isHappeningNow(i, now))
@@ -362,7 +369,7 @@ export const CLASS_COUNTDOWN_MS = DEFAULT_CLASS_REMINDER_MINUTES * 60 * 1000;
 export function isClassStartingSoon(
   item: Item,
   now = new Date(),
-  windowMs = CLASS_COUNTDOWN_MS
+  windowMs = CLASS_COUNTDOWN_MS,
 ): boolean {
   if (!isClassScheduleItem(item) || item.status === "done") return false;
   if (isHappeningNow(item, now)) return false;
@@ -376,7 +383,7 @@ export function isClassStartingSoon(
 export function classStartingSoon(
   items: Item[],
   now = new Date(),
-  windowMs = CLASS_COUNTDOWN_MS
+  windowMs = CLASS_COUNTDOWN_MS,
 ): Item[] {
   return items
     .filter((i) => isClassStartingSoon(i, now, windowMs))
@@ -402,12 +409,12 @@ export function happeningNowStack(
   items: Item[],
   now = new Date(),
   categories: Pick<Category, "id" | "name">[] = [],
-  windowMs = CLASS_COUNTDOWN_MS
+  windowMs = CLASS_COUNTDOWN_MS,
 ): { happening: Item[]; startingSoon: Item[]; upcoming?: Item } {
   const happening = happeningNow(items, now, categories);
   const happeningIds = new Set(happening.map((i) => i.id));
   const startingSoon = classStartingSoon(items, now, windowMs).filter(
-    (i) => !happeningIds.has(i.id)
+    (i) => !happeningIds.has(i.id),
   );
   const busy = new Set([...happeningIds, ...startingSoon.map((i) => i.id)]);
   const upcoming = items
@@ -416,7 +423,7 @@ export function happeningNowStack(
         i.status !== "done" &&
         !busy.has(i.id) &&
         !isClassScheduleItem(i) &&
-        new Date(i.at).getTime() > now.getTime()
+        new Date(i.at).getTime() > now.getTime(),
     )
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
   return { happening, startingSoon, upcoming };
@@ -429,7 +436,7 @@ export function happeningNowStack(
 export function focusQueue(
   items: Item[],
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
 ): { current?: Item; next?: Item } {
   const open = items.filter((i) => i.status !== "done");
   const live = happeningNow(open, now, categories);
@@ -439,10 +446,7 @@ export function focusQueue(
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const overdue = open
     .filter(
-      (i) =>
-        i.type !== "event" &&
-        !liveIds.has(i.id) &&
-        new Date(i.at).getTime() < now.getTime()
+      (i) => i.type !== "event" && !liveIds.has(i.id) && new Date(i.at).getTime() < now.getTime(),
     )
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const ordered = [...live, ...upcoming, ...overdue];
@@ -475,7 +479,7 @@ function workloadDay(date: Date, byDay: Map<string, Item[]>) {
 export function weekWorkloadFromByDay(
   byDay: Map<string, Item[]>,
   from = new Date(),
-  weekStartsOn: 0 | 1 = 0
+  weekStartsOn: 0 | 1 = 0,
 ) {
   const start = startOfWeek(startOfDay(from), { weekStartsOn });
   return Array.from({ length: 7 }, (_, i) => workloadDay(addDays(start, i), byDay));
@@ -605,7 +609,7 @@ export function formatDaySummary(
   /** How many of the day's things the filters are hiding, if any. */
   hidden = 0,
   /** Work due today that is already finished. */
-  done = 0
+  done = 0,
 ) {
   const parts: string[] = [];
   if (overdue) parts.push(`${overdue} overdue`);

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildWeeklySchedule, placeDayBlocks, formatDuration, weekdayOrder } from "./weekly-schedule";
+import {
+  buildWeeklySchedule,
+  placeDayBlocks,
+  formatDuration,
+  weekdayOrder,
+} from "./weekly-schedule";
 import type { Category, Item } from "./types";
 
 const NOW = new Date("2026-09-16T12:00:00");
@@ -29,9 +34,12 @@ function weekly(title: string, firstAt: string, endAt: string, weeks: number): I
 describe("buildWeeklySchedule", () => {
   it("counts a renamed course meeting and its original feed copy only once", () => {
     const original = weekly("ENGR 102", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 3);
-    const renamed = weekly("Intro to Design", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 3)
-      .map((item) => ({ ...item, repeat: { freq: "weekly" as const, byDay: [1] } }));
-    const categories: Category[] = [{ id: "c1", name: "ENGR 102", classTitle: "Design Studio", color: "#007AFF" }];
+    const renamed = weekly("Intro to Design", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 3).map(
+      (item) => ({ ...item, repeat: { freq: "weekly" as const, byDay: [1] } }),
+    );
+    const categories: Category[] = [
+      { id: "c1", name: "ENGR 102", classTitle: "Design Studio", color: "#007AFF" },
+    ];
     const schedule = buildWeeklySchedule([...original, ...renamed], NOW, 0, categories);
     expect(schedule.blocks).toHaveLength(1);
     expect(schedule.blocks[0].title).toBe("Design Studio");
@@ -42,8 +50,10 @@ describe("buildWeeklySchedule", () => {
   it("keeps courses in the same slot separate", () => {
     const items = [
       ...weekly("ENGR 102", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 2),
-      ...weekly("MATH 151", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 2)
-        .map((item) => ({ ...item, categoryId: "c2" })),
+      ...weekly("MATH 151", "2026-09-14T09:00:00", "2026-09-14T09:50:00", 2).map((item) => ({
+        ...item,
+        categoryId: "c2",
+      })),
     ];
     expect(buildWeeklySchedule(items, NOW).blocks).toHaveLength(2);
   });
@@ -115,7 +125,7 @@ describe("buildWeeklySchedule", () => {
 
   it("gives a timed event with no end a default block length", () => {
     const items = weekly("Office hours", "2026-09-16T16:00:00", "2026-09-16T16:00:00", 2).map(
-      (i) => ({ ...i, endAt: undefined })
+      (i) => ({ ...i, endAt: undefined }),
     );
     expect(buildWeeklySchedule(items, NOW).blocks[0]).toMatchObject({
       startMin: 960,

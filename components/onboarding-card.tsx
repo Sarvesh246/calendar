@@ -29,7 +29,10 @@ export function OnboardingCard() {
   const [hiding, setHiding] = useState(false);
   const dismiss = () => {
     setHiding(true);
-    window.setTimeout(() => updateSettings({ onboardingDismissed: true }), prefersReducedMotion() ? 0 : 480);
+    window.setTimeout(
+      () => updateSettings({ onboardingDismissed: true }),
+      prefersReducedMotion() ? 0 : 480,
+    );
   };
 
   const show = mounted && !dismissed && !hiding && itemCount === 0 && sourceCount === 0;
@@ -64,7 +67,8 @@ export function OnboardingCard() {
             <div>
               <p className="text-[15px] font-semibold text-ink">Get your week in here</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
-                Datebook starts empty. Import a class feed or add weekly meeting times — then turn on reminders or sign in so this device isn&apos;t the only copy.
+                Datebook starts empty. Import a class feed or add weekly meeting times — then turn
+                on reminders or sign in so this device isn&apos;t the only copy.
               </p>
             </div>
             <button

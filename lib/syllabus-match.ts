@@ -114,7 +114,7 @@ export function defaultSyllabusDecision(verdict: SyllabusVerdict): SyllabusRowDe
 /** Preview checkbox: matched rows are linked, not imported as copies. */
 export function syllabusDecisionChecked(
   decision: SyllabusRowDecision,
-  verdict: SyllabusVerdict
+  verdict: SyllabusVerdict,
 ): boolean {
   return verdict === "matched" ? decision === "link" : decision === "import";
 }
@@ -122,7 +122,7 @@ export function syllabusDecisionChecked(
 /** Binary toggle for the review sheet. Matched rows never flip to `import`. */
 export function toggleSyllabusRowDecision(
   decision: SyllabusRowDecision,
-  verdict: SyllabusVerdict
+  verdict: SyllabusVerdict,
 ): SyllabusRowDecision {
   if (verdict === "matched") return decision === "link" ? "skip" : "link";
   return decision === "import" ? "skip" : "import";
@@ -131,7 +131,7 @@ export function toggleSyllabusRowDecision(
 /** True when apply will mint a new calendar row for this review choice. */
 export function syllabusRowAddsItem(
   decision: SyllabusRowDecision,
-  verdict: SyllabusVerdict
+  verdict: SyllabusVerdict,
 ): boolean {
   return decision === "import" && verdict !== "matched";
 }
@@ -140,7 +140,7 @@ export function syllabusRowAddsItem(
 export function findSyllabusSource(
   category: { id: string; name: string },
   sources: ImportSource[],
-  items: Item[]
+  items: Item[],
 ): ImportSource | undefined {
   const url = syllabusSourceUrl(category.name);
   const byUrl = sources.find((s) => isSyllabusSource(s) && s.url === url);
@@ -209,7 +209,7 @@ export function resolveSyllabusCourse(input: {
 export function matchSyllabusItems(
   drafts: SyllabusDraft[],
   existing: Item[],
-  options: { timeZone: string; categoryId?: string }
+  options: { timeZone: string; categoryId?: string },
 ): SyllabusMatch[] {
   const timeZone = options.timeZone;
   const pool = options.categoryId
@@ -233,12 +233,15 @@ export function matchSyllabusItems(
     return { draft, verdict: "new" as const, score: 0 };
   });
 
-  const claimedItems = new Set(
-    matches.filter((m) => m.existing).map((m) => m.existing!.id)
-  );
+  const claimedItems = new Set(matches.filter((m) => m.existing).map((m) => m.existing!.id));
   const claimedDrafts = new Set<number>();
   matches.forEach((m, i) => {
-    if (m.verdict === "matched" && m.score === 1 && m.existing && isSyllabusSourceUid(m.existing.sourceUid)) {
+    if (
+      m.verdict === "matched" &&
+      m.score === 1 &&
+      m.existing &&
+      isSyllabusSourceUid(m.existing.sourceUid)
+    ) {
       claimedDrafts.add(i);
     }
   });
@@ -258,7 +261,8 @@ export function matchSyllabusItems(
       const exactTitle = draftNorm.text.length > 0 && draftNorm.text === itemNorm.text;
       const dayGap = Math.abs(dateKeyDiff(draftDay, itemDay));
       if (!sameDay && !(exactTitle && dayGap === 1)) continue;
-      const score = exactTitle && (sameDay || dayGap === 1) ? 1 : titleScore(draftNorm.text, itemNorm.text);
+      const score =
+        exactTitle && (sameDay || dayGap === 1) ? 1 : titleScore(draftNorm.text, itemNorm.text);
       if (score < SYLLABUS_UNCERTAIN_THRESHOLD) continue;
       pairs.push({ di, item, score });
     }
@@ -293,14 +297,20 @@ export function matchSyllabusItems(
       const exactTitle = draftNorm.text.length > 0 && draftNorm.text === itemNorm.text;
       const dayGap = Math.abs(dateKeyDiff(draftDay, itemDay));
       if (!sameDay && !(exactTitle && dayGap === 1)) continue;
-      const score = exactTitle && (sameDay || dayGap === 1) ? 1 : titleScore(draftNorm.text, itemNorm.text);
+      const score =
+        exactTitle && (sameDay || dayGap === 1) ? 1 : titleScore(draftNorm.text, itemNorm.text);
       if (!best || score > best.score) best = { item, score };
     }
     if (!best) return;
     if (best.score >= SYLLABUS_MATCH_THRESHOLD) {
       matches[di] = { draft: m.draft, verdict: "matched", score: best.score, existing: best.item };
     } else if (best.score >= SYLLABUS_UNCERTAIN_THRESHOLD) {
-      matches[di] = { draft: m.draft, verdict: "uncertain", score: best.score, existing: best.item };
+      matches[di] = {
+        draft: m.draft,
+        verdict: "uncertain",
+        score: best.score,
+        existing: best.item,
+      };
     }
   });
 
@@ -316,7 +326,7 @@ export function collapseCrossSourceDuplicates(
   items: Item[],
   sources: ImportSource[],
   timeZone: string,
-  now = new Date().toISOString()
+  now = new Date().toISOString(),
 ): { items: Item[]; dropped: string[] } {
   const urlById = new Map(sources.map((s) => [s.id, s.url]));
   const syllabusItems = items.filter((i) => isSyllabusRow(i, urlById));
@@ -386,7 +396,10 @@ function parseTitle(title: string): { text: string; numbers: Set<number> } {
   let s = title.toLowerCase().replace(/[​ ]/g, " ");
   s = s.replace(/\[[^\]]*\]/g, " ");
   s = expandAbbreviations(s);
-  s = s.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  s = s
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const numbers = assignmentNumbers(s);
   const stripped = s.replace(FILLER, " ").replace(/\s+/g, " ").trim();
   return { text: stripped || s, numbers };
@@ -429,8 +442,7 @@ function titleScore(a: string, b: string): number {
   const longer = a.length <= b.length ? b : a;
   const shortTokens = at.length <= bt.length ? at : bt;
   const longTokens = at.length <= bt.length ? bt : at;
-  const subset =
-    shortTokens.length >= 2 && shortTokens.every((t) => longTokens.includes(t));
+  const subset = shortTokens.length >= 2 && shortTokens.every((t) => longTokens.includes(t));
   if (subset) best = Math.max(best, 0.85);
   if (longer.includes(shorter) && (shortTokens.length >= 2 || shorter.length >= 6)) {
     best = Math.max(best, 0.72 + 0.28 * (shorter.length / longer.length));
@@ -480,7 +492,7 @@ function courseDisagreement(
   haystack: string,
   categories: Category[],
   courseName: string,
-  courseCode: string
+  courseCode: string,
 ): string | undefined {
   if (!haystack) return undefined;
   const other = matchCategory(haystack, categories);
@@ -489,7 +501,8 @@ function courseDisagreement(
     return `This syllabus looks like ${name}, not ${forced.name}.`;
   }
   const forcedCode = courseCodeOf(forced.name);
-  const extractedCode = courseCodeOf(haystack) ?? courseCodeOf(courseCode) ?? courseCodeOf(courseName);
+  const extractedCode =
+    courseCodeOf(haystack) ?? courseCodeOf(courseCode) ?? courseCodeOf(courseName);
   if (forcedCode && extractedCode && forcedCode !== extractedCode) {
     return `This syllabus looks like ${extractedCode.replace(/(\D+)(\d+)/, "$1 $2")}, not ${forced.name}.`;
   }

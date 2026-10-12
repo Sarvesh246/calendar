@@ -57,7 +57,10 @@ function RailLabel({ collapsed, children }: { collapsed: boolean; children: Reac
           initial={{ opacity: 0, x: -6 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -6 }}
-          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
+          transition={{
+            default: motionTokens.nudge,
+            opacity: { duration: motionTokens.micro, ease: motionTokens.ease },
+          }}
           className="truncate whitespace-nowrap"
         >
           {children}
@@ -124,158 +127,184 @@ export function Sidebar({ pathname }: { pathname: string }) {
         style={{ width: collapsed ? 68 : 220 }}
       >
         <aside className="flex h-full w-full flex-col overflow-hidden p-2.5">
-        <div className="flex h-10 shrink-0 items-center justify-between pl-2.5 pr-0.5">
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -6 }}
-                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
-                className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] text-ink"
-              >
-                Datebook
-              </motion.span>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={() => setSidebarCollapsed(!collapsed)}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} /> : <PanelLeftClose className="h-4 w-4" strokeWidth={1.9} />}
-          </button>
-        </div>
+          <div className="flex h-10 shrink-0 items-center justify-between pl-2.5 pr-0.5">
+            <AnimatePresence initial={false}>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={{
+                    default: motionTokens.nudge,
+                    opacity: { duration: motionTokens.micro, ease: motionTokens.ease },
+                  }}
+                  className="whitespace-nowrap text-[16px] font-semibold tracking-[-0.01em] text-ink"
+                >
+                  Datebook
+                </motion.span>
+              )}
+            </AnimatePresence>
+            <button
+              onClick={() => setSidebarCollapsed(!collapsed)}
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" strokeWidth={1.9} />
+              )}
+            </button>
+          </div>
 
-        <nav ref={navRef} aria-label="Main" className="relative mt-3 flex shrink-0 flex-col gap-0.5">
-          <span ref={pillRef} aria-hidden className="rail-pill pointer-events-none absolute inset-x-0 top-0 rounded-lg bg-accent opacity-0" />
-          {NAV.map((item) => (
+          <nav
+            ref={navRef}
+            aria-label="Main"
+            className="relative mt-3 flex shrink-0 flex-col gap-0.5"
+          >
+            <span
+              ref={pillRef}
+              aria-hidden
+              className="rail-pill pointer-events-none absolute inset-x-0 top-0 rounded-lg bg-accent opacity-0"
+            />
+            {NAV.map((item) => (
+              <RailLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                Icon={item.icon}
+                active={pathname === item.href}
+                collapsed={collapsed}
+                onNavigate={onRailNavigate}
+              />
+            ))}
+            {/* Not a tab — the full timetable isn't a daily stop — but it is a
+              place you go, so it lives with the views rather than in a menu. */}
             <RailLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              Icon={item.icon}
-              active={pathname === item.href}
+              href="/schedule"
+              label="Schedule"
+              Icon={CalendarClock}
+              active={pathname === "/schedule"}
               collapsed={collapsed}
               onNavigate={onRailNavigate}
             />
-          ))}
-          {/* Not a tab — the full timetable isn't a daily stop — but it is a
-              place you go, so it lives with the views rather than in a menu. */}
-          <RailLink
-            href="/schedule"
-            label="Schedule"
-            Icon={CalendarClock}
-            active={pathname === "/schedule"}
-            collapsed={collapsed}
-            onNavigate={onRailNavigate}
-          />
-          {/* Sits with the views rather than buried in a menu — it's a place you
+            {/* Sits with the views rather than buried in a menu — it's a place you
               go, not a setting you find. */}
-          <RailButton
-            label="Assistant"
-            Icon={Sparkles}
-            collapsed={collapsed}
-            onClick={() => setAIDrawerOpen(true)}
-          />
-        </nav>
+            <RailButton
+              label="Assistant"
+              Icon={Sparkles}
+              collapsed={collapsed}
+              onClick={() => setAIDrawerOpen(true)}
+            />
+          </nav>
 
-        {/* Views and classes scroll on their own; navigation and the footer
+          {/* Views and classes scroll on their own; navigation and the footer
             stay put however long the class list grows. */}
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: motionTokens.micro }}
-              className="sidebar-scroll -mx-2.5 mt-5 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden px-2.5 pb-3"
-            >
-              <SidebarViews />
-              <div className="flex flex-col gap-0.5">
-                <SidebarSectionHeader label="Classes">
-                  {filterCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={clearCategoryFilter}
-                      className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
-                    >
-                      Show all
-                    </button>
-                  )}
-                </SidebarSectionHeader>
-                {categories
-                  .filter((c) => !c.archived)
-                  .map((cat) => {
-                    const active = categoryFilter?.includes(cat.id) ?? false;
-                    const course = courseLabels.of(cat);
-                    const label = course?.label ?? cat.name;
-                    const tip = [course?.full ?? cat.name, course?.detail && course.detail !== course.full ? course.detail : null]
-                      .filter(Boolean)
-                      .join(" — ");
-                    return (
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: motionTokens.micro }}
+                className="sidebar-scroll -mx-2.5 mt-5 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden px-2.5 pb-3"
+              >
+                <SidebarViews />
+                <div className="flex flex-col gap-0.5">
+                  <SidebarSectionHeader label="Classes">
+                    {filterCount > 0 && (
                       <button
-                        key={cat.id}
-                        onClick={() => toggleCategoryFilter(cat.id)}
-                        aria-pressed={active}
-                        aria-label={`Show only ${label}`}
-                        title={tip}
-                        className={cn(
-                          "press-none group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]",
-                          "transition-colors duration-[var(--motion-micro)]",
-                          active ? "bg-surface-sunken font-medium text-ink" : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink"
-                        )}
+                        type="button"
+                        onClick={clearCategoryFilter}
+                        className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
                       >
-                        <span aria-hidden className="flex w-4 shrink-0 justify-center">
-                          <motion.span
-                            initial={false}
-                            animate={{ scale: active ? 1.15 : 1 }}
-                            transition={motionTokens.springSnappy}
-                            className="h-2 w-2 rounded-full"
-                            style={{
-                              background: cat.color,
-                              boxShadow: active ? `0 0 0 3px color-mix(in srgb, ${cat.color} 24%, transparent)` : "none",
-                            }}
-                          />
-                        </span>
-                        <span className="min-w-0 truncate">{label}</span>
+                        Show all
                       </button>
-                    );
-                  })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    )}
+                  </SidebarSectionHeader>
+                  {categories
+                    .filter((c) => !c.archived)
+                    .map((cat) => {
+                      const active = categoryFilter?.includes(cat.id) ?? false;
+                      const course = courseLabels.of(cat);
+                      const label = course?.label ?? cat.name;
+                      const tip = [
+                        course?.full ?? cat.name,
+                        course?.detail && course.detail !== course.full ? course.detail : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" — ");
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => toggleCategoryFilter(cat.id)}
+                          aria-pressed={active}
+                          aria-label={`Show only ${label}`}
+                          title={tip}
+                          className={cn(
+                            "press-none group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]",
+                            "transition-colors duration-[var(--motion-micro)]",
+                            active
+                              ? "bg-surface-sunken font-medium text-ink"
+                              : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink",
+                          )}
+                        >
+                          <span aria-hidden className="flex w-4 shrink-0 justify-center">
+                            <motion.span
+                              initial={false}
+                              animate={{ scale: active ? 1.15 : 1 }}
+                              transition={motionTokens.springSnappy}
+                              className="h-2 w-2 rounded-full"
+                              style={{
+                                background: cat.color,
+                                boxShadow: active
+                                  ? `0 0 0 3px color-mix(in srgb, ${cat.color} 24%, transparent)`
+                                  : "none",
+                              }}
+                            />
+                          </span>
+                          <span className="min-w-0 truncate">{label}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* The list folds away with the rail, but the filter doesn't — so the
+          {/* The list folds away with the rail, but the filter doesn't — so the
             rail keeps saying "you're seeing a subset" and opens back up to it. */}
-        {collapsed && (filterCount > 0 || activeViewId) && (
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed(false)}
-            title={activeViewId ? "A saved view is on" : `Showing ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}
-            aria-label={`${activeViewId ? "A saved view is narrowing the list" : `Filtered to ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}. Expand sidebar to change.`}
-            className="mt-6 flex items-center rounded-lg px-2.5 py-2 text-accent transition-colors hover:bg-surface-sunken"
-          >
-            <span className="relative">
-              <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
-              <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-surface" />
-            </span>
-          </button>
-        )}
+          {collapsed && (filterCount > 0 || activeViewId) && (
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(false)}
+              title={
+                activeViewId
+                  ? "A saved view is on"
+                  : `Showing ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`
+              }
+              aria-label={`${activeViewId ? "A saved view is narrowing the list" : `Filtered to ${filterCount} categor${filterCount === 1 ? "y" : "ies"}`}. Expand sidebar to change.`}
+              className="mt-6 flex items-center rounded-lg px-2.5 py-2 text-accent transition-colors hover:bg-surface-sunken"
+            >
+              <span className="relative">
+                <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
+                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-surface" />
+              </span>
+            </button>
+          )}
 
-        <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-line pt-2">
-          <SyncChip collapsed={collapsed} />
-          <RailLink
-            href="/settings"
-            label="Settings"
-            Icon={Settings}
-            active={pathname === "/settings"}
-            collapsed={collapsed}
-          />
-        </div>
-      </aside>
+          <div className="mt-auto flex shrink-0 flex-col gap-0.5 border-t border-line pt-2">
+            <SyncChip collapsed={collapsed} />
+            <RailLink
+              href="/settings"
+              label="Settings"
+              Icon={Settings}
+              active={pathname === "/settings"}
+              collapsed={collapsed}
+            />
+          </div>
+        </aside>
       </div>
 
       <MobileBottomNav pathname={pathname} />
@@ -299,9 +328,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   // In a room the pill waits under the tab Done will return to, faded, so
   // leaving the room fades it back in place instead of sliding it over.
   const inRoom = currentIndex < 0;
-  const roomReturn = inRoom
-    ? NAV.findIndex((i) => i.href === readViewState().lastTab)
-    : -1;
+  const roomReturn = inRoom ? NAV.findIndex((i) => i.href === readViewState().lastTab) : -1;
   const activeIndex = inRoom ? Math.max(0, roomReturn) : currentIndex;
   const dragX = useMotionValue(0);
   const baseX = useMotionValue(0);
@@ -345,7 +372,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
   const pillX = useTransform([baseX, dragX, pagerPosition, pagerLive], ([b, d, p, live]) =>
     (live as number) > 0 && !dragging.current
       ? (p as number) * tabWidthRef.current
-      : (b as number) + (d as number)
+      : (b as number) + (d as number),
   );
 
   // The spring itself is chosen from the finger's leftover speed so a throw
@@ -466,7 +493,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
     // the picker-wheel feel of a native segmented scrub.
     const over = Math.max(
       0,
-      Math.min(NAV.length - 1, Math.round(indexAtStart.current + offset / tabWidth))
+      Math.min(NAV.length - 1, Math.round(indexAtStart.current + offset / tabWidth)),
     );
     if (over !== scrubIndex.current) {
       scrubIndex.current = over;
@@ -568,7 +595,10 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                   scale: isDragging ? 1.06 : inRoom && scrubbing === null ? 0.94 : 1,
                   opacity: inRoom && !isDragging ? 0 : 1,
                 }}
-                transition={{ scale: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+                transition={{
+                  scale: motionTokens.nudge,
+                  opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                }}
               />
             )}
           </span>
@@ -602,7 +632,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                 <Icon
                   className={cn(
                     "h-[22px] w-[22px] transition-colors duration-[var(--motion-standard)]",
-                    active ? "text-accent" : "text-ink-faint"
+                    active ? "text-accent" : "text-ink-faint",
                   )}
                   strokeWidth={active ? 2.1 : 1.85}
                 />
@@ -615,7 +645,7 @@ function MobileBottomNav({ pathname }: { pathname: string }) {
                   <span
                     className={cn(
                       "col-start-1 row-start-1 text-center transition-colors duration-[var(--motion-standard)]",
-                      active ? "font-semibold text-ink" : "text-ink-faint"
+                      active ? "font-semibold text-ink" : "text-ink-faint",
                     )}
                   >
                     {item.label}
@@ -660,7 +690,9 @@ function movePill(pill: HTMLElement, row: HTMLElement, animate: boolean) {
   pill.style.transform = `translateY(${row.offsetTop}px)`;
   pill.style.opacity = "1";
   // The row's ink flips with the pill, not a commit later.
-  row.parentElement?.querySelectorAll("[data-rail-on]").forEach((el) => el.removeAttribute("data-rail-on"));
+  row.parentElement
+    ?.querySelectorAll("[data-rail-on]")
+    .forEach((el) => el.removeAttribute("data-rail-on"));
   row.setAttribute("data-rail-on", "");
 }
 
@@ -689,7 +721,7 @@ function RailButton({
       className={cn(
         "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium",
         "transition-colors duration-[var(--motion-standard)]",
-        "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+        "text-ink-soft hover:bg-surface-sunken hover:text-ink",
       )}
     >
       <Icon className="relative z-[1] h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
@@ -746,7 +778,7 @@ function RailLink({
         "transition-colors duration-[var(--motion-standard)]",
         "text-ink-soft hover:bg-surface-sunken hover:text-ink",
         "data-[rail-on]:text-accent-ink data-[rail-on]:hover:bg-transparent data-[rail-on]:hover:text-accent-ink",
-        !onNavigate && active && "bg-accent text-accent-ink hover:bg-accent hover:text-accent-ink"
+        !onNavigate && active && "bg-accent text-accent-ink hover:bg-accent hover:text-accent-ink",
       )}
     >
       <Icon className="relative z-[1] h-4 w-4 shrink-0" strokeWidth={1.9} />
@@ -790,7 +822,7 @@ function SyncChip({ collapsed }: { collapsed: boolean }) {
   const chipClass = cn(
     "press-none flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium",
     "transition-colors duration-[var(--motion-standard)]",
-    cls
+    cls,
   );
 
   const inner = (

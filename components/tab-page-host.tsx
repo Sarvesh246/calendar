@@ -26,11 +26,16 @@ const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
 };
 
 function TabLoading() {
-  return <div role="status" className="flex min-h-0 flex-1 flex-col gap-4 py-2">
-    <span className="sr-only">Loading your view…</span>
-    <div aria-hidden className="h-7 w-48 animate-pulse rounded-lg bg-line/60" />
-    <div aria-hidden className="min-h-24 flex-1 animate-pulse rounded-xl border border-line bg-surface" />
-  </div>;
+  return (
+    <div role="status" className="flex min-h-0 flex-1 flex-col gap-4 py-2">
+      <span className="sr-only">Loading your view…</span>
+      <div aria-hidden className="h-7 w-48 animate-pulse rounded-lg bg-line/60" />
+      <div
+        aria-hidden
+        className="min-h-24 flex-1 animate-pulse rounded-xl border border-line bg-surface"
+      />
+    </div>
+  );
 }
 
 const TodayPage = memo(dynamic(loaders["/today"], { loading: TabLoading }));
@@ -64,7 +69,7 @@ function scheduleIdle(fn: () => void) {
 
 export function TabPageHost({ pathname }: { pathname: string }) {
   const [mounted, setMounted] = useState<Partial<Record<TabRoute, true>>>(() =>
-    isTabRoute(pathname) ? { [pathname]: true } : {}
+    isTabRoute(pathname) ? { [pathname]: true } : {},
   );
 
   useEffect(() => {
@@ -83,10 +88,12 @@ export function TabPageHost({ pathname }: { pathname: string }) {
     const modulesReady = Promise.all(TAB_ROUTES.map((href) => loaders[href]()));
     const cancel = scheduleIdle(() => {
       if (cancelled) return;
-      void modulesReady.then(() => {
-        if (cancelled) return;
-        startTransition(() => setMounted(ALL_MOUNTED));
-      }).catch(() => undefined);
+      void modulesReady
+        .then(() => {
+          if (cancelled) return;
+          startTransition(() => setMounted(ALL_MOUNTED));
+        })
+        .catch(() => undefined);
     });
     return () => {
       cancelled = true;
@@ -120,12 +127,14 @@ export function TabPageHost({ pathname }: { pathname: string }) {
         swipe.dragging && "touch-none",
         // `clip`, not `hidden`: hidden makes the host a scroll container, which
         // unpins every `position: sticky` header on the page mid-swipe.
-        pageLive && "overflow-clip"
+        pageLive && "overflow-clip",
       )}
       style={
         // A short page must still cover the screen while a long neighbour
         // floats over it, or the neighbour is clipped mid-viewport.
-        pageLive && active !== "/calendar" ? { minHeight: `calc(100dvh + ${scrollY}px)` } : undefined
+        pageLive && active !== "/calendar"
+          ? { minHeight: `calc(100dvh + ${scrollY}px)` }
+          : undefined
       }
     >
       {TAB_ROUTES.map((href) => {
@@ -142,34 +151,34 @@ export function TabPageHost({ pathname }: { pathname: string }) {
             : 0;
         return (
           <Activity key={href} mode={isActive || floating ? "visible" : "hidden"}>
-          <motion.div
-            ref={isActive ? enterRef : undefined}
-            className={cn(
-              href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
-              floating && "pointer-events-none absolute inset-x-0"
-            )}
-            style={
-              isActive && pageLive
-                ? { x: swipe.x, willChange: "transform" }
-                : floating
-                  ? {
-                      x: isPeek ? swipe.peekX : swipe.trailingX,
-                      top,
-                      willChange: "transform",
-                      // The calendar is a viewport-height page; floated, it
-                      // has to be told how tall that is.
-                      ...(href === "/calendar"
-                        ? {
-                            height:
-                              "calc(100dvh - var(--mobile-header-height) - var(--safe-bottom) - var(--tab-bar-rest) - 5.75rem)",
-                          }
-                        : null),
-                    }
-                  : undefined
-            }
-          >
-            <Page />
-          </motion.div>
+            <motion.div
+              ref={isActive ? enterRef : undefined}
+              className={cn(
+                href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
+                floating && "pointer-events-none absolute inset-x-0",
+              )}
+              style={
+                isActive && pageLive
+                  ? { x: swipe.x, willChange: "transform" }
+                  : floating
+                    ? {
+                        x: isPeek ? swipe.peekX : swipe.trailingX,
+                        top,
+                        willChange: "transform",
+                        // The calendar is a viewport-height page; floated, it
+                        // has to be told how tall that is.
+                        ...(href === "/calendar"
+                          ? {
+                              height:
+                                "calc(100dvh - var(--mobile-header-height) - var(--safe-bottom) - var(--tab-bar-rest) - 5.75rem)",
+                            }
+                          : null),
+                      }
+                    : undefined
+              }
+            >
+              <Page />
+            </motion.div>
           </Activity>
         );
       })}
@@ -257,8 +266,7 @@ function useTabScrollMemory(active: TabRoute | null) {
     let frame = 0;
     const apply = () => {
       if (done || previous.current !== target) return;
-      const reachable =
-        document.documentElement.scrollHeight - window.innerHeight >= y - 1;
+      const reachable = document.documentElement.scrollHeight - window.innerHeight >= y - 1;
       if (reachable) {
         if (Math.abs(window.scrollY - y) > 1) {
           window.scrollTo(0, y);

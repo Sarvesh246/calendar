@@ -36,6 +36,6 @@ export function ToastViewport() {
         <SaveStatusPill />
       </div>
     </>,
-    document.body
+    document.body,
   );
 }

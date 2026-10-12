@@ -50,10 +50,7 @@ function visibleBand(): { top: number; bottom: number } {
   return { top: 0, bottom: vv.height };
 }
 
-export function useKeepFieldVisible(
-  containerRef: RefObject<HTMLElement | null>,
-  enabled: boolean
-) {
+export function useKeepFieldVisible(containerRef: RefObject<HTMLElement | null>, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const container = containerRef.current;

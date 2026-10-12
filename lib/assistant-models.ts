@@ -39,7 +39,12 @@ export const useAssistantModelStore = create<AssistantModelState>((set, get) => 
       const response = await fetch("/api/assistant/models", { cache: "no-store" });
       const data = (await response.json()) as { models?: AssistantModelOption[] };
       const models = response.ok && Array.isArray(data.models) ? data.models : [];
-      if (selectedId !== "auto" && models.length > 0 && !models.some((model) => model.id === selectedId)) selectedId = "auto";
+      if (
+        selectedId !== "auto" &&
+        models.length > 0 &&
+        !models.some((model) => model.id === selectedId)
+      )
+        selectedId = "auto";
       set({ models, selectedId, loaded: true, loading: false });
     } catch {
       set({ models: [], selectedId: "auto", loaded: true, loading: false });

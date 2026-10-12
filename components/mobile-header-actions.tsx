@@ -39,7 +39,8 @@ export function MobileHeaderActions() {
             <div
               className={cn(
                 "grid min-w-0",
-                !reduced && "transition-[grid-template-columns] duration-[var(--spring-settle-ms)] ease-[var(--spring-settle)]"
+                !reduced &&
+                  "transition-[grid-template-columns] duration-[var(--spring-settle-ms)] ease-[var(--spring-settle)]",
               )}
               style={{ gridTemplateColumns: inRoom ? "0fr" : "1fr" }}
               aria-hidden={inRoom}
@@ -50,7 +51,7 @@ export function MobileHeaderActions() {
                 className={cn(
                   "min-w-0 overflow-hidden",
                   !reduced && "transition-[opacity,scale] duration-200 ease-[var(--ease-standard)]",
-                  inRoom ? "scale-75 opacity-0" : "scale-100 opacity-100"
+                  inRoom ? "scale-75 opacity-0" : "scale-100 opacity-100",
                 )}
               >
                 <Button
@@ -87,7 +88,7 @@ export function MobileHeaderActions() {
               aria-current={onSchedule ? "page" : undefined}
               className={cn(
                 "h-11 w-11 rounded-full bg-transparent hover:bg-surface-sunken",
-                onSchedule && "bg-accent-soft text-accent"
+                onSchedule && "bg-accent-soft text-accent",
               )}
             >
               <CalendarClock className="h-4 w-4" strokeWidth={1.9} />
@@ -103,7 +104,7 @@ export function MobileHeaderActions() {
               aria-current={onSettings ? "page" : undefined}
               className={cn(
                 "h-11 w-11 rounded-full bg-transparent hover:bg-surface-sunken",
-                onSettings && "bg-accent-soft text-accent"
+                onSettings && "bg-accent-soft text-accent",
               )}
             >
               <Settings className="h-4 w-4" strokeWidth={1.9} />

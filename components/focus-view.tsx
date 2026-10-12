@@ -95,13 +95,7 @@ export function FocusView() {
     }
   }, [session, allItems, items, categories]);
 
-  return (
-    <FocusRoom
-      items={items}
-      active={active}
-      desktop={desktop}
-    />
-  );
+  return <FocusRoom items={items} active={active} desktop={desktop} />;
 }
 
 function FocusRoom({
@@ -132,7 +126,10 @@ function FocusRoom({
   const searchRef = useRef<HTMLInputElement>(null);
   const [celebrating, setCelebrating] = useState(false);
 
-  const ranked = useMemo(() => rankFocusItems(items, new Date(now), categories), [items, now, categories]);
+  const ranked = useMemo(
+    () => rankFocusItems(items, new Date(now), categories),
+    [items, now, categories],
+  );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return ranked;
@@ -149,7 +146,7 @@ function FocusRoom({
       items,
       new Date(now),
       categories,
-      classCountdownWindowMs(classReminderMinutes)
+      classCountdownWindowMs(classReminderMinutes),
     );
     return [...stack.happening, ...stack.startingSoon].filter((i) => i.id !== active?.id)[0];
   }, [items, now, categories, classReminderMinutes, active?.id]);
@@ -158,7 +155,8 @@ function FocusRoom({
   const sessionMs = session ? sessionElapsedMs(session, now) : 0;
   const showSessionTotal = session ? timedItemCount(session, now) > 1 : false;
   const work = active && active.type !== "event";
-  const eventWatch = active?.type === "event" ? eventRemainingLabel(active, new Date(now)) : undefined;
+  const eventWatch =
+    active?.type === "event" ? eventRemainingLabel(active, new Date(now)) : undefined;
 
   useEffect(() => {
     if (!session || !active || !face) return;
@@ -170,7 +168,8 @@ function FocusRoom({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (useUIStore.getState().contextMenu || document.querySelector('[aria-modal="true"]')) return;
+      if (useUIStore.getState().contextMenu || document.querySelector('[aria-modal="true"]'))
+        return;
       const typing = isTypingTarget(e.target);
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
 
@@ -218,12 +217,15 @@ function FocusRoom({
     if (!active || active.type === "event" || celebrating) return;
     haptic("success");
     setCelebrating(true);
-    window.setTimeout(() => {
-      setStatusWithUndo(active, "done");
-      const next = nextAfterComplete(items, active.id, new Date(), categories);
-      selectNext(next?.id ?? null);
-      setCelebrating(false);
-    }, prefersReducedMotion() ? 0 : 280);
+    window.setTimeout(
+      () => {
+        setStatusWithUndo(active, "done");
+        const next = nextAfterComplete(items, active.id, new Date(), categories);
+        selectNext(next?.id ?? null);
+        setCelebrating(false);
+      },
+      prefersReducedMotion() ? 0 : 280,
+    );
   }
 
   const stage = (
@@ -247,7 +249,13 @@ function FocusRoom({
         toggle();
       }}
       onComplete={complete}
-      duration={session?.clock === "countdown" && session.durationMs === 45 * 60_000 ? 45 : session?.clock === "countdown" ? 25 : "stopwatch"}
+      duration={
+        session?.clock === "countdown" && session.durationMs === 45 * 60_000
+          ? 45
+          : session?.clock === "countdown"
+            ? 25
+            : "stopwatch"
+      }
       onDuration={(preset) => {
         haptic("light");
         setDuration(preset);
@@ -264,7 +272,7 @@ function FocusRoom({
       transition={motionTokens.tweenStandard}
       className={cn(
         "focus-room flex min-h-0 flex-1 flex-col",
-        desktop ? "md:min-h-[70vh]" : "items-stretch"
+        desktop ? "md:min-h-[70vh]" : "items-stretch",
       )}
     >
       <button
@@ -304,7 +312,12 @@ function FocusRoom({
         </div>
       )}
 
-      <div className={cn("flex justify-center pb-[max(0.5rem,env(safe-area-inset-bottom))]", desktop && "px-2")}>
+      <div
+        className={cn(
+          "flex justify-center pb-[max(0.5rem,env(safe-area-inset-bottom))]",
+          desktop && "px-2",
+        )}
+      >
         {isSessionLive(session, now) && (
           <button
             type="button"
@@ -396,10 +409,13 @@ function FocusStage({
 
   const due =
     active.type === "event"
-      ? [active.allDay ? "All day" : formatTime(active.at, clock24h), eventWatch].filter(Boolean).join(" · ")
+      ? [active.allDay ? "All day" : formatTime(active.at, clock24h), eventWatch]
+          .filter(Boolean)
+          .join(" · ")
       : relativeDueLabel(active.at, { allDay: active.allDay });
 
-  const display = active.type === "event" ? eventWatch ?? due : face ? formatClockFace(face) : "0:00";
+  const display =
+    active.type === "event" ? (eventWatch ?? due) : face ? formatClockFace(face) : "0:00";
 
   return (
     <div className="flex flex-col items-center gap-6 text-center md:items-start md:text-left">
@@ -447,19 +463,34 @@ function FocusStage({
             {display}
           </button>
           {showSessionTotal && (
-            <p className="text-[13px] tabular-nums text-ink-faint">Session · {formatFocusClock(sessionMs)}</p>
+            <p className="text-[13px] tabular-nums text-ink-faint">
+              Session · {formatFocusClock(sessionMs)}
+            </p>
           )}
           <div className="flex gap-1.5" role="group" aria-label="Timer length">
-            <DurationChip label="∞" pressed={duration === "stopwatch"} onClick={() => onDuration("stopwatch")} />
+            <DurationChip
+              label="∞"
+              pressed={duration === "stopwatch"}
+              onClick={() => onDuration("stopwatch")}
+            />
             <DurationChip label="25" pressed={duration === 25} onClick={() => onDuration(25)} />
             <DurationChip label="45" pressed={duration === 45} onClick={() => onDuration(45)} />
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
             <Button variant="primary" onClick={onToggle} className="min-h-12 rounded-full px-6">
-              {running ? <Pause className="h-4 w-4" strokeWidth={2.25} /> : <Play className="h-4 w-4" strokeWidth={2.25} />}
+              {running ? (
+                <Pause className="h-4 w-4" strokeWidth={2.25} />
+              ) : (
+                <Play className="h-4 w-4" strokeWidth={2.25} />
+              )}
               {running ? "Pause" : "Start"}
             </Button>
-            <Button variant="secondary" onClick={onComplete} disabled={celebrating} className="min-h-12 rounded-full px-6">
+            <Button
+              variant="secondary"
+              onClick={onComplete}
+              disabled={celebrating}
+              className="min-h-12 rounded-full px-6"
+            >
               <Check className="h-4 w-4" strokeWidth={2.5} />
               Done
             </Button>
@@ -482,7 +513,11 @@ function FocusStage({
       </AnimatePresence>
 
       {suggested && (
-        <button type="button" onClick={onAdoptSuggested} className="text-[13px] text-ink-faint hover:text-ink-soft">
+        <button
+          type="button"
+          onClick={onAdoptSuggested}
+          className="text-[13px] text-ink-faint hover:text-ink-soft"
+        >
           Suggested · {itemDisplayTitle(suggested)}
         </button>
       )}
@@ -506,7 +541,9 @@ function DurationChip({
       onClick={onClick}
       className={cn(
         "flex h-9 min-w-9 items-center justify-center rounded-full px-3 text-[13px] font-medium tabular-nums",
-        pressed ? "bg-ink text-surface" : "border border-line bg-surface text-ink-soft hover:text-ink"
+        pressed
+          ? "bg-ink text-surface"
+          : "border border-line bg-surface text-ink-soft hover:text-ink",
       )}
     >
       {label === "∞" ? <InfinityIcon className="h-3.5 w-3.5" strokeWidth={2} /> : label}
@@ -568,7 +605,9 @@ function FocusQueue({
           />
         ))}
         {items.length === 0 && (
-          <li className="px-3 py-8 text-center text-[13px] text-ink-faint">Nothing in this filter.</li>
+          <li className="px-3 py-8 text-center text-[13px] text-ink-faint">
+            Nothing in this filter.
+          </li>
         )}
       </ul>
     </aside>
@@ -598,7 +637,7 @@ function QueueRow({
         onClick={onPick}
         className={cn(
           "flex w-full min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-2 text-left",
-          active ? "bg-accent-soft" : highlighted ? "bg-surface-sunken" : "hover:bg-surface-sunken"
+          active ? "bg-accent-soft" : highlighted ? "bg-surface-sunken" : "hover:bg-surface-sunken",
         )}
       >
         <span
@@ -607,9 +646,15 @@ function QueueRow({
           style={{ background: category?.color ?? "#8a8a94" }}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-medium text-ink">{itemDisplayTitle(item)}</span>
+          <span className="block truncate text-[13.5px] font-medium text-ink">
+            {itemDisplayTitle(item)}
+          </span>
           <span className="block truncate text-[11.5px] text-ink-faint">
-            {doing ? "In progress" : item.type === "event" ? "Event" : relativeDueLabel(item.at, { allDay: item.allDay })}
+            {doing
+              ? "In progress"
+              : item.type === "event"
+                ? "Event"
+                : relativeDueLabel(item.at, { allDay: item.allDay })}
           </span>
         </span>
       </button>

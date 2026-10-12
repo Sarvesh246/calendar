@@ -25,7 +25,10 @@ export function useCourseLabels() {
  * class list changes (it reads the live list without subscribing). Shares the
  * collision handling, so two `ENGR 102`s still read apart in pickers.
  */
-export function classLabel(category: Pick<Category, "id" | "name"> | undefined | null, fallback = "No class"): string {
+export function classLabel(
+  category: Pick<Category, "id" | "name"> | undefined | null,
+  fallback = "No class",
+): string {
   if (!category) return fallback;
   return categoryLabel(useDatebookStore.getState().categories, category);
 }

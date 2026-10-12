@@ -46,24 +46,14 @@ export function SyncNoticeToasts() {
     <div className="flex w-full max-w-[420px] flex-col items-stretch gap-2 self-center">
       <AnimatePresence initial={false}>
         {notices.map((notice) => (
-          <SwipeNotice
-            key={notice.id}
-            notice={notice}
-            onDismiss={() => dismiss(notice.id)}
-          />
+          <SwipeNotice key={notice.id} notice={notice} onDismiss={() => dismiss(notice.id)} />
         ))}
       </AnimatePresence>
     </div>
   );
 }
 
-function SwipeNotice({
-  notice,
-  onDismiss,
-}: {
-  notice: SyncNotice;
-  onDismiss: () => void;
-}) {
+function SwipeNotice({ notice, onDismiss }: { notice: SyncNotice; onDismiss: () => void }) {
   const reduced = prefersReducedMotion();
   const cardRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
@@ -199,7 +189,7 @@ function SwipeNotice({
       >
         <div
           className={cn(
-            "sync-notice-card relative flex w-full items-start gap-2 overflow-hidden pl-3 pr-1.5 py-2"
+            "sync-notice-card relative flex w-full items-start gap-2 overflow-hidden pl-3 pr-1.5 py-2",
           )}
         >
           <div

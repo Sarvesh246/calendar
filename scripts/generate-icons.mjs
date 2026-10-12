@@ -42,7 +42,11 @@ async function exportMaskable(size, outName) {
 /** Branded launch splash: dark fill + centered icon. */
 async function exportSplash(width, height, outName) {
   const iconSize = Math.round(Math.min(width, height) * 0.22);
-  const icon = await sharp(svg).resize(iconSize, iconSize).flatten({ background: BG }).png().toBuffer();
+  const icon = await sharp(svg)
+    .resize(iconSize, iconSize)
+    .flatten({ background: BG })
+    .png()
+    .toBuffer();
   const out = path.join(PUBLIC, outName);
   await sharp({
     create: { width, height, channels: 3, background: BG },

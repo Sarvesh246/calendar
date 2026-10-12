@@ -39,10 +39,7 @@ export function MobileQuickActions({
   // only thing you are plausibly here to do.
   if (done) {
     return (
-      <ActionButton
-        label="Reopen"
-        onPress={() => changeMobileStatus(item, "todo")}
-      >
+      <ActionButton label="Reopen" onPress={() => changeMobileStatus(item, "todo")}>
         <Undo2 className="h-4 w-4" strokeWidth={2} aria-hidden />
       </ActionButton>
     );
@@ -98,7 +95,7 @@ function ActionButton({
         "press-pop flex h-11 w-10 shrink-0 items-center justify-center rounded-lg",
         "transition-[color,background-color,scale] duration-[var(--motion-standard)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active ? "bg-accent-soft text-accent" : "text-ink-soft active:bg-surface-sunken"
+        active ? "bg-accent-soft text-accent" : "text-ink-soft active:bg-surface-sunken",
       )}
     >
       {children}

@@ -63,7 +63,10 @@ export function DateJump({
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-ink-faint transition-colors duration-[var(--motion-standard)] group-hover:text-ink-soft"
         >
           <ChevronDown
-            className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", open && "rotate-180")}
+            className={cn(
+              "h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]",
+              open && "rotate-180",
+            )}
             strokeWidth={2.25}
           />
         </span>
@@ -150,7 +153,11 @@ function JumpPanel({
       data-no-shortcuts
       initial={{ opacity: 0, scale: 0.96, y: -4 }}
       animate={active ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
-      transition={active ? motionTokens.springSnappy : { duration: motionTokens.exit, ease: motionTokens.easeIn }}
+      transition={
+        active
+          ? motionTokens.springSnappy
+          : { duration: motionTokens.exit, ease: motionTokens.easeIn }
+      }
       style={{ transformOrigin: "top left", pointerEvents: active ? "auto" : "none" }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -167,7 +174,10 @@ function JumpPanel({
           if (target) go(target.date, target.granularity);
         }}
       >
-        <label htmlFor="date-jump-input" className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+        <label
+          htmlFor="date-jump-input"
+          className="text-[11px] font-medium uppercase tracking-wider text-ink-faint"
+        >
           Go to
         </label>
         <div className="focus-within-ring mt-1 flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 transition-[border-color,box-shadow] duration-[var(--motion-standard)] focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
@@ -242,12 +252,17 @@ function JumpPanel({
               aria-label={format(new Date(year, i, 1), "MMMM yyyy")}
               className={cn(
                 "relative h-9 rounded-md text-[12.5px] font-medium transition-colors duration-[var(--motion-micro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                current ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-surface-sunken hover:text-ink"
+                current
+                  ? "bg-accent text-accent-ink"
+                  : "text-ink-soft hover:bg-surface-sunken hover:text-ink",
               )}
             >
               {label}
               {thisMonth && !current && (
-                <span aria-hidden className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
+                <span
+                  aria-hidden
+                  className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent"
+                />
               )}
             </button>
           );

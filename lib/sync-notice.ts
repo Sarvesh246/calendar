@@ -60,9 +60,7 @@ function stamp(iso: string | undefined): string {
  * a conflict.
  */
 export function itemNoticeFingerprint(item: Item): string {
-  const reminders = (item.reminders ?? [])
-    .map((r) => r.offsetMinutes)
-    .sort((a, b) => a - b);
+  const reminders = (item.reminders ?? []).map((r) => r.offsetMinutes).sort((a, b) => a - b);
   return JSON.stringify({
     title: item.title,
     at: stamp(item.at),
@@ -80,7 +78,7 @@ export function itemNoticeFingerprint(item: Item): string {
 
 export function isOwnWriteEcho(
   remoteUpdatedAt: string | undefined,
-  lastLocalUpdatedAt: string | undefined
+  lastLocalUpdatedAt: string | undefined,
 ): boolean {
   if (!remoteUpdatedAt || !lastLocalUpdatedAt) return false;
   return time(remoteUpdatedAt) <= time(lastLocalUpdatedAt) + OWN_WRITE_SKEW_MS;
@@ -111,7 +109,7 @@ export function decideRemoteItemNotice(input: {
 function upsertOne(
   current: SyncNotice[],
   draft: { itemId: string; title: string; kind: SyncNoticeKind },
-  makeId: () => string
+  makeId: () => string,
 ): SyncNotice[] {
   const idx = current.findIndex((n) => n.itemId === draft.itemId);
   if (idx >= 0) {
@@ -140,7 +138,7 @@ function upsertOne(
 export function mergeNoticeBatch(
   current: SyncNotice[],
   drafts: NoticeDraft[],
-  makeId: () => string = nanoid
+  makeId: () => string = nanoid,
 ): SyncNotice[] {
   if (drafts.length === 0) return current;
 
@@ -156,7 +154,7 @@ export function mergeNoticeBatch(
     next = upsertOne(
       next,
       { itemId: BULK_ITEM_ID, title: `${remotes.length} items`, kind: "bulk" },
-      makeId
+      makeId,
     );
     return next.slice(0, MAX_STACKED_NOTICES);
   }

@@ -85,7 +85,13 @@ const HOW_TO =
 export function answerHelpQuestion(q: string): AssistantResponse | undefined {
   if (!HOW_TO.test(q) && !/\bsettings?\b|\bin the app\b|\bin datebook\b/.test(q)) return undefined;
   // "can I turn in late work" / "can I use AI" are course questions, not app questions.
-  if (/\b(?:late|extension|ai|chat ?gpt|office hours|professor|exam|syllabus says|allowed)\b/.test(q) && !/\bsyllabus\b.*\b(?:import|upload)\b/.test(q)) return undefined;
+  if (
+    /\b(?:late|extension|ai|chat ?gpt|office hours|professor|exam|syllabus says|allowed)\b/.test(
+      q,
+    ) &&
+    !/\bsyllabus\b.*\b(?:import|upload)\b/.test(q)
+  )
+    return undefined;
   const hit = HELP.find((h) => h.re.test(q));
   return hit ? { text: hit.text } : undefined;
 }

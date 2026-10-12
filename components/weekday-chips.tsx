@@ -27,7 +27,9 @@ export function WeekdayChips({
             }}
             className={cn(
               "flex h-9 min-w-0 items-center justify-center rounded-full px-0 text-[11px] font-medium leading-none tracking-tight transition-colors",
-              on ? "bg-accent text-accent-ink" : "border border-line bg-surface text-ink-soft hover:text-ink"
+              on
+                ? "bg-accent text-accent-ink"
+                : "border border-line bg-surface text-ink-soft hover:text-ink",
             )}
           >
             {weekdayShort(d)}

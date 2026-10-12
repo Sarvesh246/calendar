@@ -45,7 +45,7 @@ describe("summariseFilters", () => {
   it("spells the classes out for screen readers", () => {
     const s = summariseFilters(cats, ["a", "b"], true);
     expect(s.announcement).toBe(
-      "Filtered by 2 classes: COMU 010, EXEX 101, and completed items hidden"
+      "Filtered by 2 classes: COMU 010, EXEX 101, and completed items hidden",
     );
   });
 });
@@ -55,7 +55,7 @@ describe("summariseFilters with a saved view", () => {
     const s = summariseFilters(cats, ["a", "b"], true, "Deep work");
     expect(s.label).toBe("Deep work · 2 classes · Incomplete");
     expect(s.announcement).toBe(
-      "Filtered by the Deep work view, and 2 classes: COMU 010, EXEX 101, and completed items hidden"
+      "Filtered by the Deep work view, and 2 classes: COMU 010, EXEX 101, and completed items hidden",
     );
   });
 

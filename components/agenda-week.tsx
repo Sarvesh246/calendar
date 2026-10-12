@@ -11,14 +11,20 @@ import { cn } from "@/lib/utils";
  * legend-backed dot row on a phone, where seven columns leave no room for text.
  * Tapping a day opens it on the Calendar.
  */
-export function AgendaWeek({ days, onOpenDay }: { days: WeekDaySummary[]; onOpenDay: (day: WeekDaySummary) => void }) {
+export function AgendaWeek({
+  days,
+  onOpenDay,
+}: {
+  days: WeekDaySummary[];
+  onOpenDay: (day: WeekDaySummary) => void;
+}) {
   const totals = days.reduce(
     (acc, d) => ({
       due: acc.due + d.due,
       overdue: acc.overdue + d.overdue,
       scheduled: acc.scheduled + d.classes + d.events,
     }),
-    { due: 0, overdue: 0, scheduled: 0 }
+    { due: 0, overdue: 0, scheduled: 0 },
   );
   const summary = [
     totals.overdue ? `${totals.overdue} overdue` : null,
@@ -31,7 +37,9 @@ export function AgendaWeek({ days, onOpenDay }: { days: WeekDaySummary[]; onOpen
   return (
     <section aria-label="This week" className="@container">
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">This week</h2>
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
+          This week
+        </h2>
         <p className="hidden text-[12px] tabular-nums text-ink-faint @2xl:block">{summary}</p>
         <WeekLegend />
       </div>
@@ -65,14 +73,14 @@ function WeekDayButton({ day, onOpen }: { day: WeekDaySummary; onOpen: () => voi
         "transition-colors duration-[var(--motion-micro)]",
         day.isToday
           ? "border-accent/35 bg-accent-soft"
-          : "border-line/70 bg-surface hover:border-line-strong hover:bg-surface-sunken/40"
+          : "border-line/70 bg-surface hover:border-line-strong hover:bg-surface-sunken/40",
       )}
     >
       <span className="flex flex-col items-center leading-none @2xl:flex-row @2xl:items-baseline @2xl:gap-1.5">
         <span
           className={cn(
             "text-[10.5px] font-medium uppercase tracking-[0.06em] @2xl:text-[11px]",
-            day.isToday ? "text-accent" : "text-ink-faint"
+            day.isToday ? "text-accent" : "text-ink-faint",
           )}
         >
           <span className="@2xl:hidden">{format(day.date, "EEEEE")}</span>
@@ -81,7 +89,7 @@ function WeekDayButton({ day, onOpen }: { day: WeekDaySummary; onOpen: () => voi
         <span
           className={cn(
             "mt-1 text-[15px] font-semibold tabular-nums @2xl:mt-0",
-            day.isToday ? "text-ink" : day.isPast ? "text-ink-faint" : "text-ink"
+            day.isToday ? "text-ink" : day.isPast ? "text-ink-faint" : "text-ink",
           )}
         >
           {format(day.date, "d")}

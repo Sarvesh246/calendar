@@ -2,7 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { AlignLeft, Bell, CalendarClock, Check, ChevronDown, ChevronUp, Copy, ExternalLink, MapPin, Repeat, Shapes, Tag, Timer, Trash2, Type, X } from "lucide-react";
+import {
+  AlignLeft,
+  Bell,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  MapPin,
+  Repeat,
+  Shapes,
+  Tag,
+  Timer,
+  Trash2,
+  Type,
+  X,
+} from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 import { summarizeItemWhen } from "@/lib/item-summary";
 import { CHIP_TONE, TYPE_NAME } from "@/components/item-summary-header";
@@ -71,13 +88,7 @@ const FIELD =
   "hover:border-line-strong focus:border-accent focus:bg-surface-elevated focus:outline-none " +
   "focus:shadow-[0_0_0_3px_var(--accent-soft)]";
 
-function PlaceReminder({
-  item,
-  patch,
-}: {
-  item: Item;
-  patch: (next: Partial<Item>) => void;
-}) {
+function PlaceReminder({ item, patch }: { item: Item; patch: (next: Partial<Item>) => void }) {
   const [name, setName] = useState("");
   const native = isNativeWrapper();
 
@@ -238,7 +249,12 @@ export function ItemEditor({
       ? current.filter((r) => r.id !== hit.id)
       : [
           ...current,
-          { id: nanoid(), itemId: item.id, offsetMinutes: preset.offsetMinutes, label: preset.label },
+          {
+            id: nanoid(),
+            itemId: item.id,
+            offsetMinutes: preset.offsetMinutes,
+            label: preset.label,
+          },
         ];
     patch({ reminders: next.length ? next : undefined });
   };
@@ -273,7 +289,9 @@ export function ItemEditor({
       aria-label="Title"
       className={cn(
         "field-inline -mx-2 block w-[calc(100%+1rem)] resize-none bg-transparent px-2 py-1 text-[22px] font-semibold leading-tight tracking-tight text-ink [field-sizing:content]",
-        item.status === "done" && item.type !== "event" && "text-ink-soft line-through decoration-ink-faint"
+        item.status === "done" &&
+          item.type !== "event" &&
+          "text-ink-soft line-through decoration-ink-faint",
       )}
     />
   ) : (
@@ -311,11 +329,21 @@ export function ItemEditor({
   );
 
   const whenBlock = (
-    <DetailRow icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />} label={isEvent ? "When" : "Due"}>
+    <DetailRow
+      icon={<CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      label={isEvent ? "When" : "Due"}
+    >
       {/* The inspector already says this in words at the top. */}
       {!inspector && (
         <p className="mb-1.5 text-ink-faint">
-          {Number.isNaN(start.getTime()) ? "" : start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+          {Number.isNaN(start.getTime())
+            ? ""
+            : start.toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
           <span> · </span>
           {timeLabel}
         </p>
@@ -380,7 +408,11 @@ export function ItemEditor({
         value={item.type}
         onChange={(e) => {
           const type = e.target.value as ItemType;
-          patch(type === "event" ? { type, status: undefined } : { type, status: item.status ?? "todo" });
+          patch(
+            type === "event"
+              ? { type, status: undefined }
+              : { type, status: item.status ?? "todo" },
+          );
         }}
         className={FIELD}
       >
@@ -435,7 +467,7 @@ export function ItemEditor({
                 "transition-[background-color,border-color,color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
                 active
                   ? "border-accent/40 bg-accent-soft text-ink"
-                  : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
+                  : "border-line text-ink-soft hover:border-line-strong hover:text-ink",
               )}
             >
               {rp.label}
@@ -526,11 +558,7 @@ export function ItemEditor({
       {item.repeat?.freq === "weekly" && (
         <div className="mt-2">
           <WeekdayChips
-            value={
-              item.repeat.byDay?.length
-                ? item.repeat.byDay
-                : [new Date(item.at).getDay()]
-            }
+            value={item.repeat.byDay?.length ? item.repeat.byDay : [new Date(item.at).getDay()]}
             onChange={(days) => {
               if (days.length === 0) return;
               setItemRepeat(item.id, { ...item.repeat!, freq: "weekly", byDay: days });
@@ -545,7 +573,10 @@ export function ItemEditor({
   );
 
   const detailsBlock = (
-    <DetailRow icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />} label={inspector ? "Notes" : "Details"}>
+    <DetailRow
+      icon={<AlignLeft className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      label={inspector ? "Notes" : "Details"}
+    >
       <textarea
         value={description}
         rows={inspector ? 4 : 3}
@@ -580,7 +611,11 @@ export function ItemEditor({
   // form. The pill is a real <select> underneath, so changing class stays one tap.
   const classPill = (
     <label className="relative inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-line bg-surface-sunken py-1 pl-2.5 pr-2 text-[12.5px] font-semibold text-ink transition-colors duration-[var(--motion-micro)] focus-within:ring-2 focus-within:ring-accent hover:border-line-strong">
-      <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
+      <span
+        aria-hidden
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ background: category?.color ?? "#8a8a94" }}
+      />
       <span className="min-w-0 truncate">{classLabel(category)}</span>
       <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2.25} />
       <select
@@ -617,12 +652,20 @@ export function ItemEditor({
           {summary.date && summary.time ? " · " : ""}
           {summary.time}
         </p>
-        <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", CHIP_TONE[summary.chip.tone])}>
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-[12px] font-semibold",
+            CHIP_TONE[summary.chip.tone],
+          )}
+        >
           {summary.chip.label}
         </span>
       </div>
       {!isEvent && (
-        <StatusSegmented value={item.status ?? "todo"} onChange={(status) => setItemStatus(item.id, status)} />
+        <StatusSegmented
+          value={item.status ?? "todo"}
+          onChange={(status) => setItemStatus(item.id, status)}
+        />
       )}
       {linkBlock}
     </div>
@@ -641,7 +684,10 @@ export function ItemEditor({
       Reminders, repeat &amp; type
       <ChevronDown
         aria-hidden
-        className={cn("h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", moreOpen && "rotate-180")}
+        className={cn(
+          "h-4 w-4 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]",
+          moreOpen && "rotate-180",
+        )}
         strokeWidth={2}
       />
     </button>
@@ -707,14 +753,17 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
   const target = item.workFor ? items.find((i) => i.id === item.workFor) : undefined;
   const sessions = useMemo(
     () => (item.type !== "event" ? workSessionsFor(items, item.id) : []),
-    [items, item.id, item.type]
+    [items, item.id, item.type],
   );
   const linkClass =
     "flex min-h-9 w-full items-center justify-between gap-2 rounded-md border border-line px-2.5 py-1.5 text-left text-[12.5px] text-ink transition-colors hover:border-line-strong hover:bg-surface-sunken/60";
 
   if (item.workFor) {
     return (
-      <DetailRow icon={<Timer className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Planned work for">
+      <DetailRow
+        icon={<Timer className="h-3.5 w-3.5" strokeWidth={1.75} />}
+        label="Planned work for"
+      >
         {target ? (
           <button type="button" className={linkClass} onClick={() => openInspector(target.id)}>
             <span className="min-w-0 truncate font-medium">{target.title}</span>
@@ -723,7 +772,9 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
             </span>
           </button>
         ) : (
-          <p className="text-ink-faint">The item this time was set aside for is no longer on your calendar.</p>
+          <p className="text-ink-faint">
+            The item this time was set aside for is no longer on your calendar.
+          </p>
         )}
       </DetailRow>
     );
@@ -736,7 +787,12 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
     >
       <div className="flex flex-col gap-1">
         {sessions.slice(0, 4).map((s) => (
-          <button key={s.id} type="button" className={linkClass} onClick={() => openInspector(s.id)}>
+          <button
+            key={s.id}
+            type="button"
+            className={linkClass}
+            onClick={() => openInspector(s.id)}
+          >
             <span>{format(new Date(s.at), "EEE, MMM d")}</span>
             <span className="shrink-0 tabular-nums text-ink-faint">
               {formatTime(s.at, clock24h)}
@@ -744,7 +800,9 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
             </span>
           </button>
         ))}
-        {sessions.length > 4 && <p className="text-[11.5px] text-ink-faint">and {sessions.length - 4} more</p>}
+        {sessions.length > 4 && (
+          <p className="text-[11.5px] text-ink-faint">and {sessions.length - 4} more</p>
+        )}
       </div>
     </DetailRow>
   );
@@ -754,13 +812,7 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
  * A real switch for "All day". The raw `<input type="checkbox">` here was the
  * only unstyled control in the app and gave a ~13px target on touch.
  */
-function AllDayToggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function AllDayToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"
@@ -776,7 +828,7 @@ function AllDayToggle({
         className={cn(
           "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border",
           "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
-          checked ? "border-accent bg-accent" : "border-line-strong bg-surface"
+          checked ? "border-accent bg-accent" : "border-line-strong bg-surface",
         )}
       >
         <motion.span
@@ -808,7 +860,11 @@ function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void
   }, [choosing]);
 
   return (
-    <motion.div layout="position" transition={motionTokens.springLayout} className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+    <motion.div
+      layout="position"
+      transition={motionTokens.springLayout}
+      className="flex flex-wrap items-center gap-2 border-t border-line pt-3"
+    >
       {choosing && item.repeatId ? (
         <>
           <span className="text-[12.5px] font-medium text-warn">Delete…</span>

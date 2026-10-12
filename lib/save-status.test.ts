@@ -95,7 +95,9 @@ describe("isStatusOnlyItemsChange", () => {
 
   it("rejects a title edit even when status also moves", () => {
     const before = [item({ id: "a", status: "todo", title: "Old" })];
-    const after = [item({ id: "a", status: "done", title: "New", updatedAt: "2026-09-15T18:00:00.000Z" })];
+    const after = [
+      item({ id: "a", status: "done", title: "New", updatedAt: "2026-09-15T18:00:00.000Z" }),
+    ];
     expect(isStatusOnlyItemsChange(before, after)).toBe(false);
   });
 

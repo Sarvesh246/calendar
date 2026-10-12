@@ -7,8 +7,7 @@ import { haptic } from "./haptic";
 export const HOUR_HEIGHT = 52;
 
 export type DropTarget =
-  | { kind: "slot"; dayKey: string; minute: number }
-  | { kind: "day"; dayKey: string };
+  { kind: "slot"; dayKey: string; minute: number } | { kind: "day"; dayKey: string };
 
 export type DragTone = "move" | "create" | "plan" | "due";
 
@@ -93,9 +92,12 @@ function hitTest(x: number, y: number, accept: DragOptions["accept"]): DropTarge
 }
 
 function markTarget(dayKey: string | null) {
-  for (const el of document.querySelectorAll("[data-drop-active]")) el.removeAttribute("data-drop-active");
+  for (const el of document.querySelectorAll("[data-drop-active]"))
+    el.removeAttribute("data-drop-active");
   if (!dayKey) return;
-  for (const el of document.querySelectorAll(`[data-drop-day="${dayKey}"], [data-drop-head="${dayKey}"]`)) {
+  for (const el of document.querySelectorAll(
+    `[data-drop-day="${dayKey}"], [data-drop-head="${dayKey}"]`,
+  )) {
     el.setAttribute("data-drop-active", "");
   }
 }
@@ -140,7 +142,7 @@ function edgeScroll(x: number, y: number): boolean {
  */
 export function beginCalendarDrag(
   e: { clientX: number; clientY: number; pointerId: number; button: number },
-  opts: DragOptions
+  opts: DragOptions,
 ) {
   if (e.button !== 0) return;
   cancelActive?.();
@@ -163,7 +165,10 @@ export function beginCalendarDrag(
       if (lastKey && key) haptic("light");
       lastKey = key;
       markTarget(target?.dayKey ?? null);
-      useCalendarDrag.setState({ preview: resolved?.preview ?? null, label: resolved?.label ?? null });
+      useCalendarDrag.setState({
+        preview: resolved?.preview ?? null,
+        label: resolved?.label ?? null,
+      });
     }
     useCalendarDrag.setState({ x: pointer.x, y: pointer.y });
   };

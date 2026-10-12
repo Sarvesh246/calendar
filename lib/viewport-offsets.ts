@@ -211,7 +211,7 @@ export function resolveWindowHeight(m: ViewportMetrics): number {
 
 function resolveNeedsRelayout(
   m: ViewportMetrics,
-  state: { pinchZoomed: boolean; keyboardBase: number | null }
+  state: { pinchZoomed: boolean; keyboardBase: number | null },
 ): boolean {
   if (!m.phoneChrome || m.typing || state.keyboardBase !== null || state.pinchZoomed) {
     return false;

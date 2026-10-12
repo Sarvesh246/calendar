@@ -54,7 +54,9 @@ export function DismissibleSnack({
           leaving.current = true;
           const v = Math.max(0, info.velocity.y);
           void animate(opacity, 0, { duration: 0.16 });
-          void animate(y, y.get() + 90, { ...releaseSpring(v, 1, 0.3), restDelta: 2 }).then(onDismiss);
+          void animate(y, y.get() + 90, { ...releaseSpring(v, 1, 0.3), restDelta: 2 }).then(
+            onDismiss,
+          );
           return;
         }
         void animate(y, 0, releaseSpring(info.velocity.y, 0.8, 0.32));

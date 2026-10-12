@@ -1,9 +1,5 @@
 import { clearDraft, readJsonDraft, writeJsonDraft } from "./drafts";
-import {
-  focusQueue,
-  isDueOnDay,
-  isOverdueAt,
-} from "./date-utils";
+import { focusQueue, isDueOnDay, isOverdueAt } from "./date-utils";
 import type { Category, Item } from "./types";
 
 export const FOCUS_SESSION_DRAFT_KEY = "focus-session" as const;
@@ -133,7 +129,10 @@ function lastIndexFor(segments: FocusSegment[], itemId: string | null): number {
   return -1;
 }
 
-function patchActive(session: FocusSession, fn: (seg: FocusSegment) => FocusSegment): FocusSegment[] {
+function patchActive(
+  session: FocusSession,
+  fn: (seg: FocusSegment) => FocusSegment,
+): FocusSegment[] {
   const idx = lastIndexFor(session.segments, session.activeItemId);
   if (idx < 0) return session.segments;
   return session.segments.map((seg, i) => (i === idx ? fn(seg) : seg));
@@ -181,11 +180,17 @@ export function setClockMode(
   session: FocusSession,
   mode: FocusClock,
   durationMs: number | null,
-  now: number
+  now: number,
 ): FocusSession {
   const running = isRunning(session);
   if (mode === "stopwatch") {
-    return { ...session, clock: "stopwatch", durationMs: null, targetEndsAt: null, overtimeNotified: false };
+    return {
+      ...session,
+      clock: "stopwatch",
+      durationMs: null,
+      targetEndsAt: null,
+      overtimeNotified: false,
+    };
   }
   const duration = durationMs ?? COUNTDOWN_MS[25];
   return {
@@ -207,11 +212,19 @@ export function switchActive(session: FocusSession, itemId: string, now: number)
   return { ...paused, activeItemId: itemId, segments: [...paused.segments, nextSeg] };
 }
 
-export function closeActiveAndSelect(session: FocusSession, nextItemId: string | null, now: number): FocusSession {
+export function closeActiveAndSelect(
+  session: FocusSession,
+  nextItemId: string | null,
+  now: number,
+): FocusSession {
   const paused = pauseClock(session, now);
   if (!nextItemId) return { ...paused, activeItemId: null };
   if (paused.activeItemId === nextItemId) return paused;
-  return { ...paused, activeItemId: nextItemId, segments: [...paused.segments, idleSegment(nextItemId, now)] };
+  return {
+    ...paused,
+    activeItemId: nextItemId,
+    segments: [...paused.segments, idleSegment(nextItemId, now)],
+  };
 }
 
 export function markOvertimeNotified(session: FocusSession): FocusSession {
@@ -221,7 +234,7 @@ export function markOvertimeNotified(session: FocusSession): FocusSession {
 export function defaultFocusItem(
   items: Item[],
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
 ): Item | undefined {
   const open = items.filter((i) => i.status !== "done");
   const doing = open.find((i) => i.type !== "event" && i.status === "doing");
@@ -232,13 +245,15 @@ export function defaultFocusItem(
 export function rankFocusItems(
   items: Item[],
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
 ): Item[] {
   const open = items.filter((i) => i.status !== "done");
   const suggested = focusQueue(open, now, categories);
   const doing = open.filter((i) => i.type !== "event" && i.status === "doing");
   const overdue = open.filter((i) => isOverdueAt(i, now) && !isDueOnDay(i, now));
-  const dueToday = open.filter((i) => i.type !== "event" && isDueOnDay(i, now) && i.status !== "done");
+  const dueToday = open.filter(
+    (i) => i.type !== "event" && isDueOnDay(i, now) && i.status !== "done",
+  );
   const rest = [...open].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const seen = new Set<string>();
   const out: Item[] = [];
@@ -261,12 +276,12 @@ export function nextAfterComplete(
   items: Item[],
   completedId: string,
   now = new Date(),
-  categories: Pick<Category, "id" | "name">[] = []
+  categories: Pick<Category, "id" | "name">[] = [],
 ): Item | undefined {
   return defaultFocusItem(
     items.filter((i) => i.id !== completedId),
     now,
-    categories
+    categories,
   );
 }
 
@@ -276,7 +291,8 @@ function isSegment(value: unknown): value is FocusSegment {
   if (typeof v.itemId !== "string" || !v.itemId) return false;
   if (typeof v.startedAt !== "number" || !Number.isFinite(v.startedAt)) return false;
   if (typeof v.accumulatedMs !== "number" || !Number.isFinite(v.accumulatedMs)) return false;
-  if (v.pausedAt != null && (typeof v.pausedAt !== "number" || !Number.isFinite(v.pausedAt))) return false;
+  if (v.pausedAt != null && (typeof v.pausedAt !== "number" || !Number.isFinite(v.pausedAt)))
+    return false;
   return true;
 }
 
@@ -284,8 +300,13 @@ export function isFocusSession(value: unknown): value is FocusSession {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   if (v.clock !== "stopwatch" && v.clock !== "countdown") return false;
-  if (v.durationMs != null && (typeof v.durationMs !== "number" || !Number.isFinite(v.durationMs))) return false;
-  if (v.targetEndsAt != null && (typeof v.targetEndsAt !== "number" || !Number.isFinite(v.targetEndsAt))) return false;
+  if (v.durationMs != null && (typeof v.durationMs !== "number" || !Number.isFinite(v.durationMs)))
+    return false;
+  if (
+    v.targetEndsAt != null &&
+    (typeof v.targetEndsAt !== "number" || !Number.isFinite(v.targetEndsAt))
+  )
+    return false;
   if (v.activeItemId != null && typeof v.activeItemId !== "string") return false;
   if (!Array.isArray(v.segments) || !v.segments.every(isSegment)) return false;
   if (v.overtimeNotified != null && typeof v.overtimeNotified !== "boolean") return false;

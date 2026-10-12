@@ -64,12 +64,20 @@ describe("isOverdueOrJustFinished", () => {
   });
 
   it("never keeps something that was not overdue", () => {
-    const future = base({ id: "y", at: new Date(Date.now() + 3_600_000).toISOString(), status: "done" });
+    const future = base({
+      id: "y",
+      at: new Date(Date.now() + 3_600_000).toISOString(),
+      status: "done",
+    });
     expect(isOverdueOrJustFinished(future, new Date(), new Set(["y"]))).toBe(false);
   });
 
   it("feeds leftoverOverdue", () => {
-    const done = base({ id: "z", at: new Date(Date.now() - 2 * 86_400_000).toISOString(), status: "done" });
+    const done = base({
+      id: "z",
+      at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      status: "done",
+    });
     expect(leftoverOverdue([done], new Date(), new Set(["z"]))).toHaveLength(1);
     expect(leftoverOverdue([done], new Date())).toHaveLength(0);
   });
@@ -149,8 +157,16 @@ describe("nextOpenAssignment", () => {
   it("skips events and completed work, then returns the soonest due", () => {
     const later = base({ id: "2", at: new Date("2026-09-02T12:00:00").toISOString() });
     const sooner = base({ id: "3", at: new Date("2026-09-01T12:00:00").toISOString() });
-    const done = base({ id: "4", status: "done", at: new Date("2026-08-01T12:00:00").toISOString() });
-    const event = base({ id: "5", type: "event", at: new Date("2026-08-15T12:00:00").toISOString() });
+    const done = base({
+      id: "4",
+      status: "done",
+      at: new Date("2026-08-01T12:00:00").toISOString(),
+    });
+    const event = base({
+      id: "5",
+      type: "event",
+      at: new Date("2026-08-15T12:00:00").toISOString(),
+    });
     const now = new Date("2026-08-20T12:00:00");
     expect(nextOpenAssignment([later, sooner, done, event], now)?.id).toBe("3");
   });
@@ -191,7 +207,9 @@ describe("openWorkDueOnDay and leftoverOverdue", () => {
       at: new Date(2026, 8, 10, 8, 0, 0).toISOString(),
       status: "done",
     });
-    expect(openWorkDueOnDay([dueToday, yesterday, done], today).map((i) => i.id)).toEqual(["today"]);
+    expect(openWorkDueOnDay([dueToday, yesterday, done], today).map((i) => i.id)).toEqual([
+      "today",
+    ]);
     expect(leftoverOverdue([dueToday, yesterday, done], today).map((i) => i.id)).toEqual(["yest"]);
   });
 });
@@ -199,9 +217,21 @@ describe("openWorkDueOnDay and leftoverOverdue", () => {
 describe("workDueOnDay", () => {
   it("keeps finished work on its day, after what is still open", () => {
     const day = new Date(2026, 8, 10, 12, 0, 0);
-    const done = base({ id: "done", at: new Date(2026, 8, 10, 8, 0, 0).toISOString(), status: "done" });
-    const open = base({ id: "open", at: new Date(2026, 8, 10, 20, 0, 0).toISOString(), status: "todo" });
-    const other = base({ id: "other", at: new Date(2026, 8, 11, 8, 0, 0).toISOString(), status: "todo" });
+    const done = base({
+      id: "done",
+      at: new Date(2026, 8, 10, 8, 0, 0).toISOString(),
+      status: "done",
+    });
+    const open = base({
+      id: "open",
+      at: new Date(2026, 8, 10, 20, 0, 0).toISOString(),
+      status: "todo",
+    });
+    const other = base({
+      id: "other",
+      at: new Date(2026, 8, 11, 8, 0, 0).toISOString(),
+      status: "todo",
+    });
     expect(workDueOnDay([done, open, other], day).map((i) => i.id)).toEqual(["open", "done"]);
   });
 });
@@ -261,8 +291,8 @@ describe("eventRemainingLabel", () => {
           at: "2026-09-09T13:00:00",
           endAt: "2026-09-09T14:00:00",
         }),
-        now
-      )
+        now,
+      ),
     ).toBeUndefined();
     expect(
       eventRemainingLabel(
@@ -271,8 +301,8 @@ describe("eventRemainingLabel", () => {
           at: "2026-09-09T10:00:00",
           endAt: "2026-09-09T11:00:00",
         }),
-        now
-      )
+        now,
+      ),
     ).toBeUndefined();
     expect(eventRemainingLabel(base({ type: "assignment" }), now)).toBeUndefined();
   });
@@ -285,8 +315,8 @@ describe("eventRemainingLabel", () => {
           at: "2026-09-09T11:48:00",
           endAt: "2026-09-09T12:12:00",
         }),
-        now
-      )
+        now,
+      ),
     ).toBe("12 min left");
   });
 
@@ -299,8 +329,8 @@ describe("eventRemainingLabel", () => {
           at: "2026-09-08T09:00:00",
           endAt: "2026-09-10T17:00:00",
         }),
-        now
-      )
+        now,
+      ),
     ).toBe("5 hr left");
   });
 });
@@ -325,9 +355,9 @@ describe("isEventEnded", () => {
       endAt: "2026-09-11T17:00:00",
     });
     expect(isEventEnded(work, new Date("2026-09-10T17:20:00"))).toBe(false);
-    expect(isEventEnded(work, new Date("2026-09-10T17:20:00"), new Date("2026-09-11T00:00:00"))).toBe(
-      false
-    );
+    expect(
+      isEventEnded(work, new Date("2026-09-10T17:20:00"), new Date("2026-09-11T00:00:00")),
+    ).toBe(false);
   });
 
   it("marks yesterday's event as ended when viewing that day", () => {
@@ -336,9 +366,9 @@ describe("isEventEnded", () => {
       at: "2026-09-09T09:00:00",
       endAt: "2026-09-09T17:00:00",
     });
-    expect(isEventEnded(work, new Date("2026-09-10T10:00:00"), new Date("2026-09-09T00:00:00"))).toBe(
-      true
-    );
+    expect(
+      isEventEnded(work, new Date("2026-09-10T10:00:00"), new Date("2026-09-09T00:00:00")),
+    ).toBe(true);
   });
 
   it("uses today's session for a multi-day 9-to-5", () => {
@@ -525,7 +555,10 @@ describe("class countdown and happening-now stack", () => {
       { id: "pols", name: "POLS 207" },
       { id: "personal", name: "Personal" },
     ];
-    expect(happeningNow([fair, lecture], now, cats).map((i) => i.id)).toEqual(["class-live", "fair"]);
+    expect(happeningNow([fair, lecture], now, cats).map((i) => i.id)).toEqual([
+      "class-live",
+      "fair",
+    ]);
   });
 
   it("labels a countdown in minutes or seconds", () => {

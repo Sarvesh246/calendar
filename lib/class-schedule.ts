@@ -28,9 +28,7 @@ export function weekdayShort(d: number): string {
 }
 
 export function weekdayLong(d: number): string {
-  return (
-    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d] ?? ""
-  );
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d] ?? "";
 }
 
 export function clockInput(hour: number, minute: number): string {
@@ -40,7 +38,7 @@ export function clockInput(hour: number, minute: number): string {
 /** Pull MWF / TTh / Mon, Wed, Fri out of free text. */
 export function extractScheduleDays(
   text: string,
-  opts?: { minDays?: number }
+  opts?: { minDays?: number },
 ): { days: number[]; rest: string } | null {
   const minDays = opts?.minDays ?? 2;
   const compact = COMPACT.find((c) => c.re.test(text));
@@ -55,20 +53,19 @@ export function extractScheduleDays(
   let m: RegExpExecArray | null;
   while ((m = long.exec(text))) {
     const key = m[1].toLowerCase();
-    const full =
-      key.startsWith("sun")
-        ? "sunday"
-        : key.startsWith("mon")
-          ? "monday"
-          : key.startsWith("tue")
-            ? "tuesday"
-            : key.startsWith("wed")
-              ? "wednesday"
-              : key.startsWith("thu")
-                ? "thursday"
-                : key.startsWith("fri")
-                  ? "friday"
-                  : "saturday";
+    const full = key.startsWith("sun")
+      ? "sunday"
+      : key.startsWith("mon")
+        ? "monday"
+        : key.startsWith("tue")
+          ? "tuesday"
+          : key.startsWith("wed")
+            ? "wednesday"
+            : key.startsWith("thu")
+              ? "thursday"
+              : key.startsWith("fri")
+                ? "friday"
+                : "saturday";
     const dow = WEEKDAY_NAME[full];
     if (dow !== undefined && !found.includes(dow)) found.push(dow);
     rest = rest.replace(m[0], " ");
@@ -88,7 +85,10 @@ export function extractScheduleDays(
   return { days: found.sort((a, b) => a - b), rest: rest.replace(/\s+/g, " ").trim() };
 }
 
-export function extractUntilIso(text: string, from = new Date()): { until: string; rest: string } | null {
+export function extractUntilIso(
+  text: string,
+  from = new Date(),
+): { until: string; rest: string } | null {
   const untilMatch = text.match(/\b(?:until|through|thru|to)\s+(.+)$/i);
   if (!untilMatch) return null;
   const phrase = matchDatePhrase(untilMatch[1], from);
@@ -99,8 +99,7 @@ export function extractUntilIso(text: string, from = new Date()): { until: strin
   return { until: end.toISOString(), rest: before };
 }
 
-const TIME_RANGE_SOURCE =
-  String.raw`\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b`;
+const TIME_RANGE_SOURCE = String.raw`\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b`;
 
 export interface ClassMeeting {
   days: number[];
@@ -257,7 +256,7 @@ export function firstOverlappingDay(meetings: ClassMeeting[]): number | null {
 export function parseClassSchedule(
   raw: string,
   categories: Category[],
-  from = new Date()
+  from = new Date(),
 ): ParsedClassSchedule | null {
   let text = raw.trim();
   if (!text) return null;
@@ -369,7 +368,7 @@ export function untilDayToIso(day: string, fallback = defaultUntilIso()): string
 
 export function meetingDateTimes(
   meeting: ClassMeeting,
-  from = new Date()
+  from = new Date(),
 ): { at: Date; endAt: Date } | null {
   if (meeting.days.length === 0) return null;
   const first = soonestOnDays(meeting.days, from);
@@ -406,7 +405,7 @@ export function savedMeetingSlotEqual(
     minute: number;
     endHour: number;
     endMinute: number;
-  }
+  },
 ): boolean {
   return (
     daysEqual(saved.days, next.days) &&
@@ -429,7 +428,7 @@ export function formatTimeRange(
   startMinute: number,
   endHour: number | undefined,
   endMinute: number | undefined,
-  clock24h = false
+  clock24h = false,
 ): string {
   const start = formatClock(startHour, startMinute, clock24h);
   if (endHour == null || endMinute == null) return start;
@@ -441,13 +440,16 @@ export function formatTimeRange(
 }
 
 export function formatMeetingSummary(meeting: SavedClassMeeting, clock24h = false): string {
-  const days = meeting.days.map((d) => weekdayShort(d)).filter(Boolean).join("/");
+  const days = meeting.days
+    .map((d) => weekdayShort(d))
+    .filter(Boolean)
+    .join("/");
   const range = formatTimeRange(
     meeting.hour,
     meeting.minute,
     meeting.endHour,
     meeting.endMinute,
-    clock24h
+    clock24h,
   );
   return days ? `${days} ${range}` : range;
 }
@@ -497,7 +499,10 @@ export function isClassMeeting(item: Item, categoryName?: string): boolean {
 }
 
 /** A course nickname changes the visible meeting label without rewriting feed items. */
-export function classMeetingTitle(item: Item, category?: Pick<Category, "name" | "classTitle">): string {
+export function classMeetingTitle(
+  item: Item,
+  category?: Pick<Category, "name" | "classTitle">,
+): string {
   return category?.classTitle?.trim() && isClassMeeting(item, category.name)
     ? category.classTitle.trim()
     : item.title;
@@ -511,7 +516,7 @@ export function classMeetingTitle(item: Item, category?: Pick<Category, "name" |
  */
 export function collapseDuplicateClassMeetings(
   items: Item[],
-  categoryName: (id?: string) => string | undefined
+  categoryName: (id?: string) => string | undefined,
 ): Item[] {
   const meetings = items.filter((i) => isClassMeeting(i, categoryName(i.categoryId)));
   if (meetings.length < 2) return items;
@@ -553,7 +558,7 @@ function sameClassSlot(a: Item, b: Item): boolean {
 function preferClassMeeting(
   a: Item,
   b: Item,
-  categoryName: (id?: string) => string | undefined
+  categoryName: (id?: string) => string | undefined,
 ): Item {
   const aSched = isClassScheduleItem(a);
   const bSched = isClassScheduleItem(b);
@@ -587,7 +592,7 @@ export function savedClassMeetings(items: Item[], categoryId: string): SavedClas
     if (Number.isNaN(+at)) continue;
     const end = first.endAt ? new Date(first.endAt) : null;
     const days = [...new Set(first.repeat!.byDay!.filter((d) => d >= 0 && d <= 6))].sort(
-      (a, b) => a - b
+      (a, b) => a - b,
     );
     const meeting: SavedClassMeeting = {
       repeatId,
@@ -608,7 +613,8 @@ export function savedClassMeetings(items: Item[], categoryId: string): SavedClas
   }
 
   return meetings.sort(
-    (a, b) => (a.days[0] ?? 0) - (b.days[0] ?? 0) || a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
+    (a, b) =>
+      (a.days[0] ?? 0) - (b.days[0] ?? 0) || a.hour * 60 + a.minute - (b.hour * 60 + b.minute),
   );
 }
 

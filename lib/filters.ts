@@ -14,7 +14,7 @@ export function applyItemFilters(
     viewFilter?: ViewFilter | null;
     now?: Date;
     weekStartsOn?: 0 | 1;
-  }
+  },
 ) {
   let next = applyCategoryFilter(items, opts.categoryFilter);
   if (opts.hideCompleted) next = next.filter((i) => i.type === "event" || i.status !== "done");
@@ -52,7 +52,7 @@ export function filterBreakdown(
     viewFilter?: ViewFilter | null;
     now?: Date;
     weekStartsOn?: 0 | 1;
-  }
+  },
 ): FilterBreakdown {
   const byCategory = applyCategoryFilter(items, opts.categoryFilter);
   const byCompletion = opts.hideCompleted

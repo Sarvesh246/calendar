@@ -6,14 +6,24 @@ import { createDebouncedStorage } from "./debounced-storage";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { nanoid } from "./nanoid";
 import { createDefaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
-import { buildImportPlan, feedLabel, isHttpFeedUrl, normalizeFeedUrl, type FetchedCalendar } from "./calendar-import";
+import {
+  buildImportPlan,
+  feedLabel,
+  isHttpFeedUrl,
+  normalizeFeedUrl,
+  type FetchedCalendar,
+} from "./calendar-import";
 import {
   applySyllabusImportToSnapshot,
   recountSyllabusItemCounts,
   type SyllabusImportRequest,
   type SyllabusImportResult,
 } from "./syllabus-import";
-import { collapseCrossSourceDuplicates, isSyllabusSource, syllabusSourceUrl } from "./syllabus-match";
+import {
+  collapseCrossSourceDuplicates,
+  isSyllabusSource,
+  syllabusSourceUrl,
+} from "./syllabus-match";
 import { mergeImportedItem, importedFieldsChanged } from "./source-snapshot";
 import { isStatusOnlyItemsChange } from "./save-status";
 import { supabase } from "./supabase/client";
@@ -93,8 +103,7 @@ export type SyncStatus = "idle" | "connecting" | "syncing" | "synced" | "error" 
 export type CloudMergeChoice = "local" | "cloud" | "merge";
 
 export type CategoryRemoval =
-  | { kind: "delete-items" }
-  | { kind: "move-items"; targetCategoryId: string };
+  { kind: "delete-items" } | { kind: "move-items"; targetCategoryId: string };
 
 export interface MergeOffer {
   localItems: number;
@@ -304,7 +313,7 @@ export const useDatebookStore = create<DatebookState>()(
           deletions: dropTombstones(
             get().deletions,
             "item",
-            back.map((i) => i.id)
+            back.map((i) => i.id),
           ),
         });
       },
@@ -384,7 +393,7 @@ export const useDatebookStore = create<DatebookState>()(
         noteLocalWrite(id, stamp);
         set({
           categories: get().categories.map((c) =>
-            c.id === id ? { ...c, ...next, updatedAt: stamp } : c
+            c.id === id ? { ...c, ...next, updatedAt: stamp } : c,
           ),
           importSources,
         });
@@ -397,27 +406,32 @@ export const useDatebookStore = create<DatebookState>()(
         if (removal.kind !== "delete-items" && removal.kind !== "move-items") return false;
         // Never choose a destination on the user's behalf. Re-check it at execution
         // time in case another device removed or archived it while the prompt was open.
-        if (removal.kind === "move-items" && !cats.some(
-          (c) => c.id === removal.targetCategoryId && c.id !== id && !c.archived
-        )) return false;
-        const gone = removal.kind === "delete-items"
-          ? state.items.filter((i) => i.categoryId === id).map((i) => i.id)
-          : [];
+        if (
+          removal.kind === "move-items" &&
+          !cats.some((c) => c.id === removal.targetCategoryId && c.id !== id && !c.archived)
+        )
+          return false;
+        const gone =
+          removal.kind === "delete-items"
+            ? state.items.filter((i) => i.categoryId === id).map((i) => i.id)
+            : [];
         const stamp = nowIso();
-        const items = removal.kind === "delete-items"
-          ? state.items.filter((i) => i.categoryId !== id)
-          : state.items.map((i) => {
-              if (i.categoryId !== id) return i;
-              noteLocalWrite(i.id, stamp);
-              return { ...i, categoryId: removal.targetCategoryId, updatedAt: stamp };
-            });
+        const items =
+          removal.kind === "delete-items"
+            ? state.items.filter((i) => i.categoryId !== id)
+            : state.items.map((i) => {
+                if (i.categoryId !== id) return i;
+                noteLocalWrite(i.id, stamp);
+                return { ...i, categoryId: removal.targetCategoryId, updatedAt: stamp };
+              });
         set({
           categories: cats.filter((c) => c.id !== id),
           items,
           importSources: recountSyllabusItemCounts(state.importSources, items, stamp),
           // A prior single-item Undo must not restore an item into the removed class.
           lastDeleted: state.lastDeleted?.items.some((i) => i.categoryId === id)
-            ? null : state.lastDeleted,
+            ? null
+            : state.lastDeleted,
           deletions: addTombstones(addTombstones(state.deletions, "item", gone), "category", [id]),
         });
         return true;
@@ -436,7 +450,9 @@ export const useDatebookStore = create<DatebookState>()(
       updateReminderPreset: (id, patch) => {
         const next = {
           ...("label" in patch ? { label: safePresetLabel(patch.label) } : {}),
-          ...("offsetMinutes" in patch ? { offsetMinutes: safeOffsetMinutes(patch.offsetMinutes) } : {}),
+          ...("offsetMinutes" in patch
+            ? { offsetMinutes: safeOffsetMinutes(patch.offsetMinutes) }
+            : {}),
         };
         set({
           reminderPresets: get().reminderPresets.map((p) => (p.id === id ? { ...p, ...next } : p)),
@@ -448,7 +464,9 @@ export const useDatebookStore = create<DatebookState>()(
           reminderPresets: get().reminderPresets.filter((p) => p.id !== id),
           settings: {
             ...get().settings,
-            defaultReminderPresetIds: get().settings.defaultReminderPresetIds.filter((pid) => pid !== id),
+            defaultReminderPresetIds: get().settings.defaultReminderPresetIds.filter(
+              (pid) => pid !== id,
+            ),
           },
           deletions: addTombstones(get().deletions, "reminder_preset", [id]),
         });
@@ -503,7 +521,7 @@ export const useDatebookStore = create<DatebookState>()(
           incoming.has(item.sourceUid as string) &&
           (!item.sourceId || !liveSourceIds.has(item.sourceId));
         const claimed = baseItems.map((item) =>
-          adoptable(item) ? { ...item, sourceId, updatedAt: nowIso() } : item
+          adoptable(item) ? { ...item, sourceId, updatedAt: nowIso() } : item,
         );
 
         // Now that every copy agrees on the source, two rows for one feed event
@@ -525,7 +543,7 @@ export const useDatebookStore = create<DatebookState>()(
         });
 
         const known = new Set(
-          merged.filter((i) => i.sourceId === sourceId && i.sourceUid).map((i) => i.sourceUid)
+          merged.filter((i) => i.sourceId === sourceId && i.sourceUid).map((i) => i.sourceUid),
         );
 
         // Drop items that vanished from the feed — but keep ones marked done.
@@ -534,7 +552,7 @@ export const useDatebookStore = create<DatebookState>()(
             i.sourceId === sourceId &&
             i.sourceUid &&
             !incoming.has(i.sourceUid) &&
-            i.status !== "done"
+            i.status !== "done",
         );
         const droppedIds = new Set(dropped.map((i) => i.id));
         const pruned = merged.filter((i) => !droppedIds.has(i.id));
@@ -568,7 +586,7 @@ export const useDatebookStore = create<DatebookState>()(
           pruned,
           nextSources,
           Intl.DateTimeFormat().resolvedOptions().timeZone,
-          now
+          now,
         );
 
         set({
@@ -585,7 +603,7 @@ export const useDatebookStore = create<DatebookState>()(
               ...cross.dropped,
             ]),
             "category",
-            [...remap.keys()]
+            [...remap.keys()],
           ),
         });
 
@@ -601,7 +619,7 @@ export const useDatebookStore = create<DatebookState>()(
             importSources: state.importSources,
             deletions: state.deletions,
           },
-          request
+          request,
         );
         set({
           items: applied.snapshot.items,
@@ -622,7 +640,7 @@ export const useDatebookStore = create<DatebookState>()(
             : state.items.map((i) =>
                 i.sourceId === id
                   ? { ...i, sourceId: undefined, sourceUid: undefined, updatedAt: nowIso() }
-                  : i
+                  : i,
               );
           const inUse = new Set(items.map((i) => i.categoryId));
           const categories = state.categories.filter((c) => c.sourceId !== id || inUse.has(c.id));
@@ -632,7 +650,7 @@ export const useDatebookStore = create<DatebookState>()(
           deletions = addTombstones(
             deletions,
             "category",
-            state.categories.filter((c) => !keptCategoryIds.has(c.id)).map((c) => c.id)
+            state.categories.filter((c) => !keptCategoryIds.has(c.id)).map((c) => c.id),
           );
           return {
             importSources: state.importSources.filter((s) => s.id !== id),
@@ -646,7 +664,7 @@ export const useDatebookStore = create<DatebookState>()(
       markImportError: (url, message) => {
         set({
           importSources: get().importSources.map((s) =>
-            s.url === url ? { ...s, lastError: message, updatedAt: nowIso() } : s
+            s.url === url ? { ...s, lastError: message, updatedAt: nowIso() } : s,
           ),
         });
       },
@@ -660,7 +678,7 @@ export const useDatebookStore = create<DatebookState>()(
           deletions: addTombstones(
             get().deletions,
             "item",
-            gone.map((i) => i.id)
+            gone.map((i) => i.id),
           ),
         });
       },
@@ -732,7 +750,7 @@ export const useDatebookStore = create<DatebookState>()(
           deletions: addTombstones(
             get().deletions,
             "item",
-            replaced.filter((id) => !keep.has(id))
+            replaced.filter((id) => !keep.has(id)),
           ),
         });
       },
@@ -754,7 +772,9 @@ export const useDatebookStore = create<DatebookState>()(
 
       replaceFromBackup: (backup) => {
         const prev = get();
-        const categories = backup.categories?.length ? backup.categories : createDefaultCategories();
+        const categories = backup.categories?.length
+          ? backup.categories
+          : createDefaultCategories();
         const importSources = backup.importSources ?? [];
         const gone = <T extends { id: string }>(before: T[], after: T[]) => {
           const kept = new Set(after.map((x) => x.id));
@@ -767,7 +787,7 @@ export const useDatebookStore = create<DatebookState>()(
         deletions = addTombstones(
           deletions,
           "import_source",
-          gone(prev.importSources, importSources)
+          gone(prev.importSources, importSources),
         );
         const stamp = nowIso();
         set({
@@ -783,8 +803,7 @@ export const useDatebookStore = create<DatebookState>()(
         });
       },
 
-      dismissSyncNotice: (id) =>
-        set((s) => ({ syncNotices: dropSyncNotice(s.syncNotices, id) })),
+      dismissSyncNotice: (id) => set((s) => ({ syncNotices: dropSyncNotice(s.syncNotices, id) })),
       clearSyncNotices: () => set({ syncNotices: [] }),
       pushSyncNotice: (draft) => {
         enqueueSyncNotice(draft);
@@ -823,7 +842,7 @@ export const useDatebookStore = create<DatebookState>()(
 
           const cloud = await withTimeout(
             fetchAllForUser(supabase, userId, get().settings),
-            "Loading your calendar"
+            "Loading your calendar",
           );
           let local = get();
 
@@ -926,13 +945,13 @@ export const useDatebookStore = create<DatebookState>()(
             // another device — so only what the tombstones haven't deleted
             // goes up, or a reset elsewhere is undone by the next device to open.
             const liveCategories = local.categories.filter(
-              (c) => !isDeleted(tombstones, "category", c)
+              (c) => !isDeleted(tombstones, "category", c),
             );
             set({
               items: local.items.filter((i) => !isDeleted(tombstones, "item", i)),
               categories: liveCategories.length ? liveCategories : local.categories,
               importSources: local.importSources.filter(
-                (s) => !isDeleted(tombstones, "import_source", s)
+                (s) => !isDeleted(tombstones, "import_source", s),
               ),
               settings: cloud.settings ?? local.settings,
               reminderPresets: cloud.reminderPresets.length
@@ -955,7 +974,7 @@ export const useDatebookStore = create<DatebookState>()(
                   importSources: s.importSources,
                   settings: s.settings,
                 }),
-                "Uploading your calendar"
+                "Uploading your calendar",
               );
               suspended = false;
             } catch (pushErr) {
@@ -991,7 +1010,7 @@ export const useDatebookStore = create<DatebookState>()(
                 importSources: cloud.importSources,
                 settings: cloud.settings ?? local.settings,
               },
-              tombstones
+              tombstones,
             );
             set({ ...adopted, deletions: tombstones, mode: "cloud", userId });
             applyingRemote = false;
@@ -1162,7 +1181,7 @@ export const useDatebookStore = create<DatebookState>()(
           settings: local.settings,
         };
         const tombstones = pruneTombstones(
-          mergeTombstones(local.deletions, pending.cloud.deletions)
+          mergeTombstones(local.deletions, pending.cloud.deletions),
         );
 
         let next: CalendarSnapshot;
@@ -1265,8 +1284,8 @@ export const useDatebookStore = create<DatebookState>()(
           if (state.settings) {
             state.settings = {
               ...state.settings,
-              defaultReminderPresetIds: (state.settings.defaultReminderPresetIds ?? []).filter((id) =>
-                keep.has(id)
+              defaultReminderPresetIds: (state.settings.defaultReminderPresetIds ?? []).filter(
+                (id) => keep.has(id),
               ),
             };
           }
@@ -1280,10 +1299,14 @@ export const useDatebookStore = create<DatebookState>()(
           // `createdAt` so a merge has something ordered to compare, rather than
           // treating every old row as infinitely stale.
           state.items = (state.items ?? []).map((i) =>
-            i.updatedAt ? i : { ...i, updatedAt: i.createdAt }
+            i.updatedAt ? i : { ...i, updatedAt: i.createdAt },
           );
         }
-        if (state && version < 8 && state.categories?.some((c) => LEGACY_DEFAULT_CATEGORY_IDS.has(c.id))) {
+        if (
+          state &&
+          version < 8 &&
+          state.categories?.some((c) => LEGACY_DEFAULT_CATEGORY_IDS.has(c.id))
+        ) {
           // One-time escape from the old fixed default-category ids: mint each
           // a fresh one and carry every item's reference along with it. Safe
           // whether or not this device happens to be the account that already
@@ -1299,7 +1322,7 @@ export const useDatebookStore = create<DatebookState>()(
           });
           if (remap.size > 0) {
             state.items = (state.items ?? []).map((i) =>
-              remap.has(i.categoryId) ? { ...i, categoryId: remap.get(i.categoryId)! } : i
+              remap.has(i.categoryId) ? { ...i, categoryId: remap.get(i.categoryId)! } : i,
             );
           }
         }
@@ -1337,8 +1360,8 @@ export const useDatebookStore = create<DatebookState>()(
           });
         }
       },
-    }
-  )
+    },
+  ),
 );
 
 export function useCategory(id: string | undefined) {
@@ -1461,9 +1484,21 @@ function tombstonesForWipe(s: {
   importSources: ImportSource[];
   deletions: TombstoneMap;
 }): TombstoneMap {
-  let out = addTombstones(s.deletions, "item", s.items.map((i) => i.id));
-  out = addTombstones(out, "category", s.categories.map((c) => c.id));
-  out = addTombstones(out, "import_source", s.importSources.map((i) => i.id));
+  let out = addTombstones(
+    s.deletions,
+    "item",
+    s.items.map((i) => i.id),
+  );
+  out = addTombstones(
+    out,
+    "category",
+    s.categories.map((c) => c.id),
+  );
+  out = addTombstones(
+    out,
+    "import_source",
+    s.importSources.map((i) => i.id),
+  );
   return out;
 }
 
@@ -1499,7 +1534,7 @@ function withTimeout<T>(p: Promise<T>, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(
       () => reject(new Error(`${label} timed out — check your connection and retry.`)),
-      SYNC_TIMEOUT_MS
+      SYNC_TIMEOUT_MS,
     );
     p.then(
       (v) => {
@@ -1509,7 +1544,7 @@ function withTimeout<T>(p: Promise<T>, label: string): Promise<T> {
       (e) => {
         clearTimeout(t);
         reject(e);
-      }
+      },
     );
   });
 }
@@ -1667,7 +1702,7 @@ function pendingWork() {
     pending.settingsDirty ||
     Object.keys(pending.deletions).length > 0 ||
     (["categories", "reminderPresets", "importSources", "items"] as CollKey[]).some(
-      (k) => pending[k].upserts.size > 0 || pending[k].deletes.size > 0
+      (k) => pending[k].upserts.size > 0 || pending[k].deletes.size > 0,
     )
   );
 }
@@ -1697,11 +1732,7 @@ function publishQueueDepth() {
   }
 }
 
-function accumulate<T extends { id: string }>(
-  key: CollKey,
-  prev: T[],
-  next: T[]
-): boolean {
+function accumulate<T extends { id: string }>(key: CollKey, prev: T[], next: T[]): boolean {
   if (prev === next) return false;
   const { upserts, deletes } = diffCollection(prev, next);
   if (upserts.length === 0 && deletes.length === 0) return false;
@@ -1730,7 +1761,10 @@ function scheduleFlush() {
   }, FLUSH_DEBOUNCE_MS);
 }
 
-function drain<T extends { id: string }>(bucket: { upserts: Map<string, T>; deletes: Set<string> }) {
+function drain<T extends { id: string }>(bucket: {
+  upserts: Map<string, T>;
+  deletes: Set<string>;
+}) {
   const out = { upserts: [...bucket.upserts.values()], deletes: [...bucket.deletes] };
   bucket.upserts.clear();
   bucket.deletes.clear();
@@ -1787,10 +1821,7 @@ async function flush() {
   publishQueueDepth();
   try {
     const knownCategoryIds = new Set(useDatebookStore.getState().categories.map((c) => c.id));
-    await withTimeout(
-      pushChanges(supabase, activeUserId, batch, knownCategoryIds),
-      "Sync"
-    );
+    await withTimeout(pushChanges(supabase, activeUserId, batch, knownCategoryIds), "Sync");
     clearFlushRetry();
     useDatebookStore.setState({ syncStatus: "synced", cloudError: null });
     ok = true;
@@ -1876,10 +1907,7 @@ useDatebookStore.subscribe((state, prev) => {
   if (state.items === prev.items && state.categories === prev.categories) return;
   // Completing / starting / reopening already gets a dedicated snackbar. Counting
   // those as "content edits" made the Saved pill stack on top of Completed.
-  if (
-    state.categories === prev.categories &&
-    isStatusOnlyItemsChange(prev.items, state.items)
-  ) {
+  if (state.categories === prev.categories && isStatusOnlyItemsChange(prev.items, state.items)) {
     return;
   }
   localWrites += 1;
@@ -1945,7 +1973,7 @@ function isItemLike(v: unknown): v is Item {
 
 function ingestRemoteItem(
   current: Item[],
-  model: Item
+  model: Item,
 ): {
   items: Item[];
   notice: NoticeDraft | null;
@@ -2040,7 +2068,7 @@ function broadcastItemUpserts(items: Item[]) {
 
 function applyRealtime(
   table: string,
-  payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+  payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
 ) {
   applyingRemote = true;
   try {
@@ -2086,9 +2114,12 @@ function applyRealtime(
       // recreates the row. Dropping and tombstoning it here is how the echo of
       // our own delete used to reverse an Undo tapped within a second.
       const mine = current.find((x) => x.id === id) as
-        | { updatedAt?: string; createdAt?: string }
-        | undefined;
-      if (mine && old?.updated_at && time(mine.updatedAt ?? mine.createdAt) > time(old.updated_at)) {
+        { updatedAt?: string; createdAt?: string } | undefined;
+      if (
+        mine &&
+        old?.updated_at &&
+        time(mine.updatedAt ?? mine.createdAt) > time(old.updated_at)
+      ) {
         return;
       }
       nextArr = current.filter((x) => x.id !== id);
@@ -2157,9 +2188,7 @@ function applyRealtime(
             return;
           }
           const applied =
-            key === "categories"
-              ? preserveClassTitle(model as Category, prev as Category)
-              : model;
+            key === "categories" ? preserveClassTitle(model as Category, prev as Category) : model;
           nextArr = current.map((x, i) => (i === idx ? applied : x));
         } else {
           nextArr = [...current, model];
@@ -2204,8 +2233,7 @@ function scheduleConnectRetry(userId: string) {
     // Out of automatic retries — leave a clear call to action for the user.
     useDatebookStore.setState((s) => ({
       syncStatus: "error",
-      cloudError:
-        s.cloudError ?? "Couldn't reach the server. Tap “Retry sync” to try again.",
+      cloudError: s.cloudError ?? "Couldn't reach the server. Tap “Retry sync” to try again.",
     }));
     return;
   }
@@ -2254,7 +2282,7 @@ async function catchUpFromCloud(userId: string) {
   try {
     const cloud = await withTimeout(
       fetchAllForUser(supabase, userId, useDatebookStore.getState().settings),
-      "Reconciling"
+      "Reconciling",
     );
     if (activeUserId !== userId) return;
     if (pendingWork() || flushing) {
@@ -2284,7 +2312,7 @@ async function catchUpFromCloud(userId: string) {
         importSources: cloud.importSources,
         settings: cloud.settings ?? local.settings,
       },
-      tombstones
+      tombstones,
     );
     applyingRemote = true;
     useDatebookStore.setState({
@@ -2357,7 +2385,8 @@ async function subscribeRealtime(userId: string) {
     ch.on(
       "postgres_changes",
       { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
-      (payload) => applyRealtime(table, payload as RealtimePostgresChangesPayload<Record<string, unknown>>)
+      (payload) =>
+        applyRealtime(table, payload as RealtimePostgresChangesPayload<Record<string, unknown>>),
     );
   }
   ch.subscribe((status) => {
@@ -2396,7 +2425,10 @@ function subscribeDeletions(userId: string) {
     "postgres_changes",
     { event: "*", schema: "public", table: "deletions", filter: `user_id=eq.${userId}` },
     (payload) =>
-      applyRealtime("deletions", payload as RealtimePostgresChangesPayload<Record<string, unknown>>)
+      applyRealtime(
+        "deletions",
+        payload as RealtimePostgresChangesPayload<Record<string, unknown>>,
+      ),
   );
   ch.subscribe((status) => {
     if (deletionsChannel !== ch) return;
@@ -2405,7 +2437,7 @@ function subscribeDeletions(userId: string) {
       // this channel, so drop it quietly instead of retrying forever.
       console.warn(
         "[datebook] live delete updates unavailable — run supabase/migrations/0006. " +
-          "Deletes still reconcile on reconnect."
+          "Deletes still reconcile on reconnect.",
       );
       if (supabase) void supabase.removeChannel(ch);
       if (deletionsChannel === ch) deletionsChannel = null;

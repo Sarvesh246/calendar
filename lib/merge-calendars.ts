@@ -31,13 +31,13 @@ type Stamped = { id: string; updatedAt?: string; createdAt?: string };
 export function mergeCalendars(
   local: CalendarSnapshot,
   cloud: CalendarSnapshot,
-  tombstones: TombstoneMap = {}
+  tombstones: TombstoneMap = {},
 ): CalendarSnapshot {
   const { categories: deduped, remap } = dedupeCategories(
-    reconcileCategories(local.categories, cloud.categories, tombstones)
+    reconcileCategories(local.categories, cloud.categories, tombstones),
   );
   const sources = dedupeByUrl(
-    reconcile("import_source", local.importSources, cloud.importSources, tombstones)
+    reconcile("import_source", local.importSources, cloud.importSources, tombstones),
   );
   // A feed row that loses the dedupe takes its items' `sourceId` with it —
   // otherwise every item that pointed at it is orphaned, and the next re-sync
@@ -46,9 +46,9 @@ export function mergeCalendars(
   const items = collapseBySourceUid(
     repointSources(
       repointCategories(mergeItems(local.items, cloud.items, tombstones), remap),
-      sources.remap
+      sources.remap,
     ),
-    new Set(local.items.map((i) => i.id))
+    new Set(local.items.map((i) => i.id)),
   ).items;
   return {
     categories,
@@ -56,7 +56,7 @@ export function mergeCalendars(
       "reminder_preset",
       local.reminderPresets,
       cloud.reminderPresets,
-      tombstones
+      tombstones,
     ),
     importSources: sources.sources,
     items,
@@ -75,7 +75,7 @@ function resolveChains(remap: Map<string, string>) {
 
 function repointSources<T extends { sourceId?: string }>(
   rows: T[],
-  remap: Map<string, string>
+  remap: Map<string, string>,
 ): T[] {
   if (remap.size === 0) return rows;
   return rows.map((r) => {
@@ -124,7 +124,7 @@ export function collapseBySourceUid(
   /** Ids of the local copies. Used only to break an exact `updatedAt` tie —
    *  the local side is the only one that can hold an edit the cloud has not
    *  seen yet. The surviving *id* never depends on this. */
-  localIds: ReadonlySet<string> = new Set()
+  localIds: ReadonlySet<string> = new Set(),
 ): { items: Item[]; dropped: string[] } {
   const groups = new Map<string, Item[]>();
   let duplicated = false;
@@ -190,7 +190,7 @@ function foldDuplicate(
   a: Item,
   aIsLocal: boolean,
   b: Item,
-  bIsLocal: boolean
+  bIsLocal: boolean,
 ): { item: Item; isLocal: boolean } {
   const at = time(a.updatedAt ?? a.createdAt);
   const bt = time(b.updatedAt ?? b.createdAt);
@@ -293,7 +293,7 @@ function pickCategoryRow(local: Category, cloud: Category): Category {
 function reconcileCategories(
   local: Category[],
   cloud: Category[],
-  tombstones: TombstoneMap
+  tombstones: TombstoneMap,
 ): Category[] {
   const byId = new Map<string, Category>();
   for (const row of cloud) byId.set(row.id, row);
@@ -308,7 +308,7 @@ function reconcile<T extends Stamped>(
   kind: EntityKind,
   local: T[],
   cloud: T[],
-  tombstones: TombstoneMap
+  tombstones: TombstoneMap,
 ): T[] {
   const byId = new Map<string, T>();
   for (const row of cloud) byId.set(row.id, row);

@@ -97,7 +97,11 @@ const RESPONSE_SCHEMA = {
           type: "ARRAY",
           items: {
             type: "OBJECT",
-            properties: { label: { type: "STRING" }, date: { type: "STRING" }, endDate: { type: "STRING" } },
+            properties: {
+              label: { type: "STRING" },
+              date: { type: "STRING" },
+              endDate: { type: "STRING" },
+            },
             required: ["label", "date"],
           },
         },
@@ -293,12 +297,19 @@ export async function POST(request: Request) {
   const categories = parseCategoryHints(form.get("categories"));
 
   const payload = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt({ now, timeZone, categoryId, categories }) }] },
+    systemInstruction: {
+      parts: [{ text: systemPrompt({ now, timeZone, categoryId, categories }) }],
+    },
     contents: [
       {
         role: "user",
         parts: [
-          { inlineData: { mimeType: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
+          {
+            inlineData: {
+              mimeType: "application/pdf",
+              data: Buffer.from(bytes).toString("base64"),
+            },
+          },
           { text: "Extract the graded due work from this syllabus PDF." },
         ],
       },
@@ -326,8 +337,11 @@ export async function POST(request: Request) {
   const data = gemini.data;
 
   const textOut: string =
-    (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
-      ?.candidates?.[0]?.content?.parts?.map((p) => p?.text ?? "").join("") ?? "";
+    (
+      data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+    )?.candidates?.[0]?.content?.parts
+      ?.map((p) => p?.text ?? "")
+      .join("") ?? "";
 
   let parsed: unknown;
   try {

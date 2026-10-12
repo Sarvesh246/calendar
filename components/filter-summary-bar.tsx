@@ -40,7 +40,7 @@ export function FilterSummaryBar() {
     categories,
     categoryFilter,
     hideCompleted,
-    views.find((v) => v.id === activeViewId)?.name
+    views.find((v) => v.id === activeViewId)?.name,
   );
   // `MotionConfig reducedMotion="user"` drops transforms and keeps opacity, but
   // an animating *height* is neither — it is the page reflowing under you, which

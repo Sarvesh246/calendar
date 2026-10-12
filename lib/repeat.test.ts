@@ -12,11 +12,10 @@ describe("expandRepeat", () => {
   });
 
   it("keeps duration on later instances", () => {
-    const occ = expandRepeat(
-      "2026-09-01T15:00:00.000Z",
-      "2026-09-01T16:00:00.000Z",
-      { freq: "weekly", until: "2026-09-16T00:00:00.000Z" }
-    );
+    const occ = expandRepeat("2026-09-01T15:00:00.000Z", "2026-09-01T16:00:00.000Z", {
+      freq: "weekly",
+      until: "2026-09-16T00:00:00.000Z",
+    });
     expect(occ.length).toBeGreaterThanOrEqual(2);
     const span = +new Date(occ[1].endAt!) - +new Date(occ[1].at);
     expect(span).toBe(60 * 60 * 1000);

@@ -2,11 +2,28 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildAssistantDigest, selectAssistantItems } from "@/lib/ai-assistant";
 import {
-  MAX_ASSISTANT_BODY, MAX_ASSISTANT_ITEMS, MAX_ASSISTANT_MESSAGE, authenticationRequired,
-  clientKey, durableHourlyLimit, getRequestUser, isJsonRequest, rateLimit, sameOrigin, tooMany,
+  MAX_ASSISTANT_BODY,
+  MAX_ASSISTANT_ITEMS,
+  MAX_ASSISTANT_MESSAGE,
+  authenticationRequired,
+  clientKey,
+  durableHourlyLimit,
+  getRequestUser,
+  isJsonRequest,
+  rateLimit,
+  sameOrigin,
+  tooMany,
 } from "@/lib/api-guard";
-import { isPureQuestion, normalizeActions, type AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
-import { ensureAssistantThread, loadAssistantHistory, storeAssistantMessage } from "@/lib/llm/history";
+import {
+  isPureQuestion,
+  normalizeActions,
+  type AssistantReqBody as ReqBody,
+} from "@/lib/assistant-actions";
+import {
+  ensureAssistantThread,
+  loadAssistantHistory,
+  storeAssistantMessage,
+} from "@/lib/llm/history";
 import { createChatCompletion, callRoutedProvider } from "@/lib/llm/router";
 import { DATEBOOK_TOOLS, executeDatebookTool, MalformedToolArgumentsError } from "@/lib/llm/tools";
 import type { ChatMessage } from "@/lib/llm/openai-compatible";
@@ -30,9 +47,16 @@ function localStamp(iso: string | undefined, tz: string): string {
   if (Number.isNaN(+d)) return "";
   try {
     return new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-    }).format(d).replace(",", "");
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .format(d)
+      .replace(",", "");
   } catch {
     return iso.slice(0, 16).replace("T", " ");
   }
@@ -43,7 +67,8 @@ function localStamp(iso: string | undefined, tz: string): string {
  * one compact line per item (local time, no urls/source ids/descriptions) instead
  * of pretty JSON with every field. Full detail is one list_* tool call away.
  */
-const SYLLABUS_WORDS = /\b(?:syllabus|professor|prof|instructor|teacher|ta|tas|office hours?|email|contact|grad(?:e|ed|ing)|worth|weight|percent|policy|policies|late|extension|attendance|absen\w*|make-?up|regrade|extra credit|cheat\w*|plagiari\w*|integrity|ai|chatgpt|collaborat\w*|textbook|book|materials|prereq\w*|break|holiday|drop|withdraw|deadline|final|midterm|exam|allowed|rules?)\b/i;
+const SYLLABUS_WORDS =
+  /\b(?:syllabus|professor|prof|instructor|teacher|ta|tas|office hours?|email|contact|grad(?:e|ed|ing)|worth|weight|percent|policy|policies|late|extension|attendance|absen\w*|make-?up|regrade|extra credit|cheat\w*|plagiari\w*|integrity|ai|chatgpt|collaborat\w*|textbook|book|materials|prereq\w*|break|holiday|drop|withdraw|deadline|final|midterm|exam|allowed|rules?)\b/i;
 
 /**
  * Syllabus details are only worth their tokens when the question is about a
@@ -58,33 +83,50 @@ function relevantSyllabi(body: ReqBody): string {
   if (!withInfo.length) return "";
   const named = withInfo.filter((c) => message.includes(c.name.toLowerCase()));
   const chosen = named.length ? named : SYLLABUS_WORDS.test(message) ? withInfo.slice(0, 4) : [];
-  return chosen.map((c) => syllabusDigest(c.name, c.info)).join("\n\n").slice(0, 12_000);
+  return chosen
+    .map((c) => syllabusDigest(c.name, c.info))
+    .join("\n\n")
+    .slice(0, 12_000);
 }
 
 function systemPrompt(body: ReqBody): string {
   const now = new Date(body.now);
   const tz = body.timeZone || "UTC";
   const human = new Intl.DateTimeFormat("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
   }).format(now);
   const digest = buildAssistantDigest(
     body.items.map((item) => ({ ...item, categoryId: item.categoryId ?? "", createdAt: body.now })),
-    body.categories, body.now, tz, body.weekStartsOn === 1 ? 1 : 0
+    body.categories,
+    body.now,
+    tz,
+    body.weekStartsOn === 1 ? 1 : 0,
   );
   const categoryNames = new Map(body.categories.map((category) => [category.id, category.name]));
-  const line = (item: ReqBody["items"][number]) => [
-    item.id, item.type, item.status ?? "", localStamp(item.at, tz),
-    item.endAt ? localStamp(item.endAt, tz) : "",
-    item.title.slice(0, 120),
-    (item.categoryId && categoryNames.get(item.categoryId)) || "",
-    item.location?.slice(0, 60) ?? "",
-  ].join("|");
+  const line = (item: ReqBody["items"][number]) =>
+    [
+      item.id,
+      item.type,
+      item.status ?? "",
+      localStamp(item.at, tz),
+      item.endAt ? localStamp(item.endAt, tz) : "",
+      item.title.slice(0, 120),
+      (item.categoryId && categoryNames.get(item.categoryId)) || "",
+      item.location?.slice(0, 60) ?? "",
+    ].join("|");
   const entry = (e: { title: string; at: string; status?: string }) =>
     `${e.title.slice(0, 80)} @ ${localStamp(e.at, tz)}${e.status && e.status !== "todo" ? ` [${e.status}]` : ""}`;
   const compactDigest = {
     dueToday: digest.dueToday.map(entry),
-    dueThisWeek: digest.dueThisWeek.filter((e) => !digest.dueToday.some((t) => t.id === e.id)).map(entry),
+    dueThisWeek: digest.dueThisWeek
+      .filter((e) => !digest.dueToday.some((t) => t.id === e.id))
+      .map(entry),
     overdue: digest.overdue.map(entry),
     inProgress: digest.inProgress.map(entry),
     completedLast7Days: digest.completedLast7Days,
@@ -101,9 +143,13 @@ Authoritative digest (local times): ${JSON.stringify(compactDigest)}
 Calendar snapshot, one item per line as id|type|status|start (local)|end|title|class|location, open work and soonest first${hidden > 0 ? `; ${hidden} more not shown, use list_events/list_tasks for them` : ""}:
 ${snapshot}
 
-${syllabi ? `${syllabi}
+${
+  syllabi
+    ? `${syllabi}
 
-` : ""}Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the current time and timezone above. Use ISO 8601 with an explicit offset in tool arguments.
+`
+    : ""
+}Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the current time and timezone above. Use ISO 8601 with an explicit offset in tool arguments.
 
 Keep the final response short and natural: 1-3 sentences or a compact bullet list, no heading or table. Use bold only for useful titles, dates, times, or counts. Never expose provider internals or tool JSON.`;
 }
@@ -111,18 +157,32 @@ Keep the final response short and natural: 1-3 sentences or a compact bullet lis
 /** Only recent plain user/assistant turns matter; long old replies just burn tokens. */
 function trimHistory(messages: ChatMessage[]): ChatMessage[] {
   return messages
-    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+    .filter(
+      (m) =>
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.trim(),
+    )
     .slice(-HISTORY_TURNS)
     .map((m) => ({ role: m.role, content: (m.content as string).slice(0, HISTORY_TURN_CHARS) }));
 }
 
 function requestHistory(body: ReqBody): ChatMessage[] {
-  return trimHistory((body.history ?? [])
-    .filter((turn) => turn && typeof turn.text === "string" && turn.text.trim())
-    .map((turn) => ({ role: turn.role, content: turn.text.trim() })));
+  return trimHistory(
+    (body.history ?? [])
+      .filter((turn) => turn && typeof turn.text === "string" && turn.text.trim())
+      .map((turn) => ({ role: turn.role, content: turn.text.trim() })),
+  );
 }
 
-const MUTATION_TOOLS = new Set(["add_event", "update_event", "delete_event", "add_task", "update_task", "delete_task"]);
+const MUTATION_TOOLS = new Set([
+  "add_event",
+  "update_event",
+  "delete_event",
+  "add_task",
+  "update_task",
+  "delete_task",
+]);
 
 function confirmationText(actions: unknown[]): string {
   const lines = actions
@@ -149,28 +209,38 @@ async function runAgent(opts: {
     if (opts.budget.left <= 0) throw new Error("Assistant model-call budget exhausted");
     opts.budget.left -= 1;
     const completion = await createChatCompletion({
-      provider: opts.provider, key: opts.key, messages, tools: DATEBOOK_TOOLS,
+      provider: opts.provider,
+      key: opts.key,
+      messages,
+      tools: DATEBOOK_TOOLS,
     });
     latencyMs += completion.latencyMs;
     const reply = completion.message;
     messages.push(reply);
     if (!reply.tool_calls?.length) {
       return {
-        text: reply.content?.trim() || "I couldn't produce a useful answer. Try rephrasing that request.",
-        actions, latencyMs,
+        text:
+          reply.content?.trim() ||
+          "I couldn't produce a useful answer. Try rephrasing that request.",
+        actions,
+        latencyMs,
       };
     }
     let allStaged = true;
     for (const call of reply.tool_calls) {
       try {
         const result = await executeDatebookTool(call.function.name, call.function.arguments, {
-          userId: opts.userId, threadId: opts.threadId, body: opts.body,
+          userId: opts.userId,
+          threadId: opts.threadId,
+          body: opts.body,
         });
         if (result.action) actions.push(result.action);
         else allStaged = false;
         if (!MUTATION_TOOLS.has(call.function.name)) allStaged = false;
         messages.push({
-          role: "tool", tool_call_id: call.id, name: call.function.name,
+          role: "tool",
+          tool_call_id: call.id,
+          name: call.function.name,
           content: JSON.stringify(result.output),
         });
       } catch (error) {
@@ -178,8 +248,13 @@ async function runAgent(opts: {
         malformedRetries += 1;
         allStaged = false;
         messages.push({
-          role: "tool", tool_call_id: call.id, name: call.function.name,
-          content: JSON.stringify({ error: error.details, retry: "Call the same tool once with valid arguments." }),
+          role: "tool",
+          tool_call_id: call.id,
+          name: call.function.name,
+          content: JSON.stringify({
+            error: error.details,
+            retry: "Call the same tool once with valid arguments.",
+          }),
         });
       }
     }
@@ -209,10 +284,12 @@ export async function POST(request: Request) {
     !rateLimit("assistant:global:minute", 240, 60_000) ||
     !(await durableHourlyLimit(limitKey, 60, { failClosed: true })) ||
     !(await durableHourlyLimit("assistant:global", 3_000, { failClosed: true }))
-  ) return tooMany();
+  )
+    return tooMany();
 
   const rawText = await request.text();
-  if (rawText.length > MAX_ASSISTANT_BODY) return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
+  if (rawText.length > MAX_ASSISTANT_BODY)
+    return NextResponse.json({ error: "payload-too-large" }, { status: 413 });
   let body: ReqBody;
   try {
     body = JSON.parse(rawText) as ReqBody;
@@ -220,8 +297,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "bad-request" }, { status: 400 });
   }
   if (!body?.message?.trim()) return NextResponse.json({ error: "empty-message" }, { status: 400 });
-  if (body.message.length > MAX_ASSISTANT_MESSAGE) return NextResponse.json({ error: "message-too-long" }, { status: 400 });
-  body.now = Number.isNaN(+new Date(body.now)) ? new Date().toISOString() : new Date(body.now).toISOString();
+  if (body.message.length > MAX_ASSISTANT_MESSAGE)
+    return NextResponse.json({ error: "message-too-long" }, { status: 400 });
+  body.now = Number.isNaN(+new Date(body.now))
+    ? new Date().toISOString()
+    : new Date(body.now).toISOString();
   body.items = Array.isArray(body.items)
     ? selectAssistantItems(body.items, body.now, body.timeZone || "UTC", MAX_ASSISTANT_ITEMS)
     : [];
@@ -239,7 +319,10 @@ export async function POST(request: Request) {
       if (!history.length && stored.length) history = trimHistory(stored);
       await storeAssistantMessage({ userId: user.id, threadId, role: "user", text: body.message });
     } catch (error) {
-      console.error("[assistant] history write failed", error instanceof Error ? error.name : "unknown");
+      console.error(
+        "[assistant] history write failed",
+        error instanceof Error ? error.name : "unknown",
+      );
     }
   }
   const messages: ChatMessage[] = [
@@ -251,19 +334,30 @@ export async function POST(request: Request) {
   const budget = { left: MAX_MODEL_CALLS };
   try {
     const result = await callRoutedProvider({
-      selectedId, messages, tools: DATEBOOK_TOOLS,
-      run: (provider, key) => runAgent({ provider, key, messages, userId: user?.id ?? null, threadId, body, budget }),
+      selectedId,
+      messages,
+      tools: DATEBOOK_TOOLS,
+      run: (provider, key) =>
+        runAgent({ provider, key, messages, userId: user?.id ?? null, threadId, body, budget }),
     });
     let actions = normalizeActions(result.actions, body);
-    if (isPureQuestion(body.message)) actions = actions.filter((action) => action.kind !== "create");
+    if (isPureQuestion(body.message))
+      actions = actions.filter((action) => action.kind !== "create");
     if (threadId) {
       try {
         await storeAssistantMessage({
-          userId: user.id, threadId, role: "assistant", text: result.text,
-          providerId: result.provider.id, model: result.provider.model,
+          userId: user.id,
+          threadId,
+          role: "assistant",
+          text: result.text,
+          providerId: result.provider.id,
+          model: result.provider.model,
         });
       } catch (error) {
-        console.error("[assistant] history write failed", error instanceof Error ? error.name : "unknown");
+        console.error(
+          "[assistant] history write failed",
+          error instanceof Error ? error.name : "unknown",
+        );
       }
     }
     const fallbackNotice = result.fellBack
@@ -276,7 +370,10 @@ export async function POST(request: Request) {
       fallbackNotice,
     });
   } catch (error) {
-    console.error("[assistant] all providers unavailable", error instanceof Error ? error.name : "unknown");
+    console.error(
+      "[assistant] all providers unavailable",
+      error instanceof Error ? error.name : "unknown",
+    );
     return NextResponse.json({ error: "assistant-unreachable" }, { status: 200 });
   }
 }

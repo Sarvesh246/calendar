@@ -73,7 +73,7 @@ export interface SyllabusSnapshot {
 export function applySyllabusImportToSnapshot(
   snapshot: SyllabusSnapshot,
   request: SyllabusImportRequest,
-  opts?: { now?: string; id?: () => string }
+  opts?: { now?: string; id?: () => string },
 ): { snapshot: SyllabusSnapshot; result: SyllabusImportResult } {
   const now = opts?.now ?? new Date().toISOString();
   const nextId = opts?.id ?? nanoid;
@@ -126,22 +126,25 @@ export function applySyllabusImportToSnapshot(
   const syllabusSourceId = existingSource?.id ?? nextId();
 
   if (pendingNew) {
-    categories = [
-      ...categories,
-      { ...pendingNew, sourceId: syllabusSourceId, updatedAt: now },
-    ];
+    categories = [...categories, { ...pendingNew, sourceId: syllabusSourceId, updatedAt: now }];
   }
   // A newer syllabus is the better source; an import with no details keeps the old ones.
   if (request.info) {
-    const info = { ...request.info, importedAt: now, ...(request.fileName ? { fileName: request.fileName } : {}) };
-    categories = categories.map((c) => (c.id === categoryId ? { ...c, syllabus: info, updatedAt: now } : c));
+    const info = {
+      ...request.info,
+      importedAt: now,
+      ...(request.fileName ? { fileName: request.fileName } : {}),
+    };
+    categories = categories.map((c) =>
+      c.id === categoryId ? { ...c, syllabus: info, updatedAt: now } : c,
+    );
   }
 
   const matches = matchSyllabusItems(request.drafts, items, { timeZone, categoryId });
   const seenUid = new Set(
     items
       .filter((i) => i.sourceId === syllabusSourceId && i.sourceUid)
-      .map((i) => i.sourceUid as string)
+      .map((i) => i.sourceUid as string),
   );
 
   let added = 0;
@@ -151,8 +154,7 @@ export function applySyllabusImportToSnapshot(
 
   request.drafts.forEach((draft, index) => {
     const match = matches[index];
-    const decision =
-      request.decisions?.[index] ?? defaultSyllabusDecision(match?.verdict ?? "new");
+    const decision = request.decisions?.[index] ?? defaultSyllabusDecision(match?.verdict ?? "new");
     if (decision === "skip") return;
 
     const existing = match?.existing ? byId.get(match.existing.id) : undefined;
@@ -230,7 +232,7 @@ export function applySyllabusImportToSnapshot(
 export function recountSyllabusItemCounts(
   sources: ImportSource[],
   items: Item[],
-  now: string
+  now: string,
 ): ImportSource[] {
   const counts = new Map<string, number>();
   for (const item of items) {
@@ -256,7 +258,7 @@ function patchMatchedItem(item: Item, draft: SyllabusDraft, now: string): Item {
 
 function draftToItem(
   draft: SyllabusDraft,
-  ids: { id: string; categoryId: string; sourceId: string; sourceUid: string; now: string }
+  ids: { id: string; categoryId: string; sourceId: string; sourceUid: string; now: string },
 ): Item {
   const item: Item = {
     id: ids.id,
@@ -281,7 +283,7 @@ function stampTombstones(
   current: TombstoneMap,
   kind: "item" | "category",
   ids: string[],
-  at: string
+  at: string,
 ): TombstoneMap {
   if (ids.length === 0) return current;
   const next = { ...current };

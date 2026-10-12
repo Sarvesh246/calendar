@@ -26,8 +26,20 @@ import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 /* ------------------------------------------------------------------ */
 
 export type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt">; serverActionId?: string }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item>; serverActionId?: string }
+  | {
+      kind: "create";
+      summary: string;
+      draft: Omit<Item, "id" | "createdAt">;
+      serverActionId?: string;
+    }
+  | {
+      kind: "update";
+      summary: string;
+      itemId: string;
+      itemTitle: string;
+      patch: Partial<Item>;
+      serverActionId?: string;
+    }
   | { kind: "delete"; summary: string; itemId: string; itemTitle: string; serverActionId?: string };
 
 export interface AssistantResponse {
@@ -122,7 +134,10 @@ function endOfCalendarWeekKey(now: Date, timeZone: string, weekStartsOn: 0 | 1):
   return addDaysToDateKey(todayKey, (weekEndDow - dow + 7) % 7);
 }
 
-function categoryNameFor(id: string | undefined, categories: Pick<Category, "id" | "name">[]): string | undefined {
+function categoryNameFor(
+  id: string | undefined,
+  categories: Pick<Category, "id" | "name">[],
+): string | undefined {
   if (!id) return undefined;
   return categories.find((c) => c.id === id)?.name;
 }
@@ -182,7 +197,7 @@ export function selectAssistantItems<T extends RankedItem>(
   items: T[],
   nowIso: string,
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
-  cap = 600
+  cap = 600,
 ): T[] {
   const now = new Date(nowIso);
   const nowMs = now.getTime();
@@ -249,7 +264,7 @@ export function buildAssistantDigest(
   categories: Pick<Category, "id" | "name">[],
   nowIso: string,
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
-  weekStartsOn: 0 | 1 = 0
+  weekStartsOn: 0 | 1 = 0,
 ): AssistantDigest {
   const now = new Date(nowIso);
   const todayKey = zonedDateKey(now, timeZone);
@@ -295,7 +310,9 @@ export function buildAssistantDigest(
 }
 
 function asksAboutCompletedWork(q: string): boolean {
-  return /\b(finished|completed|complete|did i finish|what did i|have i finished|checked off|done with)\b/.test(q);
+  return /\b(finished|completed|complete|did i finish|what did i|have i finished|checked off|done with)\b/.test(
+    q,
+  );
 }
 
 const STARTER_SUGGESTIONS = [
@@ -315,8 +332,7 @@ const COMMAND_VERBS =
 const QUESTION_OPENERS =
   /^(what|whats|when|whens|where|wheres|which|who|why|how|do i|did i|have i|am i|are there|is there|will i|can you|could you|should i|show me|list|tell me|remind me what|how many|how much|when'?s)\b/i;
 
-const CREATE_VERBS =
-  /^(add|create|schedule|new|set up|book|block off|remind me to|put)\b/i;
+const CREATE_VERBS = /^(add|create|schedule|new|set up|book|block off|remind me to|put)\b/i;
 
 /**
  * Decide whether text typed into the quick-add bar is really a question or a
@@ -335,11 +351,11 @@ export function shouldAskAssistant(text: string): boolean {
 /** Long or multi-part creates the local parser shouldn't silently guess at. */
 export function looksLikeRichCreate(text: string): boolean {
   const t = text.trim();
-  const reminderHits = t.match(
-    /\b(?:remind(?:er|ers| me)|ping me|nudge me|don'?t forget)\b/gi
-  )?.length ?? 0;
+  const reminderHits =
+    t.match(/\b(?:remind(?:er|ers| me)|ping me|nudge me|don'?t forget)\b/gi)?.length ?? 0;
   const hasLocation = /\bat the\b|\bin the\b|\blocation\b|\bby the\b/i.test(t);
-  const hasTime = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bat\s+\d{1,2}(?::\d{2})?\b|\b\d{1,2}:\d{2}\b/i.test(t);
+  const hasTime =
+    /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bat\s+\d{1,2}(?::\d{2})?\b|\b\d{1,2}:\d{2}\b/i.test(t);
   const multiReminder = reminderHits >= 2 || /\ba reminder\b[\s\S]+\ba reminder\b/i.test(t);
   return (
     multiReminder ||
@@ -358,7 +374,10 @@ export function shouldHandOffToAssistant(text: string): boolean {
   if (COMMAND_VERBS.test(t)) return true;
   if (QUESTION_OPENERS.test(t)) return true;
   if (looksLikeRichCreate(t)) return true;
-  if (t.endsWith("?") && (CREATE_VERBS.test(t) || /\b(add|create|schedule|what|when|where|how)\b/i.test(t)))
+  if (
+    t.endsWith("?") &&
+    (CREATE_VERBS.test(t) || /\b(add|create|schedule|what|when|where|how)\b/i.test(t))
+  )
     return true;
   return false;
 }
@@ -370,7 +389,7 @@ export function shouldHandOffToAssistant(text: string): boolean {
 export async function askAssistant(
   message: string,
   history: AssistantTurn[],
-  ctx: AssistantCtx
+  ctx: AssistantCtx,
 ): Promise<AssistantResponse> {
   // Most daily asks are lookups or one-item edits over data already on this
   // device. Answer those here (same voice, same confirm cards) and keep the
@@ -405,7 +424,11 @@ export async function askAssistant(
         clock24h: ctx.clock24h,
         weekStartsOn: ctx.weekStartsOn ?? 0,
         items: selectAssistantItems(ctx.items, new Date().toISOString()).map(toAssistantSlimItem),
-        categories: ctx.categories.map((c) => ({ id: c.id, name: c.name, ...(c.syllabus ? { syllabus: c.syllabus } : {}) })),
+        categories: ctx.categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          ...(c.syllabus ? { syllabus: c.syllabus } : {}),
+        })),
       }),
     });
     if (res.status === 401) {
@@ -451,7 +474,10 @@ export async function askAssistant(
 }
 
 /** Defensive pass over server actions before the store applies them. */
-function sanitizeActions(actions: AssistantResponse["actions"], ctx: AssistantCtx): AssistantAction[] | undefined {
+function sanitizeActions(
+  actions: AssistantResponse["actions"],
+  ctx: AssistantCtx,
+): AssistantAction[] | undefined {
   if (!Array.isArray(actions)) return undefined;
   const ids = new Set(ctx.items.map((i) => i.id));
   const catIds = new Set(ctx.categories.map((c) => c.id));
@@ -461,7 +487,8 @@ function sanitizeActions(actions: AssistantResponse["actions"], ctx: AssistantCt
     if (a.kind === "create") {
       if (!a.draft?.title || !a.draft?.at || Number.isNaN(+new Date(a.draft.at))) continue;
       const draft = { ...a.draft };
-      if (!draft.categoryId || !catIds.has(draft.categoryId)) draft.categoryId = ctx.categories[0]?.id ?? "";
+      if (!draft.categoryId || !catIds.has(draft.categoryId))
+        draft.categoryId = ctx.categories[0]?.id ?? "";
       out.push({ kind: "create", summary: a.summary, draft, serverActionId: a.serverActionId });
     } else if (a.kind === "update") {
       if (!ids.has(a.itemId) || !a.patch || Object.keys(a.patch).length === 0) continue;
@@ -483,7 +510,13 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
   const q = raw.toLowerCase();
   const fmtTime = (iso: string) => format(new Date(iso), ctx.clock24h ? "HH:mm" : "h:mm a");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const digest = buildAssistantDigest(ctx.items, ctx.categories, now.toISOString(), tz, ctx.weekStartsOn ?? 0);
+  const digest = buildAssistantDigest(
+    ctx.items,
+    ctx.categories,
+    now.toISOString(),
+    tz,
+    ctx.weekStartsOn ?? 0,
+  );
   const open = ctx.items.filter(isOpenWork);
   const wantsCompleted = asksAboutCompletedWork(q);
 
@@ -497,13 +530,19 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     return {
       text: `Delete “${target.title}” (${when(target, fmtTime)})?`,
       actions: [
-        { kind: "delete", summary: `Delete “${target.title}”`, itemId: target.id, itemTitle: target.title },
+        {
+          kind: "delete",
+          summary: `Delete “${target.title}”`,
+          itemId: target.id,
+          itemTitle: target.title,
+        },
       ],
     };
   }
 
   // mark done / reopen
-  const done = raw.match(/^(?:mark|set)\s+(.+?)\s+(?:as\s+)?(done|complete|completed|finished)\b/i) ||
+  const done =
+    raw.match(/^(?:mark|set)\s+(.+?)\s+(?:as\s+)?(done|complete|completed|finished)\b/i) ||
     raw.match(/^(?:complete|finish|check off)\s+(?:the\s+|my\s+)?(.+)/i);
   if (done) {
     const target = findItem(ctx.items, done[1]);
@@ -511,7 +550,13 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     return {
       text: `Mark “${target.title}” done?`,
       actions: [
-        { kind: "update", summary: `Mark “${target.title}” done`, itemId: target.id, itemTitle: target.title, patch: { status: "done" } },
+        {
+          kind: "update",
+          summary: `Mark “${target.title}” done`,
+          itemId: target.id,
+          itemTitle: target.title,
+          patch: { status: "done" },
+        },
       ],
     };
   }
@@ -522,7 +567,13 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     return {
       text: `Reopen “${target.title}”?`,
       actions: [
-        { kind: "update", summary: `Reopen “${target.title}”`, itemId: target.id, itemTitle: target.title, patch: { status: "todo" } },
+        {
+          kind: "update",
+          summary: `Reopen “${target.title}”`,
+          itemId: target.id,
+          itemTitle: target.title,
+          patch: { status: "todo" },
+        },
       ],
     };
   }
@@ -536,19 +587,29 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     return {
       text: `Rename “${target.title}” to “${title}”?`,
       actions: [
-        { kind: "update", summary: `Rename to “${title}”`, itemId: target.id, itemTitle: target.title, patch: { title } },
+        {
+          kind: "update",
+          summary: `Rename to “${title}”`,
+          itemId: target.id,
+          itemTitle: target.title,
+          patch: { title },
+        },
       ],
     };
   }
 
   // move / reschedule / push
-  const move = raw.match(/^(?:move|reschedule|push|bump|shift)\s+(.+?)\s+(?:to|for|until|->)\s+(.+)/i);
+  const move = raw.match(
+    /^(?:move|reschedule|push|bump|shift)\s+(.+?)\s+(?:to|for|until|->)\s+(.+)/i,
+  );
   if (move) {
     const target = findItem(ctx.items, move[1]);
     if (!target) return miss(move[1]);
     const dest = resolveDate(move[2]);
     if (!dest) {
-      return { text: `I found “${target.title}” but couldn't read the new date “${move[2]}”. Try "move ${move[1].trim()} to Friday" or a date like "Sep 3".` };
+      return {
+        text: `I found “${target.title}” but couldn't read the new date “${move[2]}”. Try "move ${move[1].trim()} to Friday" or a date like "Sep 3".`,
+      };
     }
     const orig = new Date(target.at);
     const at = setMinutes(setHours(dest, orig.getHours()), orig.getMinutes());
@@ -633,15 +694,25 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
   if (/\b(overdue|late|behind|past due)\b/.test(q)) {
     const od = digest.overdue;
     return {
-      text: od.length === 0 ? "Nothing overdue — you're on top of it." : `${od.length} overdue: ${digestList(od)}.`,
+      text:
+        od.length === 0
+          ? "Nothing overdue — you're on top of it."
+          : `${od.length} overdue: ${digestList(od)}.`,
       suggestions: ["What's due this week?", "What's on today?"],
     };
   }
 
   if (wantsCompleted && !/\b(add|create|move|delete|mark|rename)\b/.test(q)) {
     const { count, titles } = digest.completedLast7Days;
-    if (count === 0) return { text: "Nothing completed in the last 7 days.", suggestions: ["What's due this week?"] };
-    const listed = titles.slice(0, 8).map((t) => `**${t}**`).join(", ");
+    if (count === 0)
+      return {
+        text: "Nothing completed in the last 7 days.",
+        suggestions: ["What's due this week?"],
+      };
+    const listed = titles
+      .slice(0, 8)
+      .map((t) => `**${t}**`)
+      .join(", ");
     const more = count > titles.length ? ` (+${count - titles.length} more)` : "";
     return {
       text: `You finished **${count}** item${count === 1 ? "" : "s"} in the last 7 days: ${listed}${more}.`,
@@ -651,7 +722,9 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
 
   if (/\bbusiest\b/.test(q)) return busiestDay(ctx);
 
-  if (/(free|open|available).*(time|slot|day|today|tomorrow|week)|am i free|do i have time/.test(q)) {
+  if (
+    /(free|open|available).*(time|slot|day|today|tomorrow|week)|am i free|do i have time/.test(q)
+  ) {
     return freeTime(q, ctx, fmtTime);
   }
 
@@ -683,11 +756,25 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
   }
 
   // "what's on / do I have <day>"
-  const dayQ = raw.match(/\b(?:what(?:'s| is| do i have| have i got)?|anything|what about|show me)\b.*?\b(today|tomorrow|tonight|this weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|\w+ \d{1,2})\b/i);
+  const dayQ = raw.match(
+    /\b(?:what(?:'s| is| do i have| have i got)?|anything|what about|show me)\b.*?\b(today|tomorrow|tonight|this weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|\w+ \d{1,2})\b/i,
+  );
   if (dayQ) {
     const key = dayQ[1].toLowerCase();
-    if (key === "this week") return rangeAnswer("this week", startOfDay(new Date()), addDays(startOfDay(new Date()), 7), ctx);
-    if (key === "next week") return rangeAnswer("next week", addWeeks(startOfDay(new Date()), 1), addWeeks(addDays(startOfDay(new Date()), 7), 1), ctx);
+    if (key === "this week")
+      return rangeAnswer(
+        "this week",
+        startOfDay(new Date()),
+        addDays(startOfDay(new Date()), 7),
+        ctx,
+      );
+    if (key === "next week")
+      return rangeAnswer(
+        "next week",
+        addWeeks(startOfDay(new Date()), 1),
+        addWeeks(addDays(startOfDay(new Date()), 7), 1),
+        ctx,
+      );
     if (key === "this weekend") {
       const sat = nextDay(startOfDay(new Date()), 6);
       return rangeAnswer("this weekend", isToday(sat) ? sat : sat, addDays(sat, 2), ctx);
@@ -696,9 +783,22 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     if (d) return dayAnswer(d, ctx, fmtTime, wantsCompleted);
   }
 
-  if (/due (this week|soon)|this week/.test(q)) return rangeAnswer("this week", startOfDay(new Date()), addDays(startOfDay(new Date()), 7), ctx);
-  if (/next week/.test(q)) return rangeAnswer("next week", addWeeks(startOfDay(new Date()), 1), addWeeks(addDays(startOfDay(new Date()), 7), 1), ctx);
-  if (/due today|what'?s? (due )?today|today/.test(q)) return dayAnswer(new Date(), ctx, fmtTime, wantsCompleted);
+  if (/due (this week|soon)|this week/.test(q))
+    return rangeAnswer(
+      "this week",
+      startOfDay(new Date()),
+      addDays(startOfDay(new Date()), 7),
+      ctx,
+    );
+  if (/next week/.test(q))
+    return rangeAnswer(
+      "next week",
+      addWeeks(startOfDay(new Date()), 1),
+      addWeeks(addDays(startOfDay(new Date()), 7), 1),
+      ctx,
+    );
+  if (/due today|what'?s? (due )?today|today/.test(q))
+    return dayAnswer(new Date(), ctx, fmtTime, wantsCompleted);
   if (/tomorrow/.test(q)) return dayAnswer(addDays(new Date(), 1), ctx, fmtTime, wantsCompleted);
 
   if (/how many|count|number of/.test(q)) {
@@ -709,7 +809,9 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
     const todayBound = /\btoday\b/.test(q) && !thisWeek && !bySunday;
 
     if (wantsEvents && !wantsWork) {
-      const events = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(now)).length;
+      const events = ctx.items.filter(
+        (i) => i.type === "event" && new Date(i.at) >= startOfDay(now),
+      ).length;
       return {
         text: `You have **${events}** upcoming event${events === 1 ? "" : "s"}.`,
         suggestions: ["What's on today?", "What's due this week?"],
@@ -731,7 +833,9 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
       pool = open.map((i) => toDigestEntry(i, ctx.categories));
       label = "open";
     } else {
-      const events = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(now)).length;
+      const events = ctx.items.filter(
+        (i) => i.type === "event" && new Date(i.at) >= startOfDay(now),
+      ).length;
       return {
         text: `You have **${open.length}** open task${open.length === 1 ? "" : "s"} and **${events}** upcoming event${events === 1 ? "" : "s"}.`,
         suggestions: ["What's due this week?", "What's my busiest day?"],
@@ -750,8 +854,15 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
   }
 
   if (/\b(list|show|all)\b.*\bevents?\b/.test(q)) {
-    const ev = ctx.items.filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(new Date())).sort((a, b) => +new Date(a.at) - +new Date(b.at)).slice(0, 12);
-    return { text: ev.length ? `Upcoming events: ${ev.map((e) => `${e.title} (${dayPhrase(new Date(e.at))})`).join(", ")}.` : "No upcoming events." };
+    const ev = ctx.items
+      .filter((i) => i.type === "event" && new Date(i.at) >= startOfDay(new Date()))
+      .sort((a, b) => +new Date(a.at) - +new Date(b.at))
+      .slice(0, 12);
+    return {
+      text: ev.length
+        ? `Upcoming events: ${ev.map((e) => `${e.title} (${dayPhrase(new Date(e.at))})`).join(", ")}.`
+        : "No upcoming events.",
+    };
   }
 
   /* --- default ------------------------------------------------- */
@@ -769,7 +880,11 @@ export function localAnswer(query: string, ctx: AssistantCtx, now = new Date()):
 /* ------------------------------------------------------------------ */
 
 function findItem(items: Item[], q: string): Item | undefined {
-  const needle = q.trim().toLowerCase().replace(/^["']|["'?.]+$/g, "").trim();
+  const needle = q
+    .trim()
+    .toLowerCase()
+    .replace(/^["']|["'?.]+$/g, "")
+    .trim();
   if (!needle) return undefined;
   return (
     items.find((i) => i.title.toLowerCase() === needle) ||
@@ -783,7 +898,10 @@ function findItem(items: Item[], q: string): Item | undefined {
 }
 
 function resolveDate(text: string): Date | null {
-  const t = text.trim().toLowerCase().replace(/^(on|the)\s+/, "");
+  const t = text
+    .trim()
+    .toLowerCase()
+    .replace(/^(on|the)\s+/, "");
   const today = startOfDay(new Date());
   if (/^(today|tonight)\b/.test(t)) return today;
   if (/^tomorrow\b/.test(t)) return addDays(today, 1);
@@ -792,14 +910,16 @@ function resolveDate(text: string): Date | null {
   const inWeeks = t.match(/^in\s+(\d+)\s+weeks?/);
   if (inWeeks) return addDays(today, parseInt(inWeeks[1], 10) * 7);
   const nextWd = t.match(/^next\s+(\w+)/);
-  if (nextWd && WEEKDAYS[nextWd[1]] !== undefined) return addDays(nextDay(today, WEEKDAYS[nextWd[1]]), 7);
+  if (nextWd && WEEKDAYS[nextWd[1]] !== undefined)
+    return addDays(nextDay(today, WEEKDAYS[nextWd[1]]), 7);
   for (const [name, dow] of Object.entries(WEEKDAYS)) {
     if (new RegExp(`^${name}\\b`).test(t)) return thisOrNextWeekday(dow, today);
   }
   for (const fmt of ["MMMM d", "MMM d", "M/d", "MM/dd", "yyyy-MM-dd", "d MMMM", "d MMM"]) {
     const d = parse(t, fmt, new Date());
     if (!Number.isNaN(+d)) {
-      if (d.getTime() < today.getTime() - 86_400_000 && !/\d{4}/.test(t)) d.setFullYear(d.getFullYear() + 1);
+      if (d.getTime() < today.getTime() - 86_400_000 && !/\d{4}/.test(t))
+        d.setFullYear(d.getFullYear() + 1);
       return startOfDay(d);
     }
   }
@@ -826,7 +946,10 @@ function daysAway(d: Date): string {
 }
 
 function list(items: Item[]): string {
-  return items.slice(0, 8).map((i) => `${i.title} (${dayPhrase(new Date(i.at))})`).join(", ");
+  return items
+    .slice(0, 8)
+    .map((i) => `${i.title} (${dayPhrase(new Date(i.at))})`)
+    .join(", ");
 }
 
 function digestList(entries: DigestEntry[]): string {
@@ -843,10 +966,16 @@ function miss(q: string): AssistantResponse {
   };
 }
 
-function dayAnswer(day: Date, ctx: AssistantCtx, fmtTime: (iso: string) => string, wantsCompleted = false): AssistantResponse {
+function dayAnswer(
+  day: Date,
+  ctx: AssistantCtx,
+  fmtTime: (iso: string) => string,
+  wantsCompleted = false,
+): AssistantResponse {
   const on = ctx.items
     .filter((i) => {
-      if (wantsCompleted) return i.status === "done" && isSameDay(new Date(i.completedAt ?? i.at), day);
+      if (wantsCompleted)
+        return i.status === "done" && isSameDay(new Date(i.completedAt ?? i.at), day);
       if (i.type === "event") return i.status !== "done" && itemOccupiesDay(i, day);
       if (!isSameDay(new Date(i.at), day)) return false;
       return i.status !== "done";
@@ -874,11 +1003,16 @@ function rangeAnswer(label: string, start: Date, end: Date, ctx: AssistantCtx): 
   const inRange = ctx.items.filter((i) => isWithinInterval(new Date(i.at), { start, end }));
   const due = inRange.filter((i) => i.type !== "event" && i.status !== "done");
   const events = inRange.filter((i) => i.type === "event" && i.status !== "done");
-  if (due.length === 0 && events.length === 0) return { text: `Nothing outstanding ${label}.`, suggestions: ["What's on today?"] };
+  if (due.length === 0 && events.length === 0)
+    return { text: `Nothing outstanding ${label}.`, suggestions: ["What's on today?"] };
   const parts: string[] = [];
   if (due.length) parts.push(`${due.length} due (${list(due)})`);
-  if (events.length) parts.push(`${events.length} event${events.length === 1 ? "" : "s"} (${list(events)})`);
-  return { text: `${cap(label)}: ${parts.join("; ")}.`, suggestions: ["What's my busiest day?", "What's on today?"] };
+  if (events.length)
+    parts.push(`${events.length} event${events.length === 1 ? "" : "s"} (${list(events)})`);
+  return {
+    text: `${cap(label)}: ${parts.join("; ")}.`,
+    suggestions: ["What's my busiest day?", "What's on today?"],
+  };
 }
 
 function busiestDay(ctx: AssistantCtx): AssistantResponse {
@@ -902,13 +1036,18 @@ function busiestDay(ctx: AssistantCtx): AssistantResponse {
   };
 }
 
-function freeTime(q: string, ctx: AssistantCtx, fmtTime: (iso: string) => string): AssistantResponse {
+function freeTime(
+  q: string,
+  ctx: AssistantCtx,
+  fmtTime: (iso: string) => string,
+): AssistantResponse {
   const day = /tomorrow/.test(q) ? addDays(new Date(), 1) : new Date();
   const events = ctx.items
     .filter((i) => i.type === "event" && !i.allDay && isSameDay(new Date(i.at), day))
     .sort((a, b) => +new Date(a.at) - +new Date(b.at));
   const label = isToday(day) ? "today" : "tomorrow";
-  if (events.length === 0) return { text: `You have no timed events ${label} — the day's wide open.` };
+  if (events.length === 0)
+    return { text: `You have no timed events ${label} — the day's wide open.` };
   const busy = events
     .map((e) => `${fmtTime(e.at)}${e.endAt ? `–${fmtTime(e.endAt)}` : ""} ${e.title}`)
     .join(", ");

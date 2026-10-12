@@ -63,8 +63,20 @@ interface RawAction {
 }
 
 export type AssistantAction =
-  | { kind: "create"; summary: string; draft: Omit<Item, "id" | "createdAt">; serverActionId?: string }
-  | { kind: "update"; summary: string; itemId: string; itemTitle: string; patch: Partial<Item>; serverActionId?: string }
+  | {
+      kind: "create";
+      summary: string;
+      draft: Omit<Item, "id" | "createdAt">;
+      serverActionId?: string;
+    }
+  | {
+      kind: "update";
+      summary: string;
+      itemId: string;
+      itemTitle: string;
+      patch: Partial<Item>;
+      serverActionId?: string;
+    }
   | { kind: "delete"; summary: string; itemId: string; itemTitle: string; serverActionId?: string };
 
 export function isPureQuestion(message: string): boolean {
@@ -76,7 +88,7 @@ export function isPureQuestion(message: string): boolean {
   return (
     t.endsWith("?") ||
     /^(what|when|where|which|who|why|how|do i|did i|have i|am i|is there|are there|will i|can you|could you|would you|should i|show me|list|tell me)\b/.test(
-      t
+      t,
     )
   );
 }
@@ -95,7 +107,7 @@ function parseRepeat(a: RawAction, at: string): RepeatRule | undefined {
         ...new Set(
           a.repeatDays
             .map((d) => (typeof d === "number" ? d : Number(d)))
-            .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+            .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
         ),
       ].sort((x, y) => x - y)
     : [];
@@ -193,7 +205,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         patch.title = a.title.trim();
       if (a.categoryId && catIds.has(a.categoryId) && a.categoryId !== target.categoryId)
         patch.categoryId = a.categoryId;
-      if (a.status === "todo" || a.status === "doing" || a.status === "done") patch.status = a.status;
+      if (a.status === "todo" || a.status === "doing" || a.status === "done")
+        patch.status = a.status;
       if (a.clearLocation) patch.location = undefined;
       else if (
         typeof a.location === "string" &&
@@ -208,7 +221,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         a.description.trim() !== target.description
       )
         patch.description = a.description.trim();
-      if (typeof a.allDay === "boolean" && a.allDay !== Boolean(target.allDay)) patch.allDay = a.allDay;
+      if (typeof a.allDay === "boolean" && a.allDay !== Boolean(target.allDay))
+        patch.allDay = a.allDay;
       if (
         (a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task") &&
         a.itemType !== target.type
@@ -216,7 +230,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         patch.type = a.itemType;
 
       const reminders = parseActionReminders(a.reminders);
-      if (reminders !== undefined) patch.reminders = reminders.map((r) => ({ ...r, itemId: target.id }));
+      if (reminders !== undefined)
+        patch.reminders = reminders.map((r) => ({ ...r, itemId: target.id }));
 
       if (Object.keys(patch).length === 0) continue;
       out.push({

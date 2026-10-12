@@ -74,12 +74,17 @@ export function AIDrawer() {
   return (
     // Lets go of the page the moment it starts closing: taps reach the app
     // during the exit instead of landing on a veil that is on its way out.
-    <div className={cn("viewport-pinned-overlay fixed inset-0 z-50", !open && "pointer-events-none")}>
+    <div
+      className={cn("viewport-pinned-overlay fixed inset-0 z-50", !open && "pointer-events-none")}
+    >
       <motion.div
         // On press, like every other sheet's veil.
         onPointerDown={() => setOpen(false)}
         style={{ opacity: veil }}
-        className={cn("assistant-overlay overlay-scrim absolute inset-0", open ? "is-open" : "is-closed")}
+        className={cn(
+          "assistant-overlay overlay-scrim absolute inset-0",
+          open ? "is-open" : "is-closed",
+        )}
       />
       <motion.div
         role="dialog"
@@ -93,12 +98,18 @@ export function AIDrawer() {
         dragMomentum={false}
         onDragEnd={(_, info) => {
           const h = panelRef.current?.offsetHeight ?? 500;
-          const release = sheetRelease({ at: y.get(), velocity: info.velocity.y, height: h, points: [0] });
+          const release = sheetRelease({
+            at: y.get(),
+            velocity: info.velocity.y,
+            height: h,
+            points: [0],
+          });
           if (release.kind === "close") {
             haptic("light");
-            void animate(y, h + 40, { ...releaseSpring(Math.max(0, info.velocity.y), 1, 0.34), restDelta: 2 }).then(
-              () => setOpen(false)
-            );
+            void animate(y, h + 40, {
+              ...releaseSpring(Math.max(0, info.velocity.y), 1, 0.34),
+              restDelta: 2,
+            }).then(() => setOpen(false));
             return;
           }
           void animate(y, 0, releaseSpring(info.velocity.y, 0.86, 0.4));
@@ -110,7 +121,7 @@ export function AIDrawer() {
           "assistant-panel absolute flex flex-col overflow-hidden border border-line bg-surface",
           "max-md:transition-[bottom] max-md:duration-[280ms] max-md:ease-[var(--ease-standard)]",
           "max-md:inset-x-3 max-md:bottom-[max(0.9rem,calc(var(--keyboard-inset,0px)+env(safe-area-inset-bottom)+0.65rem))] max-md:mx-auto max-md:h-[70dvh] max-md:max-h-[min(560px,calc(100%-env(safe-area-inset-top)-1.25rem-var(--keyboard-inset,0px)))] max-md:w-auto max-md:max-w-[400px] max-md:rounded-[22px] max-md:shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
-          open ? "is-open" : "is-closed"
+          open ? "is-open" : "is-closed",
         )}
       >
         {phone && (
@@ -122,7 +133,11 @@ export function AIDrawer() {
             <span className="h-1 w-9 rounded-full bg-line-strong opacity-70" />
           </div>
         )}
-        <AssistantConversation variant="modal" active={open && present} onClose={() => setOpen(false)} />
+        <AssistantConversation
+          variant="modal"
+          active={open && present}
+          onClose={() => setOpen(false)}
+        />
       </motion.div>
     </div>
   );

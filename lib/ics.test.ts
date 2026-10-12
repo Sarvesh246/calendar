@@ -7,7 +7,7 @@ describe("expandRRule", () => {
       new Date(2026, 8, 1, 14, 0, 0).toISOString(),
       "FREQ=WEEKLY;COUNT=4;BYDAY=TU",
       [],
-      new Date(2027, 0, 1)
+      new Date(2027, 0, 1),
     );
     expect(starts.length).toBe(4);
   });
@@ -15,7 +15,12 @@ describe("expandRRule", () => {
   it("skips EXDATE days", () => {
     const start = new Date(2026, 8, 1, 9, 0, 0);
     const ex = new Date(2026, 8, 2, 9, 0, 0).toISOString();
-    const starts = expandRRule(start.toISOString(), "FREQ=DAILY;COUNT=3", [ex], new Date(2027, 0, 1));
+    const starts = expandRRule(
+      start.toISOString(),
+      "FREQ=DAILY;COUNT=3",
+      [ex],
+      new Date(2027, 0, 1),
+    );
     expect(starts.length).toBe(2);
   });
 });
@@ -98,7 +103,7 @@ describe("monthly RRULE anchoring", () => {
       local(2026, 1, 31),
       "FREQ=MONTHLY;INTERVAL=2;COUNT=5",
       [],
-      new Date(2027, 0, 1)
+      new Date(2027, 0, 1),
     );
     expect(occ.map((s) => new Date(s).getDate())).toEqual([31, 31, 31, 31, 30]);
   });

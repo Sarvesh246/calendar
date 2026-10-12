@@ -42,5 +42,7 @@ export async function validPushEndpoint(value: unknown): Promise<boolean> {
 }
 
 export function validPushKey(value: unknown, min: number, max: number): value is string {
-  return typeof value === "string" && value.length >= min && value.length <= max && BASE64URL.test(value);
+  return (
+    typeof value === "string" && value.length >= min && value.length <= max && BASE64URL.test(value)
+  );
 }

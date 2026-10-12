@@ -8,7 +8,10 @@ describe("parseCourseName", () => {
       label: "ENGR 102",
       detail: "Sections 204, 218, 505, 568",
     });
-    expect(parseCourseName("POLS 207 508:")).toMatchObject({ label: "POLS 207", detail: "Section 508" });
+    expect(parseCourseName("POLS 207 508:")).toMatchObject({
+      label: "POLS 207",
+      detail: "Section 508",
+    });
     expect(parseCourseName("MATH-150:533,534,535").label).toBe("MATH 150");
     expect(parseCourseName("COMU-010-CORT")).toMatchObject({ label: "COMU 010", detail: "CORT" });
   });
@@ -43,7 +46,13 @@ describe("courseLabels", () => {
 });
 
 describe("item titles", () => {
-  const base = { id: "1", categoryId: "c", type: "event", at: "2026-10-12T10:20:00", createdAt: "" } as Item;
+  const base = {
+    id: "1",
+    categoryId: "c",
+    type: "event",
+    at: "2026-10-12T10:20:00",
+    createdAt: "",
+  } as Item;
 
   it("reduces a code-only title to the code", () => {
     expect(courseOnlyLabel("POLS 207 508:")).toBe("POLS 207");
@@ -53,7 +62,7 @@ describe("item titles", () => {
   it("never touches a title with words", () => {
     expect(courseOnlyLabel("Math 150 Algebra Review Week 7")).toBeNull();
     expect(itemDisplayTitle({ ...base, title: "Packback #6 - Question Due October 8th" })).toBe(
-      "Packback #6 - Question Due October 8th"
+      "Packback #6 - Question Due October 8th",
     );
     expect(courseOnlyLabel("CS 101 Final exam")).toBeNull();
   });

@@ -27,7 +27,9 @@ export function NumberRoll({ value, className }: { value: number; className?: st
     setState({
       value,
       dir: value > state.value ? 1 : -1,
-      revs: after.map((digit, place) => (before[place] === digit ? state.revs[place] ?? 0 : (state.revs[place] ?? 0) + 1)),
+      revs: after.map((digit, place) =>
+        before[place] === digit ? (state.revs[place] ?? 0) : (state.revs[place] ?? 0) + 1,
+      ),
     });
   }
   const dir = state.dir;
@@ -70,7 +72,11 @@ function placesOf(n: number): string[] {
 
 const rollVariants = {
   enter: (dir: number) => ({ y: dir > 0 ? "70%" : "-70%", opacity: 0 }),
-  center: { y: "0%", opacity: 1, transition: { y: motionTokens.nudge, opacity: { duration: 0.16 } } },
+  center: {
+    y: "0%",
+    opacity: 1,
+    transition: { y: motionTokens.nudge, opacity: { duration: 0.16 } },
+  },
   exit: (dir: number) => ({
     y: dir > 0 ? "-70%" : "70%",
     opacity: 0,

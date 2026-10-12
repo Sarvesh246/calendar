@@ -50,7 +50,8 @@ export function AgendaSticky({
       if (wrap) {
         const parent = wrap.parentElement;
         if (parent) {
-          const nextPinned = parent.getBoundingClientRect().top < wrap.getBoundingClientRect().top - 1;
+          const nextPinned =
+            parent.getBoundingClientRect().top < wrap.getBoundingClientRect().top - 1;
           setPinned((previous) => (previous === nextPinned ? previous : nextPinned));
         }
       }
@@ -144,13 +145,7 @@ export function AgendaSticky({
   );
 }
 
-function Folio({
-  face,
-  warn,
-}: {
-  face: ReturnType<typeof agendaStickyFace>;
-  warn: boolean;
-}) {
+function Folio({ face, warn }: { face: ReturnType<typeof agendaStickyFace>; warn: boolean }) {
   return (
     <>
       {face.numeral && (
@@ -158,23 +153,18 @@ function Folio({
           className={cn(
             "shrink-0 text-center text-[1.65rem] font-semibold leading-none tracking-[-0.04em] tabular-nums",
             face.numeral.length > 2 ? "min-w-[2ch] px-0.5" : "w-[2ch]",
-            warn ? "text-warn" : "text-ink"
+            warn ? "text-warn" : "text-ink",
           )}
         >
           {face.numeral}
         </span>
       )}
-      <span
-        className={cn(
-          "h-7 w-px shrink-0 rounded-full",
-          warn ? "bg-warn/55" : "bg-ink/14"
-        )}
-      />
+      <span className={cn("h-7 w-px shrink-0 rounded-full", warn ? "bg-warn/55" : "bg-ink/14")} />
       <span className="flex min-w-0 flex-1 flex-col justify-center gap-1">
         <span
           className={cn(
             "truncate text-[12.5px] font-medium leading-none tracking-[-0.01em]",
-            warn ? "text-warn" : "text-ink"
+            warn ? "text-warn" : "text-ink",
           )}
         >
           {face.kicker}

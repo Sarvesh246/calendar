@@ -72,7 +72,7 @@ export function buildWeeklySchedule(
   items: Item[],
   now: Date = new Date(),
   weekStartsOn: 0 | 1 = 0,
-  categories: Category[] = []
+  categories: Category[] = [],
 ): WeeklySchedule {
   const from = +startOfDay(addDays(now, -7 * SCAN_WEEKS_BACK));
   const to = +startOfDay(addDays(now, 7 * SCAN_WEEKS_FORWARD));
@@ -102,7 +102,8 @@ export function buildWeeklySchedule(
     const day = start.getDay();
     // Title is presentation, not identity. Renamed occurrences and imported
     // copies of the same course slot must contribute only one weekly block.
-    const courseKey = category && !isGenericCategoryName(category.name) ? category.id : title.toLowerCase();
+    const courseKey =
+      category && !isGenericCategoryName(category.name) ? category.id : title.toLowerCase();
     const key = `${courseKey}|${day}|${startMin}|${endMin}`;
     const existing = drafts.get(key);
     if (existing) {
@@ -153,7 +154,7 @@ export function buildWeeklySchedule(
       order.indexOf(a.day) - order.indexOf(b.day) ||
       a.startMin - b.startMin ||
       a.endMin - b.endMin ||
-      a.title.localeCompare(b.title)
+      a.title.localeCompare(b.title),
   );
 
   const present = new Set(blocks.map((b) => b.day));
@@ -205,9 +206,7 @@ export function placeDayBlocks(blocks: ScheduleBlock[]): PlacedBlock[] {
 
   for (const block of sorted) {
     if (cluster.length > 0 && block.startMin >= clusterEnd) closeCluster();
-    const taken = new Set(
-      cluster.filter((b) => b.endMin > block.startMin).map((b) => b.lane)
-    );
+    const taken = new Set(cluster.filter((b) => b.endMin > block.startMin).map((b) => b.lane));
     let lane = 0;
     while (taken.has(lane)) lane++;
     const next: PlacedBlock = { ...block, lane, lanes: lane + 1 };

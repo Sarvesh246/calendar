@@ -16,11 +16,13 @@ import { useEffect, useReducer, type ComponentType } from "react";
  * anyone taps, nothing is left to wait for. Client-only, like `ssr: false`:
  * the server (and hydration) render the fallback.
  */
-export type LazyComponent<P extends object> = ComponentType<P> & { preload: () => Promise<unknown> };
+export type LazyComponent<P extends object> = ComponentType<P> & {
+  preload: () => Promise<unknown>;
+};
 
 export function lazyComponent<P extends object>(
   load: () => Promise<ComponentType<P>>,
-  Fallback?: ComponentType
+  Fallback?: ComponentType,
 ): LazyComponent<P> {
   let Loaded: ComponentType<P> | null = null;
   let pending: Promise<ComponentType<P>> | null = null;
@@ -45,7 +47,7 @@ export function lazyComponent<P extends object>(
       let live = true;
       preload().then(
         () => live && loaded(),
-        () => undefined
+        () => undefined,
       );
       return () => {
         live = false;

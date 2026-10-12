@@ -18,12 +18,18 @@ describe("PWA icon PNGs", () => {
     it(`${name} is fully opaque (no transparent pixels)`, async () => {
       const file = path.join(PUBLIC, name);
       expect(fs.existsSync(file)).toBe(true);
-      const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { data, info } = await sharp(file)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
       let transparent = 0;
       for (let i = 3; i < data.length; i += 4) {
         if (data[i] < 255) transparent++;
       }
-      expect(transparent, `${name} has ${transparent} non-opaque pixels in ${info.width}x${info.height}`).toBe(0);
+      expect(
+        transparent,
+        `${name} has ${transparent} non-opaque pixels in ${info.width}x${info.height}`,
+      ).toBe(0);
     });
   }
 });

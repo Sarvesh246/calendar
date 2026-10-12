@@ -21,12 +21,7 @@ import type { SyncMode, SyncStatus } from "./store";
  */
 
 /** Fields a complete / start / reopen write is allowed to touch. */
-const STATUS_ONLY_KEYS = new Set([
-  "status",
-  "completedAt",
-  "statusAt",
-  "updatedAt",
-]);
+const STATUS_ONLY_KEYS = new Set(["status", "completedAt", "statusAt", "updatedAt"]);
 
 /**
  * True when every changed item differs only in status / completion timestamps.

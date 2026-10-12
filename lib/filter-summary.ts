@@ -26,7 +26,7 @@ export function summariseFilters(
   hideCompleted: boolean,
   /** Name of the saved view in force, if one is. It leads, because it is the
    *  thing that set everything else. */
-  viewName?: string | null
+  viewName?: string | null,
 ): FilterSummary {
   const parts: string[] = [];
   const spoken: string[] = [];
@@ -44,13 +44,11 @@ export function summariseFilters(
 
   if (selected.length > 0) {
     const names = selected.map((id) => byId.get(id)!.name);
-    parts.push(
-      selected.length === 1 ? names[0] : `${selected.length} classes`
-    );
+    parts.push(selected.length === 1 ? names[0] : `${selected.length} classes`);
     spoken.push(
       selected.length === 1
         ? `class ${names[0]}`
-        : `${selected.length} classes: ${names.join(", ")}`
+        : `${selected.length} classes: ${names.join(", ")}`,
     );
   }
 

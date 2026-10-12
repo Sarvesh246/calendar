@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   if (!start) {
     return NextResponse.json(
       { ok: false, error: "That doesn't look like a valid http(s) or webcal link." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -129,7 +129,10 @@ export async function POST(request: Request) {
   let res: PublicResponse | null = null;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (isBlockedHost(current.hostname)) {
-      return NextResponse.json({ ok: false, error: "That address isn't allowed." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "That address isn't allowed." },
+        { status: 400 },
+      );
     }
     try {
       // The address is checked as the socket connects (see publicOnlyLookup),
@@ -154,24 +157,33 @@ export async function POST(request: Request) {
               : "Couldn't reach that URL.";
       return NextResponse.json(
         { ok: false, error },
-        { status: e.code === "EBLOCKEDHOST" || e.code === "ENOTFOUND" ? 400 : 502 }
+        { status: e.code === "EBLOCKEDHOST" || e.code === "ENOTFOUND" ? 400 : 502 },
       );
     }
 
     if (res.status >= 300 && res.status < 400) {
       const loc = res.location;
       if (!loc || hop === MAX_REDIRECTS) {
-        return NextResponse.json({ ok: false, error: "The feed redirected too many times." }, { status: 502 });
+        return NextResponse.json(
+          { ok: false, error: "The feed redirected too many times." },
+          { status: 502 },
+        );
       }
       let next: string;
       try {
         next = new URL(loc, current).toString();
       } catch {
-        return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
+        return NextResponse.json(
+          { ok: false, error: "That redirect wasn't allowed." },
+          { status: 400 },
+        );
       }
       const redirected = normalizeFeedInput(next);
       if (!redirected || (current.protocol === "https:" && redirected.protocol !== "https:")) {
-        return NextResponse.json({ ok: false, error: "That redirect wasn't allowed." }, { status: 400 });
+        return NextResponse.json(
+          { ok: false, error: "That redirect wasn't allowed." },
+          { status: 400 },
+        );
       }
       current = redirected;
       continue;
@@ -188,18 +200,21 @@ export async function POST(request: Request) {
     if (stale) return NextResponse.json({ ok: true, text: stale, cached: true, stale: true });
     return NextResponse.json(
       { ok: false, error: `The feed responded with ${res.status}. Double-check the link.` },
-      { status: 502 }
+      { status: 502 },
     );
   }
 
   const text = res.text;
   if (text == null) {
-    return NextResponse.json({ ok: false, error: "That calendar is too large to import." }, { status: 413 });
+    return NextResponse.json(
+      { ok: false, error: "That calendar is too large to import." },
+      { status: 413 },
+    );
   }
   if (!/BEGIN:VCALENDAR/i.test(text)) {
     return NextResponse.json(
       { ok: false, error: "That link didn't return a calendar feed (no iCalendar data found)." },
-      { status: 422 }
+      { status: 422 },
     );
   }
 

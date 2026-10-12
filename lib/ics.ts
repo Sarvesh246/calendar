@@ -52,7 +52,9 @@ function unfold(raw: string): string[] {
 }
 
 /** Split "DTSTART;TZID=America/New_York:20260901T235900" into name, params, value. */
-function parseLine(line: string): { name: string; params: Record<string, string>; value: string } | null {
+function parseLine(
+  line: string,
+): { name: string; params: Record<string, string>; value: string } | null {
   const colon = line.indexOf(":");
   if (colon === -1) return null;
   const head = line.slice(0, colon);
@@ -345,7 +347,7 @@ export function expandRRule(
   startIso: string,
   rrule: string,
   exdates: string[] = [],
-  horizon = new Date(Date.now() + HORIZON_MS)
+  horizon = new Date(Date.now() + HORIZON_MS),
 ): string[] {
   const start = new Date(startIso);
   if (Number.isNaN(start.getTime())) return [startIso];
@@ -365,7 +367,11 @@ export function expandRRule(
   };
 
   if (rule.freq === "DAILY") {
-    for (let d = new Date(start); generated < max && d.getTime() <= until.getTime(); d = addDaysLocal(d, rule.interval)) {
+    for (
+      let d = new Date(start);
+      generated < max && d.getTime() <= until.getTime();
+      d = addDaysLocal(d, rule.interval)
+    ) {
       if (!take(d)) break;
     }
     return out.length ? out : [startIso];
@@ -449,7 +455,11 @@ function flattenRecurrence(raw: RawEvent[]): IcsEvent[] {
 }
 
 function icsEscape(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
 }
 
 function utcStamp(d: Date): string {
@@ -476,7 +486,7 @@ export function serializeIcs(
     url?: string;
     sourceUid?: string;
   }[],
-  calendarName = "Datebook"
+  calendarName = "Datebook",
 ): string {
   const lines = [
     "BEGIN:VCALENDAR",

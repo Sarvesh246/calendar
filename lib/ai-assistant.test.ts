@@ -17,11 +17,21 @@ describe("offline calendar answers", () => {
     try {
       vi.setSystemTime(new Date(2026, 8, 11, 12));
       const reply = localAnswer("What's on today?", {
-        items: [item({ type: "event", title: "Conference", at: new Date(2026, 8, 10, 9).toISOString(), endAt: new Date(2026, 8, 12, 17).toISOString() })],
-        categories: cat, clock24h: false,
+        items: [
+          item({
+            type: "event",
+            title: "Conference",
+            at: new Date(2026, 8, 10, 9).toISOString(),
+            endAt: new Date(2026, 8, 12, 17).toISOString(),
+          }),
+        ],
+        categories: cat,
+        clock24h: false,
       });
       expect(reply.text).toContain("Conference");
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -46,7 +56,7 @@ describe("buildAssistantDigest", () => {
       cat,
       new Date().toISOString(),
       "UTC",
-      0
+      0,
     );
     expect(digest.overdue).toHaveLength(0);
     expect(digest.dueByNextSunday.every((e) => e.id !== "d1")).toBe(true);
@@ -65,7 +75,7 @@ describe("buildAssistantDigest", () => {
       cat,
       new Date().toISOString(),
       "UTC",
-      0
+      0,
     );
     expect(digest.completedLast7Days.count).toBe(1);
   });
@@ -107,7 +117,7 @@ describe("buildAssistantDigest", () => {
       cat,
       now,
       "UTC",
-      0
+      0,
     );
     expect(digest.dueByNextSunday.map((e) => e.id)).toEqual(["overdue", "sat", "doing"]);
     expect(digest.overdue.map((e) => e.id)).toEqual(["overdue"]);
@@ -126,7 +136,7 @@ describe("selectAssistantItems", () => {
         at: new Date(now.getTime() - (110 - i) * 3_600_000).toISOString(),
         endAt: new Date(now.getTime() - (110 - i) * 3_600_000 + 3_000_000).toISOString(),
         repeat: { freq: "weekly", byDay: [1, 3, 5] },
-      })
+      }),
     );
     const hw = item({
       id: "hw-sun",
@@ -166,9 +176,16 @@ describe("localAnswer due by Sunday", () => {
       "what's due by Sunday?",
       {
         ...ctx,
-        items: [item({ id: "hw", title: "Problem set 4", at: "2026-09-12T23:59:00.000Z", status: "done" })],
+        items: [
+          item({
+            id: "hw",
+            title: "Problem set 4",
+            at: "2026-09-12T23:59:00.000Z",
+            status: "done",
+          }),
+        ],
       },
-      now
+      now,
     );
     expect(res.text.toLowerCase()).toMatch(/nothing/);
   });
@@ -181,7 +198,7 @@ describe("localAnswer create", () => {
       vi.setSystemTime(new Date(2026, 8, 13, 12));
       const res = localAnswer(
         "add an event with a reminder for a day before and a reminder for a couple hours before to do my Hullabaloo U meeting at 5:30 at the PLNK Building First floor by the starbucks?",
-        { items: [], categories: cat, clock24h: false }
+        { items: [], categories: cat, clock24h: false },
       );
       expect(res.actions).toHaveLength(1);
       const a = res.actions![0];
@@ -191,7 +208,9 @@ describe("localAnswer create", () => {
       expect(a.draft.type).toBe("event");
       expect(a.draft.location).toMatch(/PLNK/i);
       expect(new Date(a.draft.at).getHours()).toBe(17);
-      expect(a.draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b)).toEqual([120, 1440]);
+      expect(a.draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b)).toEqual([
+        120, 1440,
+      ]);
     } finally {
       vi.useRealTimers();
     }

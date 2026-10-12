@@ -83,7 +83,7 @@ export default function AgendaPage() {
       items
         .filter((item) => isOverdueOrJustFinished(item, now, justDone))
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [items, now, justDone]
+    [items, now, justDone],
   );
 
   const todayCount = useMemo(() => {
@@ -125,7 +125,7 @@ export default function AgendaPage() {
 
   const week = useMemo(
     () => summarizeWeek(byDay, now, weekStartsOn, categoryNameLookup(categories)),
-    [byDay, now, weekStartsOn, categories]
+    [byDay, now, weekStartsOn, categories],
   );
 
   const [overdueLimit, setOverdueLimit] = useState(FIRST_PAINT_OVERDUE);
@@ -205,7 +205,13 @@ export default function AgendaPage() {
     if (!rows) return [];
     const out: AgendaRowSection[] = [];
     if (visibleOverdue.length) {
-      out.push({ id: "overdue", label: "Overdue", count: overdue.length, tone: "warn", items: visibleOverdue });
+      out.push({
+        id: "overdue",
+        label: "Overdue",
+        count: overdue.length,
+        tone: "warn",
+        items: visibleOverdue,
+      });
     }
     for (const g of visibleGroups) {
       out.push({
@@ -219,7 +225,14 @@ export default function AgendaPage() {
       });
     }
     if (visibleLater.length) {
-      out.push({ id: "later", label: "Later", sublabel: `after ${format(addDays(startOfDay(now), HORIZON_DAYS - 1), "MMM d")}`, count: later.length, tone: "faint", items: visibleLater });
+      out.push({
+        id: "later",
+        label: "Later",
+        sublabel: `after ${format(addDays(startOfDay(now), HORIZON_DAYS - 1), "MMM d")}`,
+        count: later.length,
+        tone: "faint",
+        items: visibleLater,
+      });
     }
     return out;
   }, [rows, overdue.length, later.length, visibleOverdue, visibleGroups, visibleLater, now]);
@@ -227,12 +240,21 @@ export default function AgendaPage() {
   const todayLink = <AgendaTodayDropdown items={todayRows} />;
 
   return (
-    <div className={cn("mx-auto flex w-full flex-col gap-6", rows ? "max-w-[1080px]" : "max-w-[880px]")}>
+    <div
+      className={cn(
+        "mx-auto flex w-full flex-col gap-6",
+        rows ? "max-w-[1080px]" : "max-w-[880px]",
+      )}
+    >
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.015em] text-ink">Agenda</h1>
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.015em] text-ink">
+            Agenda
+          </h1>
           <p className="mt-1 text-[13.5px] text-ink-soft">
-            {view === "history" ? "What you've finished, most recent first." : "Everything ahead, one day at a time."}
+            {view === "history"
+              ? "What you've finished, most recent first."
+              : "Everything ahead, one day at a time."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -263,152 +285,158 @@ export default function AgendaPage() {
         </div>
       ) : (
         <div key="upcoming" className="route-enter flex flex-col gap-6">
-      <AgendaWeek
-        days={week}
-        onOpenDay={(d) => {
-          setCalendarFocusDate(d.key);
-          router.push("/calendar");
-        }}
-      />
-
-      {isEmpty && (
-        <>
-          {todayLink}
-          <OnboardingCard />
-          <FeedHealthBanner />
-          <ListEmptyState
-            scope="the agenda"
-            total={breakdown.total}
-            hiddenByCategory={breakdown.hiddenByCategory}
-            hiddenByCompletion={breakdown.hiddenByCompletion}
-            hiddenByView={breakdown.hiddenByView}
+          <AgendaWeek
+            days={week}
+            onOpenDay={(d) => {
+              setCalendarFocusDate(d.key);
+              router.push("/calendar");
+            }}
           />
-        </>
-      )}
-      {!isEmpty && <FeedHealthBanner />}
 
-      {!isEmpty && (
-        <div className="relative">
-          {sections.length > 0 && (
-            <AgendaSticky sections={sections} now={now} layout={rows ? "rows" : "cards"} />
-          )}
-          {rows ? (
-            <div className="flex flex-col gap-6">
+          {isEmpty && (
+            <>
               {todayLink}
-              {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
-              {overdue.length > visibleOverdue.length && (
-                <RevealOverdueButton
-                  remaining={overdue.length - visibleOverdue.length}
-                  onReveal={revealMoreOverdue}
-                />
+              <OnboardingCard />
+              <FeedHealthBanner />
+              <ListEmptyState
+                scope="the agenda"
+                total={breakdown.total}
+                hiddenByCategory={breakdown.hiddenByCategory}
+                hiddenByCompletion={breakdown.hiddenByCompletion}
+                hiddenByView={breakdown.hiddenByView}
+              />
+            </>
+          )}
+          {!isEmpty && <FeedHealthBanner />}
+
+          {!isEmpty && (
+            <div className="relative">
+              {sections.length > 0 && (
+                <AgendaSticky sections={sections} now={now} layout={rows ? "rows" : "cards"} />
               )}
-              {visibleGroups.length < groups.length && (
-                <AgendaContinuation
-                  key={`groups-${visibleGroups.length}`}
-                  label="Load more days"
-                  onReveal={revealMoreGroups}
-                />
-              )}
-              {allGroupsVisible && visibleLater.length < later.length && (
-                <AgendaContinuation
-                  key={`later-${visibleLater.length}`}
-                  label="Load more later items"
-                  onReveal={revealMoreLater}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6">
-              {visibleOverdue.length > 0 && (
-                <section id="agenda-overdue" className="agenda-day">
-                  <DayHeading label="Overdue" count={overdue.length} tone="warn" />
-                  <div className="flex flex-col gap-2">
-                    <AnimatePresence initial={false}>
-                      {visibleOverdue.map((item) => (
-                        <ItemCard
-                          key={item.id}
-                          item={item}
-                          category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                          showQuickActions={false}
-                          {...chrome}
-                        />
-                      ))}
-                    </AnimatePresence>
-                  </div>
+              {rows ? (
+                <div className="flex flex-col gap-6">
+                  {todayLink}
+                  {rowSections.length > 0 && <AgendaRows sections={rowSections} />}
                   {overdue.length > visibleOverdue.length && (
                     <RevealOverdueButton
                       remaining={overdue.length - visibleOverdue.length}
                       onReveal={revealMoreOverdue}
                     />
                   )}
-                </section>
-              )}
-
-              {todayLink}
-
-              {visibleGroups.map((group) => {
-                return (
-                  <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
-                    <DayHeading
-                      label={isTomorrow(group.date) ? "Tomorrow" : format(group.date, "EEEE")}
-                      sublabel={format(group.date, "MMM d")}
-                      count={group.items.length}
+                  {visibleGroups.length < groups.length && (
+                    <AgendaContinuation
+                      key={`groups-${visibleGroups.length}`}
+                      label="Load more days"
+                      onReveal={revealMoreGroups}
                     />
-                    <div className="flex flex-col gap-2">
-                      <AnimatePresence initial={false}>
-                        {group.items.map((item) => (
-                          <ItemCard
-                            key={item.id}
-                            item={item}
-                            category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                            day={group.date}
-                            showQuickActions={false}
-                          {...chrome}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  </section>
-                );
-              })}
-
-              {visibleGroups.length < groups.length && (
-                <AgendaContinuation
-                  key={`groups-${visibleGroups.length}`}
-                  label="Load more days"
-                  onReveal={revealMoreGroups}
-                />
-              )}
-
-              {visibleLater.length > 0 && (
-                <section id="agenda-later" className="agenda-day">
-                  <DayHeading label="Later" count={later.length} />
-                  <div className="flex flex-col gap-2">
-                    <AnimatePresence initial={false}>
-                      {visibleLater.map((item) => (
-                        <ItemCard
-                          key={item.id}
-                          item={item}
-                          category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                          showQuickActions={false}
-                          {...chrome}
+                  )}
+                  {allGroupsVisible && visibleLater.length < later.length && (
+                    <AgendaContinuation
+                      key={`later-${visibleLater.length}`}
+                      label="Load more later items"
+                      onReveal={revealMoreLater}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {visibleOverdue.length > 0 && (
+                    <section id="agenda-overdue" className="agenda-day">
+                      <DayHeading label="Overdue" count={overdue.length} tone="warn" />
+                      <div className="flex flex-col gap-2">
+                        <AnimatePresence initial={false}>
+                          {visibleOverdue.map((item) => (
+                            <ItemCard
+                              key={item.id}
+                              item={item}
+                              category={
+                                item.categoryId ? categoriesById.get(item.categoryId) : undefined
+                              }
+                              showQuickActions={false}
+                              {...chrome}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                      {overdue.length > visibleOverdue.length && (
+                        <RevealOverdueButton
+                          remaining={overdue.length - visibleOverdue.length}
+                          onReveal={revealMoreOverdue}
                         />
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                </section>
-              )}
-              {allGroupsVisible && visibleLater.length < later.length && (
-                <AgendaContinuation
-                  key={`later-${visibleLater.length}`}
-                  label="Load more later items"
-                  onReveal={revealMoreLater}
-                />
+                      )}
+                    </section>
+                  )}
+
+                  {todayLink}
+
+                  {visibleGroups.map((group) => {
+                    return (
+                      <section key={group.key} id={`agenda-${group.key}`} className="agenda-day">
+                        <DayHeading
+                          label={isTomorrow(group.date) ? "Tomorrow" : format(group.date, "EEEE")}
+                          sublabel={format(group.date, "MMM d")}
+                          count={group.items.length}
+                        />
+                        <div className="flex flex-col gap-2">
+                          <AnimatePresence initial={false}>
+                            {group.items.map((item) => (
+                              <ItemCard
+                                key={item.id}
+                                item={item}
+                                category={
+                                  item.categoryId ? categoriesById.get(item.categoryId) : undefined
+                                }
+                                day={group.date}
+                                showQuickActions={false}
+                                {...chrome}
+                              />
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                      </section>
+                    );
+                  })}
+
+                  {visibleGroups.length < groups.length && (
+                    <AgendaContinuation
+                      key={`groups-${visibleGroups.length}`}
+                      label="Load more days"
+                      onReveal={revealMoreGroups}
+                    />
+                  )}
+
+                  {visibleLater.length > 0 && (
+                    <section id="agenda-later" className="agenda-day">
+                      <DayHeading label="Later" count={later.length} />
+                      <div className="flex flex-col gap-2">
+                        <AnimatePresence initial={false}>
+                          {visibleLater.map((item) => (
+                            <ItemCard
+                              key={item.id}
+                              item={item}
+                              category={
+                                item.categoryId ? categoriesById.get(item.categoryId) : undefined
+                              }
+                              showQuickActions={false}
+                              {...chrome}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </section>
+                  )}
+                  {allGroupsVisible && visibleLater.length < later.length && (
+                    <AgendaContinuation
+                      key={`later-${visibleLater.length}`}
+                      label="Load more later items"
+                      onReveal={revealMoreLater}
+                    />
+                  )}
+                </div>
               )}
             </div>
           )}
-        </div>
-      )}
         </div>
       )}
     </div>
@@ -429,7 +457,9 @@ function DayHeading({
 }) {
   return (
     <h2 className="mb-2.5 flex items-baseline gap-2 px-0.5 text-[13px]">
-      <span className={cn("font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>{label}</span>
+      <span className={cn("font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>
+        {label}
+      </span>
       {sublabel && <span className="text-ink-faint">{sublabel}</span>}
       <span className="ml-auto text-[12px] tabular-nums text-ink-faint">
         <NumberRoll value={count} /> {count === 1 ? "item" : "items"}
@@ -460,7 +490,7 @@ function AgendaContinuation({ label, onReveal }: { label: string; onReveal: () =
       ([entry]) => {
         if (entry.isIntersecting) onReveal();
       },
-      { rootMargin: "1200px 0px" }
+      { rootMargin: "1200px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();

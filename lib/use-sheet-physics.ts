@@ -1,6 +1,12 @@
 "use client";
 
-import { animate, useDragControls, useMotionValue, useTransform, type PanInfo } from "framer-motion";
+import {
+  animate,
+  useDragControls,
+  useMotionValue,
+  useTransform,
+  type PanInfo,
+} from "framer-motion";
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { haptic } from "@/lib/haptic";
 import { sheetRelease } from "@/lib/sheet-gesture";
@@ -62,7 +68,10 @@ export function useSheetPhysics({
   const detentIndex = useRef(initialDetent);
   const reduced = prefersReducedMotion();
 
-  const heightOf = useCallback(() => panelRef.current?.offsetHeight || window.innerHeight * 0.6, [panelRef]);
+  const heightOf = useCallback(
+    () => panelRef.current?.offsetHeight || window.innerHeight * 0.6,
+    [panelRef],
+  );
   const pointsOf = useCallback(() => (detents ? detents() : [0]), [detents]);
 
   const scrimOpacity = useTransform(y, (v) => {
@@ -119,7 +128,7 @@ export function useSheetPhysics({
       }
       void animate(y, target, releaseSpring(velocity, 0.86, 0.42));
     },
-    [onDetent, pointsOf, reduced, y]
+    [onDetent, pointsOf, reduced, y],
   );
 
   /**
@@ -167,7 +176,7 @@ export function useSheetPhysics({
         finish();
       });
     },
-    [canClose, finish, heightOf, reduced, snapTo, y]
+    [canClose, finish, heightOf, reduced, snapTo, y],
   );
 
   const onDragEnd = useCallback(
@@ -184,7 +193,7 @@ export function useSheetPhysics({
       if (release.index !== detentIndex.current) haptic("light");
       snapTo(release.index, v);
     },
-    [close, heightOf, pointsOf, snapTo, y]
+    [close, heightOf, pointsOf, snapTo, y],
   );
 
   const dragProps = {
@@ -202,5 +211,16 @@ export function useSheetPhysics({
     style: { y, willChange: "transform" as const },
   };
 
-  return { y, scrimOpacity, dragging, dragControls, dragProps, close, snapTo, gone, closing, leaving };
+  return {
+    y,
+    scrimOpacity,
+    dragging,
+    dragControls,
+    dragProps,
+    close,
+    snapTo,
+    gone,
+    closing,
+    leaving,
+  };
 }

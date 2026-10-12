@@ -20,7 +20,7 @@ function desktop() {
 export function openItemMenuAt(
   el: HTMLElement,
   itemId: string,
-  extra: Pick<ContextMenuRequest, "dayKey" | "section"> = {}
+  extra: Pick<ContextMenuRequest, "dayKey" | "section"> = {},
 ) {
   const r = el.getBoundingClientRect();
   opener = el;
@@ -44,13 +44,19 @@ export function itemMenuProps(itemId: string, dayKey?: string) {
 }
 
 /** Call from an item's onKeyDown. Returns true when it opened the menu. */
-export function handleItemMenuKey(e: ReactKeyboardEvent<HTMLElement>, itemId: string, dayKey?: string) {
+export function handleItemMenuKey(
+  e: ReactKeyboardEvent<HTMLElement>,
+  itemId: string,
+  dayKey?: string,
+) {
   if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return false;
   if (!desktop()) return false;
   e.preventDefault();
   e.stopPropagation();
   const r = e.currentTarget.getBoundingClientRect();
   opener = e.currentTarget;
-  useUIStore.getState().openContextMenu({ itemId, x: r.left + 12, y: Math.min(r.bottom, r.top + 28), dayKey });
+  useUIStore
+    .getState()
+    .openContextMenu({ itemId, x: r.left + 12, y: Math.min(r.bottom, r.top + 28), dayKey });
   return true;
 }

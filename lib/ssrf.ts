@@ -22,7 +22,8 @@ export function isBlockedHost(host: string): boolean {
   ) {
     return true;
   }
-  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return true;
+  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h))
+    return true;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
   if (/^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\./.test(h)) return true; // CGNAT
   if (/^::ffff:(127\.|10\.|192\.168\.|169\.254\.)/i.test(h)) return true;
@@ -35,7 +36,10 @@ export function isBlockedIp(ip: string): boolean {
   if (v === "::1" || v === "0.0.0.0" || v === "::") return true;
   const v4 = v.startsWith("::ffff:") ? v.slice(7) : v;
   const octets = v4.split(".").map(Number);
-  if (octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+  if (
+    octets.length === 4 &&
+    octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
+  ) {
     const [a, b, c] = octets;
     if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
     if (a === 100 && b >= 64 && b <= 127) return true;
@@ -79,7 +83,13 @@ export function normalizeFeedInput(input: string): URL | null {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   if (url.username || url.password) return null;
-  if (url.port && !((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80"))) {
+  if (
+    url.port &&
+    !(
+      (url.protocol === "https:" && url.port === "443") ||
+      (url.protocol === "http:" && url.port === "80")
+    )
+  ) {
     return null;
   }
   url.hash = "";
@@ -122,48 +132,59 @@ export interface PublicResponse {
  */
 export function fetchPublic(
   url: URL,
-  { timeoutMs, maxBytes, headers }: { timeoutMs: number; maxBytes: number; headers?: Record<string, string> }
+  {
+    timeoutMs,
+    maxBytes,
+    headers,
+  }: { timeoutMs: number; maxBytes: number; headers?: Record<string, string> },
 ): Promise<PublicResponse> {
   return new Promise((resolve, reject) => {
     const send = url.protocol === "https:" ? httpsRequest : httpRequest;
-    const req = send(url, { method: "GET", headers, lookup: publicOnlyLookup }, (res: IncomingMessage) => {
-      const status = res.statusCode ?? 0;
-      const location = typeof res.headers.location === "string" ? res.headers.location : null;
-      if ((status >= 300 && status < 400) || status < 200 || status >= 300) {
-        res.resume();
-        clearTimeout(timer);
-        resolve({ status, location, text: "" });
-        return;
-      }
-      const declared = Number(res.headers["content-length"] ?? "0");
-      if (declared > maxBytes) {
-        res.destroy();
-        clearTimeout(timer);
-        resolve({ status, location, text: null });
-        return;
-      }
-      const chunks: Buffer[] = [];
-      let size = 0;
-      res.on("data", (chunk: Buffer) => {
-        size += chunk.byteLength;
-        if (size > maxBytes) {
+    const req = send(
+      url,
+      { method: "GET", headers, lookup: publicOnlyLookup },
+      (res: IncomingMessage) => {
+        const status = res.statusCode ?? 0;
+        const location = typeof res.headers.location === "string" ? res.headers.location : null;
+        if ((status >= 300 && status < 400) || status < 200 || status >= 300) {
+          res.resume();
+          clearTimeout(timer);
+          resolve({ status, location, text: "" });
+          return;
+        }
+        const declared = Number(res.headers["content-length"] ?? "0");
+        if (declared > maxBytes) {
           res.destroy();
           clearTimeout(timer);
           resolve({ status, location, text: null });
           return;
         }
-        chunks.push(chunk);
-      });
-      res.on("end", () => {
-        clearTimeout(timer);
-        resolve({ status, location, text: Buffer.concat(chunks).toString("utf8") });
-      });
-      res.on("error", (e) => {
-        clearTimeout(timer);
-        reject(e);
-      });
-    });
-    const timer = setTimeout(() => req.destroy(Object.assign(new Error("timeout"), { name: "AbortError" })), timeoutMs);
+        const chunks: Buffer[] = [];
+        let size = 0;
+        res.on("data", (chunk: Buffer) => {
+          size += chunk.byteLength;
+          if (size > maxBytes) {
+            res.destroy();
+            clearTimeout(timer);
+            resolve({ status, location, text: null });
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on("end", () => {
+          clearTimeout(timer);
+          resolve({ status, location, text: Buffer.concat(chunks).toString("utf8") });
+        });
+        res.on("error", (e) => {
+          clearTimeout(timer);
+          reject(e);
+        });
+      },
+    );
+    const timer = setTimeout(
+      () => req.destroy(Object.assign(new Error("timeout"), { name: "AbortError" })),
+      timeoutMs,
+    );
     req.on("error", (e) => {
       clearTimeout(timer);
       reject(e);

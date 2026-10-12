@@ -55,7 +55,7 @@ export function pruneTombstones(t: TombstoneMap, now = Date.now()): TombstoneMap
 export function isDeleted(
   tombstones: TombstoneMap,
   kind: EntityKind,
-  row: { id: string; updatedAt?: string; createdAt?: string }
+  row: { id: string; updatedAt?: string; createdAt?: string },
 ): boolean {
   const at = tombstones[tombKey(kind, row.id)];
   if (!at) return false;

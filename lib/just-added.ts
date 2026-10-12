@@ -63,6 +63,6 @@ export function useJustAdded(id: string): boolean {
   return useSyncExternalStore(
     subscribe,
     () => ids.has(id),
-    () => false
+    () => false,
   );
 }

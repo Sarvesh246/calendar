@@ -115,7 +115,7 @@ export function SaveStatusPill() {
         // "Saved" that fades in two seconds can sit dead centre, which is
         // where the eye expects it — the permanent right gutter was making
         // every pill look accidentally off to one side.
-        current && !current.transient && "pr-[4.5rem]"
+        current && !current.transient && "pr-[4.5rem]",
       )}
     >
       <AnimatePresence>
@@ -149,7 +149,7 @@ export function SaveStatusPill() {
             }}
             className={cn(
               "sync-notice-card pointer-events-auto flex max-w-full touch-none items-center gap-2 px-3 py-2",
-              current.tone === "error" && "border-warn/50"
+              current.tone === "error" && "border-warn/50",
             )}
           >
             <StatusIcon tone={current.tone} />

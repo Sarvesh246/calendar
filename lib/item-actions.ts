@@ -38,7 +38,7 @@ export function applyItemPatch(item: Item, patch: Patch, label: string) {
 export function applyBatchPatch(
   items: Item[],
   makePatch: (item: Item) => Patch | null,
-  label: (count: number) => string
+  label: (count: number) => string,
 ): number {
   const store = useDatebookStore.getState();
   const byId = new Map(store.items.map((i) => [i.id, i]));
@@ -54,7 +54,8 @@ export function applyBatchPatch(
   if (undos.length) {
     offerUndo(label(undos.length), () => {
       const s = useDatebookStore.getState();
-      for (const [id, patch] of undos) if (s.items.some((i) => i.id === id)) s.updateItem(id, patch);
+      for (const [id, patch] of undos)
+        if (s.items.some((i) => i.id === id)) s.updateItem(id, patch);
     });
   }
   return undos.length;
@@ -65,14 +66,16 @@ export function startExclusiveDoing(item: Item) {
   if (item.type === "event" || (item.status ?? "todo") === "done") return;
   const others = useDatebookStore
     .getState()
-    .items.filter((i) => i.id !== item.id && i.type !== "event" && (i.status ?? "todo") === "doing");
+    .items.filter(
+      (i) => i.id !== item.id && i.type !== "event" && (i.status ?? "todo") === "doing",
+    );
   applyBatchPatch(
     [...others, item],
     (it) => {
       if (it.id === item.id) return (it.status ?? "todo") === "doing" ? null : { status: "doing" };
       return { status: "todo" };
     },
-    () => "Started"
+    () => "Started",
   );
 }
 
@@ -81,7 +84,11 @@ export function dayLabelFor(key: string) {
 }
 
 /** Move an item to another day, keeping its time of day (and length). */
-export function rescheduleToDay(item: Item, targetKey: string, fromKey = dayKey(new Date(item.at))) {
+export function rescheduleToDay(
+  item: Item,
+  targetKey: string,
+  fromKey = dayKey(new Date(item.at)),
+) {
   const days = dayDelta(fromKey, targetKey);
   if (!days) return;
   applyItemPatch(item, shiftedByDays(item, days), `Moved to ${dayLabelFor(targetKey)}`);
@@ -98,7 +105,11 @@ export function setStatusWithUndo(item: Item, status: ItemStatus) {
   applyItemPatch(
     item,
     { status },
-    status === "done" ? "Marked done" : status === "doing" ? "Marked in progress" : "Moved back to to do"
+    status === "done"
+      ? "Marked done"
+      : status === "doing"
+        ? "Marked in progress"
+        : "Moved back to to do",
   );
 }
 
@@ -157,7 +168,7 @@ export function planWorkSession(item: Item, start: Date, minutes: number): Item 
     ...(item.url ? { url: item.url } : {}),
   });
   offerUndo(`Planned ${formatDuration(minutes)} · ${format(start, "EEE h:mm a")}`, () =>
-    removeQuietly(session.id)
+    removeQuietly(session.id),
   );
   return session;
 }

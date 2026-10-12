@@ -2,28 +2,50 @@ import { addDays, addMonths, addWeeks, startOfDay } from "date-fns";
 import { matchDatePhrase } from "./date-phrase";
 
 const WEEKDAYS: Record<string, number> = {
-  sunday: 0, sun: 0,
-  monday: 1, mon: 1,
-  tuesday: 2, tue: 2, tues: 2,
-  wednesday: 3, wed: 3,
-  thursday: 4, thu: 4, thur: 4, thurs: 4,
-  friday: 5, fri: 5,
-  saturday: 6, sat: 6,
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
 };
 
 const MONTHS: Record<string, number> = {
-  january: 0, jan: 0,
-  february: 1, feb: 1,
-  march: 2, mar: 2,
-  april: 3, apr: 3,
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
   may: 4,
-  june: 5, jun: 5,
-  july: 6, jul: 6,
-  august: 7, aug: 7,
-  september: 8, sep: 8, sept: 8,
-  october: 9, oct: 9,
-  november: 10, nov: 10,
-  december: 11, dec: 11,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sep: 8,
+  sept: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
 };
 
 function validDay(y: number, m: number, d: number): Date | null {
@@ -44,7 +66,7 @@ export function parseJumpDate(text: string, now = new Date()): Date | null {
 /** Like `parseJumpDate`, but also says whether the text named a day or a whole month. */
 export function parseJumpTarget(
   text: string,
-  now = new Date()
+  now = new Date(),
 ): { date: Date; granularity: "day" | "month" } | null {
   const t = text.trim().toLowerCase().replace(/\s+/g, " ").replace(/,/g, "");
   const monthOnly = t.match(/^([a-z]+)\.? ?(\d{4})?$/);

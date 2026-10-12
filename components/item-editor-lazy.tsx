@@ -23,6 +23,6 @@ function EditorPlaceholder() {
  */
 export const ItemEditor = lazyComponent<ComponentProps<typeof ItemEditorType>>(
   () => import("@/components/item-editor").then((m) => m.ItemEditor),
-  EditorPlaceholder
+  EditorPlaceholder,
 );
 registerWarmUp(ItemEditor.preload);

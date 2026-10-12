@@ -110,7 +110,7 @@ function TodayDashboard() {
   const dueTodayCount = useMemo(() => openWorkDueOnDay(items, day).length, [items, day]);
   const doneTodayCount = useMemo(
     () => workDueOnDay(items, day).filter((i) => i.status === "done").length,
-    [items, day]
+    [items, day],
   );
   const eventsCount = today.filter((i) => i.type === "event").length;
 
@@ -137,7 +137,7 @@ function TodayDashboard() {
             todayBreakdown.hiddenByCategory +
               todayBreakdown.hiddenByCompletion +
               todayBreakdown.hiddenByView,
-            doneTodayCount
+            doneTodayCount,
           )}
         </p>
       </div>
@@ -185,9 +185,10 @@ function TodayDashboard() {
         setReviewOverdue(true);
         // Next paint hosts #today-overdue; scroll after Review reveals it.
         requestAnimationFrame(() => {
-          document
-            .getElementById("today-overdue")
-            ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+          document.getElementById("today-overdue")?.scrollIntoView({
+            behavior: prefersReducedMotion() ? "auto" : "smooth",
+            block: "start",
+          });
         });
       }}
       className="press-none flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-warn/40 bg-warn-soft px-3 text-left"
@@ -206,7 +207,9 @@ function TodayDashboard() {
   const overdueSection = overdue.length > 0 && (!mobile || reviewOverdue) && (
     <section id="today-overdue" className="scroll-mt-[calc(var(--mobile-header-height)+0.75rem)]">
       <div className="flex items-center justify-between">
-        <SectionLabel tone="warn">Overdue <span className="font-normal text-ink-faint">· {overdue.length}</span></SectionLabel>
+        <SectionLabel tone="warn">
+          Overdue <span className="font-normal text-ink-faint">· {overdue.length}</span>
+        </SectionLabel>
         {mobile && (
           <button
             type="button"
@@ -268,7 +271,12 @@ function TodayDashboard() {
 
   const comingUpSection = (
     <section>
-      <SectionLabel>Coming up{comingUp.length ? <span className="font-normal text-ink-faint"> · {comingUp.length}</span> : null}</SectionLabel>
+      <SectionLabel>
+        Coming up
+        {comingUp.length ? (
+          <span className="font-normal text-ink-faint"> · {comingUp.length}</span>
+        ) : null}
+      </SectionLabel>
       {comingUp.length === 0 ? (
         <Link
           href="/agenda"
@@ -282,9 +290,7 @@ function TodayDashboard() {
           {comingUp.slice(0, COMING_UP_ROWS).map((item) => {
             const at = new Date(item.at);
             const isTomorrow = dayKey(at) === dayKey(addDays(day, 1));
-            const dayLabel = isTomorrow
-              ? "Tomorrow"
-              : format(at, "EEE");
+            const dayLabel = isTomorrow ? "Tomorrow" : format(at, "EEE");
             return (
               <CompactRow
                 key={item.id}
@@ -377,9 +383,13 @@ function HappeningNowSection({
     return () => window.clearInterval(id);
   }, []);
 
-  const { happening: liveNow, startingSoon: classSoon, upcoming: nextUpcoming } = useMemo(
+  const {
+    happening: liveNow,
+    startingSoon: classSoon,
+    upcoming: nextUpcoming,
+  } = useMemo(
     () => happeningNowStack(items, now, categories, classCountdownWindowMs(classReminderMinutes)),
-    [items, now, categories, classReminderMinutes]
+    [items, now, categories, classReminderMinutes],
   );
   const nextAssignment = useMemo(() => nextOpenAssignment(items, now), [items, now]);
   const showDueNext =
@@ -415,9 +425,20 @@ function HappeningNowSection({
 }
 
 /** Same heading shape as the Agenda's day groups: a name, then a quiet count. */
-function SectionLabel({ children, tone = "ink" }: { children: React.ReactNode; tone?: "ink" | "warn" }) {
+function SectionLabel({
+  children,
+  tone = "ink",
+}: {
+  children: React.ReactNode;
+  tone?: "ink" | "warn";
+}) {
   return (
-    <h2 className={cn("mb-2.5 px-0.5 text-[13px] font-semibold", tone === "warn" ? "text-warn" : "text-ink")}>
+    <h2
+      className={cn(
+        "mb-2.5 px-0.5 text-[13px] font-semibold",
+        tone === "warn" ? "text-warn" : "text-ink",
+      )}
+    >
       {children}
     </h2>
   );
@@ -453,12 +474,16 @@ function TodayNextStepTips() {
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const openClassSchedule = useUIStore((s) => s.openClassSchedule);
-  const nameOf = (id?: string) => (id ? classLabel(categories.find((c) => c.id === id), "") || undefined : undefined);
+  const nameOf = (id?: string) =>
+    id
+      ? classLabel(
+          categories.find((c) => c.id === id),
+          "",
+        ) || undefined
+      : undefined;
   const hasMeetings = items.some((i) => isClassMeeting(i, nameOf(i.categoryId)));
   const remindersOff =
-    mounted &&
-    notificationPermission() !== "granted" &&
-    notificationPermission() !== "unsupported";
+    mounted && notificationPermission() !== "granted" && notificationPermission() !== "unsupported";
 
   if (!mounted || items.length === 0) return null;
   if (hasMeetings && !remindersOff) return null;
@@ -502,7 +527,7 @@ function CompactRow({
   trailing: string;
 }) {
   const openInspector = useUIStore((s) => s.openInspector);
-  const status = item.type === "event" ? undefined : item.status ?? "todo";
+  const status = item.type === "event" ? undefined : (item.status ?? "todo");
   return (
     <button
       type="button"
@@ -520,7 +545,7 @@ function CompactRow({
         <span
           className={cn(
             "block truncate text-[13px] font-medium",
-            status === "done" ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
+            status === "done" ? "text-ink-soft line-through decoration-ink-faint" : "text-ink",
           )}
         >
           {itemDisplayTitle(item)}

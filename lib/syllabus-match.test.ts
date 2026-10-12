@@ -80,9 +80,11 @@ describe("matchSyllabusItems — name variants", () => {
 
   it("matches h.w. / pset / ps variants to the long form", () => {
     expect(matchOf("h.w. 2", [item({ id: "a", title: "Homework 2" })])[0].verdict).toBe("matched");
-    expect(matchOf("Pset 1", [item({ id: "b", title: "Problem Set 1" })])[0].verdict).toBe("matched");
+    expect(matchOf("Pset 1", [item({ id: "b", title: "Problem Set 1" })])[0].verdict).toBe(
+      "matched",
+    );
     expect(matchOf("PS 4", [item({ id: "c", title: "Problem Set 4: Recursion" })])[0].verdict).toBe(
-      "matched"
+      "matched",
     );
   });
 
@@ -116,14 +118,11 @@ describe("matchSyllabusItems — same-day different work", () => {
   });
 
   it("still matches the quiz when that is the extracted row", () => {
-    const existing = [
-      item({ id: "q", title: "Quiz 1" }),
-      item({ id: "h", title: "Homework 3" }),
-    ];
+    const existing = [item({ id: "q", title: "Quiz 1" }), item({ id: "h", title: "Homework 3" })];
     const [quiz, hw] = matchSyllabusItems(
       [draft({ title: "Quiz 1" }), draft({ title: "HW 3" })],
       existing,
-      { timeZone: TZ, categoryId: "engl" }
+      { timeZone: TZ, categoryId: "engl" },
     );
     expect(quiz.existing?.id).toBe("q");
     expect(hw.existing?.id).toBe("h");
@@ -170,7 +169,7 @@ describe("matchSyllabusItems — scoring bands and one-to-one", () => {
     const [a, b] = matchSyllabusItems(
       [draft({ title: "Homework 3: Linked Lists" }), draft({ title: "HW 3" })],
       existing,
-      { timeZone: TZ, categoryId: "engl" }
+      { timeZone: TZ, categoryId: "engl" },
     );
     expect(a.verdict).toBe("matched");
     expect(a.existing?.id).toBe("hw");
@@ -184,7 +183,7 @@ describe("matchSyllabusItems — scoring bands and one-to-one", () => {
     const matches = matchSyllabusItems(
       [draft({ title: "HW 3" }), draft({ title: "Quiz 1 extra" }), draft({ title: "Final paper" })],
       existing,
-      { timeZone: TZ, categoryId: "engl" }
+      { timeZone: TZ, categoryId: "engl" },
     );
     const groups = groupSyllabusMatches(matches);
     expect(groups.already).toHaveLength(1);
@@ -284,7 +283,7 @@ describe("collapseCrossSourceDuplicates — calendar after syllabus", () => {
       [syl, feed],
       [syllabusSrc, feedSrc],
       TZ,
-      "2026-09-10T18:00:00.000Z"
+      "2026-09-10T18:00:00.000Z",
     );
     expect(dropped).toEqual(["syl-hw"]);
     expect(items).toHaveLength(1);
@@ -309,7 +308,11 @@ describe("collapseCrossSourceDuplicates — calendar after syllabus", () => {
       sourceId: "src-feed",
       sourceUid: "canvas-uid-q1",
     });
-    const { items, dropped } = collapseCrossSourceDuplicates([syl, feed], [syllabusSrc, feedSrc], TZ);
+    const { items, dropped } = collapseCrossSourceDuplicates(
+      [syl, feed],
+      [syllabusSrc, feedSrc],
+      TZ,
+    );
     expect(dropped).toEqual([]);
     expect(items).toHaveLength(2);
   });
@@ -362,7 +365,7 @@ describe("applySyllabusImportToSnapshot", () => {
         forceCategoryId: "engl",
         fileName: "engl101.pdf",
       },
-      { now, id }
+      { now, id },
     );
     expect(result.added).toBe(2);
     expect(snapshot.importSources).toHaveLength(1);
@@ -400,7 +403,7 @@ describe("applySyllabusImportToSnapshot", () => {
         timeZone: TZ,
         forceCategoryId: "engl",
       },
-      { now, id }
+      { now, id },
     );
     expect(result.added).toBe(0);
     expect(result.matched).toBe(1);
@@ -423,7 +426,7 @@ describe("applySyllabusImportToSnapshot", () => {
         timeZone: TZ,
         forceCategoryId: "engl",
       },
-      { now, id }
+      { now, id },
     );
     expect(first.result.added).toBe(2);
     const second = applySyllabusImportToSnapshot(first.snapshot, {
@@ -441,7 +444,7 @@ describe("applySyllabusImportToSnapshot", () => {
     const first = applySyllabusImportToSnapshot(
       snap({}),
       { drafts, timeZone: TZ, forceCategoryId: "engl" },
-      { now, id }
+      { now, id },
     );
     expect(first.result.added).toBe(2);
     const second = applySyllabusImportToSnapshot(first.snapshot, {
@@ -469,7 +472,7 @@ describe("applySyllabusImportToSnapshot", () => {
         forceCategoryId: "engl",
         decisions: ["import"],
       },
-      { now, id }
+      { now, id },
     );
     expect(result.added).toBe(0);
     expect(result.matched).toBe(1);
@@ -487,7 +490,7 @@ describe("applySyllabusImportToSnapshot", () => {
         courseName: "Biology 111",
         courseCode: "BIOL 111",
       },
-      { now, id }
+      { now, id },
     );
     expect(result.added).toBe(1);
     expect(snapshot.categories.some((c) => c.name === "Biology 111")).toBe(true);

@@ -75,7 +75,7 @@ export function isSynthesizedClassReminder(reminder: Pick<Reminder, "id">): bool
  */
 export function classReminderFor(
   item: Pick<Item, "id" | "type" | "allDay" | "sourceId" | "repeat" | "status" | "reminders">,
-  minutes: number
+  minutes: number,
 ): Reminder | null {
   const offsetMinutes = normalizeClassReminderMinutes(minutes);
   if (offsetMinutes <= 0) return null;

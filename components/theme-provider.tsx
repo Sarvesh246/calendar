@@ -12,7 +12,8 @@ import { writeAppearanceSnapshot } from "@/lib/appearance-storage";
 import type { AppearancePreset } from "@/lib/types";
 
 function applyThemeColor(preset: AppearancePreset, customBackground?: string) {
-  const color = preset === "custom" ? customBackground ?? presetThemeColor.custom : presetThemeColor[preset];
+  const color =
+    preset === "custom" ? (customBackground ?? presetThemeColor.custom) : presetThemeColor[preset];
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     meta.setAttribute("content", color);
   }
@@ -30,7 +31,10 @@ function persistHydrated() {
  *  Custom themes have no static `:root[data-preset="custom"]` rule — tokens
  *  live as inline properties. Built-ins use those static rules, so any leftover
  *  inline custom vars have to be cleared or they outrank the stylesheet. */
-export function paintAppearance(preset: AppearancePreset, customTheme?: { background: string; surface: string; accent: string } | null) {
+export function paintAppearance(
+  preset: AppearancePreset,
+  customTheme?: { background: string; surface: string; accent: string } | null,
+) {
   const root = document.documentElement;
   if (preset === "custom") {
     const colors = customTheme ?? DEFAULT_CUSTOM_THEME;

@@ -55,6 +55,8 @@ describe("findFreeSlot", () => {
   });
 
   it("won't plan work after the deadline", () => {
-    expect(findFreeSlot([], { from: at(16, 21, 30), minutes: 60, before: at(17, 8, 30) })).toBeNull();
+    expect(
+      findFreeSlot([], { from: at(16, 21, 30), minutes: 60, before: at(17, 8, 30) }),
+    ).toBeNull();
   });
 });

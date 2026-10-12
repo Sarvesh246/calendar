@@ -116,7 +116,10 @@ function role(v: unknown): SyllabusRole {
  * return a bounded, well-typed record — or undefined when there is nothing
  * worth keeping.
  */
-export function normalizeSyllabusInfo(raw: unknown, meta?: { importedAt?: string; fileName?: string }): SyllabusInfo | undefined {
+export function normalizeSyllabusInfo(
+  raw: unknown,
+  meta?: { importedAt?: string; fileName?: string },
+): SyllabusInfo | undefined {
   const o = rec(raw);
   const people: SyllabusPerson[] = [];
   for (const p of arr(o.people).slice(0, LIMITS.people)) {
@@ -141,7 +144,10 @@ export function normalizeSyllabusInfo(raw: unknown, meta?: { importedAt?: string
     .slice(0, LIMITS.scale)
     .map((g) => ({ grade: str(rec(g).grade, 8), range: str(rec(g).range, 40) }))
     .filter((g) => g.grade && g.range);
-  const materials = arr(o.materials).map((m) => str(m, 200)).filter(Boolean).slice(0, LIMITS.materials);
+  const materials = arr(o.materials)
+    .map((m) => str(m, 200))
+    .filter(Boolean)
+    .slice(0, LIMITS.materials);
   const policies = arr(o.policies)
     .slice(0, LIMITS.policies)
     .map((p) => ({ topic: str(rec(p).topic, 60), text: str(rec(p).text, LIMITS.text) }))
@@ -164,7 +170,9 @@ export function normalizeSyllabusInfo(raw: unknown, meta?: { importedAt?: string
     ...(opt(o.description, LIMITS.text) ? { description: opt(o.description, LIMITS.text) } : {}),
     ...(opt(o.meetings, 200) ? { meetings: opt(o.meetings, 200) } : {}),
     ...(opt(o.location, 120) ? { location: opt(o.location, 120) } : {}),
-    ...(opt(o.website, 300) && /^https?:\/\//i.test(str(o.website, 300)) ? { website: opt(o.website, 300) } : {}),
+    ...(opt(o.website, 300) && /^https?:\/\//i.test(str(o.website, 300))
+      ? { website: opt(o.website, 300) }
+      : {}),
     ...(opt(o.prerequisites, 300) ? { prerequisites: opt(o.prerequisites, 300) } : {}),
     people,
     grading,
@@ -172,8 +180,12 @@ export function normalizeSyllabusInfo(raw: unknown, meta?: { importedAt?: string
     materials,
     policies,
     keyDates,
-    importedAt: meta?.importedAt ?? (typeof o.importedAt === "string" ? o.importedAt : new Date().toISOString()),
-    ...(meta?.fileName ?? opt(o.fileName, 200) ? { fileName: meta?.fileName ?? opt(o.fileName, 200) } : {}),
+    importedAt:
+      meta?.importedAt ??
+      (typeof o.importedAt === "string" ? o.importedAt : new Date().toISOString()),
+    ...((meta?.fileName ?? opt(o.fileName, 200))
+      ? { fileName: meta?.fileName ?? opt(o.fileName, 200) }
+      : {}),
   };
   return hasSyllabusContent(info) ? info : undefined;
 }
@@ -182,15 +194,15 @@ export function hasSyllabusContent(info: SyllabusInfo | undefined): info is Syll
   if (!info) return false;
   return Boolean(
     info.people.length ||
-      info.grading.length ||
-      info.gradeScale.length ||
-      info.materials.length ||
-      info.policies.length ||
-      info.keyDates.length ||
-      info.description ||
-      info.meetings ||
-      info.prerequisites ||
-      info.website
+    info.grading.length ||
+    info.gradeScale.length ||
+    info.materials.length ||
+    info.policies.length ||
+    info.keyDates.length ||
+    info.description ||
+    info.meetings ||
+    info.prerequisites ||
+    info.website,
   );
 }
 
@@ -198,16 +210,24 @@ export function hasSyllabusContent(info: SyllabusInfo | undefined): info is Syll
 export function syllabusDigest(className: string, info: SyllabusInfo): string {
   const lines: string[] = [`Syllabus for ${className}${info.term ? ` (${info.term})` : ""}:`];
   if (info.description) lines.push(`About: ${info.description}`);
-  if (info.meetings || info.location) lines.push(`Meets: ${[info.meetings, info.location].filter(Boolean).join(", ")}`);
+  if (info.meetings || info.location)
+    lines.push(`Meets: ${[info.meetings, info.location].filter(Boolean).join(", ")}`);
   for (const p of info.people) {
-    lines.push(`${p.role === "ta" ? "TA" : p.role === "instructor" ? "Instructor" : "Contact"}: ${[p.name, p.email, p.office && `office ${p.office}`, p.officeHours && `office hours ${p.officeHours}`].filter(Boolean).join("; ")}`);
+    lines.push(
+      `${p.role === "ta" ? "TA" : p.role === "instructor" ? "Instructor" : "Contact"}: ${[p.name, p.email, p.office && `office ${p.office}`, p.officeHours && `office hours ${p.officeHours}`].filter(Boolean).join("; ")}`,
+    );
   }
-  if (info.grading.length) lines.push(`Grading: ${info.grading.map((g) => `${g.component} ${g.weight}`).join(", ")}`);
-  if (info.gradeScale.length) lines.push(`Scale: ${info.gradeScale.map((g) => `${g.grade} ${g.range}`).join(", ")}`);
+  if (info.grading.length)
+    lines.push(`Grading: ${info.grading.map((g) => `${g.component} ${g.weight}`).join(", ")}`);
+  if (info.gradeScale.length)
+    lines.push(`Scale: ${info.gradeScale.map((g) => `${g.grade} ${g.range}`).join(", ")}`);
   if (info.materials.length) lines.push(`Materials: ${info.materials.join("; ")}`);
   if (info.prerequisites) lines.push(`Prerequisites: ${info.prerequisites}`);
   for (const p of info.policies) lines.push(`${p.topic}: ${p.text}`);
-  if (info.keyDates.length) lines.push(`Key dates: ${info.keyDates.map((k) => `${k.label} ${k.date}${k.endDate ? `–${k.endDate}` : ""}`).join("; ")}`);
+  if (info.keyDates.length)
+    lines.push(
+      `Key dates: ${info.keyDates.map((k) => `${k.label} ${k.date}${k.endDate ? `–${k.endDate}` : ""}`).join("; ")}`,
+    );
   if (info.website) lines.push(`Website: ${info.website}`);
   return lines.join("\n");
 }

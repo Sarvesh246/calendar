@@ -5,7 +5,7 @@ const NOW = new Date(2026, 8, 2); // 2 Sep 2026
 
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
+    d.getDate(),
   ).padStart(2, "0")}`;
 }
 

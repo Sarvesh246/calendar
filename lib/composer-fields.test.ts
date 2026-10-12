@@ -16,7 +16,11 @@ const cats: Category[] = [
 
 const NO_CONTEXT = { dateKey: null, categoryId: null, defaultReminderMinutes: null };
 
-function parse(at: Date, confidence: Partial<ComposerParse["confidence"]> = {}, rest: Partial<ComposerParse> = {}): ComposerParse {
+function parse(
+  at: Date,
+  confidence: Partial<ComposerParse["confidence"]> = {},
+  rest: Partial<ComposerParse> = {},
+): ComposerParse {
   return {
     at,
     confidence: { date: false, category: false, reminder: false, ...confidence },
@@ -55,7 +59,7 @@ describe("resolveComposer — day", () => {
     const r = resolveComposer(
       parse(at, { date: true }),
       { ...NO_CONTEXT, dateKey: "2026-03-14" },
-      { dateKey: "2026-04-01" }
+      { dateKey: "2026-04-01" },
     );
     expect(r.date.source).toBe("override");
     expect(r.date.value.getMonth()).toBe(3);
@@ -77,7 +81,7 @@ describe("resolveComposer — class", () => {
     const r = resolveComposer(
       parse(new Date(), { category: true }, { categoryId: "bio" }),
       { ...NO_CONTEXT, categoryId: "cs" },
-      {}
+      {},
     );
     expect(r.categoryId.value).toBe("bio");
     expect(r.categoryId.source).toBe("typed");
@@ -93,7 +97,7 @@ describe("resolveComposer — class", () => {
     const r = resolveComposer(
       parse(new Date(), { category: true }, { categoryId: "bio" }),
       { ...NO_CONTEXT, categoryId: "cs" },
-      { categoryId: "cs" }
+      { categoryId: "cs" },
     );
     expect(r.categoryId.value).toBe("cs");
     expect(r.categoryId.source).toBe("override");
@@ -111,7 +115,7 @@ describe("resolveComposer — class", () => {
     const r = resolveComposer(
       parse(new Date(), { category: true }, { categoryId: "bio" }),
       NO_CONTEXT,
-      { categoryId: "" }
+      { categoryId: "" },
     );
     expect(r.categoryId.value).toBe("");
     expect(r.categoryId.source).toBe("override");
@@ -129,7 +133,7 @@ describe("resolveComposer — reminder", () => {
     const r = resolveComposer(
       parse(new Date(), { reminder: true }, { reminderMinutesBefore: 15 }),
       { ...NO_CONTEXT, defaultReminderMinutes: 60 },
-      {}
+      {},
     );
     expect(r.reminderMinutes.value).toBe(15);
     expect(r.reminderMinutes.source).toBe("typed");
@@ -141,7 +145,7 @@ describe("resolveComposer — reminder", () => {
     const r = resolveComposer(
       parse(new Date(), { reminder: true }, { reminderMinutesBefore: 15 }),
       { ...NO_CONTEXT, defaultReminderMinutes: 60 },
-      { reminderMinutes: 0 }
+      { reminderMinutes: 0 },
     );
     expect(r.reminderMinutes.value).toBe(null);
     expect(r.reminderMinutes.source).toBe("override");

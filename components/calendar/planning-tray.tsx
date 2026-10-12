@@ -70,7 +70,7 @@ export function PlanningTray({
         (i) =>
           !needle ||
           i.title.toLowerCase().includes(needle) ||
-          (categories.get(i.categoryId)?.name ?? "").toLowerCase().includes(needle)
+          (categories.get(i.categoryId)?.name ?? "").toLowerCase().includes(needle),
       )
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
     const overdue: Item[] = [];
@@ -107,7 +107,11 @@ export function PlanningTray({
     planWorkSession(item, slot, minutes);
   }
 
-  function startDrag(e: React.PointerEvent<HTMLElement>, item: Item, category: Category | undefined) {
+  function startDrag(
+    e: React.PointerEvent<HTMLElement>,
+    item: Item,
+    category: Category | undefined,
+  ) {
     if (!canDrop || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     const length = minutes;
     const color = category?.color ?? "#8a8a94";
@@ -120,7 +124,14 @@ export function PlanningTray({
         if (t.kind !== "slot") return null;
         const s = startFor(t.minute);
         return {
-          preview: { dayKey: t.dayKey, startMin: s, endMin: s + length, tone: "plan", color, title: `Work on: ${item.title}` },
+          preview: {
+            dayKey: t.dayKey,
+            startMin: s,
+            endMin: s + length,
+            tone: "plan",
+            color,
+            title: `Work on: ${item.title}`,
+          },
           label: `${slotLabel(t.dayKey, s, s + length, clock24h)} · ${formatDuration(length)}`,
         };
       },
@@ -138,7 +149,12 @@ export function PlanningTray({
   const renderGroup = (title: string, list: Item[], tone?: "warn") =>
     list.length > 0 && (
       <section key={title} className="mb-4 last:mb-0">
-        <p className={cn("mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wider", tone === "warn" ? "text-warn" : "text-ink-faint")}>
+        <p
+          className={cn(
+            "mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wider",
+            tone === "warn" ? "text-warn" : "text-ink-faint",
+          )}
+        >
           {title} · {list.length}
         </p>
         <ul className="flex flex-col gap-1.5">
@@ -170,24 +186,38 @@ export function PlanningTray({
                     "group flex items-center gap-2 rounded-lg border border-line bg-surface py-2 pl-1.5 pr-1 text-left",
                     "transition-[border-color,background-color] duration-[var(--motion-micro)] hover:border-line-strong hover:bg-surface-sunken/40",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                    canDrop ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+                    canDrop ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
                   )}
                 >
                   <GripVertical
                     aria-hidden
-                    className={cn("h-3.5 w-3.5 shrink-0 text-ink-faint transition-opacity", canDrop ? "opacity-60 group-hover:opacity-100" : "opacity-25")}
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 text-ink-faint transition-opacity",
+                      canDrop ? "opacity-60 group-hover:opacity-100" : "opacity-25",
+                    )}
                     strokeWidth={2}
                   />
-                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: category?.color ?? "#8a8a94" }}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p title={item.title} className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{itemDisplayTitle(item)}</p>
+                    <p
+                      title={item.title}
+                      className="line-clamp-2 text-[13px] font-medium leading-snug text-ink"
+                    >
+                      {itemDisplayTitle(item)}
+                    </p>
                     <p className="truncate text-[11.5px] text-ink-faint">
                       <span className={overdue ? "font-medium text-warn" : undefined}>
                         {overdue ? "Was due " : "Due "}
                         {format(due, "EEE, MMM d")}
                         {!item.allDay && ` · ${formatTime(item.at, clock24h)}`}
                       </span>
-                      {planned > 0 && <span className="text-good"> · {formatDuration(planned)} planned</span>}
+                      {planned > 0 && (
+                        <span className="text-good"> · {formatDuration(planned)} planned</span>
+                      )}
                     </p>
                     {notice?.id === item.id && (
                       <p role="status" className="mt-0.5 text-[11px] text-warn">
@@ -222,7 +252,11 @@ export function PlanningTray({
           <span id="session-length-label" className="text-[11.5px] text-ink-faint">
             Session length
           </span>
-          <div role="radiogroup" aria-labelledby="session-length-label" className="flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5">
+          <div
+            role="radiogroup"
+            aria-labelledby="session-length-label"
+            className="flex items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5"
+          >
             {SESSION_LENGTHS.map((m) => (
               <button
                 key={m}
@@ -232,7 +266,9 @@ export function PlanningTray({
                 onClick={() => setMinutes(m)}
                 className={cn(
                   "h-7 rounded-md px-2 text-[11.5px] font-medium tabular-nums transition-colors duration-[var(--motion-micro)]",
-                  minutes === m ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]" : "text-ink-soft hover:text-ink"
+                  minutes === m
+                    ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]"
+                    : "text-ink-soft hover:text-ink",
                 )}
               >
                 {formatDuration(m)}
@@ -251,7 +287,11 @@ export function PlanningTray({
         {!canDrop && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[12px] text-ink">
             <span>Open the week to drop work into time.</span>
-            <button type="button" onClick={onSwitchToWeek} className="shrink-0 font-medium text-accent hover:underline">
+            <button
+              type="button"
+              onClick={onSwitchToWeek}
+              className="shrink-0 font-medium text-accent hover:underline"
+            >
               Week view
             </button>
           </div>
@@ -261,7 +301,11 @@ export function PlanningTray({
         {empty ? (
           <EmptyState
             title={query.trim() ? "No matches." : "Nothing to plan."}
-            sub={query.trim() ? "Try a different title or class." : `Open assignments and tasks due in the next ${HORIZON_DAYS} days show up here.`}
+            sub={
+              query.trim()
+                ? "Try a different title or class."
+                : `Open assignments and tasks due in the next ${HORIZON_DAYS} days show up here.`
+            }
           />
         ) : (
           <>
@@ -270,7 +314,8 @@ export function PlanningTray({
             {renderGroup("Later", groups.later)}
             {groups.beyond > 0 && (
               <p className="px-1 pt-1 text-[11.5px] text-ink-faint">
-                {groups.beyond} more due after {format(addDays(startOfDay(now), HORIZON_DAYS), "MMM d")}.
+                {groups.beyond} more due after{" "}
+                {format(addDays(startOfDay(now), HORIZON_DAYS), "MMM d")}.
               </p>
             )}
           </>

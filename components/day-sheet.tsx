@@ -3,7 +3,14 @@
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useTransform,
+  type PanInfo,
+} from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { dayLabel } from "@/lib/date-utils";
@@ -90,10 +97,7 @@ export function DaySheet({
     ? format(date, "EEEE, MMMM d")
     : items.length === 0
       ? "Nothing scheduled"
-      : [
-          eventCount > 0 && `${eventCount} scheduled`,
-          dueCount > 0 && `${dueCount} due`,
-        ]
+      : [eventCount > 0 && `${eventCount} scheduled`, dueCount > 0 && `${dueCount} due`]
           .filter(Boolean)
           .join(" · ") || `${items.length} completed`;
   /**
@@ -267,7 +271,11 @@ export function DaySheet({
           detent the month has to stay legible — it is the thing you are
           stepping through days *against*. */}
       {/* Dismisses on press: the page is yours again the instant you touch it. */}
-      <Scrim onPointerDown={close} progress={scrim} exitDuration={sheet.gone ? 0 : motionTokens.exit} />
+      <Scrim
+        onPointerDown={close}
+        progress={scrim}
+        exitDuration={sheet.gone ? 0 : motionTokens.exit}
+      />
       <motion.div
         role="dialog"
         ref={panelRef}
@@ -300,7 +308,11 @@ export function DaySheet({
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); haptic("selection"); onStep(-1); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  haptic("selection");
+                  onStep(-1);
+                }}
                 aria-label="Previous day"
                 className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
               >
@@ -332,7 +344,10 @@ export function DaySheet({
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+                  transition={{
+                    default: motionTokens.nudge,
+                    opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                  }}
                   className={cn(phone && (onStep || activeItem) ? "text-center" : "text-left")}
                 >
                   <p id={headingId} className="truncate text-[16px] font-semibold text-ink">
@@ -345,12 +360,16 @@ export function DaySheet({
               </AnimatePresence>
             </div>
 
-            <div className="flex shrink-0 items-center" onPointerDown={e => e.stopPropagation()}>
+            <div className="flex shrink-0 items-center" onPointerDown={(e) => e.stopPropagation()}>
               {phone && onStep && !activeItem && (
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); haptic("selection"); onStep(1); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    haptic("selection");
+                    onStep(1);
+                  }}
                   aria-label="Next day"
                   className="press-none flex h-11 w-11 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
                 >
@@ -393,29 +412,34 @@ export function DaySheet({
                   )}
                 </button>
               )}
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                close();
-              }}
-              aria-label="Close"
-              className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:bg-surface-sunken"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  close();
+                }}
+                aria-label="Close"
+                className="press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:text-ink active:bg-surface-sunken"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
             </div>
           </div>
         </div>
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-8 pt-0 [-webkit-overflow-scrolling:touch]">
+        <div
+          ref={listRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-8 pt-0 [-webkit-overflow-scrolling:touch]"
+        >
           {activeItem ? (
             editingItem || activeItem.type === "event" ? (
               <div className="pt-1">
                 <p className="mb-2 text-[12px] text-ink-soft">Changes save as you edit.</p>
                 <ItemEditor
                   item={activeItem}
-                  category={activeItem.categoryId ? categories.get(activeItem.categoryId) : undefined}
+                  category={
+                    activeItem.categoryId ? categories.get(activeItem.categoryId) : undefined
+                  }
                   clock24h={chrome.clock24h}
                   StatusSegmented={StatusSegmented}
                   variant="inspector"
@@ -495,6 +519,6 @@ export function DaySheet({
         </div>
       </motion.div>
     </div>,
-    document.body
+    document.body,
   );
 }

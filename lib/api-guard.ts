@@ -83,7 +83,12 @@ function hostAllowed(hostname: string): boolean {
     process.env.VERCEL_URL,
     process.env.VERCEL_BRANCH_URL,
     process.env.VERCEL_PROJECT_PRODUCTION_URL,
-  ].map((v) => v?.replace(/^https?:\/\//, "").split(/[:/]/)[0]?.toLowerCase());
+  ].map((v) =>
+    v
+      ?.replace(/^https?:\/\//, "")
+      .split(/[:/]/)[0]
+      ?.toLowerCase(),
+  );
   if (own.includes(h)) return true;
   const site = process.env.NEXT_PUBLIC_SITE_URL;
   if (site) {
@@ -130,14 +135,14 @@ export async function getRequestUser(request: Request): Promise<{ id: string } |
 export function tooMany() {
   return Response.json(
     { error: "rate-limited", ok: false },
-    { status: 429, headers: { "Retry-After": "30", "Cache-Control": "private, no-store" } }
+    { status: 429, headers: { "Retry-After": "30", "Cache-Control": "private, no-store" } },
   );
 }
 
 export function authenticationRequired() {
   return Response.json(
     { error: "authentication-required", ok: false },
-    { status: 401, headers: { "Cache-Control": "private, no-store" } }
+    { status: 401, headers: { "Cache-Control": "private, no-store" } },
   );
 }
 
@@ -158,7 +163,7 @@ export function safeSecretEqual(actual: string | null, expected: string | undefi
 export async function durableHourlyLimit(
   key: string,
   max: number,
-  opts: { failClosed?: boolean; windowMs?: number } = {}
+  opts: { failClosed?: boolean; windowMs?: number } = {},
 ): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -190,7 +195,11 @@ export async function durableHourlyLimit(
     // projects apply the atomic quota migration.
     const hour = new Date();
     hour.setUTCMinutes(0, 0, 0);
-    const { data } = await sb.from("rate_limits").select("count, window_start").eq("key", key).maybeSingle();
+    const { data } = await sb
+      .from("rate_limits")
+      .select("count, window_start")
+      .eq("key", key)
+      .maybeSingle();
     const windowStart = data?.window_start ? new Date(data.window_start as string) : null;
     if (!data || !windowStart || windowStart < hour) {
       // Fail-open: a store blip must not 429 a class mid-import.
@@ -198,7 +207,10 @@ export async function durableHourlyLimit(
       return true;
     }
     if ((data.count as number) >= max) return false;
-    await sb.from("rate_limits").update({ count: (data.count as number) + 1 }).eq("key", key);
+    await sb
+      .from("rate_limits")
+      .update({ count: (data.count as number) + 1 })
+      .eq("key", key);
     return true;
   } catch {
     return !opts.failClosed;

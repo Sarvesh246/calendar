@@ -14,7 +14,9 @@ describe("sheetRelease", () => {
   });
 
   it("closes a quick flick before it has travelled far", () => {
-    expect(sheetRelease({ ...one, at: 30, velocity: SHEET_FLICK_CLOSE + 50 })).toEqual({ kind: "close" });
+    expect(sheetRelease({ ...one, at: 30, velocity: SHEET_FLICK_CLOSE + 50 })).toEqual({
+      kind: "close",
+    });
   });
 
   it("stays when the pull is heading back up at release", () => {

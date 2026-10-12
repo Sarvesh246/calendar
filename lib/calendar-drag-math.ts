@@ -41,7 +41,7 @@ export function movedTimes(
   sourceDayKey: string,
   sourceStartMin: number,
   targetDayKey: string,
-  targetStartMin: number
+  targetStartMin: number,
 ): { at: string; endAt?: string } {
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : undefined;
@@ -50,7 +50,9 @@ export function movedTimes(
     const at = dayAtMinute(targetDayKey, targetStartMin);
     return {
       at: at.toISOString(),
-      ...(end ? { endAt: new Date(at.getTime() + (end.getTime() - start.getTime())).toISOString() } : {}),
+      ...(end
+        ? { endAt: new Date(at.getTime() + (end.getTime() - start.getTime())).toISOString() }
+        : {}),
     };
   }
   const dayDiff = differenceInCalendarDays(dateFromDayKey(targetDayKey), sourceDay);
@@ -87,7 +89,7 @@ export function sweptRange(
   anchorMin: number,
   currentMin: number,
   minMinute: number,
-  maxMinute: number
+  maxMinute: number,
 ): { startMin: number; endMin: number } {
   const clamp = (m: number) => Math.max(minMinute, Math.min(maxMinute, m));
   const a = clamp(Math.floor(anchorMin / SNAP_MINUTES) * SNAP_MINUTES);

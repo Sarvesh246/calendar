@@ -59,7 +59,12 @@ export function rubberband(distance: number, dimension: number, constant = 0.55)
  * Track 1:1 inside [min, max] and rubber-band past either end. `dimension`
  * scales how much room the overdrag gets before it stiffens.
  */
-export function rubberbandClamp(value: number, min: number, max: number, dimension: number): number {
+export function rubberbandClamp(
+  value: number,
+  min: number,
+  max: number,
+  dimension: number,
+): number {
   if (value < min) return min + rubberband(value - min, dimension);
   if (value > max) return max + rubberband(value - max, dimension);
   return value;

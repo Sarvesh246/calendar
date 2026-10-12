@@ -87,7 +87,11 @@ export const motion = {
  * motion continues instead of restarting from rest. `dampingFraction` 1 for
  * things heading off-screen, a little lower for things landing on a detent.
  */
-export function releaseSpring(velocity: number, dampingFraction = 0.88, response = 0.4): SpringTransition {
+export function releaseSpring(
+  velocity: number,
+  dampingFraction = 0.88,
+  response = 0.4,
+): SpringTransition {
   return { ...appleSpring(response, dampingFraction), velocity };
 }
 
@@ -113,7 +117,7 @@ export function prefersReducedMotion(): boolean {
 export function springEasing(
   response: number,
   dampingFraction: number,
-  samples = 40
+  samples = 40,
 ): { easing: string; duration: number } {
   const omega = (2 * Math.PI) / response;
   const zeta = dampingFraction;
@@ -121,7 +125,10 @@ export function springEasing(
   const at = (t: number) => {
     if (zeta < 1) {
       const wd = omega * Math.sqrt(1 - zeta * zeta);
-      return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t));
+      return (
+        1 -
+        Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t))
+      );
     }
     return 1 - Math.exp(-omega * t) * (1 + omega * t);
   };
@@ -144,6 +151,8 @@ let linearSupport: boolean | null = null;
 export function supportsLinearEasing(): boolean {
   if (linearSupport !== null) return linearSupport;
   linearSupport =
-    typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("transition-timing-function", "linear(0, 1)");
+    typeof CSS !== "undefined" &&
+    typeof CSS.supports === "function" &&
+    CSS.supports("transition-timing-function", "linear(0, 1)");
   return linearSupport;
 }

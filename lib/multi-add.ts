@@ -20,24 +20,38 @@ import type { Category } from "./types";
  */
 
 const DAY_NAMES: Record<string, string> = {
-  mon: "monday", monday: "monday",
-  tue: "tuesday", tues: "tuesday", tuesday: "tuesday",
-  wed: "wednesday", wednesday: "wednesday",
-  thu: "thursday", thur: "thursday", thurs: "thursday", thursday: "thursday",
-  fri: "friday", friday: "friday",
-  sat: "saturday", saturday: "saturday",
-  sun: "sunday", sunday: "sunday",
+  mon: "monday",
+  monday: "monday",
+  tue: "tuesday",
+  tues: "tuesday",
+  tuesday: "tuesday",
+  wed: "wednesday",
+  wednesday: "wednesday",
+  thu: "thursday",
+  thur: "thursday",
+  thurs: "thursday",
+  thursday: "thursday",
+  fri: "friday",
+  friday: "friday",
+  sat: "saturday",
+  saturday: "saturday",
+  sun: "sunday",
+  sunday: "sunday",
 };
-const WEEKDAY_WORD = /\b(mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b\.?,?/gi;
-const WEEKDAY_TEST = /\b(?:mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b/i;
+const WEEKDAY_WORD =
+  /\b(mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b\.?,?/gi;
+const WEEKDAY_TEST =
+  /\b(?:mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\b/i;
 const RELATIVE_DAY = /\b(today|tomorrow|tonight|yesterday)\b/i;
-const TIME_RE = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\bat\s+\d{1,2}\b/i;
+const TIME_RE =
+  /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\bat\s+\d{1,2}\b/i;
 
 const LOCATION_KEYS = /^(?:location|where|place|venue|room|address|loc)$/i;
 const NOTE_KEYS = /^(?:notes?|description|details?|info|link|url|agenda|attendees?|with)$/i;
 const TIME_KEYS = /^(?:date|when|time|day|starts?|start time|at)$/i;
 const KEY_VALUE = /^\s*([A-Za-z][A-Za-z ]{1,14}?)\s*:\s*(.+?)\s*$/;
-const INTRO = /^(?:please\s+|can you\s+|could you\s+)?(?:add|put|create|schedule|book|set up|remind me(?: about)?)\b/i;
+const INTRO =
+  /^(?:please\s+|can you\s+|could you\s+)?(?:add|put|create|schedule|book|set up|remind me(?: about)?)\b/i;
 const INLINE_LOCATION = /(?:[,;]\s*|\s+[-–—]\s+|\s{2,})(?:location|where|room|venue)\s*:\s*(.+)$/i;
 
 interface Entry {
@@ -59,7 +73,11 @@ function hasSignal(text: string): boolean {
 
 /** "Fri Sep 25, 2026 4:45 pm" → drop the redundant weekday; "fri 3pm" → "friday 3pm". */
 function normalizeHead(text: string): string {
-  if (matchDatePhrase(text)) return text.replace(WEEKDAY_WORD, " ").replace(/\s{2,}/g, " ").trim();
+  if (matchDatePhrase(text))
+    return text
+      .replace(WEEKDAY_WORD, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   return text.replace(WEEKDAY_WORD, (m) => {
     const key = m.replace(/[.,]/g, "").toLowerCase();
     return (DAY_NAMES[key] ?? m) + (/[.,]$/.test(m) ? "" : "");
@@ -76,14 +94,27 @@ function headerDateOf(line: string, now: Date): Date | null {
   return rest === "" ? phrase.start : null;
 }
 
-export function parseMultiAdd(raw: string, categories: Category[], now = new Date()): BulkParseResult {
+export function parseMultiAdd(
+  raw: string,
+  categories: Category[],
+  now = new Date(),
+): BulkParseResult {
   const drafts: BulkDraft[] = [];
   const skipped: string[] = [];
-  const lines = raw.split(/\r?\n/).map((l) => l.replace(/[​ ]/g, " ").replace(/^\s*(?:[-*•·]|\d+[.)])\s+/, "").trim());
+  const lines = raw.split(/\r?\n/).map((l) =>
+    l
+      .replace(/[​ ]/g, " ")
+      .replace(/^\s*(?:[-*•·]|\d+[.)])\s+/, "")
+      .trim(),
+  );
 
   // Instructions ("add these to my calendar:") are not an event.
   const firstIdx = lines.findIndex(Boolean);
-  if (firstIdx >= 0 && INTRO.test(lines[firstIdx]) && (/:\s*$/.test(lines[firstIdx]) || !hasSignal(lines[firstIdx]))) {
+  if (
+    firstIdx >= 0 &&
+    INTRO.test(lines[firstIdx]) &&
+    (/:\s*$/.test(lines[firstIdx]) || !hasSignal(lines[firstIdx]))
+  ) {
     lines[firstIdx] = "";
   }
 
@@ -113,7 +144,11 @@ export function parseMultiAdd(raw: string, categories: Category[], now = new Dat
       continue;
     }
     const kv = KEY_VALUE.exec(line);
-    if (kv && !matchDatePhrase(kv[1]) && (LOCATION_KEYS.test(kv[1]) || NOTE_KEYS.test(kv[1]) || TIME_KEYS.test(kv[1]))) {
+    if (
+      kv &&
+      !matchDatePhrase(kv[1]) &&
+      (LOCATION_KEYS.test(kv[1]) || NOTE_KEYS.test(kv[1]) || TIME_KEYS.test(kv[1]))
+    ) {
       if (!current) continue;
       if (LOCATION_KEYS.test(kv[1])) current.location = kv[2];
       else if (TIME_KEYS.test(kv[1])) {
@@ -144,7 +179,11 @@ export function parseMultiAdd(raw: string, categories: Category[], now = new Dat
       skipped.push(entry.head);
       continue;
     }
-    const parsed = parseQuickAdd(text, categories, entry.headerDate ? { anchor: entry.headerDate } : undefined);
+    const parsed = parseQuickAdd(
+      text,
+      categories,
+      entry.headerDate ? { anchor: entry.headerDate } : undefined,
+    );
     const timed = TIME_RE.test(text);
     const allDay = Boolean(parsed.allDay) || !timed;
     const at = allDay ? new Date(new Date(parsed.at).setHours(12, 0, 0, 0)) : parsed.at;

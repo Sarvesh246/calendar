@@ -47,9 +47,9 @@ calls so that nobody but the cron can trigger a send. Authentication is a
 single shared value that has to exist in **both** places, set to the same
 string:
 
-| Where | What to set |
-| --- | --- |
-| Vercel project | environment variable `CRON_SECRET` (then redeploy) |
+| Where             | What to set                                                               |
+| ----------------- | ------------------------------------------------------------------------- |
+| Vercel project    | environment variable `CRON_SECRET` (then redeploy)                        |
 | GitHub repository | Actions secret `CRON_SECRET` (Settings → Secrets and variables → Actions) |
 
 If either side is missing or the two disagree, the endpoint answers `401`,

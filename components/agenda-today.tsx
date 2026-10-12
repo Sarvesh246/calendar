@@ -56,7 +56,10 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft">{summary}</span>
         <ChevronDown
           aria-hidden
-          className={cn("h-4 w-4 shrink-0 text-ink-faint transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", open && "rotate-180")}
+          className={cn(
+            "h-4 w-4 shrink-0 text-ink-faint transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]",
+            open && "rotate-180",
+          )}
           strokeWidth={2}
         />
       </button>
@@ -65,7 +68,8 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
           {items.map((item) => {
             const finished = isDone(item);
             const event = item.type === "event";
-            const live = event && !finished && !item.allDay && new Date(item.at).getTime() <= now.getTime();
+            const live =
+              event && !finished && !item.allDay && new Date(item.at).getTime() <= now.getTime();
             const color = categories.find((c) => c.id === item.categoryId)?.color ?? "#8a8a94";
             return (
               <button
@@ -90,7 +94,7 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
                     aria-hidden
                     className={cn(
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
-                      finished ? "bg-good text-white" : "border"
+                      finished ? "bg-good text-white" : "border",
                     )}
                     style={finished ? undefined : { borderColor: color }}
                   >
@@ -101,13 +105,18 @@ export function AgendaTodayDropdown({ items }: { items: Item[] }) {
                   className={cn(
                     "min-w-0 flex-1 truncate text-[13.5px] font-medium",
                     finished ? "text-ink-faint" : "text-ink",
-                    finished && !event && "line-through decoration-ink-faint"
+                    finished && !event && "line-through decoration-ink-faint",
                   )}
                 >
                   {itemDisplayTitle(item)}
                 </span>
                 {event && (finished || live) && (
-                  <span className={cn("shrink-0 text-[12px] font-medium", live ? "text-accent" : "text-ink-faint")}>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[12px] font-medium",
+                      live ? "text-accent" : "text-ink-faint",
+                    )}
+                  >
                     {live ? "Now" : "Ended"}
                   </span>
                 )}

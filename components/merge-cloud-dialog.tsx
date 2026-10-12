@@ -21,7 +21,10 @@ export function MergeCloudDialog() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+            exit={{
+              opacity: 0,
+              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+            }}
             transition={{ duration: 0.2, ease: motionTokens.ease }}
             className="overlay-scrim absolute inset-0"
           />
@@ -43,13 +46,15 @@ export function MergeCloudDialog() {
             transition={motionTokens.springGentle}
             className="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-surface p-5"
           >
-            <h2 className="text-[16px] font-semibold text-ink">Your account has a different calendar</h2>
+            <h2 className="text-[16px] font-semibold text-ink">
+              Your account has a different calendar
+            </h2>
             {/* Plain words for a choice that can throw data away: no "cloud",
                 no "last write wins", no "ids". */}
             <p className="mt-2 text-[13.5px] leading-relaxed text-ink-soft">
-              Your account has {offer.cloudItems} item{offer.cloudItems === 1 ? "" : "s"}; this device has{" "}
-              {offer.localItems}. Merging keeps everything from both — where the same item is on both, this
-              device&apos;s version wins.
+              Your account has {offer.cloudItems} item{offer.cloudItems === 1 ? "" : "s"}; this
+              device has {offer.localItems}. Merging keeps everything from both — where the same
+              item is on both, this device&apos;s version wins.
             </p>
             <div className="mt-4 flex flex-col gap-2">
               <button
@@ -65,7 +70,9 @@ export function MergeCloudDialog() {
                 className="flex min-h-12 flex-col items-center justify-center rounded-lg border border-line px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink"
               >
                 Keep my account&apos;s calendar
-                <span className="text-[11.5px] font-normal text-ink-faint">Replaces what&apos;s on this device</span>
+                <span className="text-[11.5px] font-normal text-ink-faint">
+                  Replaces what&apos;s on this device
+                </span>
               </button>
               <button
                 type="button"
@@ -73,7 +80,9 @@ export function MergeCloudDialog() {
                 className="flex min-h-12 flex-col items-center justify-center rounded-lg border border-line px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink"
               >
                 Keep this device&apos;s calendar
-                <span className="text-[11.5px] font-normal text-ink-faint">Replaces what&apos;s in your account</span>
+                <span className="text-[11.5px] font-normal text-ink-faint">
+                  Replaces what&apos;s in your account
+                </span>
               </button>
             </div>
           </motion.div>

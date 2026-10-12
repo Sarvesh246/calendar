@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveActivitySnapshot, buildNativeSnapshot, upcomingReminderFires } from "./native-snapshot";
+import {
+  buildLiveActivitySnapshot,
+  buildNativeSnapshot,
+  upcomingReminderFires,
+} from "./native-snapshot";
 import type { FocusSession } from "./focus-session";
 import type { Category, Item } from "./types";
 
@@ -42,7 +46,7 @@ describe("upcomingReminderFires", () => {
       ],
       false,
       10,
-      now
+      now,
     );
     expect(fires).toHaveLength(1);
     expect(fires[0].kind).toBe("location");
@@ -63,7 +67,12 @@ const event = (over: Partial<Item> = {}): Item => ({
   createdAt: at(8),
   ...over,
 });
-const live = (items: Item[], now: Date, focus: FocusSession | null = null, privacy: "show" | "hide" = "show") =>
+const live = (
+  items: Item[],
+  now: Date,
+  focus: FocusSession | null = null,
+  privacy: "show" | "hide" = "show",
+) =>
   buildLiveActivitySnapshot({
     items,
     categories: [category],
@@ -85,7 +94,7 @@ describe("buildLiveActivitySnapshot", () => {
   it("maps an active event to current and includes the next concise line", () => {
     const state = live(
       [event(), event({ id: "event-2", title: "Study group", at: at(18), endAt: at(19) })],
-      new Date(2026, 8, 21, 16, 30)
+      new Date(2026, 8, 21, 16, 30),
     );
     expect(state.mode).toBe("current");
     expect(state.nextTitle).toBe("Study group");
@@ -95,7 +104,7 @@ describe("buildLiveActivitySnapshot", () => {
   it("uses a day overview for non-event work", () => {
     const state = live(
       [event({ type: "task", title: "Review chapter", endAt: undefined })],
-      new Date(2026, 8, 21, 15, 0)
+      new Date(2026, 8, 21, 15, 0),
     );
     expect(state.mode).toBe("day");
     expect(state.subtitle).toBe("Your day");
@@ -186,7 +195,12 @@ describe("buildNativeSnapshot class names", () => {
       focus: null,
       now,
     });
-    const text = JSON.stringify([snap.today, snap.upNext, snap.assignments, snap.spotlight.map((s) => s.subtitle)]);
+    const text = JSON.stringify([
+      snap.today,
+      snap.upNext,
+      snap.assignments,
+      snap.spotlight.map((s) => s.subtitle),
+    ]);
     expect(text).toContain("MATH 150");
     expect(text).not.toContain("533,534,535");
     // Spotlight still matches someone typing the feed's own code.

@@ -14,7 +14,10 @@ function chat(...messages: string[]): Array<AssistantResponse | null> {
   const history: AssistantTurn[] = [];
   return messages.map((m) => {
     const r = tryLocalAnswer(m, history, ctx, NOW);
-    history.push({ role: "user", text: m }, { role: "assistant", text: r?.text ?? "(model reply)" });
+    history.push(
+      { role: "user", text: m },
+      { role: "assistant", text: r?.text ?? "(model reply)" },
+    );
     return r;
   });
 }
@@ -35,9 +38,14 @@ describe("planning", () => {
   });
 
   it("keeps blocks apart and inside the day", () => {
-    const creates = ask("block time for all my assignments this week")!.actions!.flatMap((a) => (a.kind === "create" ? [a.draft] : []));
+    const creates = ask("block time for all my assignments this week")!.actions!.flatMap((a) =>
+      a.kind === "create" ? [a.draft] : [],
+    );
     const sorted = creates.sort((a, b) => +new Date(a.at) - +new Date(b.at));
-    for (let i = 1; i < sorted.length; i++) expect(+new Date(sorted[i].at)).toBeGreaterThanOrEqual(+new Date(sorted[i - 1].endAt!) + 15 * 60_000);
+    for (let i = 1; i < sorted.length; i++)
+      expect(+new Date(sorted[i].at)).toBeGreaterThanOrEqual(
+        +new Date(sorted[i - 1].endAt!) + 15 * 60_000,
+      );
     for (const d of sorted) expect(new Date(d.at).getHours()).toBeGreaterThanOrEqual(9);
   });
 
@@ -48,19 +56,32 @@ describe("planning", () => {
 
   it("says so when everything already has time blocked", () => {
     const essay = ctx.items.find((i) => i.title === "Essay draft")!;
-    ctx.items.push({ id: "s1", categoryId: essay.categoryId, type: "event", title: "Work on: Essay draft", at: at(9, 24, 16), endAt: at(9, 24, 17), workFor: essay.id, createdAt: at(9, 1) });
+    ctx.items.push({
+      id: "s1",
+      categoryId: essay.categoryId,
+      type: "event",
+      title: "Work on: Essay draft",
+      at: at(9, 24, 16),
+      endAt: at(9, 24, 17),
+      workFor: essay.id,
+      createdAt: at(9, 1),
+    });
     expect(text("plan my week")).not.toMatch(/— Essay draft/);
   });
 });
 
 describe("judgement calls with a clear answer", () => {
   it("compares two items by deadline", () => {
-    expect(text("should I do the essay or problem set 4 first?")).toBe("Start with **Essay draft** — it's due tomorrow, and **Problem Set 4** isn't due until Thu, Oct 1.");
+    expect(text("should I do the essay or problem set 4 first?")).toBe(
+      "Start with **Essay draft** — it's due tomorrow, and **Problem Set 4** isn't due until Thu, Oct 1.",
+    );
     expect(text("essay or problem set 3 first")).toMatch(/^Start with \*\*Problem Set 3\*\*/);
   });
 
   it("puts overdue work first when prioritizing", () => {
-    expect(text("what should I prioritize this week")).toMatch(/1\. \*\*Reading response\*\* — overdue/);
+    expect(text("what should I prioritize this week")).toMatch(
+      /1\. \*\*Reading response\*\* — overdue/,
+    );
   });
 
   it("summarizes the week, a day, and the past", () => {
@@ -70,7 +91,9 @@ describe("judgement calls with a clear answer", () => {
   });
 
   it("reads the workload from estimates and free time", () => {
-    expect(text("is my week realistic")).toMatch(/looks \*\*(?:very manageable|full but doable|tight)/);
+    expect(text("is my week realistic")).toMatch(
+      /looks \*\*(?:very manageable|full but doable|tight)/,
+    );
     expect(text("how's my workload next week")).not.toContain("overdue");
   });
 
@@ -83,7 +106,15 @@ describe("judgement calls with a clear answer", () => {
 describe("calendar checks", () => {
   it("finds real overlaps only", () => {
     expect(text("do i have any conflicts this week")).toMatch(/^No conflicts/);
-    ctx.items.push({ id: "x", categoryId: "c3", type: "event", title: "Club meeting", at: at(9, 24, 14, 30), endAt: at(9, 24, 15, 30), createdAt: at(9, 1) });
+    ctx.items.push({
+      id: "x",
+      categoryId: "c3",
+      type: "event",
+      title: "Club meeting",
+      at: at(9, 24, 14, 30),
+      endAt: at(9, 24, 15, 30),
+      createdAt: at(9, 1),
+    });
     const r = text("am i double booked today")!;
     expect(r).toContain("Club meeting");
     expect(r).toContain("Econ Seminar");
@@ -106,7 +137,15 @@ describe("calendar checks", () => {
 
 describe("class times from chat", () => {
   it("adds weekly meetings for a class with none saved, ending with the semester", () => {
-    ctx.categories.push({ id: "c4", name: "BIO 110", color: "#AF52DE", syllabus: { ...ctx.categories[1].syllabus!, keyDates: [{ label: "Last day of classes", date: "2026-12-11" }] } });
+    ctx.categories.push({
+      id: "c4",
+      name: "BIO 110",
+      color: "#AF52DE",
+      syllabus: {
+        ...ctx.categories[1].syllabus!,
+        keyDates: [{ label: "Last day of classes", date: "2026-12-11" }],
+      },
+    });
     const r = ask("bio 110 meets tth 9:30-10:45 in hall b")!;
     const a = r.actions![0];
     expect(a.kind).toBe("create");
@@ -147,14 +186,22 @@ describe("more edits", () => {
   });
 
   it("switches all-day, type, reminders and cleared fields", () => {
-    expect(ask("make the dentist appointment all day")?.actions?.[0]).toMatchObject({ patch: { allDay: true } });
-    expect(ask("make buy textbook an assignment")?.actions?.[0]).toMatchObject({ patch: { type: "assignment" } });
-    expect(ask("remove the location from the dentist appointment")?.actions?.[0]).toMatchObject({ kind: "update" });
+    expect(ask("make the dentist appointment all day")?.actions?.[0]).toMatchObject({
+      patch: { allDay: true },
+    });
+    expect(ask("make buy textbook an assignment")?.actions?.[0]).toMatchObject({
+      patch: { type: "assignment" },
+    });
+    expect(ask("remove the location from the dentist appointment")?.actions?.[0]).toMatchObject({
+      kind: "update",
+    });
     expect(text("remove the reminders from the essay")).toMatch(/doesn't have any reminders/);
   });
 
   it("never reads 'remove reminders from X' as deleting X", () => {
-    ctx.items.find((i) => i.title === "Essay draft")!.reminders = [{ id: "r", itemId: "x", offsetMinutes: 60, label: "1 hour before" }];
+    ctx.items.find((i) => i.title === "Essay draft")!.reminders = [
+      { id: "r", itemId: "x", offsetMinutes: 60, label: "1 hour before" },
+    ];
     const a = ask("remove the reminders from the essay")!.actions![0];
     expect(a).toMatchObject({ kind: "update", patch: { reminders: [] } });
   });

@@ -129,7 +129,11 @@ function WeekStrip({
   selected: number;
   onSelect: (day: number) => void;
 }) {
-  const { containerRef: stripRef, pillRef, moveTo } = useSlidingPill(String(selected), { mark: false });
+  const {
+    containerRef: stripRef,
+    pillRef,
+    moveTo,
+  } = useSlidingPill(String(selected), { mark: false });
   const load = useMemo(() => {
     const minutes = new Map<number, number>();
     let busiest = 0;
@@ -151,7 +155,11 @@ function WeekStrip({
       {/* One highlight that slides between days on the compositor
           (useSlidingPill), not a Framer layoutId that re-measures on the
           same frame the timeline below re-renders. */}
-      <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent-soft ring-1 ring-accent/45" />
+      <span
+        ref={pillRef}
+        aria-hidden
+        className="sliding-pill rounded-lg bg-accent-soft ring-1 ring-accent/45"
+      />
       {order.map((day) => {
         const blocks = byDay.get(day) ?? [];
         const minutes = load.minutes.get(day) ?? 0;
@@ -182,7 +190,7 @@ function WeekStrip({
               aria-hidden
               className={cn(
                 "relative z-[1] text-[12.5px] font-semibold tabular-nums",
-                isSelected ? "text-accent" : day === today ? "text-ink" : "text-ink-soft"
+                isSelected ? "text-accent" : day === today ? "text-ink" : "text-ink-soft",
               )}
             >
               {weekdayShort(day).slice(0, 1)}
@@ -195,7 +203,7 @@ function WeekStrip({
                 <span
                   className={cn(
                     "block h-full rounded-full",
-                    isSelected ? "bg-accent" : "bg-ink-faint/55"
+                    isSelected ? "bg-accent" : "bg-ink-faint/55",
                   )}
                   style={{ width: `${Math.round(fill * 100)}%` }}
                 />
@@ -206,7 +214,7 @@ function WeekStrip({
                 aria-hidden
                 className={cn(
                   "relative z-[1] h-1 w-1 rounded-full",
-                  isSelected ? "bg-accent" : "bg-ink-faint"
+                  isSelected ? "bg-accent" : "bg-ink-faint",
                 )}
               />
             )}
@@ -347,7 +355,7 @@ function DayTimeline({
                       block.startMin % 60,
                       Math.floor(block.endMin / 60),
                       block.endMin % 60,
-                      clock24h
+                      clock24h,
                     )}
                   </p>
                   {boxHeight >= 62 && (category || block.location) && (
@@ -378,8 +386,8 @@ function DayTimeline({
                 b.startMin % 60,
                 Math.floor(b.endMin / 60),
                 b.endMin % 60,
-                clock24h
-              )}${b.location ? `, ${b.location}` : ""}`
+                clock24h,
+              )}${b.location ? `, ${b.location}` : ""}`,
           )
           .join(". ")}
       </p>

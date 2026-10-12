@@ -43,7 +43,7 @@ export function feedOwnsField<K extends keyof SourceSnapshot>(item: Item, key: K
 /** Apply an incoming feed draft, keeping any field the user has changed since last sync. */
 export function mergeImportedItem<T extends Omit<Item, "id" | "createdAt">>(
   item: Item,
-  draft: T
+  draft: T,
 ): Item {
   const next: Item = {
     ...item,

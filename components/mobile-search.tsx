@@ -169,7 +169,10 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
             key={deferredQuery}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+            transition={{
+              default: motionTokens.nudge,
+              opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+            }}
             className="divide-y divide-line"
           >
             {matches.slice(0, 100).map((i) => (
@@ -204,7 +207,10 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: motionTokens.exit } }}
-                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+                transition={{
+                  default: motionTokens.nudge,
+                  opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                }}
                 className="py-6 text-center text-[13px] text-ink-soft"
               >
                 No matching items. Try another word.

@@ -6,7 +6,12 @@ import {
   type OpenAiTool,
   type ChatMessage,
 } from "./openai-compatible";
-import { LLM_PROVIDERS, publicProvider, type LlmProviderConfig, type PublicLlmModel } from "./providers";
+import {
+  LLM_PROVIDERS,
+  publicProvider,
+  type LlmProviderConfig,
+  type PublicLlmModel,
+} from "./providers";
 
 const cooldownUntil = new Map<string, number>();
 const COOLDOWN_429_MS = 15 * 60_000;
@@ -19,9 +24,9 @@ function keyFor(provider: LlmProviderConfig) {
 }
 
 function configuredProviders(): LlmProviderConfig[] {
-  return LLM_PROVIDERS
-    .filter((provider) => provider.supportsTools && Boolean(keyFor(provider)))
-    .sort((a, b) => a.tier - b.tier);
+  return LLM_PROVIDERS.filter(
+    (provider) => provider.supportsTools && Boolean(keyFor(provider)),
+  ).sort((a, b) => a.tier - b.tier);
 }
 
 /** Model discovery must never contact upstreams or spend quota. */
@@ -34,11 +39,16 @@ export async function providerCandidates(selectedId?: string): Promise<{
   requestedUnavailable: boolean;
 }> {
   const configured = configuredProviders();
-  const enabled = configured.filter((provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now());
-  if (!selectedId || selectedId === "auto") return { providers: enabled, requestedUnavailable: false };
+  const enabled = configured.filter(
+    (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
+  );
+  if (!selectedId || selectedId === "auto")
+    return { providers: enabled, requestedUnavailable: false };
   const selected = enabled.find((provider) => provider.id === selectedId);
   return {
-    providers: selected ? [selected, ...enabled.filter((provider) => provider.id !== selected.id)] : enabled,
+    providers: selected
+      ? [selected, ...enabled.filter((provider) => provider.id !== selected.id)]
+      : enabled,
     requestedUnavailable: !selected,
   };
 }
@@ -59,9 +69,10 @@ export function putProviderOnCooldown(provider: LlmProviderConfig, error: unknow
 
 export function shouldFallbackProvider(error: unknown) {
   if (!(error instanceof ProviderRequestError)) {
-    return error instanceof Error && (
-      error.name === "MalformedToolArgumentsError" ||
-      error.message.includes("maximum tool-call loop")
+    return (
+      error instanceof Error &&
+      (error.name === "MalformedToolArgumentsError" ||
+        error.message.includes("maximum tool-call loop"))
     );
   }
   return (
@@ -90,7 +101,7 @@ export function logLlmRequest(data: {
       ok: data.ok,
       status: error instanceof ProviderRequestError ? error.status : undefined,
       errorType: error instanceof Error ? error.name : undefined,
-    })
+    }),
   );
 }
 
@@ -98,7 +109,10 @@ export async function callRoutedProvider(opts: {
   selectedId?: string;
   messages: ChatMessage[];
   tools: OpenAiTool[];
-  run: (provider: LlmProviderConfig, key: string) => Promise<{
+  run: (
+    provider: LlmProviderConfig,
+    key: string,
+  ) => Promise<{
     text: string;
     actions: unknown[];
     latencyMs: number;
@@ -118,7 +132,9 @@ export async function callRoutedProvider(opts: {
         provider: publicProvider(provider),
         fellBack:
           requestedUnavailable ||
-          (Boolean(opts.selectedId) && opts.selectedId !== "auto" && provider.id !== opts.selectedId),
+          (Boolean(opts.selectedId) &&
+            opts.selectedId !== "auto" &&
+            provider.id !== opts.selectedId),
       };
     } catch (error) {
       lastError = error;

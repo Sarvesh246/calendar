@@ -4,7 +4,7 @@ import { safeExternalUrl } from "./safe-url";
 describe("safeExternalUrl", () => {
   it("keeps ordinary web links", () => {
     expect(safeExternalUrl("https://canvas.example/assignment/1")).toBe(
-      "https://canvas.example/assignment/1"
+      "https://canvas.example/assignment/1",
     );
   });
 

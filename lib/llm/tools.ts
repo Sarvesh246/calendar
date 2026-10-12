@@ -7,7 +7,15 @@ import { assistantDatabase } from "./database";
 const id = z.string().min(1).max(100);
 const optionalText = z.string().trim().min(1).max(2_000).optional();
 const iso = z.string().datetime({ offset: true });
-const reminders = z.array(z.object({ offsetMinutes: z.number().int().min(1).max(20_160), label: z.string().trim().max(120).optional() })).max(4).optional();
+const reminders = z
+  .array(
+    z.object({
+      offsetMinutes: z.number().int().min(1).max(20_160),
+      label: z.string().trim().max(120).optional(),
+    }),
+  )
+  .max(4)
+  .optional();
 
 const schemas = {
   list_events: z.object({
@@ -84,7 +92,17 @@ const object = (properties: Record<string, unknown>, required: string[] = []) =>
 });
 const str = (description: string) => ({ type: "string", description });
 const dateTime = (description: string) => ({ type: "string", format: "date-time", description });
-const reminderSchema = { type: "array", maxItems: 4, items: object({ offsetMinutes: { type: "integer", minimum: 1, maximum: 20_160 }, label: str("Optional reminder label") }, ["offsetMinutes"]) };
+const reminderSchema = {
+  type: "array",
+  maxItems: 4,
+  items: object(
+    {
+      offsetMinutes: { type: "integer", minimum: 1, maximum: 20_160 },
+      label: str("Optional reminder label"),
+    },
+    ["offsetMinutes"],
+  ),
+};
 
 export const DATEBOOK_TOOLS: OpenAiTool[] = [
   {
@@ -92,7 +110,12 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
     function: {
       name: "list_events",
       description: "List the signed-in user's calendar events in an optional time range.",
-      parameters: object({ start: dateTime("Inclusive start"), end: dateTime("Inclusive end"), query: str("Optional title search"), limit: { type: "integer", minimum: 1, maximum: 100 } }),
+      parameters: object({
+        start: dateTime("Inclusive start"),
+        end: dateTime("Inclusive end"),
+        query: str("Optional title search"),
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+      }),
     },
   },
   {
@@ -100,7 +123,19 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
     function: {
       name: "add_event",
       description: "Propose adding one calendar event. The user must confirm before it is written.",
-      parameters: object({ title: str("Event title"), start: dateTime("Start with timezone offset"), end: dateTime("Optional end"), allDay: { type: "boolean" }, location: str("Optional location"), description: str("Optional notes"), categoryId: str("Optional class/category id"), reminders: reminderSchema }, ["title", "start"]),
+      parameters: object(
+        {
+          title: str("Event title"),
+          start: dateTime("Start with timezone offset"),
+          end: dateTime("Optional end"),
+          allDay: { type: "boolean" },
+          location: str("Optional location"),
+          description: str("Optional notes"),
+          categoryId: str("Optional class/category id"),
+          reminders: reminderSchema,
+        },
+        ["title", "start"],
+      ),
     },
   },
   {
@@ -108,27 +143,62 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
     function: {
       name: "update_event",
       description: "Propose updating one existing event by its id. The user must confirm.",
-      parameters: object({ id: str("Event id from list_events"), title: str("New title"), start: dateTime("New start"), end: { type: ["string", "null"], format: "date-time" }, allDay: { type: "boolean" }, location: { type: ["string", "null"] }, description: { type: ["string", "null"] }, categoryId: str("New category id"), reminders: reminderSchema }, ["id"]),
+      parameters: object(
+        {
+          id: str("Event id from list_events"),
+          title: str("New title"),
+          start: dateTime("New start"),
+          end: { type: ["string", "null"], format: "date-time" },
+          allDay: { type: "boolean" },
+          location: { type: ["string", "null"] },
+          description: { type: ["string", "null"] },
+          categoryId: str("New category id"),
+          reminders: reminderSchema,
+        },
+        ["id"],
+      ),
     },
   },
   {
     type: "function",
-    function: { name: "delete_event", description: "Propose deleting one event. Explicit user confirmation is always required.", parameters: object({ id: str("Event id from list_events") }, ["id"]) },
+    function: {
+      name: "delete_event",
+      description: "Propose deleting one event. Explicit user confirmation is always required.",
+      parameters: object({ id: str("Event id from list_events") }, ["id"]),
+    },
   },
   {
     type: "function",
     function: {
       name: "list_tasks",
       description: "List the signed-in user's tasks and assignments.",
-      parameters: object({ status: { type: "string", enum: ["todo", "doing", "done"] }, dueAfter: dateTime("Inclusive due-date lower bound"), dueBefore: dateTime("Inclusive due-date upper bound"), query: str("Optional title search"), limit: { type: "integer", minimum: 1, maximum: 100 } }),
+      parameters: object({
+        status: { type: "string", enum: ["todo", "doing", "done"] },
+        dueAfter: dateTime("Inclusive due-date lower bound"),
+        dueBefore: dateTime("Inclusive due-date upper bound"),
+        query: str("Optional title search"),
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+      }),
     },
   },
   {
     type: "function",
     function: {
       name: "add_task",
-      description: "Propose adding one task or assignment. The user must confirm before it is written.",
-      parameters: object({ title: str("Task title"), due: dateTime("Due date/time with timezone offset"), itemType: { type: "string", enum: ["assignment", "task"] }, status: { type: "string", enum: ["todo", "doing", "done"] }, description: str("Optional notes"), categoryId: str("Optional class/category id"), reminders: reminderSchema }, ["title", "due"]),
+      description:
+        "Propose adding one task or assignment. The user must confirm before it is written.",
+      parameters: object(
+        {
+          title: str("Task title"),
+          due: dateTime("Due date/time with timezone offset"),
+          itemType: { type: "string", enum: ["assignment", "task"] },
+          status: { type: "string", enum: ["todo", "doing", "done"] },
+          description: str("Optional notes"),
+          categoryId: str("Optional class/category id"),
+          reminders: reminderSchema,
+        },
+        ["title", "due"],
+      ),
     },
   },
   {
@@ -136,17 +206,36 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
     function: {
       name: "update_task",
       description: "Propose updating one task or assignment by id. The user must confirm.",
-      parameters: object({ id: str("Task id from list_tasks"), title: str("New title"), due: dateTime("New due date/time"), status: { type: "string", enum: ["todo", "doing", "done"] }, description: { type: ["string", "null"] }, categoryId: str("New category id"), reminders: reminderSchema }, ["id"]),
+      parameters: object(
+        {
+          id: str("Task id from list_tasks"),
+          title: str("New title"),
+          due: dateTime("New due date/time"),
+          status: { type: "string", enum: ["todo", "doing", "done"] },
+          description: { type: ["string", "null"] },
+          categoryId: str("New category id"),
+          reminders: reminderSchema,
+        },
+        ["id"],
+      ),
     },
   },
   {
     type: "function",
-    function: { name: "delete_task", description: "Propose deleting one task or assignment. Explicit user confirmation is always required.", parameters: object({ id: str("Task id from list_tasks") }, ["id"]) },
+    function: {
+      name: "delete_task",
+      description:
+        "Propose deleting one task or assignment. Explicit user confirmation is always required.",
+      parameters: object({ id: str("Task id from list_tasks") }, ["id"]),
+    },
   },
 ];
 
 export class MalformedToolArgumentsError extends Error {
-  constructor(readonly toolName: string, readonly details: string) {
+  constructor(
+    readonly toolName: string,
+    readonly details: string,
+  ) {
     super(`Malformed ${toolName} arguments: ${details}`);
     this.name = "MalformedToolArgumentsError";
   }
@@ -159,13 +248,25 @@ type ToolContext = {
 };
 
 function fallbackItems(ctx: ToolContext, type: "event" | "task") {
-  return ctx.body.items.filter((item) => (type === "event" ? item.type === "event" : item.type !== "event"));
+  return ctx.body.items.filter((item) =>
+    type === "event" ? item.type === "event" : item.type !== "event",
+  );
 }
 
 function filterFallback(items: SlimItem[], args: Record<string, unknown>) {
   const query = typeof args.query === "string" ? args.query.toLowerCase() : "";
-  const start = typeof args.start === "string" ? +new Date(args.start) : typeof args.dueAfter === "string" ? +new Date(args.dueAfter) : -Infinity;
-  const end = typeof args.end === "string" ? +new Date(args.end) : typeof args.dueBefore === "string" ? +new Date(args.dueBefore) : Infinity;
+  const start =
+    typeof args.start === "string"
+      ? +new Date(args.start)
+      : typeof args.dueAfter === "string"
+        ? +new Date(args.dueAfter)
+        : -Infinity;
+  const end =
+    typeof args.end === "string"
+      ? +new Date(args.end)
+      : typeof args.dueBefore === "string"
+        ? +new Date(args.dueBefore)
+        : Infinity;
   const limit = typeof args.limit === "number" ? args.limit : 50;
   return items
     .filter((item) => +new Date(item.at) >= start && +new Date(item.at) <= end)
@@ -174,7 +275,11 @@ function filterFallback(items: SlimItem[], args: Record<string, unknown>) {
     .slice(0, limit);
 }
 
-async function listFromDatabase(ctx: ToolContext, kind: "event" | "task", args: Record<string, unknown>) {
+async function listFromDatabase(
+  ctx: ToolContext,
+  kind: "event" | "task",
+  args: Record<string, unknown>,
+) {
   const db = assistantDatabase();
   if (!ctx.userId || !db) return filterFallback(fallbackItems(ctx, kind), args);
   let query = db
@@ -189,7 +294,8 @@ async function listFromDatabase(ctx: ToolContext, kind: "event" | "task", args: 
   if (typeof args.dueAfter === "string") query = query.gte("at", args.dueAfter);
   if (typeof args.dueBefore === "string") query = query.lte("at", args.dueBefore);
   if (typeof args.status === "string") query = query.eq("status", args.status);
-  if (typeof args.query === "string" && args.query) query = query.ilike("title", `%${args.query.replace(/[%_,]/g, "")}%`);
+  if (typeof args.query === "string" && args.query)
+    query = query.ilike("title", `%${args.query.replace(/[%_,]/g, "")}%`);
   const { data, error } = await query;
   if (error) throw new Error(`Calendar lookup failed: ${error.message}`);
   return data ?? [];
@@ -212,13 +318,39 @@ async function ownedItem(ctx: ToolContext, itemId: string) {
   return data;
 }
 
-function actionFor(tool: DatebookToolName, args: Record<string, unknown>, target?: Record<string, unknown> | SlimItem | null) {
+function actionFor(
+  tool: DatebookToolName,
+  args: Record<string, unknown>,
+  target?: Record<string, unknown> | SlimItem | null,
+) {
   const title = String(args.title || target?.title || (tool.includes("event") ? "Event" : "Task"));
   if (tool === "add_event") {
-    return { kind: "create", summary: `Add event “${title}”`, title, itemType: "event", at: args.start, endAt: args.end, allDay: args.allDay, location: args.location, description: args.description, categoryId: args.categoryId, reminders: args.reminders };
+    return {
+      kind: "create",
+      summary: `Add event “${title}”`,
+      title,
+      itemType: "event",
+      at: args.start,
+      endAt: args.end,
+      allDay: args.allDay,
+      location: args.location,
+      description: args.description,
+      categoryId: args.categoryId,
+      reminders: args.reminders,
+    };
   }
   if (tool === "add_task") {
-    return { kind: "create", summary: `Add ${args.itemType === "assignment" ? "assignment" : "task"} “${title}”`, title, itemType: args.itemType, at: args.due, status: args.status, description: args.description, categoryId: args.categoryId, reminders: args.reminders };
+    return {
+      kind: "create",
+      summary: `Add ${args.itemType === "assignment" ? "assignment" : "task"} “${title}”`,
+      title,
+      itemType: args.itemType,
+      at: args.due,
+      status: args.status,
+      description: args.description,
+      categoryId: args.categoryId,
+      reminders: args.reminders,
+    };
   }
   if (tool === "delete_event" || tool === "delete_task") {
     return { kind: "delete", summary: `Delete “${title}”`, itemId: args.id, title };
@@ -232,9 +364,21 @@ function actionFor(tool: DatebookToolName, args: Record<string, unknown>, target
     ...(args.title ? { title: args.title } : {}),
     ...(event && args.start ? { at: args.start } : {}),
     ...(!event && args.due ? { at: args.due } : {}),
-    ...(event && "end" in args ? (args.end === null ? { clearEndAt: true } : { endAt: args.end }) : {}),
-    ...("location" in args ? (args.location === null ? { clearLocation: true } : { location: args.location }) : {}),
-    ...("description" in args ? (args.description === null ? { clearDescription: true } : { description: args.description }) : {}),
+    ...(event && "end" in args
+      ? args.end === null
+        ? { clearEndAt: true }
+        : { endAt: args.end }
+      : {}),
+    ...("location" in args
+      ? args.location === null
+        ? { clearLocation: true }
+        : { location: args.location }
+      : {}),
+    ...("description" in args
+      ? args.description === null
+        ? { clearDescription: true }
+        : { description: args.description }
+      : {}),
     ...(args.categoryId ? { categoryId: args.categoryId } : {}),
     ...(args.status ? { status: args.status } : {}),
     ...(typeof args.allDay === "boolean" ? { allDay: args.allDay } : {}),
@@ -245,7 +389,7 @@ function actionFor(tool: DatebookToolName, args: Record<string, unknown>, target
 export async function executeDatebookTool(
   name: string,
   rawArguments: string,
-  ctx: ToolContext
+  ctx: ToolContext,
 ): Promise<{ output: unknown; action?: Record<string, unknown> }> {
   if (!(name in schemas)) throw new MalformedToolArgumentsError(name, "unknown tool");
   let json: unknown;
@@ -255,17 +399,28 @@ export async function executeDatebookTool(
     throw new MalformedToolArgumentsError(name, "arguments were not valid JSON");
   }
   const parsed = schemas[name as DatebookToolName].safeParse(json);
-  if (!parsed.success) throw new MalformedToolArgumentsError(name, parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "));
+  if (!parsed.success)
+    throw new MalformedToolArgumentsError(
+      name,
+      parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "),
+    );
   const tool = name as DatebookToolName;
   const args = parsed.data as Record<string, unknown>;
-  if ((tool === "add_event" || tool === "add_task") && !args.categoryId && ctx.body.categories[0]?.id) {
+  if (
+    (tool === "add_event" || tool === "add_task") &&
+    !args.categoryId &&
+    ctx.body.categories[0]?.id
+  ) {
     args.categoryId = ctx.body.categories[0].id;
   }
   if (tool === "list_events") return { output: await listFromDatabase(ctx, "event", args) };
   if (tool === "list_tasks") return { output: await listFromDatabase(ctx, "task", args) };
   if (!MUTATIONS.has(tool)) throw new MalformedToolArgumentsError(name, "unsupported tool");
 
-  const target = tool.startsWith("update_") || tool.startsWith("delete_") ? await ownedItem(ctx, String(args.id)) : null;
+  const target =
+    tool.startsWith("update_") || tool.startsWith("delete_")
+      ? await ownedItem(ctx, String(args.id))
+      : null;
   if ((tool.startsWith("update_") || tool.startsWith("delete_")) && !target) {
     return { output: { ok: false, error: "Item not found for this user" } };
   }
@@ -354,7 +509,9 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
           .eq("user_id", userId)
           .maybeSingle();
         const presetIds = Array.isArray(settings?.default_reminder_preset_ids)
-          ? settings.default_reminder_preset_ids.filter((value): value is string => typeof value === "string")
+          ? settings.default_reminder_preset_ids.filter(
+              (value): value is string => typeof value === "string",
+            )
           : [];
         if (presetIds.length) {
           const { data: presets } = await db
@@ -372,13 +529,13 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
         id: itemId,
         user_id: userId,
         category_id: categoryId,
-        type: event ? "event" : args.itemType ?? "task",
+        type: event ? "event" : (args.itemType ?? "task"),
         title: args.title,
         at: event ? args.start : args.due,
-        end_at: event ? args.end ?? null : null,
+        end_at: event ? (args.end ?? null) : null,
         all_day: event ? Boolean(args.allDay) : false,
-        status: event ? null : args.status ?? "todo",
-        location: event ? args.location ?? null : null,
+        status: event ? null : (args.status ?? "todo"),
+        location: event ? (args.location ?? null) : null,
         description: args.description ?? null,
         reminders: reminderRows
           ? reminderRows.map((reminder) => ({ ...(reminder as object), id: nanoid(), itemId }))
@@ -422,7 +579,11 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
       if (updateError) throw new Error(updateError.message);
       item = data;
     } else {
-      const { error: deleteError } = await db.from("items").delete().eq("id", args.id).eq("user_id", userId);
+      const { error: deleteError } = await db
+        .from("items")
+        .delete()
+        .eq("id", args.id)
+        .eq("user_id", userId);
       if (deleteError) throw new Error(deleteError.message);
     }
   } catch (error) {

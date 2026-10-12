@@ -46,7 +46,7 @@ export default function SchedulePage() {
 
   const items = useMemo(
     () => applyCategoryFilter(allItems, categoryFilter),
-    [allItems, categoryFilter]
+    [allItems, categoryFilter],
   );
 
   // Which column to mark. Read once per mount — a timetable is the same all
@@ -55,7 +55,7 @@ export default function SchedulePage() {
 
   const schedule = useMemo(
     () => buildWeeklySchedule(items, new Date(), weekStartsOn, categories),
-    [items, weekStartsOn, categories]
+    [items, weekStartsOn, categories],
   );
 
   const colorOf = (categoryId?: string) =>
@@ -127,12 +127,7 @@ export default function SchedulePage() {
             clock24h={clock24h}
           />
 
-          <TimetableGrid
-            schedule={schedule}
-            today={today}
-            clock24h={clock24h}
-            colorOf={colorOf}
-          />
+          <TimetableGrid schedule={schedule} today={today} clock24h={clock24h} colorOf={colorOf} />
 
           {/* Phones get a day at a time on a real timeline; from `md` up the
               grid above already answers the same question better. */}
@@ -145,8 +140,8 @@ export default function SchedulePage() {
           />
 
           <p className="px-0.5 text-[12px] leading-relaxed text-ink-faint">
-            Built from anything weekly — class times you entered and repeating events from
-            imported calendars. One-off events stay on the calendar.
+            Built from anything weekly — class times you entered and repeating events from imported
+            calendars. One-off events stay on the calendar.
           </p>
         </>
       )}
@@ -184,7 +179,7 @@ function SummaryStrip({
       value: `${formatClock(Math.floor(earliestMin / 60), earliestMin % 60, clock24h)}–${formatClock(
         Math.floor(latestMin / 60),
         latestMin % 60,
-        clock24h
+        clock24h,
       )}`,
     },
   ];
@@ -196,7 +191,7 @@ function SummaryStrip({
           key={stat.label}
           className={cn(
             "rounded-xl border border-line bg-surface px-3.5 py-3",
-            stat.wide && "col-span-2 sm:col-span-1"
+            stat.wide && "col-span-2 sm:col-span-1",
           )}
         >
           <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
@@ -254,10 +249,7 @@ function TimetableGrid({
   const byDay = useMemo(() => {
     const map = new Map<number, PlacedBlock[]>();
     for (const day of schedule.days) {
-      map.set(
-        day,
-        placeDayBlocks(schedule.blocks.filter((b) => b.day === day))
-      );
+      map.set(day, placeDayBlocks(schedule.blocks.filter((b) => b.day === day)));
     }
     return map;
   }, [schedule]);
@@ -279,20 +271,21 @@ function TimetableGrid({
             key={day}
             className={cn(
               "border-l border-line px-2 py-2 text-center",
-              today === day && "bg-accent-soft"
+              today === day && "bg-accent-soft",
             )}
           >
             <p
               className={cn(
                 "text-[12.5px] font-semibold",
-                today === day ? "text-accent" : "text-ink"
+                today === day ? "text-accent" : "text-ink",
               )}
             >
               {weekdayLong(day)}
             </p>
             <p className="text-[11px] text-ink-faint">
-              {byDay.get(day)?.length ?? 0} · {formatDuration(
-                (byDay.get(day) ?? []).reduce((sum, b) => sum + (b.endMin - b.startMin), 0)
+              {byDay.get(day)?.length ?? 0} ·{" "}
+              {formatDuration(
+                (byDay.get(day) ?? []).reduce((sum, b) => sum + (b.endMin - b.startMin), 0),
               )}
             </p>
           </div>
@@ -312,7 +305,9 @@ function TimetableGrid({
                 className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-[10.5px] tabular-nums text-ink-faint"
                 style={{ top: (minute - gridStart) * ppm }}
               >
-                {minute === gridStart || minute === gridEnd ? "" : formatClock(minute / 60, 0, clock24h)}
+                {minute === gridStart || minute === gridEnd
+                  ? ""
+                  : formatClock(minute / 60, 0, clock24h)}
               </span>
             ))}
           </div>
@@ -320,10 +315,7 @@ function TimetableGrid({
           {schedule.days.map((day) => (
             <div
               key={day}
-              className={cn(
-                "relative border-l border-line",
-                today === day && "bg-accent-soft/40"
-              )}
+              className={cn("relative border-l border-line", today === day && "bg-accent-soft/40")}
             >
               {/* Hour rules as one gradient rather than an element per hour —
                   the grid stays a handful of nodes however long the day runs. */}
@@ -407,15 +399,12 @@ function useNowMinutes(): number {
   return minutes;
 }
 
-function formatRange(
-  block: { startMin: number; endMin: number },
-  clock24h: boolean
-): string {
+function formatRange(block: { startMin: number; endMin: number }, clock24h: boolean): string {
   return formatTimeRange(
     Math.floor(block.startMin / 60),
     block.startMin % 60,
     Math.floor(block.endMin / 60),
     block.endMin % 60,
-    clock24h
+    clock24h,
   );
 }

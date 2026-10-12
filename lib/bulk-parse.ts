@@ -40,7 +40,9 @@ function cleanCell(v: string): string {
 
 /** A title shouldn't keep the asterisk that pointed at a footnote. */
 function cleanTitle(v: string): string {
-  return cleanCell(v).replace(/[*†‡]+$/g, "").trim();
+  return cleanCell(v)
+    .replace(/[*†‡]+$/g, "")
+    .trim();
 }
 
 function looksLikeContact(v: string): boolean {
@@ -51,7 +53,10 @@ function looksLikeContact(v: string): boolean {
 function splitCells(line: string): string[] {
   if (line.includes("\t")) return line.split("\t").map(cleanCell).filter(Boolean);
   if (line.includes("|")) return line.split("|").map(cleanCell).filter(Boolean);
-  const bySpaces = line.split(/\s{2,}/).map(cleanCell).filter(Boolean);
+  const bySpaces = line
+    .split(/\s{2,}/)
+    .map(cleanCell)
+    .filter(Boolean);
   if (bySpaces.length > 1) return bySpaces;
   return [cleanCell(line)];
 }
@@ -101,7 +106,7 @@ function draftFromLine(line: string, categories: Category[], now: Date): BulkDra
     }
     // Keep anything else that shared the date's cell ("Sept. 11 Career Fair").
     const leftover = cleanCell(
-      cell.slice(0, phrase!.index) + cell.slice(phrase!.index + phrase!.text.length)
+      cell.slice(0, phrase!.index) + cell.slice(phrase!.index + phrase!.text.length),
     );
     if (leftover) rest.push(leftover);
   });
@@ -125,7 +130,9 @@ function draftFromLine(line: string, categories: Category[], now: Date): BulkDra
     allDay,
     ...(location ? { location } : {}),
     ...(extras.length ? { description: extras.join(" · ") } : {}),
-    ...(matchCategory(haystack, categories) ? { categoryId: matchCategory(haystack, categories) } : {}),
+    ...(matchCategory(haystack, categories)
+      ? { categoryId: matchCategory(haystack, categories) }
+      : {}),
     source: cleanCell(line),
   };
 }
@@ -138,7 +145,10 @@ export interface BulkParseResult {
 
 /** True when `raw` is worth offering as a multi-item add. */
 export function looksLikeBulkPaste(raw: string): boolean {
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length < 2) return false;
   let dated = 0;
   for (const line of lines) {
@@ -154,12 +164,11 @@ function isTabular(lines: string[]): boolean {
   return lines.some((l) => l.includes("\t") || l.includes("|") || /\S {2,}\S/.test(l));
 }
 
-export function parseBulk(
-  raw: string,
-  categories: Category[],
-  now = new Date()
-): BulkParseResult {
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+export function parseBulk(raw: string, categories: Category[], now = new Date()): BulkParseResult {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (!isTabular(lines)) {
     const multi = parseMultiAdd(raw, categories, now);
     if (multi.drafts.length >= 2) return multi;
@@ -177,7 +186,7 @@ export function parseBulk(
 /** Shape a draft for `addItem`. */
 export function toNewItem(
   draft: BulkDraft,
-  fallbackCategoryId: string | undefined
+  fallbackCategoryId: string | undefined,
 ): Omit<Item, "id" | "createdAt"> {
   return {
     title: draft.title,

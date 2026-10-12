@@ -34,10 +34,10 @@ describe("itemNoticeFingerprint", () => {
 
   it("changes when a user-visible field changes", () => {
     expect(itemNoticeFingerprint(item({ title: "Essay v2" }))).not.toBe(
-      itemNoticeFingerprint(item())
+      itemNoticeFingerprint(item()),
     );
     expect(itemNoticeFingerprint(item({ status: "done" }))).not.toBe(
-      itemNoticeFingerprint(item({ status: "todo" }))
+      itemNoticeFingerprint(item({ status: "todo" })),
     );
   });
 
@@ -50,21 +50,15 @@ describe("itemNoticeFingerprint", () => {
 
 describe("isOwnWriteEcho", () => {
   it("matches the stamp this device just wrote", () => {
-    expect(isOwnWriteEcho("2026-09-09T12:00:00.000Z", "2026-09-09T12:00:00.000Z")).toBe(
-      true
-    );
+    expect(isOwnWriteEcho("2026-09-09T12:00:00.000Z", "2026-09-09T12:00:00.000Z")).toBe(true);
   });
 
   it("tolerates a millisecond or two of postgres rounding", () => {
-    expect(isOwnWriteEcho("2026-09-09T12:00:00.012Z", "2026-09-09T12:00:00.000Z")).toBe(
-      true
-    );
+    expect(isOwnWriteEcho("2026-09-09T12:00:00.012Z", "2026-09-09T12:00:00.000Z")).toBe(true);
   });
 
   it("does not treat a later other-device write as an echo", () => {
-    expect(isOwnWriteEcho("2026-09-09T12:00:05.000Z", "2026-09-09T12:00:00.000Z")).toBe(
-      false
-    );
+    expect(isOwnWriteEcho("2026-09-09T12:00:05.000Z", "2026-09-09T12:00:00.000Z")).toBe(false);
   });
 
   it("is false when this device never wrote the row", () => {
@@ -83,7 +77,7 @@ describe("decideRemoteItemNotice", () => {
         remote,
         lastWrittenAt: prev.updatedAt,
         editedHereRecently: true,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -97,7 +91,7 @@ describe("decideRemoteItemNotice", () => {
         prev,
         remote,
         editedHereRecently: false,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -111,7 +105,7 @@ describe("decideRemoteItemNotice", () => {
         prev,
         remote,
         editedHereRecently: false,
-      })
+      }),
     ).toEqual({
       itemId: "item-1",
       title: "Essay rescheduled",
@@ -130,7 +124,7 @@ describe("decideRemoteItemNotice", () => {
         remote,
         lastWrittenAt: prev.updatedAt,
         editedHereRecently: true,
-      })
+      }),
     ).toEqual({
       itemId: "item-1",
       title: "Essay rescheduled",
@@ -147,7 +141,7 @@ describe("decideRemoteItemNotice", () => {
         prev: item({ allDay: false }),
         remote,
         editedHereRecently: false,
-      })
+      }),
     ).toBeNull();
   });
 
@@ -165,7 +159,7 @@ describe("decideRemoteItemNotice", () => {
         remote,
         lastWrittenAt: prev.updatedAt,
         editedHereRecently: true,
-      })
+      }),
     ).toBeNull();
   });
 });
@@ -175,15 +169,11 @@ describe("mergeNoticeBatch", () => {
 
   it("replaces an existing card for the same item instead of stacking another", () => {
     ids.n = 0;
-    const first = mergeNoticeBatch(
-      [],
-      [{ itemId: "a", title: "A", kind: "remote" }],
-      ids.make
-    );
+    const first = mergeNoticeBatch([], [{ itemId: "a", title: "A", kind: "remote" }], ids.make);
     const next = mergeNoticeBatch(
       first,
       [{ itemId: "a", title: "A v2", kind: "remote" }],
-      ids.make
+      ids.make,
     );
     expect(next).toHaveLength(1);
     expect(next[0].id).toBe(first[0].id);

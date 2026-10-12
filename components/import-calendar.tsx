@@ -51,7 +51,8 @@ export function ImportCalendar() {
     try {
       const feed = await fetchCalendarFeed(feedUrl);
       const current = useDatebookStore.getState();
-      if (current.userId !== userId || !current.importSources.some((source) => source.id === id)) return;
+      if (current.userId !== userId || !current.importSources.some((source) => source.id === id))
+        return;
       const { added, updated, removed } = applyImport(feedUrl, feed);
       setStatus({ kind: "success", message: summarize(added, updated, removed) });
     } catch (err) {
@@ -97,10 +98,13 @@ export function ImportCalendar() {
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+            transition={{
+              default: motionTokens.nudge,
+              opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+            }}
             className={cn(
               "flex items-start gap-1.5 text-[12.5px]",
-              status.kind === "error" ? "text-warn" : "text-good"
+              status.kind === "error" ? "text-warn" : "text-good",
             )}
           >
             {status.kind === "error" ? (

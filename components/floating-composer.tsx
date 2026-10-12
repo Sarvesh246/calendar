@@ -30,7 +30,12 @@ function seedTransform(panel: HTMLElement) {
   const button = document.querySelector<HTMLElement>(".mobile-add-button");
   // Layout box, not the client rect: the panel may be mid-flight, and its
   // own transform must not move the target it is aiming for.
-  const p = { left: panel.offsetLeft, top: panel.offsetTop, width: panel.offsetWidth, height: panel.offsetHeight };
+  const p = {
+    left: panel.offsetLeft,
+    top: panel.offsetTop,
+    width: panel.offsetWidth,
+    height: panel.offsetHeight,
+  };
   if (!button || p.width === 0) return `translate(0px, 24px) scale(0.92)`;
   const b = button.getBoundingClientRect();
   const dx = b.left + b.width / 2 - (p.left + p.width / 2);
@@ -124,14 +129,17 @@ export function FloatingComposer() {
         fill: "forwards",
       });
     }
-    scrim.animate([{ opacity: scrim.style.opacity || "1" }, { opacity: 0 }], { ...SCRIM_OUT, fill: "forwards" });
+    scrim.animate([{ opacity: scrim.style.opacity || "1" }, { opacity: 0 }], {
+      ...SCRIM_OUT,
+      fill: "forwards",
+    });
     let cancelled = false;
     // Gone as soon as it is invisible; the tail of the travel isn't worth waiting for.
     fade.finished.then(
       () => {
         if (!cancelled) setPresent(false);
       },
-      () => {}
+      () => {},
     );
     return () => {
       cancelled = true;
@@ -152,7 +160,7 @@ export function FloatingComposer() {
         onPointerDown={open ? closeQuickAdd : undefined}
         className={cn(
           "overlay-scrim-light press-none viewport-pinned-top viewport-pinned-overlay fixed inset-0 z-[45]",
-          !open && "pointer-events-none"
+          !open && "pointer-events-none",
         )}
       />
       <div
@@ -167,7 +175,7 @@ export function FloatingComposer() {
         }}
         className={cn(
           "mobile-composer viewport-pinned-top fixed inset-x-3 z-[46] mx-auto max-h-[calc(var(--visible-height,100dvh)-5rem)] max-w-[760px] overflow-y-auto overscroll-contain md:inset-x-6",
-          !open && "pointer-events-none"
+          !open && "pointer-events-none",
         )}
       >
         <QuickAddBar />

@@ -72,7 +72,10 @@ export function Scrim({
     ...driven,
     exit: {
       opacity: 0,
-      transition: { duration: reduced ? motionTokens.micro : exitDuration, ease: motionTokens.easeInOut },
+      transition: {
+        duration: reduced ? motionTokens.micro : exitDuration,
+        ease: motionTokens.easeInOut,
+      },
     },
     transition: reduced
       ? { duration: motionTokens.micro }
@@ -85,7 +88,7 @@ export function Scrim({
       // scale would expose a strip of the live page around all four edges.
       label && "press-none",
       "absolute inset-0",
-      className
+      className,
     ),
     onClick,
     onPointerDown,

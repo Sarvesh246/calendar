@@ -48,7 +48,9 @@ export function sanitizeReminderPresets(presets: ReminderPreset[]): ReminderPres
   const next = presets.map((p) => {
     const label = safePresetLabel(p.label);
     const offsetMinutes =
-      typeof p.offsetMinutes === "number" && Number.isFinite(p.offsetMinutes) ? p.offsetMinutes : 15;
+      typeof p.offsetMinutes === "number" && Number.isFinite(p.offsetMinutes)
+        ? p.offsetMinutes
+        : 15;
     if (label === p.label && offsetMinutes === p.offsetMinutes) return p;
     changed = true;
     return { ...p, label, offsetMinutes };
@@ -168,8 +170,7 @@ export function sanitizeItems(items: Item[] | undefined): Item[] {
     const type: ItemType = ITEM_TYPES.has(i.type) ? i.type : "task";
     const createdAt = isoOrUndefined(i.createdAt) ?? at;
     const endAt = isoOrUndefined(i.endAt);
-    const status =
-      i.status !== undefined && ITEM_STATUSES.has(i.status) ? i.status : undefined;
+    const status = i.status !== undefined && ITEM_STATUSES.has(i.status) ? i.status : undefined;
     const reminders = Array.isArray(i.reminders)
       ? i.reminders.filter((r) => r && typeof r === "object")
       : undefined;

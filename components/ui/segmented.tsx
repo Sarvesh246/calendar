@@ -48,7 +48,7 @@ export function Segmented<T extends string>({
       className={cn(
         "relative items-center gap-0.5 rounded-[10px] border border-line bg-surface p-0.5",
         fill ? "grid auto-cols-fr grid-flow-col" : "inline-flex",
-        className
+        className,
       )}
     >
       <span ref={pillRef} aria-hidden className="sliding-pill rounded-[7px] bg-accent" />
@@ -72,7 +72,7 @@ export function Segmented<T extends string>({
               "press-none relative flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] font-medium",
               "transition-colors duration-[var(--motion-micro)]",
               "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
-              size === "desk" ? "h-[30px] px-3 text-[13px]" : "h-[38px] px-4 text-[14px]"
+              size === "desk" ? "h-[30px] px-3 text-[13px]" : "h-[38px] px-4 text-[14px]",
             )}
           >
             {Icon && <Icon aria-hidden className="relative z-[1] h-3.5 w-3.5" strokeWidth={1.9} />}

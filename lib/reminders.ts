@@ -40,7 +40,9 @@ export function notificationPermission(): NotificationPermission | "unsupported"
   return notificationsSupported() ? Notification.permission : "unsupported";
 }
 
-export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+export async function requestNotificationPermission(): Promise<
+  NotificationPermission | "unsupported"
+> {
   if (!notificationsSupported()) return "unsupported";
   if (Notification.permission !== "default") return Notification.permission;
   try {
@@ -69,9 +71,7 @@ export function usesNativeReminders(): boolean {
   return isNativeWrapper();
 }
 
-export async function maybePromptForReminders(
-  getContext: () => ReminderContext
-): Promise<void> {
+export async function maybePromptForReminders(getContext: () => ReminderContext): Promise<void> {
   if (promptedThisSession) return;
   if (usesNativeReminders()) {
     promptedThisSession = true;
@@ -183,7 +183,11 @@ async function showReminder(item: Item, label: string, clock24h: boolean): Promi
     ],
   } as NotificationOptions & { tag: string };
 
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator && navigator.serviceWorker.controller) {
+  if (
+    typeof navigator !== "undefined" &&
+    "serviceWorker" in navigator &&
+    navigator.serviceWorker.controller
+  ) {
     try {
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification(title, options);
@@ -256,7 +260,7 @@ export function effectiveReminders(item: Item, classReminderMinutes: number): Re
 export function armReminders(
   items: Item[],
   clock24h = false,
-  classReminderMinutes = DEFAULT_CLASS_REMINDER_MINUTES
+  classReminderMinutes = DEFAULT_CLASS_REMINDER_MINUTES,
 ): void {
   if (usesNativeReminders()) {
     clearTimers();
@@ -305,7 +309,7 @@ export function armReminders(
         setTimeout(() => {
           timers.delete(key);
           deliver(key, item, r.label, clock24h);
-        }, delay)
+        }, delay),
       );
     }
   }

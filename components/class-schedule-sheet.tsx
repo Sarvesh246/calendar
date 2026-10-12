@@ -42,7 +42,7 @@ const DATE_FIELD = cn(
   FIELD,
   "[appearance:none] [-webkit-appearance:none]",
   "[&::-webkit-date-and-time-value]:min-w-0 [&::-webkit-date-and-time-value]:text-left",
-  "[&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:p-0"
+  "[&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:p-0",
 );
 
 type MeetingDraft = {
@@ -57,7 +57,7 @@ function draftMeeting(
   days: number[],
   start = "10:00",
   end = "10:50",
-  repeatId?: string
+  repeatId?: string,
 ): MeetingDraft {
   return { key: repeatId ?? nanoid(), repeatId, days, start, end };
 }
@@ -66,7 +66,7 @@ function fromParsed(meeting: ClassMeeting): MeetingDraft {
   return draftMeeting(
     meeting.days,
     clockInput(meeting.hour, meeting.minute),
-    clockInput(meeting.endHour, meeting.endMinute)
+    clockInput(meeting.endHour, meeting.endMinute),
   );
 }
 
@@ -79,7 +79,7 @@ function fromSaved(meeting: SavedClassMeeting): MeetingDraft {
     meeting.days,
     clockInput(meeting.hour, meeting.minute),
     clockInput(endHour, endMinute),
-    meeting.repeatId
+    meeting.repeatId,
   );
 }
 
@@ -139,11 +139,7 @@ function snapshotOf(state: {
 
 export function ClassScheduleSheet() {
   const open = useUIStore((s) => s.classScheduleOpen);
-  return (
-    <AnimatePresence>
-      {open && <ClassScheduleSheetBody />}
-    </AnimatePresence>
-  );
+  return <AnimatePresence>{open && <ClassScheduleSheetBody />}</AnimatePresence>;
 }
 
 function ClassScheduleSheetBody() {
@@ -205,9 +201,9 @@ function ClassScheduleSheetBody() {
     const first =
       presetCategoryId && categories.some((c) => c.id === presetCategoryId)
         ? presetCategoryId
-        : categories.find((c) => savedClassMeetings(items, c.id).length > 0)?.id ??
+        : (categories.find((c) => savedClassMeetings(items, c.id).length > 0)?.id ??
           categories[0]?.id ??
-          "";
+          "");
     queueMicrotask(() => loadCategory(first));
     // Load once when the sheet opens; category changes go through the select.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,224 +334,228 @@ function ClassScheduleSheetBody() {
   }
 
   function dirty() {
-    return (
-      snapshotOf({ title, categoryId, meetings, location, until }) !== baseline.current
-    );
+    return snapshotOf({ title, categoryId, meetings, location, until }) !== baseline.current;
   }
 
   function dismiss() {
     sheet.close();
   }
 
-  const editing =
-    Boolean(categoryId) && savedClassMeetings(items, categoryId).length > 0;
+  const editing = Boolean(categoryId) && savedClassMeetings(items, categoryId).length > 0;
 
   return (
-        <div className={cn("viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden", sheet.leaving && "pointer-events-none")}>
-          <Scrim
-            label="Dismiss"
-            onPointerDown={dismiss}
-            progress={sheet.scrimOpacity}
-            exitDuration={sheet.gone ? 0 : motionTokens.exit}
-          />
-          <motion.div
-            role="dialog"
-            ref={panelRef}
-            aria-modal="true"
-            aria-labelledby={headingId}
-            exit={
-              sheet.gone
-                ? { opacity: 1, transition: { duration: 0 } }
-                : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
-            }
-            {...sheet.dragProps}
-            style={{
-              ...sheet.dragProps.style,
-              maxHeight:
-                "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.25rem)",
-            }}
-            className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface pt-0.5"
+    <div
+      className={cn(
+        "viewport-pinned-overlay fixed inset-0 z-[60] overflow-x-hidden",
+        sheet.leaving && "pointer-events-none",
+      )}
+    >
+      <Scrim
+        label="Dismiss"
+        onPointerDown={dismiss}
+        progress={sheet.scrimOpacity}
+        exitDuration={sheet.gone ? 0 : motionTokens.exit}
+      />
+      <motion.div
+        role="dialog"
+        ref={panelRef}
+        aria-modal="true"
+        aria-labelledby={headingId}
+        exit={
+          sheet.gone
+            ? { opacity: 1, transition: { duration: 0 } }
+            : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
+        }
+        {...sheet.dragProps}
+        style={{
+          ...sheet.dragProps.style,
+          maxHeight:
+            "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.25rem)",
+        }}
+        className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 mx-auto flex min-h-0 min-w-0 max-w-[380px] flex-col overflow-hidden rounded-2xl border border-line bg-surface pt-0.5"
+      >
+        <SheetHandle dragControls={dragControls} dragging={dragging} />
+        <div
+          className="flex shrink-0 cursor-grab touch-none select-none items-start justify-between gap-3 border-b border-line/70 px-3 pb-3 active:cursor-grabbing"
+          onPointerDown={(e) => startSheetDrag(dragControls, e)}
+        >
+          <div className="min-w-0">
+            <p id={headingId} className="text-[16px] font-semibold text-ink">
+              Class times
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-ink-soft">
+              {editing
+                ? "Edit this class’s weekly meetings."
+                : "Add weekly meetings for this class."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Close"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface-sunken hover:text-ink"
           >
-            <SheetHandle dragControls={dragControls} dragging={dragging} />
-            <div
-              className="flex shrink-0 cursor-grab touch-none select-none items-start justify-between gap-3 border-b border-line/70 px-3 pb-3 active:cursor-grabbing"
-              onPointerDown={(e) => startSheetDrag(dragControls, e)}
-            >
-              <div className="min-w-0">
-                <p id={headingId} className="text-[16px] font-semibold text-ink">
-                  Class times
-                </p>
-                <p className="mt-0.5 text-[12.5px] text-ink-soft">
-                  {editing
-                    ? "Edit this class’s weekly meetings."
-                    : "Add weekly meetings for this class."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={dismiss}
-                aria-label="Close"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface-sunken hover:text-ink"
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </button>
-            </div>
-
-            <div
-              ref={scrollRef}
-              className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3"
-              style={{
-                maxHeight:
-                  "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 11.5rem)",
-              }}
-            >
-              <label className="block text-[12px] font-medium text-ink-faint">Paste or type</label>
-              <div className="mt-1.5 flex min-w-0 gap-2">
-                <input
-                  value={paste}
-                  onChange={(e) => setPaste(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && applyPaste()}
-                  placeholder="MATH MW 4:15–5:00 TTh 5:30–6:45"
-                  className={FIELD}
-                />
-                <button
-                  type="button"
-                  onClick={applyPaste}
-                  disabled={!paste.trim()}
-                  className="shrink-0 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-30"
-                >
-                  Read
-                </button>
-              </div>
-
-              <label className="mt-4 block text-[12px] font-medium text-ink-faint">Class</label>
-              <select
-                value={categoryId}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  if (dirty() && !persist()) return;
-                  loadCategory(next);
-                }}
-                className={cn(FIELD, "mt-1.5")}
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {classLabel(c)}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Lecture title"
-                aria-label="Title"
-                className={cn(FIELD, "mt-2")}
-              />
-
-              <p className="mt-4 text-[12px] font-medium text-ink-faint">
-                {editing ? "Current weekly times" : "Weekly times"}
-              </p>
-              <div className="mt-1.5 flex flex-col gap-2">
-                {meetings.map((meeting, index) => (
-                  <div
-                    key={meeting.key}
-                    className={cn(
-                      "min-w-0",
-                      meetings.length > 1 && "rounded-xl border border-line px-3 py-3"
-                    )}
-                  >
-                    {meetings.length > 1 && (
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12.5px] font-medium text-ink">Time {index + 1}</p>
-                        <button
-                          type="button"
-                          onClick={() => setMeetings((prev) => prev.filter((m) => m.key !== meeting.key))}
-                          className="text-[12.5px] font-medium text-ink-faint hover:text-ink"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                    <WeekdayChips
-                      value={meeting.days}
-                      onChange={(days) => patchMeeting(meeting.key, { days })}
-                    />
-                    <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
-                      <TimeField
-                        label="Starts"
-                        value={meeting.start}
-                        onChange={(start) => patchMeeting(meeting.key, { start })}
-                      />
-                      <TimeField
-                        label="Ends"
-                        value={meeting.end}
-                        onChange={(end) => patchMeeting(meeting.key, { end })}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const last = meetings[meetings.length - 1];
-                  const days = leftoverDays(meetings);
-                  setMeetings((prev) => [
-                    ...prev,
-                    draftMeeting(days.length ? days : [], last?.start ?? "16:15", last?.end ?? "17:00"),
-                  ]);
-                  haptic("light");
-                }}
-                className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-[13px] font-medium text-ink-soft hover:border-line-strong hover:text-ink"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
-                Add a different time
-              </button>
-
-              <label className="mt-4 block text-[12px] font-medium text-ink-faint">Room</label>
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Optional"
-                className={cn(FIELD, "mt-1.5")}
-              />
-
-              <label className="mt-4 block min-w-0 text-[12px] font-medium text-ink-faint">Until</label>
-              <input
-                type="date"
-                value={until}
-                onChange={(e) => setUntil(e.target.value)}
-                className={cn(DATE_FIELD, "mt-1.5")}
-              />
-            </div>
-
-            <div className="shrink-0 border-t border-line/70 px-3 pt-3 pb-3">
-              {error && <p className="mb-2 text-[12.5px] text-warn">{error}</p>}
-              <div className="flex min-w-0 gap-2">
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="min-h-11 min-w-0 flex-1 rounded-xl border border-line text-[13.5px] font-medium text-ink-soft hover:text-ink"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!persist()) return;
-                    haptic("success");
-                    sheet.close();
-                  }}
-                  className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
-                >
-                  <CalendarClock className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                  <span className="truncate">Save</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
         </div>
+
+        <div
+          ref={scrollRef}
+          className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3"
+          style={{
+            maxHeight:
+              "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 11.5rem)",
+          }}
+        >
+          <label className="block text-[12px] font-medium text-ink-faint">Paste or type</label>
+          <div className="mt-1.5 flex min-w-0 gap-2">
+            <input
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyPaste()}
+              placeholder="MATH MW 4:15–5:00 TTh 5:30–6:45"
+              className={FIELD}
+            />
+            <button
+              type="button"
+              onClick={applyPaste}
+              disabled={!paste.trim()}
+              className="shrink-0 rounded-lg border border-line px-3 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-30"
+            >
+              Read
+            </button>
+          </div>
+
+          <label className="mt-4 block text-[12px] font-medium text-ink-faint">Class</label>
+          <select
+            value={categoryId}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (dirty() && !persist()) return;
+              loadCategory(next);
+            }}
+            className={cn(FIELD, "mt-1.5")}
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {classLabel(c)}
+              </option>
+            ))}
+          </select>
+
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Lecture title"
+            aria-label="Title"
+            className={cn(FIELD, "mt-2")}
+          />
+
+          <p className="mt-4 text-[12px] font-medium text-ink-faint">
+            {editing ? "Current weekly times" : "Weekly times"}
+          </p>
+          <div className="mt-1.5 flex flex-col gap-2">
+            {meetings.map((meeting, index) => (
+              <div
+                key={meeting.key}
+                className={cn(
+                  "min-w-0",
+                  meetings.length > 1 && "rounded-xl border border-line px-3 py-3",
+                )}
+              >
+                {meetings.length > 1 && (
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[12.5px] font-medium text-ink">Time {index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMeetings((prev) => prev.filter((m) => m.key !== meeting.key))
+                      }
+                      className="text-[12.5px] font-medium text-ink-faint hover:text-ink"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+                <WeekdayChips
+                  value={meeting.days}
+                  onChange={(days) => patchMeeting(meeting.key, { days })}
+                />
+                <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
+                  <TimeField
+                    label="Starts"
+                    value={meeting.start}
+                    onChange={(start) => patchMeeting(meeting.key, { start })}
+                  />
+                  <TimeField
+                    label="Ends"
+                    value={meeting.end}
+                    onChange={(end) => patchMeeting(meeting.key, { end })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const last = meetings[meetings.length - 1];
+              const days = leftoverDays(meetings);
+              setMeetings((prev) => [
+                ...prev,
+                draftMeeting(days.length ? days : [], last?.start ?? "16:15", last?.end ?? "17:00"),
+              ]);
+              haptic("light");
+            }}
+            className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-[13px] font-medium text-ink-soft hover:border-line-strong hover:text-ink"
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
+            Add a different time
+          </button>
+
+          <label className="mt-4 block text-[12px] font-medium text-ink-faint">Room</label>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Optional"
+            className={cn(FIELD, "mt-1.5")}
+          />
+
+          <label className="mt-4 block min-w-0 text-[12px] font-medium text-ink-faint">Until</label>
+          <input
+            type="date"
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+            className={cn(DATE_FIELD, "mt-1.5")}
+          />
+        </div>
+
+        <div className="shrink-0 border-t border-line/70 px-3 pt-3 pb-3">
+          {error && <p className="mb-2 text-[12.5px] text-warn">{error}</p>}
+          <div className="flex min-w-0 gap-2">
+            <button
+              type="button"
+              onClick={dismiss}
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-line text-[13.5px] font-medium text-ink-soft hover:text-ink"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!persist()) return;
+                haptic("success");
+                sheet.close();
+              }}
+              className="flex min-h-11 min-w-0 flex-[1.35] items-center justify-center gap-1.5 rounded-xl bg-accent px-2 text-[13.5px] font-medium text-accent-ink"
+            >
+              <CalendarClock className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+              <span className="truncate">Save</span>
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -567,7 +567,7 @@ function patchSeriesMeta(
   saved: SavedClassMeeting,
   title: string,
   location: string,
-  untilIso: string
+  untilIso: string,
 ) {
   for (const id of saved.ids) {
     const item = store.items.find((row) => row.id === id);

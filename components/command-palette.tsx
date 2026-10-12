@@ -212,7 +212,10 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
           </Command.Group>
         )}
 
-        <Command.Group heading="Go to" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+        <Command.Group
+          heading="Go to"
+          className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+        >
           <Command.Item
             onSelect={() => {
               openFocusRoom(undefined, router);
@@ -241,7 +244,10 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
           </Command.Item>
         </Command.Group>
 
-        <Command.Group heading="Create" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+        <Command.Group
+          heading="Create"
+          className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+        >
           <Command.Item onSelect={createNew} className="cmdk-row min-h-11">
             <Plus className="h-4 w-4" strokeWidth={1.75} /> New item <Hint>N</Hint>
           </Command.Item>
@@ -252,23 +258,38 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
 
         {hasQuery && (
           <>
-            <Command.Group heading="Navigate" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+            <Command.Group
+              heading="Navigate"
+              className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+            >
               <Command.Item
                 onSelect={() => calendar({ kind: "jump" })}
                 value="jump to date go to date month year"
                 className="cmdk-row min-h-11"
               >
-                <CalendarSearch className="h-4 w-4" strokeWidth={1.75} /> Jump to a date… <Hint>D</Hint>
+                <CalendarSearch className="h-4 w-4" strokeWidth={1.75} /> Jump to a date…{" "}
+                <Hint>D</Hint>
               </Command.Item>
-              <Command.Item onSelect={() => calendar({ kind: "mode", mode: "month" })} value="month view calendar" className="cmdk-row min-h-11">
+              <Command.Item
+                onSelect={() => calendar({ kind: "mode", mode: "month" })}
+                value="month view calendar"
+                className="cmdk-row min-h-11"
+              >
                 <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Month view <Hint>M</Hint>
               </Command.Item>
-              <Command.Item onSelect={() => calendar({ kind: "mode", mode: "week" })} value="week view calendar" className="cmdk-row min-h-11">
+              <Command.Item
+                onSelect={() => calendar({ kind: "mode", mode: "week" })}
+                value="week view calendar"
+                className="cmdk-row min-h-11"
+              >
                 <CalendarRange className="h-4 w-4" strokeWidth={1.75} /> Week view <Hint>W</Hint>
               </Command.Item>
             </Command.Group>
 
-            <Command.Group heading="Actions" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+            <Command.Group
+              heading="Actions"
+              className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+            >
               <Command.Item
                 onSelect={() => {
                   setPaletteOpen(false);
@@ -277,7 +298,8 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                 value="keyboard shortcuts help hotkeys"
                 className="cmdk-row min-h-11"
               >
-                <Keyboard className="h-4 w-4" strokeWidth={1.75} /> Keyboard shortcuts <Hint>?</Hint>
+                <Keyboard className="h-4 w-4" strokeWidth={1.75} /> Keyboard shortcuts{" "}
+                <Hint>?</Hint>
               </Command.Item>
               <Command.Item onSelect={() => go("/settings#import")} className="cmdk-row min-h-11">
                 <Upload className="h-4 w-4" strokeWidth={1.75} /> Import calendar
@@ -287,7 +309,10 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
               </Command.Item>
             </Command.Group>
 
-            <Command.Group heading="Views" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+            <Command.Group
+              heading="Views"
+              className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+            >
               {views.map((view) => {
                 const active = view.id === activeViewId;
                 return (
@@ -300,15 +325,24 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                     }}
                     className="cmdk-row min-h-11"
                   >
-                    <Bookmark className="h-4 w-4 shrink-0" strokeWidth={1.75} fill={active ? "currentColor" : "none"} />
-                    <span className="truncate">{active ? `Turn off “${view.name}”` : view.name}</span>
+                    <Bookmark
+                      className="h-4 w-4 shrink-0"
+                      strokeWidth={1.75}
+                      fill={active ? "currentColor" : "none"}
+                    />
+                    <span className="truncate">
+                      {active ? `Turn off “${view.name}”` : view.name}
+                    </span>
                   </Command.Item>
                 );
               })}
             </Command.Group>
 
             {visibleItems.length > 0 && (
-              <Command.Group heading="Items" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+              <Command.Group
+                heading="Items"
+                className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+              >
                 {visibleItems.map((item) => {
                   const category = categories.find((c) => c.id === item.categoryId);
                   return (
@@ -324,7 +358,10 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                         {format(new Date(item.at), "MMM d")}
                       </span>
                       {category && (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: category.color }} />
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: category.color }}
+                        />
                       )}
                     </Command.Item>
                   );
@@ -333,7 +370,10 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
             )}
 
             {visibleItems.some((i) => i.type !== "event" && i.status !== "done") && (
-              <Command.Group heading="Focus" className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5">
+              <Command.Group
+                heading="Focus"
+                className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint [&_[cmdk-group-items]]:mt-1.5"
+              >
                 {visibleItems
                   .filter((i) => i.type !== "event" && i.status !== "done")
                   .slice(0, 8)

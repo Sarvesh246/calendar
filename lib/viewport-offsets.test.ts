@@ -97,7 +97,7 @@ describe("safe-area padding", () => {
 
   it("keeps full padding while typing so the bar does not jump when the keyboard opens", () => {
     expect(resolveSafeBottom(metrics({ typing: true, visibleHeight: 552, offsetTop: 300 }))).toBe(
-      34
+      34,
     );
   });
 
@@ -138,9 +138,7 @@ describe("fixed-position drop (the cold-launch bar)", () => {
   it("unwinds itself when WebKit finally publishes the real window", () => {
     // Same correction still applied, but `bottom: 0` now resolves 46px lower,
     // so the probe reads 46px past the edge and gives the whole thing back.
-    expect(
-      resolveFixedDrop(metrics({ fixedDrop: 46, fixedGap: -46, layoutHeight: 852 }))
-    ).toBe(0);
+    expect(resolveFixedDrop(metrics({ fixedDrop: 46, fixedGap: -46, layoutHeight: 852 }))).toBe(0);
   });
 
   it("gives back an overshoot instead of leaving chrome off screen", () => {
@@ -174,15 +172,21 @@ describe("fixed-position drop (the cold-launch bar)", () => {
   it("freezes at its resting value while the keyboard is up", () => {
     expect(
       resolveFixedDrop(
-        coldLaunch({ fixedDrop: 46, typing: true, visibleHeight: 452, offsetTop: 300, fixedGap: 300 })
-      )
+        coldLaunch({
+          fixedDrop: 46,
+          typing: true,
+          visibleHeight: 452,
+          offsetTop: 300,
+          fixedGap: 300,
+        }),
+      ),
     ).toBe(46);
   });
 
   it("freezes through the keyboard's closing animation", () => {
-    expect(
-      resolveFixedDrop(coldLaunch({ fixedDrop: 46, keyboardBase: 852, fixedGap: 300 }))
-    ).toBe(46);
+    expect(resolveFixedDrop(coldLaunch({ fixedDrop: 46, keyboardBase: 852, fixedGap: 300 }))).toBe(
+      46,
+    );
   });
 
   it("keeps out of a viewport the user moved by pinching", () => {
@@ -191,7 +195,7 @@ describe("fixed-position drop (the cold-launch bar)", () => {
 
   it("resumes on the pass after the keyboard releases", () => {
     const out = resolveViewportOffsets(
-      metrics({ typing: false, keyboardBase: 852, layoutHeight: 852, fixedGap: 34 })
+      metrics({ typing: false, keyboardBase: 852, layoutHeight: 852, fixedGap: 34 }),
     );
     expect(out.keyboardBase).toBeNull();
     expect(out.fixedDrop).toBe(34);
@@ -228,7 +232,7 @@ describe("page-box floor (what Agenda was doing all along)", () => {
   it("refuses a reading too small to be a phone window", () => {
     expect(resolveWindowHeight(coldLaunch({ windowHeight: MIN_WINDOW_HEIGHT - 1 }))).toBe(0);
     expect(resolveWindowHeight(coldLaunch({ windowHeight: MIN_WINDOW_HEIGHT }))).toBe(
-      MIN_WINDOW_HEIGHT
+      MIN_WINDOW_HEIGHT,
     );
   });
 
@@ -261,7 +265,7 @@ describe("launch-time relayout (what Agenda did by scrolling)", () => {
     // Nothing left to measure: the probe carries the drop, so the residual is
     // zero even though the layout viewport is still short.
     const out = resolveViewportOffsets(
-      metrics({ layoutHeight: 793, visibleHeight: 793, fixedDrop: 46, fixedGap: 0 })
+      metrics({ layoutHeight: 793, visibleHeight: 793, fixedDrop: 46, fixedGap: 0 }),
     );
     expect(out.needsRelayout).toBe(false);
     expect(out.fixedDrop).toBe(46);
@@ -269,7 +273,7 @@ describe("launch-time relayout (what Agenda did by scrolling)", () => {
 
   it("does not relayout while a keyboard session is open", () => {
     const out = resolveViewportOffsets(
-      coldLaunch({ typing: true, visibleHeight: 552, offsetTop: 300 })
+      coldLaunch({ typing: true, visibleHeight: 552, offsetTop: 300 }),
     );
     expect(out.needsRelayout).toBe(false);
   });
@@ -284,14 +288,14 @@ describe("launch-time relayout (what Agenda did by scrolling)", () => {
 describe("keyboard up", () => {
   it("pins panned chrome to the window edge", () => {
     const out = resolveViewportOffsets(
-      metrics({ visibleHeight: 552, offsetTop: 300, typing: true })
+      metrics({ visibleHeight: 552, offsetTop: 300, typing: true }),
     );
     expect(out.pan).toBe(300);
   });
 
   it("pins shrunken chrome by the same distance", () => {
     const out = resolveViewportOffsets(
-      metrics({ layoutHeight: 552, visibleHeight: 552, typing: true, keyboardBase: 852 })
+      metrics({ layoutHeight: 552, visibleHeight: 552, typing: true, keyboardBase: 852 }),
     );
     expect(out.shrink).toBe(300);
     expect(out.pan).toBe(0);
@@ -299,14 +303,14 @@ describe("keyboard up", () => {
 
   it("reports what is hidden below the visible area", () => {
     const out = resolveViewportOffsets(
-      metrics({ visibleHeight: 452, offsetTop: 200, typing: true })
+      metrics({ visibleHeight: 452, offsetTop: 200, typing: true }),
     );
     expect(out.keyboardInset).toBe(200);
   });
 
   it("holds the shrink correction through the close animation", () => {
     const out = resolveViewportOffsets(
-      metrics({ layoutHeight: 818, visibleHeight: 818, typing: false, keyboardBase: 852 })
+      metrics({ layoutHeight: 818, visibleHeight: 818, typing: false, keyboardBase: 852 }),
     );
     expect(out.shrink).toBe(34);
     expect(out.keyboardBase).toBe(852);
@@ -320,14 +324,14 @@ describe("keyboard up", () => {
 
   it("clamps a stale base so rotating mid-edit can't shove chrome away for good", () => {
     const out = resolveViewportOffsets(
-      metrics({ layoutHeight: 200, visibleHeight: 200, typing: true, keyboardBase: 1000 })
+      metrics({ layoutHeight: 200, visibleHeight: 200, typing: true, keyboardBase: 1000 }),
     );
     expect(out.shrink).toBe(200);
   });
 
   it("keeps out of a pan the user chose by pinching", () => {
     const out = resolveViewportOffsets(
-      metrics({ visibleHeight: 552, offsetTop: 300, typing: true, scale: 2 })
+      metrics({ visibleHeight: 552, offsetTop: 300, typing: true, scale: 2 }),
     );
     expect(out.pan).toBe(0);
     expect(out.needsRelayout).toBe(false);
@@ -341,7 +345,7 @@ describe("convergence", () => {
     windowBottom: number,
     fixedBottomAt: number,
     passes = 6,
-    dropHeadroom = 46
+    dropHeadroom = 46,
   ): number {
     let drop = 0;
     for (let i = 0; i < passes; i += 1) {
@@ -352,7 +356,7 @@ describe("convergence", () => {
           dropHeadroom,
           fixedDrop: drop,
           fixedGap: windowBottom - (fixedBottomAt + drop),
-        })
+        }),
       );
     }
     return drop;

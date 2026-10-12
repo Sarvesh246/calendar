@@ -19,7 +19,10 @@ export default function Loading() {
       <div className="flex flex-col gap-2">
         <div className="h-3 w-24 rounded bg-line/80" />
         {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-3">
+          <div
+            key={i}
+            className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-3"
+          >
             <div className="h-5 w-5 shrink-0 rounded-full bg-surface-sunken" />
             <div className="min-w-0 flex-1 space-y-2">
               <div className="h-3.5 w-3/5 max-w-[220px] rounded bg-line" />

@@ -204,8 +204,7 @@ function PreviewRow({
   onToggle: () => void;
 }) {
   const existingTitle = match.existing?.title?.trim();
-  const showBoth =
-    showExistingTitle && existingTitle && existingTitle !== match.draft.title;
+  const showBoth = showExistingTitle && existingTitle && existingTitle !== match.draft.title;
 
   return (
     <button
@@ -215,13 +214,13 @@ function PreviewRow({
       className={cn(
         "flex min-h-11 w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
         "hover:bg-surface-sunken/70",
-        !checked && "opacity-45"
+        !checked && "opacity-45",
       )}
     >
       <span
         className={cn(
           "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px] border transition-colors",
-          checked ? "border-accent bg-accent text-accent-ink" : "border-line-strong"
+          checked ? "border-accent bg-accent text-accent-ink" : "border-line-strong",
         )}
       >
         {checked && <Check className="h-3 w-3" strokeWidth={3} />}
@@ -254,7 +253,7 @@ function PreviewRow({
 function indexed(
   matches: SyllabusMatch[],
   decisions: SyllabusRowDecision[],
-  verdict: SyllabusMatch["verdict"]
+  verdict: SyllabusMatch["verdict"],
 ) {
   const rows: { index: number; match: SyllabusMatch; decision: SyllabusRowDecision }[] = [];
   matches.forEach((match, index) => {

@@ -25,7 +25,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       out.push(
         <strong key={key} className="font-semibold text-ink">
           {m[2]}
-        </strong>
+        </strong>,
       );
     } else if (m[4] != null) {
       out.push(
@@ -34,21 +34,25 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
           className="rounded bg-surface-sunken px-1 py-0.5 font-mono text-[0.9em] text-ink"
         >
           {m[4]}
-        </code>
+        </code>,
       );
     } else if (m[6] != null && m[7] != null) {
       const href = safeExternalUrl(m[7]);
-      out.push(href ? (
-        <a
-          key={key}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-accent underline decoration-accent/40 underline-offset-2"
-        >
-          {m[6]}
-        </a>
-      ) : <span key={key}>{m[6]}</span>);
+      out.push(
+        href ? (
+          <a
+            key={key}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-accent underline decoration-accent/40 underline-offset-2"
+          >
+            {m[6]}
+          </a>
+        ) : (
+          <span key={key}>{m[6]}</span>
+        ),
+      );
     } else if (m[9] != null) {
       out.push(<em key={key}>{m[9]}</em>);
     } else if (m[11] != null) {
@@ -60,9 +64,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-type Block =
-  | { kind: "p"; lines: string[] }
-  | { kind: "list"; ordered: boolean; items: string[] };
+type Block = { kind: "p"; lines: string[] } | { kind: "list"; ordered: boolean; items: string[] };
 
 function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
@@ -135,7 +137,7 @@ export function AssistantMarkdown({ text, className }: { text: string; className
               <li key={li}>{renderInline(it, `${bi}-${li}`)}</li>
             ))}
           </ul>
-        )
+        ),
       )}
     </div>
   );

@@ -23,7 +23,13 @@ type Rgb = [number, number, number];
 
 function hexToRgb(hex: string): Rgb {
   const h = hex.replace("#", "").trim();
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0");
+  const full =
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h.padEnd(6, "0");
   const num = parseInt(full.slice(0, 6), 16) || 0;
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
@@ -78,8 +84,7 @@ const MIN_TEXT_CONTRAST = 4.5;
  */
 function ensureReadable(colour: Rgb, ink: Rgb, surface: Rgb, alsoOn: Rgb): Rgb {
   const scoreOf = (c: Rgb) =>
-    contrastRatio(c, surface) >= MIN_TEXT_CONTRAST &&
-    contrastRatio(c, alsoOn) >= MIN_TEXT_CONTRAST;
+    contrastRatio(c, surface) >= MIN_TEXT_CONTRAST && contrastRatio(c, alsoOn) >= MIN_TEXT_CONTRAST;
   if (scoreOf(colour)) return colour;
 
   let bestOnSurface: Rgb | null =

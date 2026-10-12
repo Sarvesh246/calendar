@@ -66,13 +66,13 @@ export function BulkAddPreview({
             className={cn(
               "flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
               "hover:bg-surface-sunken/70",
-              !selected[i] && "opacity-45"
+              !selected[i] && "opacity-45",
             )}
           >
             <span
               className={cn(
                 "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px] border transition-colors",
-                selected[i] ? "border-accent bg-accent text-accent-ink" : "border-line-strong"
+                selected[i] ? "border-accent bg-accent text-accent-ink" : "border-line-strong",
               )}
             >
               {selected[i] && <Check className="h-3 w-3" strokeWidth={3} />}
@@ -99,8 +99,8 @@ export function BulkAddPreview({
 
         {skipped.length > 0 && (
           <p className="px-2 py-2 text-[12px] leading-relaxed text-ink-faint">
-            {skipped.length} line{skipped.length === 1 ? "" : "s"} had no date we could read.
-            The assistant can usually work them out.
+            {skipped.length} line{skipped.length === 1 ? "" : "s"} had no date we could read. The
+            assistant can usually work them out.
           </p>
         )}
       </div>

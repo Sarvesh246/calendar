@@ -11,7 +11,7 @@ export function useNow() {
       clearTimeout(timer);
       if (document.visibilityState === "hidden") return;
       setNow(new Date());
-      timer = setTimeout(update, 60_000 - Date.now() % 60_000 + 50);
+      timer = setTimeout(update, 60_000 - (Date.now() % 60_000) + 50);
     };
     timer = setTimeout(update, 0);
     document.addEventListener("visibilitychange", update);

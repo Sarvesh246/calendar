@@ -54,10 +54,14 @@ export function AccountSection() {
         </div>
         {syncStatus === "error" ? (
           <div className="flex flex-col gap-2 rounded-lg border border-warn/40 bg-warn/5 px-3 py-2.5">
-            <p className="text-[12.5px] leading-relaxed text-warn">{friendlySyncError(cloudError)}</p>
+            <p className="text-[12.5px] leading-relaxed text-warn">
+              {friendlySyncError(cloudError)}
+            </p>
             {cloudError && (
               // The server's own words, for a bug report — not the headline.
-              <p className="break-words font-mono text-[10.5px] leading-snug text-ink-faint">{cloudError}</p>
+              <p className="break-words font-mono text-[10.5px] leading-snug text-ink-faint">
+                {cloudError}
+              </p>
             )}
             <button
               onClick={() => retrySync()}
@@ -68,8 +72,8 @@ export function AccountSection() {
           </div>
         ) : (
           <p className="text-[12.5px] leading-relaxed text-ink-faint">
-            Your calendar is saved to your account and syncs live across every signed-in device. Changes appear
-            without a refresh.
+            Your calendar is saved to your account and syncs live across every signed-in device.
+            Changes appear without a refresh.
           </p>
         )}
       </div>
@@ -79,8 +83,8 @@ export function AccountSection() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[13px] leading-relaxed text-ink-soft">
-        Sign in to save your calendar to the cloud and sync it across devices. Data already on this device is imported
-        on first sign-in.
+        Sign in to save your calendar to the cloud and sync it across devices. Data already on this
+        device is imported on first sign-in.
       </p>
       <GoogleSignInButton className="flex items-center justify-center gap-2.5 rounded-lg border border-line bg-surface px-4 py-2.5 text-[13.5px] font-medium text-ink transition-colors hover:border-line-strong disabled:opacity-50" />
     </div>
@@ -120,7 +124,7 @@ export function GoogleSignInButton({
         {signingIn ? (
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2} />
         ) : (
-          idleIcon ?? <GoogleGlyph />
+          (idleIcon ?? <GoogleGlyph />)
         )}
         {children}
       </button>
@@ -154,13 +158,37 @@ function GoogleGlyph() {
 
 function SyncLine({ status, error }: { status: string; error: string | null }) {
   const map: Record<string, { icon: React.ReactNode; label: string; cls: string }> = {
-    connecting: { icon: <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />, label: "Connecting…", cls: "text-ink-faint" },
-    syncing: { icon: <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={2} />, label: "Syncing…", cls: "text-ink-faint" },
-    synced: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Synced", cls: "text-good" },
+    connecting: {
+      icon: <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />,
+      label: "Connecting…",
+      cls: "text-ink-faint",
+    },
+    syncing: {
+      icon: <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={2} />,
+      label: "Syncing…",
+      cls: "text-ink-faint",
+    },
+    synced: {
+      icon: <Cloud className="h-3 w-3" strokeWidth={2} />,
+      label: "Synced",
+      cls: "text-good",
+    },
     // Short and human here; the box below the account row carries the detail.
-    error: { icon: <CloudOff className="h-3 w-3" strokeWidth={2} />, label: error ? "Not synced yet" : "Sync error", cls: "text-warn" },
-    merge: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Choose how to merge…", cls: "text-ink" },
-    idle: { icon: <Cloud className="h-3 w-3" strokeWidth={2} />, label: "Ready", cls: "text-ink-faint" },
+    error: {
+      icon: <CloudOff className="h-3 w-3" strokeWidth={2} />,
+      label: error ? "Not synced yet" : "Sync error",
+      cls: "text-warn",
+    },
+    merge: {
+      icon: <Cloud className="h-3 w-3" strokeWidth={2} />,
+      label: "Choose how to merge…",
+      cls: "text-ink",
+    },
+    idle: {
+      icon: <Cloud className="h-3 w-3" strokeWidth={2} />,
+      label: "Ready",
+      cls: "text-ink-faint",
+    },
   };
   const s = map[status] ?? map.idle;
   return (

@@ -43,7 +43,11 @@ export type PushSubscribeResult = { ok: true } | { ok: false; error: string };
 export async function subscribePush(): Promise<PushSubscribeResult> {
   const key = vapidPublicKey();
   if (!key) return { ok: false, error: "Push notifications aren't configured on this server." };
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+  if (
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window)
+  ) {
     return { ok: false, error: "This browser doesn't support push notifications." };
   }
   try {

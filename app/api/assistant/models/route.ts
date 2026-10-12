@@ -10,6 +10,6 @@ export async function GET(request: Request) {
   const models = await availableLlmModels();
   return NextResponse.json(
     { models, checkedAt: new Date().toISOString() },
-    { headers: { "Cache-Control": "private, no-store" } }
+    { headers: { "Cache-Control": "private, no-store" } },
   );
 }

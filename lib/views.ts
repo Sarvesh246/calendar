@@ -66,7 +66,9 @@ export const BUILT_IN_VIEWS: SavedView[] = [
 
 export function isViewFilterEmpty(filter: ViewFilter | null | undefined): boolean {
   if (!filter) return true;
-  return !filter.statuses?.length && !filter.kinds?.length && (!filter.range || filter.range === "any");
+  return (
+    !filter.statuses?.length && !filter.kinds?.length && (!filter.range || filter.range === "any")
+  );
 }
 
 function rangeWindow(range: ViewRange, now: Date, weekStartsOn: 0 | 1): [Date, Date] | null {
@@ -91,7 +93,7 @@ export function itemMatchesView(
   item: Item,
   filter: ViewFilter,
   now: Date,
-  weekStartsOn: 0 | 1 = 0
+  weekStartsOn: 0 | 1 = 0,
 ): boolean {
   if (filter.kinds?.length && !filter.kinds.includes(item.type)) return false;
   if (filter.statuses?.length) {
@@ -117,7 +119,7 @@ export function applyViewFilter(
   items: Item[],
   filter: ViewFilter | null | undefined,
   now: Date,
-  weekStartsOn: 0 | 1 = 0
+  weekStartsOn: 0 | 1 = 0,
 ): Item[] {
   if (isViewFilterEmpty(filter)) return items;
   return items.filter((item) => itemMatchesView(item, filter!, now, weekStartsOn));
@@ -128,9 +130,7 @@ export function viewSummary(view: SavedView): string {
   const parts: string[] = [];
   if (view.statuses?.length) {
     parts.push(
-      view.statuses
-        .map((s) => VIEW_STATUSES.find((o) => o.value === s)?.label ?? s)
-        .join(", ")
+      view.statuses.map((s) => VIEW_STATUSES.find((o) => o.value === s)?.label ?? s).join(", "),
     );
   }
   if (view.kinds?.length) {
@@ -168,7 +168,11 @@ export function sanitizeSavedViews(raw: unknown): SavedView[] {
       ? [...new Set(r.kinds.filter((k): k is ItemType => KIND_SET.has(k as ItemType)))]
       : [];
     const categoryIds = Array.isArray(r.categoryIds)
-      ? [...new Set(r.categoryIds.filter((c): c is string => typeof c === "string" && c.length > 0))]
+      ? [
+          ...new Set(
+            r.categoryIds.filter((c): c is string => typeof c === "string" && c.length > 0),
+          ),
+        ]
       : [];
     const range = RANGE_SET.has(r.range as ViewRange) ? (r.range as ViewRange) : "any";
     out.push({

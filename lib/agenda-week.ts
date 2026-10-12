@@ -25,7 +25,7 @@ export function summarizeWeek(
   byDay: Map<string, Item[]>,
   now: Date,
   weekStartsOn: 0 | 1,
-  categoryName: (id: string) => string | undefined
+  categoryName: (id: string) => string | undefined,
 ): WeekDaySummary[] {
   const today = startOfDay(now);
   const start = startOfWeek(today, { weekStartsOn });

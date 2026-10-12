@@ -229,7 +229,16 @@ export function SyllabusImportProvider({ children }: { children: React.ReactNode
       cancelPreview,
       confirmPreview,
     }),
-    [origin, status, preview, pickFile, setPreviewClass, toggleDecision, cancelPreview, confirmPreview]
+    [
+      origin,
+      status,
+      preview,
+      pickFile,
+      setPreviewClass,
+      toggleDecision,
+      cancelPreview,
+      confirmPreview,
+    ],
   );
 
   return (
@@ -259,10 +268,7 @@ export function ImportSyllabus() {
     confirmPreview,
   } = useSyllabusImport();
   const allCategories = useDatebookStore((s) => s.categories);
-  const categories = useMemo(
-    () => allCategories.filter((c) => !c.archived),
-    [allCategories]
-  );
+  const categories = useMemo(() => allCategories.filter((c) => !c.archived), [allCategories]);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -270,8 +276,7 @@ export function ImportSyllabus() {
   const [classId, setClassId] = useState("");
   const mine = origin?.type === "shared";
   const showPreview = mine && preview;
-  const showStatus =
-    mine && (status.kind === "error" || status.kind === "success") && !showPreview;
+  const showStatus = mine && (status.kind === "error" || status.kind === "success") && !showPreview;
   const classReady = Boolean(classId) || categories.length === 0;
   const onlyClassId = categories.length === 1 ? categories[0].id : "";
 
@@ -375,7 +380,7 @@ export function ImportSyllabus() {
         className={cn(
           "flex min-h-11 cursor-pointer flex-col gap-2 rounded-lg border bg-surface px-3 py-2.5 sm:flex-row sm:items-center",
           dragOver ? "border-accent" : "border-line",
-          (busy || !classReady) && "cursor-not-allowed opacity-60"
+          (busy || !classReady) && "cursor-not-allowed opacity-60",
         )}
       >
         {busy && mine ? (
@@ -477,7 +482,7 @@ export function CategorySyllabusControl({ category }: { category: Category }) {
           "flex min-h-11 w-full items-center gap-2 rounded-lg px-0.5 text-left transition-colors",
           "hover:bg-surface-sunken/50",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-          "disabled:cursor-wait disabled:opacity-70"
+          "disabled:cursor-wait disabled:opacity-70",
         )}
       >
         {reading ? (
@@ -538,10 +543,13 @@ function StatusLine({ show, status }: { show: boolean; status: Status }) {
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+          transition={{
+            default: motionTokens.nudge,
+            opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+          }}
           className={cn(
             "flex items-start gap-1.5 text-[12.5px]",
-            status.kind === "error" ? "text-warn" : "text-good"
+            status.kind === "error" ? "text-warn" : "text-good",
           )}
         >
           {status.kind === "error" ? (
@@ -560,12 +568,11 @@ async function runExtract(
   file: File,
   origin: Origin,
   signal: AbortSignal,
-  forcedClassId?: string
+  forcedClassId?: string,
 ): Promise<{ kind: "empty"; message: string } | { kind: "preview"; preview: PreviewState }> {
   const store = useDatebookStore.getState();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const forceCategoryId =
-    origin.type === "category" ? origin.id : forcedClassId || undefined;
+  const forceCategoryId = origin.type === "category" ? origin.id : forcedClassId || undefined;
   const extracted = await postSyllabusPdf(file, {
     timeZone,
     categoryId: forceCategoryId,
@@ -593,14 +600,10 @@ async function runExtract(
         extracted.courseCode ||
         "Imported";
   const warning = resolved.status === "forced" ? resolved.warning : undefined;
-  const matches = matchSyllabusItems(
-    drafts,
-    resolved.status === "create" ? [] : store.items,
-    {
-      timeZone,
-      ...(resolved.status === "create" ? {} : { categoryId: resolved.categoryId }),
-    }
-  );
+  const matches = matchSyllabusItems(drafts, resolved.status === "create" ? [] : store.items, {
+    timeZone,
+    ...(resolved.status === "create" ? {} : { categoryId: resolved.categoryId }),
+  });
   const decisions = matches.map((m) => defaultSyllabusDecision(m.verdict));
 
   return {
@@ -630,7 +633,7 @@ async function postSyllabusPdf(
     categoryId?: string;
     categories: { id: string; name: string }[];
     signal: AbortSignal;
-  }
+  },
 ): Promise<SyllabusExtractResult> {
   return retrySyllabusExtractOnce(() => postSyllabusPdfOnce(file, opts), {
     signal: opts.signal,
@@ -645,7 +648,7 @@ async function postSyllabusPdfOnce(
     categoryId?: string;
     categories: { id: string; name: string }[];
     signal: AbortSignal;
-  }
+  },
 ): Promise<SyllabusExtractResult> {
   const form = new FormData();
   form.append("pdf", file, file.name);
@@ -686,14 +689,16 @@ async function postSyllabusPdfOnce(
   if (errorCode) throw new SyllabusExtractRequestError(errorCode, res.status);
   if (!res.ok) throw new SyllabusExtractRequestError("assistant-unreachable", res.status);
 
-  const courseName = typeof (data as { courseName?: unknown }).courseName === "string"
-    ? (data as { courseName: string }).courseName
-    : "";
-  const courseCode = typeof (data as { courseCode?: unknown }).courseCode === "string"
-    ? (data as { courseCode: string }).courseCode
-    : "";
+  const courseName =
+    typeof (data as { courseName?: unknown }).courseName === "string"
+      ? (data as { courseName: string }).courseName
+      : "";
+  const courseCode =
+    typeof (data as { courseCode?: unknown }).courseCode === "string"
+      ? (data as { courseCode: string }).courseCode
+      : "";
   const items = Array.isArray((data as { items?: unknown }).items)
-    ? ((data as { items: SyllabusExtractedItem[] }).items)
+    ? (data as { items: SyllabusExtractedItem[] }).items
     : [];
   const info = normalizeSyllabusInfo((data as { info?: unknown }).info, { fileName: file.name });
   return { courseName, courseCode, items, ...(info ? { info } : {}) };

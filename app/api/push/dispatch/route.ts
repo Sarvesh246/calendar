@@ -69,9 +69,7 @@ export async function POST(request: Request) {
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error: itemsErr } = await supabase
       .from("items")
-      .select(
-        "id, user_id, title, type, at, end_at, all_day, status, reminders, repeat, source_id"
-      )
+      .select("id, user_id, title, type, at, end_at, all_day, status, reminders, repeat, source_id")
       // Events carry a NULL status, and `status <> 'done'` is NULL — not true —
       // for those rows, so a bare `.neq` silently dropped every event (classes
       // included) from closed-app push.
@@ -91,10 +89,9 @@ export async function POST(request: Request) {
 
   // Class meetings get their heads-up from settings rather than a stored
   // reminder, so the dispatcher has to read each user's chosen offset.
-  const classMinutesByUser = await readClassReminderMinutes(
-    supabase,
-    [...new Set(items.map((row) => row.user_id as string))]
-  );
+  const classMinutesByUser = await readClassReminderMinutes(supabase, [
+    ...new Set(items.map((row) => row.user_id as string)),
+  ]);
 
   const due: { userId: string; item: Item; reminder: Reminder; key: string }[] = [];
   for (const row of items) {
@@ -110,7 +107,7 @@ export async function POST(request: Request) {
         ...(row.source_id ? { sourceId: row.source_id as string } : {}),
         ...(row.repeat ? { repeat: row.repeat as RepeatRule } : {}),
       },
-      classMinutesByUser.get(userId) ?? DEFAULT_CLASS_REMINDER_MINUTES
+      classMinutesByUser.get(userId) ?? DEFAULT_CLASS_REMINDER_MINUTES,
     );
     const reminders = classReminder ? [...stored, classReminder] : stored;
     if (!reminders.length) continue;
@@ -153,7 +150,10 @@ export async function POST(request: Request) {
   // failed lookup aborts the run: treating "couldn't check" as "nothing sent
   // yet" re-pushed every reminder of the last 12 hours on each cron tick.
   const sentKeys = new Set<string>();
-  for (const batch of chunk(due.map((d) => d.key), IN_BATCH)) {
+  for (const batch of chunk(
+    due.map((d) => d.key),
+    IN_BATCH,
+  )) {
     const { data, error } = await supabase.from("reminder_sends").select("key").in("key", batch);
     if (error) {
       console.error("[push] reminder_sends", error.message);
@@ -222,7 +222,9 @@ export async function POST(request: Request) {
       }
     }
     if (delivered) {
-      await supabase.from("reminder_sends").upsert({ key: job.key, sent_at: new Date().toISOString() });
+      await supabase
+        .from("reminder_sends")
+        .upsert({ key: job.key, sent_at: new Date().toISOString() });
       sent += 1;
     }
   }
@@ -240,7 +242,7 @@ export async function POST(request: Request) {
  */
 async function readClassReminderMinutes(
   supabase: SupabaseClient,
-  userIds: string[]
+  userIds: string[],
 ): Promise<Map<string, number>> {
   const byUser = new Map<string, number>();
   if (userIds.length === 0) return byUser;
@@ -254,10 +256,7 @@ async function readClassReminderMinutes(
       return byUser;
     }
     for (const row of data ?? []) {
-      byUser.set(
-        row.user_id as string,
-        normalizeClassReminderMinutes(row.class_reminder_minutes)
-      );
+      byUser.set(row.user_id as string, normalizeClassReminderMinutes(row.class_reminder_minutes));
     }
   }
   return byUser;

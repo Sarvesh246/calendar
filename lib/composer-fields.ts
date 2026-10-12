@@ -87,7 +87,7 @@ export function onDay(at: Date, day: Date): Date {
 export function resolveComposer(
   parse: ComposerParse | null,
   context: ComposerContext,
-  overrides: ComposerOverrides
+  overrides: ComposerOverrides,
 ): ResolvedComposer {
   // --- day ---------------------------------------------------------------
   const base = parse?.at ?? new Date();
@@ -149,10 +149,7 @@ export function dayChipLabel(date: Date, now = new Date()): string {
   return format(date, "EEE d MMM");
 }
 
-export function classChipLabel(
-  categoryId: string | undefined,
-  categories: Category[]
-): string {
+export function classChipLabel(categoryId: string | undefined, categories: Category[]): string {
   if (!categoryId) return "No class";
   return categories.find((c) => c.id === categoryId)?.name ?? "No class";
 }

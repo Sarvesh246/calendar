@@ -107,7 +107,13 @@ const KIND_ALIASES: Record<string, SyllabusItemKind> = {
 
 /** `%PDF` magic bytes — browsers sometimes send an empty or octet-stream type. */
 export function isPdfMagic(bytes: Uint8Array): boolean {
-  return bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46
+  );
 }
 
 export function isSyllabusExtractError(code: unknown): code is SyllabusExtractError {
@@ -136,7 +142,7 @@ export class SyllabusExtractRequestError extends Error {
  */
 export function syllabusErrorFromResponse(
   code: unknown,
-  status: number
+  status: number,
 ): SyllabusExtractError | undefined {
   if (isSyllabusExtractError(code)) return code;
   if (status === 429) return "rate-limited";
@@ -155,7 +161,8 @@ export function syllabusExtractErrorMessage(code: string | undefined, status: nu
   if (code === "assistant-busy") return "The reader is busy — try again in a moment.";
   if (code === "assistant-unreachable") return "Couldn't reach the syllabus reader. Try again.";
   if (code === "forbidden" || status === 403) return "This request was blocked.";
-  if (code === "rate-limited" || status === 429) return "Too many syllabus reads — try again in a bit.";
+  if (code === "rate-limited" || status === 429)
+    return "Too many syllabus reads — try again in a bit.";
   if (code === "payload-too-large" || status === 413) {
     return `That PDF is too large (max ${maxMb} MB).`;
   }
@@ -198,7 +205,7 @@ export async function retrySyllabusExtractOnce<T>(
     signal: AbortSignal;
     delayMs: number;
     wait?: (ms: number, signal: AbortSignal) => Promise<void>;
-  }
+  },
 ): Promise<T> {
   try {
     return await run();
@@ -239,7 +246,12 @@ export function extractedItemToDraft(item: SyllabusExtractedItem, timeZone: stri
     if (endMin > startMin) {
       draft.endAt = wallTimeInZoneToIso(item.dueDate, end.hour, end.minute, timeZone);
     } else if (endMin < startMin) {
-      draft.endAt = wallTimeInZoneToIso(addDaysYmd(item.dueDate, 1), end.hour, end.minute, timeZone);
+      draft.endAt = wallTimeInZoneToIso(
+        addDaysYmd(item.dueDate, 1),
+        end.hour,
+        end.minute,
+        timeZone,
+      );
     }
   }
   return draft;
@@ -325,7 +337,7 @@ export function normalizeDueTime(raw: unknown): string | undefined {
 export function normalizeSyllabusExtraction(
   raw: unknown,
   nowIso: string,
-  timeZone: string
+  timeZone: string,
 ): SyllabusExtractResult {
   const now = new Date(nowIso);
   const instant = Number.isNaN(now.getTime()) ? new Date() : now;
@@ -339,11 +351,18 @@ export function normalizeSyllabusExtraction(
   const courseName = clip(str(obj.courseName), MAX_COURSE_NAME);
   const courseCode = clip(str(obj.courseCode), MAX_COURSE_CODE);
   const rawInfo = obj.info && typeof obj.info === "object" ? obj.info : {};
-  const info = normalizeSyllabusInfo({ ...rawInfo, courseName, courseCode }, { importedAt: instant.toISOString() });
+  const info = normalizeSyllabusInfo(
+    { ...rawInfo, courseName, courseCode },
+    { importedAt: instant.toISOString() },
+  );
   return { courseName, courseCode, items, ...(info ? { info } : {}) };
 }
 
-function normalizeItem(row: unknown, now: Date, timeZone: string): SyllabusExtractedItem | undefined {
+function normalizeItem(
+  row: unknown,
+  now: Date,
+  timeZone: string,
+): SyllabusExtractedItem | undefined {
   if (!row || typeof row !== "object") return undefined;
   const rec = row as Record<string, unknown>;
   const title = clip(str(rec.title), MAX_TITLE);
@@ -411,7 +430,12 @@ function inferAcademicYear(month: number, nowY: number, nowM: number): number {
   return month >= 8 ? ayStart : ayStart + 1;
 }
 
-function nearestInWindow(month: number, day: number, now: Date, timeZone: string): string | undefined {
+function nearestInWindow(
+  month: number,
+  day: number,
+  now: Date,
+  timeZone: string,
+): string | undefined {
   const { y } = zonedYmdParts(now, timeZone);
   const today = zonedYmd(now, timeZone);
   let best: string | undefined;
@@ -429,10 +453,13 @@ function nearestInWindow(month: number, day: number, now: Date, timeZone: string
 }
 
 function validYmd(year: number, month: number, day: number): string | undefined {
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return undefined;
-  if (year < 1990 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day))
+    return undefined;
+  if (year < 1990 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31)
+    return undefined;
   const dt = new Date(Date.UTC(year, month - 1, day));
-  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) return undefined;
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day)
+    return undefined;
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 

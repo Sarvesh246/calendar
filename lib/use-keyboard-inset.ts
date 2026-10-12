@@ -133,9 +133,7 @@ export function useKeyboardInset() {
     syncStandaloneFlag();
 
     let keyboardBase: number | null = null;
-    let fixedDrop = Number.parseFloat(
-      getComputedStyle(root).getPropertyValue("--fixed-drop")
-    );
+    let fixedDrop = Number.parseFloat(getComputedStyle(root).getPropertyValue("--fixed-drop"));
     if (!Number.isFinite(fixedDrop)) fixedDrop = 0;
     let launchedAt = Date.now();
     let nudges = 0;
@@ -198,7 +196,7 @@ export function useKeyboardInset() {
       const windowBottom = Math.max(
         vhProbe.getBoundingClientRect().bottom,
         offsetTop + visibleHeight,
-        window.innerHeight
+        window.innerHeight,
       );
       return {
         layoutHeight: root.clientHeight,
@@ -250,10 +248,11 @@ export function useKeyboardInset() {
 
     let raf = 0;
     const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(() => {
-        raf = 0;
-        apply();
-      });
+      if (!raf)
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          apply();
+        });
     };
 
     /**

@@ -14,7 +14,10 @@ function chat(...messages: string[]): Array<AssistantResponse | null> {
   const history: AssistantTurn[] = [];
   return messages.map((m) => {
     const r = tryLocalAnswer(m, history, ctx, NOW);
-    history.push({ role: "user", text: m }, { role: "assistant", text: r?.text ?? "(model reply)" });
+    history.push(
+      { role: "user", text: m },
+      { role: "assistant", text: r?.text ?? "(model reply)" },
+    );
     return r;
   });
 }
@@ -34,8 +37,16 @@ describe("syllabus questions", () => {
   it("answers a casual 'what percentage is X' question", () => {
     const engr = ctx.categories.find((c) => c.id === "c1")!;
     engr.name = "ENGR 102";
-    engr.syllabus = { ...ctx.categories.find((c) => c.id === "c2")!.syllabus!, grading: [{ component: "Quizzes", weight: "15%" }, { component: "Labs", weight: "30%" }] };
-    expect(text("can u check what percentage of my grade is the quizzes in my engr 102 class")).toBe("**Quizzes** is worth **15%** of your **ENGR 102** grade.");
+    engr.syllabus = {
+      ...ctx.categories.find((c) => c.id === "c2")!.syllabus!,
+      grading: [
+        { component: "Quizzes", weight: "15%" },
+        { component: "Labs", weight: "30%" },
+      ],
+    };
+    expect(
+      text("can u check what percentage of my grade is the quizzes in my engr 102 class"),
+    ).toBe("**Quizzes** is worth **15%** of your **ENGR 102** grade.");
     expect(text("how much are labs worth in engr 102")).toContain("30%");
     expect(text("what % is the quizzes for engr 102")).toContain("15%");
   });
@@ -51,7 +62,9 @@ describe("syllabus questions", () => {
     expect(text("what's the late policy?")).toContain("10% per day");
     expect(text("can i use chatgpt for econ")).toContain("AI tools");
     expect(text("what happens if I miss class")).toContain("unexcused");
-    expect(text("can i work with friends on problem sets")).toMatch(/doesn't mention collaboration/);
+    expect(text("can i work with friends on problem sets")).toMatch(
+      /doesn't mention collaboration/,
+    );
     expect(text("is there a curve")).toMatch(/doesn't mention a curve/);
   });
 
@@ -79,7 +92,9 @@ describe("syllabus questions", () => {
 
 describe("app help", () => {
   it("points at the real controls", () => {
-    expect(text("how do I import my canvas calendar")).toContain("Settings → Import → Calendar link");
+    expect(text("how do I import my canvas calendar")).toContain(
+      "Settings → Import → Calendar link",
+    );
     expect(text("how do i change the theme")).toContain("Settings → Look");
     expect(text("where do I add class times")).toContain("Class times");
     expect(text("how do I export my calendar")).toContain("Backup & export");
@@ -90,7 +105,10 @@ describe("conversation", () => {
   it("resolves 'which one?' by ordinal or by name", () => {
     const [q1, a1] = chat("mark problem set done", "the second one");
     expect(q1?.text).toMatch(/^Which one/);
-    expect(a1?.actions?.[0]).toMatchObject({ itemTitle: "Problem Set 4", patch: { status: "done" } });
+    expect(a1?.actions?.[0]).toMatchObject({
+      itemTitle: "Problem Set 4",
+      patch: { status: "done" },
+    });
     resetLocalAssistantState();
     const [, a2] = chat("mark problem set done", "problem set 3");
     expect(a2?.actions?.[0]).toMatchObject({ itemTitle: "Problem Set 3" });
@@ -105,7 +123,10 @@ describe("conversation", () => {
 
   it("plans time for 'it'", () => {
     const [, r] = chat("when is problem set 4 due", "block an hour tomorrow afternoon for it");
-    expect(r?.actions?.[0]).toMatchObject({ kind: "create", draft: { title: "Work on: Problem Set 4" } });
+    expect(r?.actions?.[0]).toMatchObject({
+      kind: "create",
+      draft: { title: "Work on: Problem Set 4" },
+    });
   });
 
   it("defers when 'it' could mean more than one thing", () => {
@@ -126,7 +147,9 @@ describe("multi-step commands", () => {
   it("handles several objects and bulk selections", () => {
     expect(ask("mark the essay and problem set 4 done")?.actions).toHaveLength(2);
     expect(ask("delete all my econ homework")?.actions).toHaveLength(2);
-    expect(ask("mark all overdue as done")?.actions?.[0]).toMatchObject({ itemTitle: "Reading response" });
+    expect(ask("mark all overdue as done")?.actions?.[0]).toMatchObject({
+      itemTitle: "Reading response",
+    });
     expect(text("move everything due friday to monday")).toContain("to Mon, Sep 28");
     expect(ask("delete everything")).toBeNull();
   });
@@ -162,9 +185,15 @@ describe("planning time", () => {
 
 describe("edits", () => {
   it("changes class, location, notes and due time", () => {
-    expect(ask("put the essay under econ")?.actions?.[0]).toMatchObject({ patch: { categoryId: "c2" } });
-    expect(ask("set the location of the dentist appointment to 45 Main St")?.actions?.[0]).toMatchObject({ patch: { location: "45 Main St" } });
-    expect(ask("add a note to the essay: use MLA format")?.actions?.[0]).toMatchObject({ patch: { description: "use MLA format" } });
+    expect(ask("put the essay under econ")?.actions?.[0]).toMatchObject({
+      patch: { categoryId: "c2" },
+    });
+    expect(
+      ask("set the location of the dentist appointment to 45 Main St")?.actions?.[0],
+    ).toMatchObject({ patch: { location: "45 Main St" } });
+    expect(ask("add a note to the essay: use MLA format")?.actions?.[0]).toMatchObject({
+      patch: { description: "use MLA format" },
+    });
     const noon = ask("make the essay due at noon")!.actions![0];
     if (noon.kind === "update") expect(new Date(noon.patch.at!).getHours()).toBe(12);
   });

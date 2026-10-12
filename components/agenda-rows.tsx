@@ -21,7 +21,14 @@ import { useUIStore } from "@/lib/ui-store";
 import { useCategoriesById } from "@/lib/card-chrome";
 import { isClassMeeting } from "@/lib/class-schedule";
 import { itemDisplayTitle, useCourseLabels, type CourseLabel } from "@/lib/course-label";
-import { dayKey, formatTime, formatTimeSpan, isEventEnded, isOverdue, toDateInputValue } from "@/lib/date-utils";
+import {
+  dayKey,
+  formatTime,
+  formatTimeSpan,
+  isEventEnded,
+  isOverdue,
+  toDateInputValue,
+} from "@/lib/date-utils";
 import { useNow } from "@/lib/use-now";
 import { dayDelta, shiftedByDays } from "@/lib/calendar-drag-math";
 import { applyBatchPatch, setStatusWithUndo, STATUS_LABEL } from "@/lib/item-actions";
@@ -66,12 +73,15 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
   const anchor = useRef<string | null>(null);
 
   const ordered = useMemo(() => sections.flatMap((s) => s.items.map((i) => i.id)), [sections]);
-  const byId = useMemo(() => new Map(sections.flatMap((s) => s.items).map((i) => [i.id, i])), [sections]);
+  const byId = useMemo(
+    () => new Map(sections.flatMap((s) => s.items).map((i) => [i.id, i])),
+    [sections],
+  );
   // Anything that left the list (filtered, completed and hidden, deleted)
   // quietly drops out of the selection.
   const selectedItems = useMemo(
     () => ordered.filter((id) => selected.has(id)).map((id) => byId.get(id)!),
-    [ordered, selected, byId]
+    [ordered, selected, byId],
   );
   const count = selectedItems.length;
 
@@ -102,7 +112,8 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
     if (!count) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (document.querySelector('[aria-modal="true"]') || useUIStore.getState().contextMenu) return;
+      if (document.querySelector('[aria-modal="true"]') || useUIStore.getState().contextMenu)
+        return;
       setSelected(new Set());
     };
     document.addEventListener("keydown", onKey);
@@ -120,7 +131,10 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
         <div role="rowgroup">
           <div
             role="row"
-            className={cn(GRID, "h-10 rounded-t-xl border-b border-line px-1 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint")}
+            className={cn(
+              GRID,
+              "h-10 rounded-t-xl border-b border-line px-1 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint",
+            )}
           >
             <div role="columnheader" className="flex justify-center">
               <SelectBox
@@ -130,20 +144,36 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
                 onToggle={() => setSelected(allSelected ? new Set() : new Set(ordered))}
               />
             </div>
-            <div role="columnheader" className="pl-6 pr-1">Title</div>
-            <div role="columnheader" className="hidden px-2 lg:block">Class</div>
-            <div role="columnheader" className="px-2.5">When</div>
-            <div role="columnheader" className="px-2.5">Status</div>
+            <div role="columnheader" className="pl-6 pr-1">
+              Title
+            </div>
+            <div role="columnheader" className="hidden px-2 lg:block">
+              Class
+            </div>
+            <div role="columnheader" className="px-2.5">
+              When
+            </div>
+            <div role="columnheader" className="px-2.5">
+              Status
+            </div>
           </div>
         </div>
         {sections.map((section) => (
           <div key={section.id} role="rowgroup" id={`agenda-${section.id}`} className="agenda-day">
-            <div role="row" className={cn(GRID, "h-9 border-b border-line bg-surface-sunken/35 px-1")}>
+            <div
+              role="row"
+              className={cn(GRID, "h-9 border-b border-line bg-surface-sunken/35 px-1")}
+            >
               <span
                 role="rowheader"
                 className="col-[2/-1] flex items-baseline gap-2 pl-6 pr-3 text-[12.5px]"
               >
-                <span className={cn("font-semibold", section.tone === "warn" ? "text-warn" : "text-ink")}>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    section.tone === "warn" ? "text-warn" : "text-ink",
+                  )}
+                >
                   {section.label}
                 </span>
                 {section.sublabel && <span className="text-ink-faint">{section.sublabel}</span>}
@@ -155,26 +185,28 @@ export function AgendaRows({ sections }: { sections: AgendaRowSection[] }) {
               </span>
             </div>
             <AnimatePresence initial={false}>
-            {section.items.map((item) => (
-              <AgendaRow
-                key={item.id}
-                item={item}
-                category={categories.get(item.categoryId)}
-                course={labels.of(categories.get(item.categoryId))}
-                now={now}
-                dayKey={section.dayKey}
-                clock24h={clock24h}
-                selected={selected.has(item.id)}
-                selecting={count > 0}
-                onToggle={toggle}
-              />
-            ))}
+              {section.items.map((item) => (
+                <AgendaRow
+                  key={item.id}
+                  item={item}
+                  category={categories.get(item.categoryId)}
+                  course={labels.of(categories.get(item.categoryId))}
+                  now={now}
+                  dayKey={section.dayKey}
+                  clock24h={clock24h}
+                  selected={selected.has(item.id)}
+                  selecting={count > 0}
+                  onToggle={toggle}
+                />
+              ))}
             </AnimatePresence>
           </div>
         ))}
       </div>
       <AnimatePresence>
-        {count > 0 && <BatchBar key="batch" items={selectedItems} onClear={() => setSelected(new Set())} />}
+        {count > 0 && (
+          <BatchBar key="batch" items={selectedItems} onClear={() => setSelected(new Set())} />
+        )}
       </AnimatePresence>
     </>
   );
@@ -218,7 +250,9 @@ function AgendaRow({
     : work
       ? formatTime(item.at, clock24h)
       : formatTimeSpan(item.at, item.endAt, clock24h);
-  const whenText = sectionDay ? timeText : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
+  const whenText = sectionDay
+    ? timeText
+    : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
 
   return (
     <motion.div
@@ -246,7 +280,7 @@ function AgendaRow({
         GRID,
         "group/row min-h-11 border-b border-line/60 px-1 text-[13.5px] last:border-b-0",
         "transition-colors duration-[var(--motion-micro)]",
-        selected ? "bg-accent-soft/70" : "hover:bg-surface-sunken/45"
+        selected ? "bg-accent-soft/70" : "hover:bg-surface-sunken/45",
       )}
     >
       <div role="cell" className="flex justify-center">
@@ -260,7 +294,15 @@ function AgendaRow({
 
       <div role="cell" className="relative flex min-w-0 items-center gap-2 px-1">
         <Glyph
-          aria-label={item.type === "event" ? (isClassMeeting(item, category?.name) ? "Class" : "Event") : item.type === "assignment" ? "Assignment" : "Task"}
+          aria-label={
+            item.type === "event"
+              ? isClassMeeting(item, category?.name)
+                ? "Class"
+                : "Event"
+              : item.type === "assignment"
+                ? "Assignment"
+                : "Task"
+          }
           className={cn("h-3.5 w-3.5 shrink-0", overdue ? "text-warn" : "text-ink-faint")}
           strokeWidth={1.8}
         />
@@ -273,13 +315,15 @@ function AgendaRow({
               title={displayTitle !== item.title ? item.title : undefined}
               className={cn(
                 "min-w-0 truncate rounded text-left font-medium underline-offset-[3px] decoration-line-strong hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                done ? "text-ink-faint" : "text-ink"
+                done ? "text-ink-faint" : "text-ink",
               )}
             >
               {displayTitle}
             </button>
             {item.location && (
-              <span className="hidden min-w-0 shrink truncate text-[12px] text-ink-faint xl:inline">{item.location}</span>
+              <span className="hidden min-w-0 shrink truncate text-[12px] text-ink-faint xl:inline">
+                {item.location}
+              </span>
             )}
           </span>
           <p className="truncate text-[12px] text-ink-faint lg:hidden">{classLabel}</p>
@@ -288,15 +332,28 @@ function AgendaRow({
           <RowIconButton label="Open details" onClick={() => openInspector(item.id)}>
             <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.9} />
           </RowIconButton>
-          <RowIconButton label="More actions" onClick={(el) => openItemMenuAt(el, item.id, { dayKey: menuDay })}>
+          <RowIconButton
+            label="More actions"
+            onClick={(el) => openItemMenuAt(el, item.id, { dayKey: menuDay })}
+          >
             <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
           </RowIconButton>
         </div>
       </div>
 
-      <div role="cell" className="hidden min-w-0 items-center gap-2 px-2 lg:flex" title={course?.full}>
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: category?.color ?? "var(--ink-faint)" }} />
-        <span className={cn("truncate text-[13px]", done ? "text-ink-faint" : "text-ink-soft")}>{classLabel}</span>
+      <div
+        role="cell"
+        className="hidden min-w-0 items-center gap-2 px-2 lg:flex"
+        title={course?.full}
+      >
+        <span
+          aria-hidden
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ background: category?.color ?? "var(--ink-faint)" }}
+        />
+        <span className={cn("truncate text-[13px]", done ? "text-ink-faint" : "text-ink-soft")}>
+          {classLabel}
+        </span>
       </div>
 
       <div role="cell" className="min-w-0 px-1">
@@ -304,10 +361,12 @@ function AgendaRow({
           type="button"
           aria-haspopup="menu"
           aria-label={`${work ? "Due" : "When"}: ${format(at, "EEEE, MMMM d")}${item.allDay ? "" : `, ${timeText}`}. Change date`}
-          onClick={(e) => openItemMenuAt(e.currentTarget, item.id, { dayKey: menuDay, section: "reschedule" })}
+          onClick={(e) =>
+            openItemMenuAt(e.currentTarget, item.id, { dayKey: menuDay, section: "reschedule" })
+          }
           className={cn(
             "flex h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[13px] tabular-nums transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            overdue ? "font-medium text-warn" : done ? "text-ink-faint" : "text-ink-soft"
+            overdue ? "font-medium text-warn" : done ? "text-ink-faint" : "text-ink-soft",
           )}
         >
           <span className="truncate">{whenText}</span>
@@ -315,7 +374,11 @@ function AgendaRow({
       </div>
 
       <div role="cell" className="px-1">
-        {work ? <StatusPicker item={item} /> : <EventState item={item} now={now} day={sectionDay} />}
+        {work ? (
+          <StatusPicker item={item} />
+        ) : (
+          <EventState item={item} now={now} day={sectionDay} />
+        )}
       </div>
     </motion.div>
   );
@@ -334,14 +397,14 @@ function EventState({ item, now, day }: { item: Item; now: Date; day?: string })
     <span
       className={cn(
         "inline-flex h-7 items-center gap-1.5 px-2.5 text-[12px] font-medium",
-        live ? "text-accent" : "text-ink-faint"
+        live ? "text-accent" : "text-ink-faint",
       )}
     >
       <span
         aria-hidden
         className={cn(
           "h-1.5 w-1.5 rounded-full",
-          live ? "bg-accent" : ended ? "bg-line-strong" : "border border-ink-faint"
+          live ? "bg-accent" : ended ? "bg-line-strong" : "border border-ink-faint",
         )}
       />
       {live ? "Now" : ended ? "Ended" : "Scheduled"}
@@ -397,13 +460,13 @@ function SelectBox({
       className={cn(
         "flex h-8 w-8 items-center justify-center rounded-md transition-opacity duration-[var(--motion-micro)]",
         "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        on || visible ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"
+        on || visible ? "opacity-100" : "opacity-0 group-hover/row:opacity-100",
       )}
     >
       <span
         className={cn(
           "flex h-4 w-4 items-center justify-center rounded-[4px] border transition-[background-color,border-color] duration-[var(--motion-standard)]",
-          on ? "border-accent bg-accent" : "border-line-strong bg-surface"
+          on ? "border-accent bg-accent" : "border-line-strong bg-surface",
         )}
       >
         <motion.span
@@ -466,7 +529,7 @@ function statusMenuPlacement(anchor: DOMRect) {
   const up = below < STATUS_MENU_HEIGHT + MENU_EDGE && anchor.top > below;
   const left = Math.max(
     MENU_EDGE,
-    Math.min(anchor.left, window.innerWidth - STATUS_MENU_WIDTH - MENU_EDGE)
+    Math.min(anchor.left, window.innerWidth - STATUS_MENU_WIDTH - MENU_EDGE),
   );
   return up
     ? { left, bottom: window.innerHeight - anchor.top + 4, up }
@@ -510,7 +573,9 @@ function StatusPicker({ item }: { item: Item }) {
       if (!ref.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("pointerdown", onDown, true);
-    listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus({ preventScroll: true });
+    listRef.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.focus({ preventScroll: true });
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [open, place]);
 
@@ -534,77 +599,88 @@ function StatusPicker({ item }: { item: Item }) {
           "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium",
           "transition-[background-color,border-color,color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-          STATUS_PILL[status]
+          STATUS_PILL[status],
         )}
       >
         <StatusGlyph status={status} />
         <span className="whitespace-nowrap">{STATUS_LABEL[status]}</span>
         <ChevronDown className="h-3 w-3 opacity-60" strokeWidth={2.25} />
       </button>
-      {typeof document !== "undefined" && createPortal(
-      <AnimatePresence>
-        {open && place && (
-          <motion.ul
-            ref={listRef}
-            role="listbox"
-            aria-label="Status"
-            data-no-shortcuts
-            initial={{ opacity: 0, scale: 0.96, y: place.up ? 4 : -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-            transition={motionTokens.springSnappy}
-            style={{
-              left: place.left,
-              top: place.top,
-              bottom: place.bottom,
-              width: STATUS_MENU_WIDTH,
-              transformOrigin: place.up ? "bottom left" : "top left",
-            }}
-            onKeyDown={(e) => {
-              const options = [...(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
-              const index = options.indexOf(document.activeElement as HTMLElement);
-              if (e.key === "Escape") {
-                e.preventDefault();
-                e.stopPropagation();
-                setOpen(false);
-                buttonRef.current?.focus();
-              } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                e.preventDefault();
-                options[(index + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length]?.focus();
-              } else if (e.key === "Tab") {
-                setOpen(false);
-              }
-            }}
-            className="fixed z-[70] rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.3)]"
-          >
-            {STATUSES.map((s) => (
-              <li
-                key={s}
-                role="option"
-                aria-selected={s === status}
-                tabIndex={-1}
-                onClick={() => choose(s)}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && place && (
+              <motion.ul
+                ref={listRef}
+                role="listbox"
+                aria-label="Status"
+                data-no-shortcuts
+                initial={{ opacity: 0, scale: 0.96, y: place.up ? 4 : -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.97,
+                  transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+                }}
+                transition={motionTokens.springSnappy}
+                style={{
+                  left: place.left,
+                  top: place.top,
+                  bottom: place.bottom,
+                  width: STATUS_MENU_WIDTH,
+                  transformOrigin: place.up ? "bottom left" : "top left",
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  const options = [
+                    ...(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []),
+                  ];
+                  const index = options.indexOf(document.activeElement as HTMLElement);
+                  if (e.key === "Escape") {
                     e.preventDefault();
-                    choose(s);
+                    e.stopPropagation();
+                    setOpen(false);
+                    buttonRef.current?.focus();
+                  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    options[
+                      (index + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length
+                    ]?.focus();
+                  } else if (e.key === "Tab") {
+                    setOpen(false);
                   }
                 }}
-                className={cn(
-                  "flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-[12.5px] outline-none transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken focus:bg-surface-sunken",
-                  s === "doing" ? "text-accent" : s === "done" ? "text-good" : "text-ink-soft"
-                )}
+                className="fixed z-[70] rounded-lg border border-line bg-surface p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.3)]"
               >
-                <StatusGlyph status={s} />
-                <span className="flex-1 text-ink">{STATUS_LABEL[s]}</span>
-                {s === status && <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />}
-              </li>
-            ))}
-          </motion.ul>
+                {STATUSES.map((s) => (
+                  <li
+                    key={s}
+                    role="option"
+                    aria-selected={s === status}
+                    tabIndex={-1}
+                    onClick={() => choose(s)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        choose(s);
+                      }
+                    }}
+                    className={cn(
+                      "flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-[12.5px] outline-none transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken focus:bg-surface-sunken",
+                      s === "doing" ? "text-accent" : s === "done" ? "text-good" : "text-ink-soft",
+                    )}
+                  >
+                    <StatusGlyph status={s} />
+                    <span className="flex-1 text-ink">{STATUS_LABEL[s]}</span>
+                    {s === status && (
+                      <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
+                    )}
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>,
-      document.body
-      )}
     </div>
   );
 }
@@ -616,7 +692,9 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
   const categories = useDatebookStore((s) => s.categories);
   const labels = useCourseLabels();
   const [menu, setMenu] = useState<BatchMenu>(null);
-  const [date, setDate] = useState(() => toDateInputValue(items[0]?.at ?? new Date().toISOString()));
+  const [date, setDate] = useState(() =>
+    toDateInputValue(items[0]?.at ?? new Date().toISOString()),
+  );
   const ref = useRef<HTMLDivElement>(null);
   const work = items.filter((i) => i.type !== "event");
   const count = items.length;
@@ -636,13 +714,17 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
     applyBatchPatch(
       work,
       (i) => ((i.status ?? "todo") === status ? null : { status }),
-      (n) => `${plural(n)} marked ${STATUS_LABEL[status].toLowerCase()}`
+      (n) => `${plural(n)} marked ${STATUS_LABEL[status].toLowerCase()}`,
     );
   }
 
   function shift(days: number) {
     haptic("light");
-    applyBatchPatch(items, (i) => shiftedByDays(i, days), (n) => `Moved ${plural(n)}`);
+    applyBatchPatch(
+      items,
+      (i) => shiftedByDays(i, days),
+      (n) => `Moved ${plural(n)}`,
+    );
     setMenu(null);
   }
 
@@ -654,7 +736,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
         const days = dayDelta(dayKey(new Date(i.at)), key);
         return days ? shiftedByDays(i, days) : null;
       },
-      (n) => `Moved ${plural(n)} to ${format(new Date(`${key}T12:00:00`), "EEE, MMM d")}`
+      (n) => `Moved ${plural(n)} to ${format(new Date(`${key}T12:00:00`), "EEE, MMM d")}`,
     );
     setMenu(null);
   }
@@ -664,7 +746,7 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
     applyBatchPatch(
       items,
       (i) => (i.categoryId === category.id ? null : { categoryId: category.id }),
-      (n) => `Moved ${plural(n)} to ${labels.label(category)}`
+      (n) => `Moved ${plural(n)} to ${labels.label(category)}`,
     );
     setMenu(null);
   }
@@ -680,7 +762,12 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
       data-no-shortcuts
       initial={{ opacity: 0, y: 20, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 12, scale: 0.97, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+      exit={{
+        opacity: 0,
+        y: 12,
+        scale: 0.97,
+        transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+      }}
       transition={motionTokens.spring}
       onKeyDown={(e) => {
         if (e.key === "Escape" && menu) {
@@ -691,10 +778,19 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
       }}
       className="fixed bottom-6 left-1/2 z-[43] flex -translate-x-1/2 items-center gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-16px_rgb(0_0_0/0.4)]"
     >
-      <button type="button" onClick={onClear} aria-label="Clear selection" title="Clear selection (Esc)" className={cn(barButton, "w-8 justify-center px-0")}>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Clear selection"
+        title="Clear selection (Esc)"
+        className={cn(barButton, "w-8 justify-center px-0")}
+      >
         <X className="h-4 w-4" strokeWidth={2} />
       </button>
-      <span className="whitespace-nowrap pl-0.5 pr-2 text-[12.5px] font-semibold tabular-nums text-ink" aria-live="polite">
+      <span
+        className="whitespace-nowrap pl-0.5 pr-2 text-[12.5px] font-semibold tabular-nums text-ink"
+        aria-live="polite"
+      >
         {count} selected
       </span>
       <span aria-hidden className="h-5 w-px bg-line" />
@@ -707,7 +803,11 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
             disabled={work.length === 0}
             onClick={() => setStatus(s)}
             title={work.length === 0 ? "Events don't have a status" : undefined}
-            className={cn(barButton, s === "doing" && "hover:text-accent", s === "done" && "hover:text-good")}
+            className={cn(
+              barButton,
+              s === "doing" && "hover:text-accent",
+              s === "done" && "hover:text-good",
+            )}
           >
             <StatusGlyph status={s} />
             {STATUS_LABEL[s]}
@@ -790,8 +890,14 @@ function BatchBar({ items, onClear }: { items: Item[]; onClear: () => void }) {
                   .filter((c) => !c.archived)
                   .map((c) => (
                     <PopoverItem key={c.id} onClick={() => setClass(c)}>
-                      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
-                      <span className="truncate" title={c.name}>{labels.label(c)}</span>
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: c.color }}
+                      />
+                      <span className="truncate" title={c.name}>
+                        {labels.label(c)}
+                      </span>
                     </PopoverItem>
                   ))}
               </div>
@@ -809,7 +915,12 @@ function BatchPopover({ children }: { children: React.ReactNode }) {
       role="menu"
       initial={{ opacity: 0, scale: 0.96, y: 6 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, y: 4, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+      exit={{
+        opacity: 0,
+        scale: 0.97,
+        y: 4,
+        transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+      }}
       transition={motionTokens.springSnappy}
       style={{ transformOrigin: "bottom left" }}
       className="absolute bottom-[calc(100%+10px)] left-0 w-56 rounded-xl border border-line bg-surface p-1 shadow-[0_16px_40px_-14px_rgb(0_0_0/0.35)]"

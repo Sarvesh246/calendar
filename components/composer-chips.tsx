@@ -98,7 +98,8 @@ export function ComposerChips({
   // A custom default (12 hours in the screenshots) still needs a selected row
   // when its chip opens. Otherwise every visible option looks like changing it.
   const reminderChoices =
-    currentReminder !== null && !REMINDER_CHOICES.some((choice) => choice.minutes === currentReminder)
+    currentReminder !== null &&
+    !REMINDER_CHOICES.some((choice) => choice.minutes === currentReminder)
       ? [
           ...REMINDER_CHOICES,
           { minutes: currentReminder, label: reminderChipLabel(currentReminder) },
@@ -249,7 +250,6 @@ export function ComposerChips({
         >
           {reminderPicker}
         </Chip>
-
       </div>
 
       {/* Reset is secondary to the three field choices, so it sits quietly
@@ -343,7 +343,7 @@ function Chip({
             ? "border-[color-mix(in_srgb,var(--accent)_34%,var(--line))] bg-accent-soft text-accent shadow-[inset_0_1px_0_color-mix(in_srgb,white_7%,transparent)]"
             : specific
               ? "bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
-              : "bg-surface text-ink-soft shadow-[0_1px_2px_rgb(0_0_0/0.04)]"
+              : "bg-surface text-ink-soft shadow-[0_1px_2px_rgb(0_0_0/0.04)]",
         )}
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -353,7 +353,7 @@ function Chip({
             transition={motionTokens.springSnappy}
             className={cn(
               "relative flex h-5 w-5 shrink-0 items-center justify-center rounded-[7px]",
-              open || specific ? "bg-accent-soft text-accent" : "bg-surface-sunken text-ink-faint"
+              open || specific ? "bg-accent-soft text-accent" : "bg-surface-sunken text-ink-faint",
             )}
           >
             {icon}
@@ -423,7 +423,7 @@ function Choice({
       className={cn(
         "press-none flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-left text-[13.5px]",
         "transition-colors duration-[var(--motion-standard)]",
-        selected ? "bg-accent-soft font-medium text-accent" : "text-ink active:bg-surface-sunken"
+        selected ? "bg-accent-soft font-medium text-accent" : "text-ink active:bg-surface-sunken",
       )}
     >
       {dot && (

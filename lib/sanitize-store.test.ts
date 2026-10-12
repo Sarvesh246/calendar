@@ -65,15 +65,15 @@ describe("sanitizeSettings", () => {
     expect(sanitizeSettings({ landingView: "today" } as never).classReminderMinutes).toBe(10);
     expect(
       sanitizeSettings({ landingView: "today", classReminderMinutes: 30 } as never)
-        .classReminderMinutes
+        .classReminderMinutes,
     ).toBe(30);
     expect(
       sanitizeSettings({ landingView: "today", classReminderMinutes: -3 } as never)
-        .classReminderMinutes
+        .classReminderMinutes,
     ).toBe(0);
     expect(
       sanitizeSettings({ landingView: "today", classReminderMinutes: "soon" } as never)
-        .classReminderMinutes
+        .classReminderMinutes,
     ).toBe(10);
   });
 
@@ -112,7 +112,7 @@ describe("buildImportPlan", () => {
         ],
       },
       existing,
-      "source-1"
+      "source-1",
     );
     expect(plan.newCategories).toHaveLength(0);
     expect(plan.drafts[0].categoryId).toBe("c2");
@@ -143,14 +143,7 @@ describe("sanitizeItems", () => {
   });
 
   it("drops non-objects and items with no id", () => {
-    const out = sanitizeItems([
-      null,
-      42,
-      "x",
-      [],
-      ok({ id: "" }),
-      ok(),
-    ] as unknown as Item[]);
+    const out = sanitizeItems([null, 42, "x", [], ok({ id: "" }), ok()] as unknown as Item[]);
     expect(out.map((i) => i.id)).toEqual(["i1"]);
   });
 

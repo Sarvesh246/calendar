@@ -168,7 +168,7 @@ export function NativeShellSync() {
             "#0A84FF",
           focus,
           now: new Date(),
-        })
+        }),
       );
     }, 280);
     return () => {
@@ -190,7 +190,13 @@ export function NativeShellSync() {
   ]);
 
   useNativeMessage("nativeIntent", (payload) => {
-    const msg = payload as { type?: string; itemId?: string; text?: string; url?: string; modelId?: string } | null;
+    const msg = payload as {
+      type?: string;
+      itemId?: string;
+      text?: string;
+      url?: string;
+      modelId?: string;
+    } | null;
     if (!msg?.type) return;
     const store = useDatebookStore.getState();
     if (msg.type === "complete" && msg.itemId) {

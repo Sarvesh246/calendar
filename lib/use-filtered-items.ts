@@ -30,7 +30,11 @@ export function useFilteredItems(): Item[] {
   // Only a time-bound view needs to re-run as the clock moves.
   const range = viewFilter?.range ?? "any";
   const clockKey =
-    range === "any" ? "" : range === "overdue" ? String(Math.floor(now.getTime() / 60_000)) : now.toDateString();
+    range === "any"
+      ? ""
+      : range === "overdue"
+        ? String(Math.floor(now.getTime() / 60_000))
+        : now.toDateString();
 
   const filtered = useMemo(
     () =>
@@ -43,7 +47,7 @@ export function useFilteredItems(): Item[] {
       }),
     // `clockKey` stands in for `now`, so the list only recomputes when it matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allItems, categoryFilter, hideCompleted, viewFilter, weekStartsOn, clockKey]
+    [allItems, categoryFilter, hideCompleted, viewFilter, weekStartsOn, clockKey],
   );
 
   // Ticking something off should look like finishing it, not like it never
@@ -74,6 +78,6 @@ export function useFilterBreakdown(items: Item[]): FilterBreakdown {
         now: new Date(),
         weekStartsOn,
       }),
-    [items, categoryFilter, hideCompleted, viewFilter, weekStartsOn]
+    [items, categoryFilter, hideCompleted, viewFilter, weekStartsOn],
   );
 }

@@ -71,7 +71,8 @@ export const useFocusSessionStore = create<FocusSessionState>((set, get) => ({
     const existing = get().session;
     const pick =
       (itemId && lists.items.find((i) => i.id === itemId)) ||
-      (existing?.activeItemId && lists.items.find((i) => i.id === existing.activeItemId && i.status !== "done")) ||
+      (existing?.activeItemId &&
+        lists.items.find((i) => i.id === existing.activeItemId && i.status !== "done")) ||
       defaultFocusItem(lists.items, new Date(now), lists.categories);
 
     if (!existing) {
@@ -91,7 +92,14 @@ export const useFocusSessionStore = create<FocusSessionState>((set, get) => ({
       return;
     }
     if (!existing.activeItemId && pick) {
-      apply(set, { ...existing, activeItemId: pick.id, segments: [...existing.segments, { itemId: pick.id, startedAt: now, accumulatedMs: 0, pausedAt: now }] });
+      apply(set, {
+        ...existing,
+        activeItemId: pick.id,
+        segments: [
+          ...existing.segments,
+          { itemId: pick.id, startedAt: now, accumulatedMs: 0, pausedAt: now },
+        ],
+      });
     }
   },
 

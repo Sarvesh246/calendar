@@ -138,15 +138,18 @@ export function markOn(target: HTMLElement, container: HTMLElement | null) {
   target.setAttribute("data-pill-on", "");
 }
 
-export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends HTMLElement = HTMLSpanElement>(
+export function useSlidingPill<
+  C extends HTMLElement = HTMLDivElement,
+  P extends HTMLElement = HTMLSpanElement,
+>(
   activeKey: string | null | undefined,
-  { keyAttr = "data-pill-key", mark = true, container: shared }: SlidingPillOptions = {}
+  { keyAttr = "data-pill-key", mark = true, container: shared }: SlidingPillOptions = {},
 ) {
   const containerRef = useRef<C>(null);
   // Resolved at call time, so a shared container needs no extra dependency.
   const getContainer = useCallback(
     (): HTMLElement | null => (shared ? shared.current : containerRef.current),
-    [shared]
+    [shared],
   );
   const pillRef = useRef<P>(null);
   const current = useRef<Box | null>(null);
@@ -181,10 +184,10 @@ export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends
           { transform: `translate(${start.x}px, ${start.y}px) scale(${sx}, ${sy})` },
           { transform: `translate(${to.x}px, ${to.y}px)` },
         ],
-        pillTimingNow()
+        pillTimingNow(),
       );
     },
-    [mark, getContainer]
+    [mark, getContainer],
   );
 
   /** Call from the option's click handler, before any state update. */
@@ -204,7 +207,10 @@ export function useSlidingPill<C extends HTMLElement = HTMLDivElement, P extends
       pill.style.opacity = "0";
       current.current = null;
       target.current = null;
-      if (mark) container.querySelectorAll("[data-pill-on]").forEach((n) => n.removeAttribute("data-pill-on"));
+      if (mark)
+        container
+          .querySelectorAll("[data-pill-on]")
+          .forEach((n) => n.removeAttribute("data-pill-on"));
       return;
     }
     slideTo(el, current.current !== null);

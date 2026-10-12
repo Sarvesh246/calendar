@@ -51,13 +51,13 @@ describe("isDeleted", () => {
 
   it("is false once the row is edited after the delete — that's undo", () => {
     expect(isDeleted({ [tombKey("item", "a")]: T1 }, "item", { ...row, updatedAt: T2 })).toBe(
-      false
+      false,
     );
   });
 
   it("falls back to createdAt for rows written before edit times existed", () => {
     expect(isDeleted({ [tombKey("item", "a")]: T2 }, "item", { id: "a", createdAt: T1 })).toBe(
-      true
+      true,
     );
   });
 

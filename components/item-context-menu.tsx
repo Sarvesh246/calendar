@@ -33,7 +33,7 @@ import type { Item } from "@/lib/types";
 export function ItemContextMenu() {
   const request = useUIStore((s) => s.contextMenu);
   const item = useDatebookStore((s) =>
-    request ? s.items.find((i) => i.id === request.itemId) : undefined
+    request ? s.items.find((i) => i.id === request.itemId) : undefined,
   );
   const close = useUIStore((s) => s.closeContextMenu);
 
@@ -44,7 +44,11 @@ export function ItemContextMenu() {
   return (
     <AnimatePresence>
       {request && item && (
-        <MenuBody key={`${request.itemId}:${request.x}:${request.y}`} request={request} item={item} />
+        <MenuBody
+          key={`${request.itemId}:${request.x}:${request.y}`}
+          request={request}
+          item={item}
+        />
       )}
     </AnimatePresence>
   );
@@ -57,7 +61,9 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
   const close = useUIStore((s) => s.closeContextMenu);
   const openInspector = useUIStore((s) => s.openInspector);
   const deleteItem = useDatebookStore((s) => s.deleteItem);
-  const [section, setSection] = useState<Section>(request.section === "reschedule" ? "reschedule" : "main");
+  const [section, setSection] = useState<Section>(
+    request.section === "reschedule" ? "reschedule" : "main",
+  );
   const [pos, setPos] = useState({ left: request.x, top: request.y, origin: "top left" });
   // Which way the last section change went, so the content slides in from
   // the side you are heading (deeper → from the right, back → from the left).
@@ -81,12 +87,16 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
     // Grow out of the corner nearest the pointer/opener, wherever the menu
     // had to be moved to fit — so it always seems to come from what you clicked.
     const origin = `${flipUp ? "bottom" : "top"} ${left < request.x - 1 ? "right" : "left"}`;
-    setPos((p) => (p.left === left && p.top === top && p.origin === origin ? p : { left, top, origin }));
+    setPos((p) =>
+      p.left === left && p.top === top && p.origin === origin ? p : { left, top, origin },
+    );
   }, [request.x, request.y, section]);
 
   useEffect(() => {
     // Land on the first real choice (or the date field), not the "back" row.
-    const first = ref.current?.querySelector<HTMLElement>('input, [role="menuitem"]:not([data-back])');
+    const first = ref.current?.querySelector<HTMLElement>(
+      'input, [role="menuitem"]:not([data-back])',
+    );
     first?.focus({ preventScroll: true });
   }, [section]);
 
@@ -172,7 +182,11 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
       aria-label={`Actions for ${item.title}`}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
+      exit={{
+        opacity: 0,
+        scale: 0.95,
+        transition: { duration: motionTokens.exit, ease: motionTokens.ease },
+      }}
       transition={{ scale: motionTokens.springSnappy, opacity: { duration: 0.12 } }}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
@@ -185,116 +199,144 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
         animate={{ opacity: 1, x: 0 }}
         transition={{ x: motionTokens.nudge, opacity: { duration: 0.14 } }}
       >
-      {section === "main" && (
-        <>
-          <p className="truncate px-2.5 pb-1 pt-1.5 text-[11px] font-medium text-ink-faint">{item.title}</p>
-          <MenuItem icon={PanelRightOpen} onSelect={() => run(() => openInspector(item.id))} hint="↵">
-            Open details
-          </MenuItem>
-          {work && status !== "done" && (
-            <MenuItem icon={FocusIcon} onSelect={() => run(() => focusOnThis(item.id, router))}>
-              Focus on this
+        {section === "main" && (
+          <>
+            <p className="truncate px-2.5 pb-1 pt-1.5 text-[11px] font-medium text-ink-faint">
+              {item.title}
+            </p>
+            <MenuItem
+              icon={PanelRightOpen}
+              onSelect={() => run(() => openInspector(item.id))}
+              hint="↵"
+            >
+              Open details
             </MenuItem>
-          )}
-          {work && (
-            <>
-              <Separator />
-              {status !== "done" && (
-                <MenuItem icon={Check} onSelect={() => run(() => setStatusWithUndo(item, "done"))}>
-                  Mark done
-                </MenuItem>
-              )}
-              {status !== "doing" && (
-                <MenuItem icon={PlayCircle} onSelect={() => run(() => setStatusWithUndo(item, "doing"))}>
-                  Mark in progress
-                </MenuItem>
-              )}
-              {status !== "todo" && (
-                <MenuItem icon={CircleDashed} onSelect={() => run(() => setStatusWithUndo(item, "todo"))}>
-                  Move to to do
-                </MenuItem>
-              )}
-            </>
-          )}
-          <Separator />
-          <MenuItem icon={CalendarClock} onSelect={() => setSection("reschedule")} submenu>
-            Reschedule
-          </MenuItem>
-          <MenuItem icon={Copy} onSelect={() => run(() => duplicateItem(item))}>
-            Duplicate
-          </MenuItem>
-          <Separator />
-          <MenuItem
-            icon={Trash2}
-            tone="warn"
-            onSelect={() => run(() => deleteItem(item.id))}
-          >
-            {item.repeatId ? "Delete this occurrence" : "Delete"}
-          </MenuItem>
-        </>
-      )}
+            {work && status !== "done" && (
+              <MenuItem icon={FocusIcon} onSelect={() => run(() => focusOnThis(item.id, router))}>
+                Focus on this
+              </MenuItem>
+            )}
+            {work && (
+              <>
+                <Separator />
+                {status !== "done" && (
+                  <MenuItem
+                    icon={Check}
+                    onSelect={() => run(() => setStatusWithUndo(item, "done"))}
+                  >
+                    Mark done
+                  </MenuItem>
+                )}
+                {status !== "doing" && (
+                  <MenuItem
+                    icon={PlayCircle}
+                    onSelect={() => run(() => setStatusWithUndo(item, "doing"))}
+                  >
+                    Mark in progress
+                  </MenuItem>
+                )}
+                {status !== "todo" && (
+                  <MenuItem
+                    icon={CircleDashed}
+                    onSelect={() => run(() => setStatusWithUndo(item, "todo"))}
+                  >
+                    Move to to do
+                  </MenuItem>
+                )}
+              </>
+            )}
+            <Separator />
+            <MenuItem icon={CalendarClock} onSelect={() => setSection("reschedule")} submenu>
+              Reschedule
+            </MenuItem>
+            <MenuItem icon={Copy} onSelect={() => run(() => duplicateItem(item))}>
+              Duplicate
+            </MenuItem>
+            <Separator />
+            <MenuItem icon={Trash2} tone="warn" onSelect={() => run(() => deleteItem(item.id))}>
+              {item.repeatId ? "Delete this occurrence" : "Delete"}
+            </MenuItem>
+          </>
+        )}
 
-      {section === "reschedule" && (
-        <>
-          <BackRow onBack={() => setSection("main")}>{work ? "Move due date" : "Move to"}</BackRow>
-          <MenuItem icon={ArrowRight} onSelect={() => run(() => rescheduleToDay(item, dayKey(today), fromKey))}>
-            Today
-          </MenuItem>
-          <MenuItem
-            icon={ArrowRight}
-            onSelect={() => run(() => rescheduleToDay(item, dayKey(addDays(today, 1)), fromKey))}
-          >
-            Tomorrow
-          </MenuItem>
-          <MenuItem
-            icon={ArrowRight}
-            onSelect={() =>
-              run(() => rescheduleToDay(item, dayKey(addDays(new Date(`${fromKey}T12:00:00`), 1)), fromKey))
-            }
-          >
-            A day later
-          </MenuItem>
-          <MenuItem
-            icon={ArrowRight}
-            onSelect={() =>
-              run(() => rescheduleToDay(item, dayKey(addDays(new Date(`${fromKey}T12:00:00`), 7)), fromKey))
-            }
-          >
-            A week later
-          </MenuItem>
-          <Separator />
-          <MenuItem icon={CalendarPlus} onSelect={() => setSection("date")} submenu>
-            Pick a date…
-          </MenuItem>
-        </>
-      )}
+        {section === "reschedule" && (
+          <>
+            <BackRow onBack={() => setSection("main")}>
+              {work ? "Move due date" : "Move to"}
+            </BackRow>
+            <MenuItem
+              icon={ArrowRight}
+              onSelect={() => run(() => rescheduleToDay(item, dayKey(today), fromKey))}
+            >
+              Today
+            </MenuItem>
+            <MenuItem
+              icon={ArrowRight}
+              onSelect={() => run(() => rescheduleToDay(item, dayKey(addDays(today, 1)), fromKey))}
+            >
+              Tomorrow
+            </MenuItem>
+            <MenuItem
+              icon={ArrowRight}
+              onSelect={() =>
+                run(() =>
+                  rescheduleToDay(
+                    item,
+                    dayKey(addDays(new Date(`${fromKey}T12:00:00`), 1)),
+                    fromKey,
+                  ),
+                )
+              }
+            >
+              A day later
+            </MenuItem>
+            <MenuItem
+              icon={ArrowRight}
+              onSelect={() =>
+                run(() =>
+                  rescheduleToDay(
+                    item,
+                    dayKey(addDays(new Date(`${fromKey}T12:00:00`), 7)),
+                    fromKey,
+                  ),
+                )
+              }
+            >
+              A week later
+            </MenuItem>
+            <Separator />
+            <MenuItem icon={CalendarPlus} onSelect={() => setSection("date")} submenu>
+              Pick a date…
+            </MenuItem>
+          </>
+        )}
 
-      {section === "date" && (
-        <form
-          className="flex flex-col gap-2 p-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!date) return;
-            run(() => rescheduleToDay(item, date, fromKey));
-          }}
-        >
-          <BackRow onBack={() => setSection("reschedule")}>Pick a date</BackRow>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            aria-label="New date"
-            className="field-control min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-          />
-          <button
-            type="submit"
-            disabled={!date}
-            className="min-h-9 rounded-md bg-accent px-3 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+        {section === "date" && (
+          <form
+            className="flex flex-col gap-2 p-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!date) return;
+              run(() => rescheduleToDay(item, date, fromKey));
+            }}
           >
-            Move
-          </button>
-        </form>
-      )}
+            <BackRow onBack={() => setSection("reschedule")}>Pick a date</BackRow>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              aria-label="New date"
+              className="field-control min-h-9 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+            <button
+              type="submit"
+              disabled={!date}
+              className="min-h-9 rounded-md bg-accent px-3 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              Move
+            </button>
+          </form>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -329,10 +371,13 @@ function MenuItem({
         "transition-colors duration-[var(--motion-micro)]",
         tone === "warn"
           ? "text-warn hover:bg-warn-soft focus-visible:bg-warn-soft focus:bg-warn-soft"
-          : "hover:bg-surface-sunken focus:bg-surface-sunken"
+          : "hover:bg-surface-sunken focus:bg-surface-sunken",
       )}
     >
-      <Icon className={cn("h-3.5 w-3.5 shrink-0", tone === "warn" ? "text-warn" : "text-ink-faint")} strokeWidth={1.9} />
+      <Icon
+        className={cn("h-3.5 w-3.5 shrink-0", tone === "warn" ? "text-warn" : "text-ink-faint")}
+        strokeWidth={1.9}
+      />
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint && <span className="text-[11px] text-ink-faint">{hint}</span>}
       {submenu && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={2} />}

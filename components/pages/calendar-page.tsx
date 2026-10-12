@@ -161,7 +161,8 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!aiDrawerOpen || !dockable) return;
     setPaneTab("assistant");
-    setPaneCollapsed(false);    useUIStore.getState().setAIDrawerOpen(false);
+    setPaneCollapsed(false);
+    useUIStore.getState().setAIDrawerOpen(false);
   }, [aiDrawerOpen, dockable, setPaneTab, setPaneCollapsed]);
 
   const days = useMemo(() => weekDays(anchor, weekStartsOn), [anchor, weekStartsOn]);
@@ -169,25 +170,26 @@ export default function CalendarPage() {
     const names = new Map(categories.map((c) => [c.id, c.name]));
     return collapseDuplicateClassMeetings(items, (id) => (id ? names.get(id) : undefined));
   }, [items, categories]);
-  const selectedItems = useMemo(() => itemsOnDay(calendarItems, selectedDate), [calendarItems, selectedDate]);
+  const selectedItems = useMemo(
+    () => itemsOnDay(calendarItems, selectedDate),
+    [calendarItems, selectedDate],
+  );
 
   // Counted against the *unfiltered* day, so an empty panel can say whether the
   // day is free, finished, or filtered — and offer the matching way out.
-  const selectedAll = useMemo(
-    () => itemsOnDay(allItems, selectedDate),
-    [allItems, selectedDate]
-  );
+  const selectedAll = useMemo(() => itemsOnDay(allItems, selectedDate), [allItems, selectedDate]);
   const selectedBreakdown = useFilterBreakdown(selectedAll);
   const selectedOverlaps = useMemo(
     () => findOverlapGroups(selectedItems, selectedDate),
-    [selectedItems, selectedDate]
+    [selectedItems, selectedDate],
   );
 
   function step(dir: 1 | -1, immediate = false) {
     // A swipe has already ticked on its own release.
     if (!immediate) haptic("selection");
     setDirection(dir);
-    const update = () => setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
+    const update = () =>
+      setAnchor((a) => (mode === "month" ? addMonths(a, dir) : addWeeks(a, dir)));
     if (immediate) update();
     else startTransition(update);
   }
@@ -301,7 +303,10 @@ export default function CalendarPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+                transition={{
+                  default: motionTokens.nudge,
+                  opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                }}
                 className="block whitespace-nowrap"
               >
                 {mode === "month"
@@ -383,68 +388,85 @@ export default function CalendarPage() {
           {/* Month ↔ week is a change of zoom, not a page turn: the outgoing
               view recedes as the incoming one settles in, instead of a cut. */}
           <AnimatePresence initial={false}>
-          {mode === "month" ? (
-            <motion.div
-              key="month"
-              initial={{ opacity: 0, scale: 1.02 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
-              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
-              className="absolute inset-0 flex min-h-0 flex-col"
-            >
-              <MonthView
-                anchor={anchor}
-                items={calendarItems}
-                selectedDate={selectedDate}
-                onSelectDate={selectDate}
-                onSwipeMonth={(dir) => step(dir, true)}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="week"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.02, transition: { duration: motionTokens.exit, ease: motionTokens.ease } }}
-              transition={{ opacity: { duration: motionTokens.standard, ease: motionTokens.ease }, scale: motionTokens.settle }}
-              className="absolute inset-0 flex min-h-0 flex-col"
-            >
-            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+            {mode === "month" ? (
               <motion.div
-                key={`week-${periodKey}`}
-                custom={direction}
-                variants={gridVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+                key="month"
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.98,
+                  transition: { duration: motionTokens.exit, ease: motionTokens.ease },
+                }}
+                transition={{
+                  opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                  scale: motionTokens.settle,
+                }}
                 className="absolute inset-0 flex min-h-0 flex-col"
               >
-                <WeekView
-                  days={days}
+                <MonthView
+                  anchor={anchor}
                   items={calendarItems}
                   selectedDate={selectedDate}
                   onSelectDate={selectDate}
-                  onSelectItem={(item, day) => {
-                    // The day list is where a tapped block opens inline; when
-                    // the pane is showing something else (or hidden), the
-                    // inspector opens without taking over the pane.
-                    if (wide && !(showPane && paneTab === "day")) openInspector(item.id);
-                    else setFocusedItemId(item.id);
-                    selectDate(day);
-                  }}
-                  onCreate={(day, startMin, durationMin) => {
-                    setQuickAddDateKey(dayKey(day));
-                    setQuickAddTime({ hour: Math.floor(startMin / 60), minute: startMin % 60 });
-                    setQuickAddDurationMin(durationMin);
-                    setQuickAddPrefill("");
-                    setQuickAddOpen(true);
-                  }}
+                  onSwipeMonth={(dir) => step(dir, true)}
                 />
               </motion.div>
-            </AnimatePresence>
-            </motion.div>
-          )}
+            ) : (
+              <motion.div
+                key="week"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{
+                  opacity: 0,
+                  scale: 1.02,
+                  transition: { duration: motionTokens.exit, ease: motionTokens.ease },
+                }}
+                transition={{
+                  opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                  scale: motionTokens.settle,
+                }}
+                className="absolute inset-0 flex min-h-0 flex-col"
+              >
+                <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+                  <motion.div
+                    key={`week-${periodKey}`}
+                    custom={direction}
+                    variants={gridVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{
+                      default: motionTokens.nudge,
+                      opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+                    }}
+                    className="absolute inset-0 flex min-h-0 flex-col"
+                  >
+                    <WeekView
+                      days={days}
+                      items={calendarItems}
+                      selectedDate={selectedDate}
+                      onSelectDate={selectDate}
+                      onSelectItem={(item, day) => {
+                        // The day list is where a tapped block opens inline; when
+                        // the pane is showing something else (or hidden), the
+                        // inspector opens without taking over the pane.
+                        if (wide && !(showPane && paneTab === "day")) openInspector(item.id);
+                        else setFocusedItemId(item.id);
+                        selectDate(day);
+                      }}
+                      onCreate={(day, startMin, durationMin) => {
+                        setQuickAddDateKey(dayKey(day));
+                        setQuickAddTime({ hour: Math.floor(startMin / 60), minute: startMin % 60 });
+                        setQuickAddDurationMin(durationMin);
+                        setQuickAddPrefill("");
+                        setQuickAddOpen(true);
+                      }}
+                    />
+                  </motion.div>
+                </AnimatePresence>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
@@ -466,7 +488,8 @@ export default function CalendarPage() {
         {showPane && (
           <div
             className={cn(
-              overlayPane && "absolute inset-y-0 right-0 z-20 flex rounded-xl shadow-[0_16px_40px_-12px_rgb(0_0_0/0.4)]"
+              overlayPane &&
+                "absolute inset-y-0 right-0 z-20 flex rounded-xl shadow-[0_16px_40px_-12px_rgb(0_0_0/0.4)]",
             )}
           >
             <WorkspacePane
@@ -488,7 +511,11 @@ export default function CalendarPage() {
           kept the page scroll-locked for half a second after it had left. */}
       {sheetOpen && (useSheet || mode === "week") && (
         <DaySheet
-          onStep={(dir) => { const next = addDays(selectedDate, dir); setSelectedDate(next); setAnchor(next); }}
+          onStep={(dir) => {
+            const next = addDays(selectedDate, dir);
+            setSelectedDate(next);
+            setAnchor(next);
+          }}
           date={selectedDate}
           items={selectedItems}
           onClose={() => setSheetOpen(false)}

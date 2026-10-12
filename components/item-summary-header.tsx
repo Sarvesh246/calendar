@@ -35,7 +35,11 @@ export function ItemSummaryHeader({ item }: { item: Item }) {
     <div className="mb-4 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border border-line bg-surface-sunken px-2.5 text-[12.5px] font-semibold text-ink">
-          <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: category?.color ?? "#8a8a94" }} />
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ background: category?.color ?? "#8a8a94" }}
+          />
           <span className="min-w-0 truncate">{classLabel(category)}</span>
         </span>
         <span className="text-[12px] font-medium text-ink-faint">
@@ -45,7 +49,7 @@ export function ItemSummaryHeader({ item }: { item: Item }) {
       <h3
         className={cn(
           "text-[21px] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]",
-          finished ? "text-ink-soft line-through decoration-ink-faint" : "text-ink"
+          finished ? "text-ink-soft line-through decoration-ink-faint" : "text-ink",
         )}
       >
         {itemDisplayTitle(item, category)}
@@ -56,7 +60,12 @@ export function ItemSummaryHeader({ item }: { item: Item }) {
           {summary.date && summary.time ? " · " : ""}
           {summary.time}
         </p>
-        <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", CHIP_TONE[summary.chip.tone])}>
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-[12px] font-semibold",
+            CHIP_TONE[summary.chip.tone],
+          )}
+        >
           {summary.chip.label}
         </span>
       </div>

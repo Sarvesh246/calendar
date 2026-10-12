@@ -63,7 +63,11 @@ export const presetMeta: Record<
   custom: {
     label: "Custom",
     description: "Pick your own background, surface, and accent.",
-    swatch: [DEFAULT_CUSTOM_THEME.background, DEFAULT_CUSTOM_THEME.surface, DEFAULT_CUSTOM_THEME.accent],
+    swatch: [
+      DEFAULT_CUSTOM_THEME.background,
+      DEFAULT_CUSTOM_THEME.surface,
+      DEFAULT_CUSTOM_THEME.accent,
+    ],
   },
 };
 

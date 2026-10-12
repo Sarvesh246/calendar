@@ -10,7 +10,11 @@ import { useSheetPhysics } from "@/lib/use-sheet-physics";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
-import { changeMobileStatus, mobileReschedule, relativeScheduleDate } from "@/lib/mobile-item-actions";
+import {
+  changeMobileStatus,
+  mobileReschedule,
+  relativeScheduleDate,
+} from "@/lib/mobile-item-actions";
 import { Reveal } from "@/components/ui/reveal";
 import { SheetHandle } from "@/components/sheet-handle";
 import { Scrim } from "@/components/ui/scrim";
@@ -42,18 +46,40 @@ export function useCloseSheet(): (() => void) | null {
   return useContext(SheetCloseContext);
 }
 
-export function MobileItemSheet({ title, note, onClose, children }: { title: string; /** A quiet line above the content. */ note?: string; onClose: () => void; children: React.ReactNode }) {
+export function MobileItemSheet({
+  title,
+  note,
+  onClose,
+  children,
+}: {
+  title: string;
+  /** A quiet line above the content. */ note?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   // The sheet owns its own departure: `onClose` fires once it has actually
   // left the screen, not when the gesture started — which is what stops the
   // scrim, the tab bar and the save pill snapping back a frame before the
   // card has gone.
   return createPortal(
-    <MobileItemSheetBody title={title} note={note} onClosed={onClose}>{children}</MobileItemSheetBody>,
-    document.body
+    <MobileItemSheetBody title={title} note={note} onClosed={onClose}>
+      {children}
+    </MobileItemSheetBody>,
+    document.body,
   );
 }
 
-function MobileItemSheetBody({ title, note, onClosed, children }: { title: string; note?: string; onClosed: () => void; children: React.ReactNode }) {
+function MobileItemSheetBody({
+  title,
+  note,
+  onClosed,
+  children,
+}: {
+  title: string;
+  note?: string;
+  onClosed: () => void;
+  children: React.ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sheet = useSheetPhysics({ panelRef: ref, onClosed });
@@ -67,31 +93,53 @@ function MobileItemSheetBody({ title, note, onClosed, children }: { title: strin
 
   return (
     <SheetCloseContext.Provider value={close}>
-    <div className={cn("fixed inset-0 z-[70]", sheet.leaving && "pointer-events-none")} onClick={e => e.stopPropagation()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); close(); } }}>
-      <Scrim onPointerDown={close} progress={sheet.scrimOpacity} />
-      <motion.div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-        {...sheet.dragProps}
-        className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-0.5"
+      <div
+        className={cn("fixed inset-0 z-[70]", sheet.leaving && "pointer-events-none")}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Escape") {
+            e.preventDefault();
+            close();
+          }
+        }}
       >
-        <SheetHandle dragControls={sheet.dragControls} dragging={sheet.dragging} />
-        <header
-          className="native-sheet-header flex shrink-0 cursor-grab touch-none select-none items-center justify-between gap-3 active:cursor-grabbing"
-          onPointerDown={(e) => startSheetDrag(sheet.dragControls, e)}
+        <Scrim onPointerDown={close} progress={sheet.scrimOpacity} />
+        <motion.div
+          ref={ref}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          tabIndex={-1}
+          {...sheet.dragProps}
+          className="mobile-action-sheet absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pb-[max(1rem,var(--safe-bottom))] pt-0.5"
         >
-          <h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2>
-          <button aria-label="Close item sheet" className="native-glass-control press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken" onClick={close}><X className="h-5 w-5" /></button>
-        </header>
-        {/* `px-1 -mx-1` so a focus ring — which is drawn 2px *outside* the
+          <SheetHandle dragControls={sheet.dragControls} dragging={sheet.dragging} />
+          <header
+            className="native-sheet-header flex shrink-0 cursor-grab touch-none select-none items-center justify-between gap-3 active:cursor-grabbing"
+            onPointerDown={(e) => startSheetDrag(sheet.dragControls, e)}
+          >
+            <h2 className="min-w-0 truncate text-[16px] font-semibold">{title}</h2>
+            <button
+              aria-label="Close item sheet"
+              className="native-glass-control press-none flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-soft active:bg-surface-sunken"
+              onClick={close}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </header>
+          {/* `px-1 -mx-1` so a focus ring — which is drawn 2px *outside* the
             field — isn't shaved off by this scroll container's edges. A ring
             clipped on three sides reads as a rendering bug, not as focus. */}
-        <div ref={scrollRef} className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1">{note && <p className="mb-2 text-[12px] text-ink-faint">{note}</p>}{children}</div>
-      </motion.div>
-    </div>
+          <div
+            ref={scrollRef}
+            className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pt-1"
+          >
+            {note && <p className="mb-2 text-[12px] text-ink-faint">{note}</p>}
+            {children}
+          </div>
+        </motion.div>
+      </div>
     </SheetCloseContext.Provider>
   );
 }
@@ -164,7 +212,10 @@ function TaskActionsBody({
 
       {!isEvent && (
         <>
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-sunken p-1" aria-label="Task status">
+          <div
+            className="grid grid-cols-3 gap-1 rounded-xl bg-surface-sunken p-1"
+            aria-label="Task status"
+          >
             {(
               [
                 ["todo", "To do"],
@@ -178,7 +229,9 @@ function TaskActionsBody({
                 className={cn(
                   control,
                   "transition-colors duration-[var(--motion-micro)]",
-                  status === value ? "border-transparent bg-accent font-medium text-accent-ink" : "border-transparent bg-transparent"
+                  status === value
+                    ? "border-transparent bg-accent font-medium text-accent-ink"
+                    : "border-transparent bg-transparent",
                 )}
                 onClick={() => {
                   changeMobileStatus(item, value);
@@ -198,7 +251,15 @@ function TaskActionsBody({
       )}
 
       <div className="my-3 flex gap-2">
-        <button className={cn(control, "flex-1 transition-colors duration-[var(--motion-micro)]", open && "border-accent text-accent")} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button
+          className={cn(
+            control,
+            "flex-1 transition-colors duration-[var(--motion-micro)]",
+            open && "border-accent text-accent",
+          )}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
           {isEvent ? "Move" : "Reschedule"}
         </button>
         <button className={cn(control, "flex-1")} onClick={onEdit}>
@@ -293,7 +354,7 @@ function RescheduleGroup({
           className={cn(
             control,
             "shrink-0 border-transparent text-accent-ink",
-            tone === "warn" ? "bg-warn" : "bg-accent"
+            tone === "warn" ? "bg-warn" : "bg-accent",
           )}
           disabled={!date}
           onClick={() => onApply(date)}

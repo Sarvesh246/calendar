@@ -26,9 +26,9 @@ export function useReminderItems(): Item[] {
         (i) =>
           i.status !== "done" &&
           ((i.reminders?.length ?? 0) > 0 ||
-            (s.settings.classReminderMinutes > 0 && isClassScheduleItem(i)))
-      )
-    )
+            (s.settings.classReminderMinutes > 0 && isClassScheduleItem(i))),
+      ),
+    ),
   );
 }
 

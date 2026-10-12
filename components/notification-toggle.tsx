@@ -77,7 +77,10 @@ export function NotificationToggle() {
     if (result === "granted") {
       const registered = await ensureReminderWorker();
       setSwReady(registered);
-      armReminders(useDatebookStore.getState().items, useDatebookStore.getState().settings.clock24h);
+      armReminders(
+        useDatebookStore.getState().items,
+        useDatebookStore.getState().settings.clock24h,
+      );
       if (hasVapid) {
         const push = await subscribePush();
         setPushReady(push.ok);
@@ -103,7 +106,10 @@ export function NotificationToggle() {
       return (
         <p className="flex items-start gap-2 rounded-lg border border-good/40 bg-good-soft px-3.5 py-2.5 text-[13px] font-medium text-ink">
           <Check className="mt-0.5 h-4 w-4 shrink-0 text-good" strokeWidth={2.5} />
-          <span>Reminders use iPhone notifications — they fire on time even when Datebook is closed. Complete or snooze from the banner.</span>
+          <span>
+            Reminders use iPhone notifications — they fire on time even when Datebook is closed.
+            Complete or snooze from the banner.
+          </span>
         </p>
       );
     }
@@ -166,7 +172,8 @@ export function NotificationToggle() {
     return (
       <p className="flex items-start gap-2 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[13px] text-ink-soft">
         <BellOff className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" strokeWidth={1.9} />
-        Notifications are blocked. Turn them back on for this site in your browser settings, then reload.
+        Notifications are blocked. Turn them back on for this site in your browser settings, then
+        reload.
       </p>
     );
   }

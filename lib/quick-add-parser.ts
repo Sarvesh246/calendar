@@ -25,24 +25,42 @@ export interface ParsedQuickAdd {
 }
 
 export const WEEKDAYS: Record<string, Day> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
 };
 
 const ASSIGNMENT_HINTS = [
-  "due", "assignment", "hw", "homework", "reading", "lab", "essay", "project",
-  "quiz", "exam", "paper", "problem set", "pset", "report", "milestone",
+  "due",
+  "assignment",
+  "hw",
+  "homework",
+  "reading",
+  "lab",
+  "essay",
+  "project",
+  "quiz",
+  "exam",
+  "paper",
+  "problem set",
+  "pset",
+  "report",
+  "milestone",
 ];
 
 export function parseQuickAdd(
   raw: string,
   categories: Category[],
-  opts?: { anchor?: Date; hour?: number; minute?: number }
+  opts?: { anchor?: Date; hour?: number; minute?: number },
 ): ParsedQuickAdd {
   let text = raw.trim().replace(/[?]+$/g, "").trim();
   const confidence = { date: false, category: false, reminder: false };
-  const forceEvent = /\b(?:add|create|schedule|set up|book)\s+(?:an?\s+)?(?:event|meeting|appointment)\b/i.test(
-    raw
-  );
+  const forceEvent =
+    /\b(?:add|create|schedule|set up|book)\s+(?:an?\s+)?(?:event|meeting|appointment)\b/i.test(raw);
 
   let categoryId: string | undefined;
   for (const cat of categories) {
@@ -68,8 +86,7 @@ export function parseQuickAdd(
   if (reminders.length) {
     confidence.reminder = true;
     reminderMinutesBefore = reminders[0].offsetMinutes;
-    reminderLabel =
-      reminders.length > 1 ? `${reminders.length} reminders` : reminders[0].label;
+    reminderLabel = reminders.length > 1 ? `${reminders.length} reminders` : reminders[0].label;
   }
 
   let repeat: RepeatRule | undefined;
@@ -79,7 +96,7 @@ export function parseQuickAdd(
     text = compactDays.rest;
   }
   const everyMatch = text.match(
-    /\bevery\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
+    /\bevery\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i,
   );
   if (everyMatch) {
     const token = everyMatch[1].toLowerCase();
@@ -109,8 +126,8 @@ export function parseQuickAdd(
   }
 
   let base = startOfDay(opts?.anchor ?? new Date());
-  let hour = allDay ? 12 : isAssignment ? 23 : opts?.hour ?? 12;
-  let minute = allDay ? 0 : isAssignment ? 59 : opts?.minute ?? 0;
+  let hour = allDay ? 12 : isAssignment ? 23 : (opts?.hour ?? 12);
+  let minute = allDay ? 0 : isAssignment ? 59 : (opts?.minute ?? 0);
   let matchedDate = Boolean(opts?.anchor) || opts?.hour !== undefined;
   let rangeEnd: Date | undefined;
 
@@ -126,7 +143,9 @@ export function parseQuickAdd(
       // A span of days is an all-day event; nobody means 12:00–12:00.
       allDay = true;
     }
-    text = (text.slice(0, datePhrase.index) + text.slice(datePhrase.index + datePhrase.text.length)).trim();
+    text = (
+      text.slice(0, datePhrase.index) + text.slice(datePhrase.index + datePhrase.text.length)
+    ).trim();
   } else if (/\btomorrow\b/i.test(text)) {
     base = addDays(base, 1);
     matchedDate = true;
@@ -139,7 +158,9 @@ export function parseQuickAdd(
     matchedDate = true;
     text = text.replace(/\btoday\b/i, "").trim();
   } else {
-    const nextWd = text.match(/\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+    const nextWd = text.match(
+      /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i,
+    );
     if (nextWd) {
       const dow = WEEKDAYS[nextWd[1].toLowerCase()];
       base = nextDay(startOfDay(new Date()), dow);
@@ -162,7 +183,7 @@ export function parseQuickAdd(
   let endAt: Date | undefined;
   let matchedTime = false;
   const range = text.match(
-    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i
+    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
   );
   if (range && !allDay) {
     const endMeridiem = range[6].toLowerCase();
@@ -269,10 +290,12 @@ function cleanTitle(text: string): string {
     .replace(/^[·•\-–—,:\s]+|[·•\-–—,:\s]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
-  title = title.replace(
-    /^(?:please\s+)?(?:add|create|schedule|set up|book|put|make)\s+(?:an?\s+)?(?:event|meeting|appointment|task|assignment|reminder)?\s*(?:called|named|titled)?\s*/i,
-    ""
-  ).trim();
+  title = title
+    .replace(
+      /^(?:please\s+)?(?:add|create|schedule|set up|book|put|make)\s+(?:an?\s+)?(?:event|meeting|appointment|task|assignment|reminder)?\s*(?:called|named|titled)?\s*/i,
+      "",
+    )
+    .trim();
   title = title.replace(/^(?:an?\s+)?(?:event|meeting|appointment)\s+/i, "").trim();
   title = title.replace(/^(?:to do(?: my)?|for my|do my)\s+/i, "").trim();
   let prevLength: number;

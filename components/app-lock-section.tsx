@@ -54,7 +54,9 @@ export function AppLockSection() {
       <div className="flex items-center justify-between gap-4 rounded-xl bg-surface-sunken/30 px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-[14px] text-ink">Face ID lock</p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-ink-faint">Require Face ID to open Datebook.</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-ink-faint">
+            Require Face ID to open Datebook.
+          </p>
         </div>
         <ToggleSwitch
           checked={state?.enabled ?? false}
@@ -76,7 +78,13 @@ export function AppLockSection() {
   );
 }
 
-function RelockTiming({ minutes, onChange }: { minutes: number; onChange: (minutes: number) => void }) {
+function RelockTiming({
+  minutes,
+  onChange,
+}: {
+  minutes: number;
+  onChange: (minutes: number) => void;
+}) {
   const { containerRef, pillRef, moveTo } = useSlidingPill(String(minutes));
   return (
     <div
@@ -102,7 +110,7 @@ function RelockTiming({ minutes, onChange }: { minutes: number; onChange: (minut
             }}
             className={cn(
               "press-none relative min-h-10 rounded-lg px-2 text-[12.5px] font-medium transition-colors duration-[var(--motion-micro)]",
-              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
             )}
           >
             <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>

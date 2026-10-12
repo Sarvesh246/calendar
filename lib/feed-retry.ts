@@ -73,7 +73,7 @@ export interface FailureVerdict {
 
 export function noteFeedFailure(
   url: string,
-  opts: { rateLimited?: boolean; lastSyncedAt?: string; now?: number } = {}
+  opts: { rateLimited?: boolean; lastSyncedAt?: string; now?: number } = {},
 ): FailureVerdict {
   const now = opts.now ?? Date.now();
   const store = read();

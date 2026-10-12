@@ -51,9 +51,7 @@ describe("describeEmptyState", () => {
       hiddenByCompletion: 2,
     });
     expect(copy.kind).toBe("filtered");
-    expect(copy.sub).toBe(
-      "5 things on today — 3 hidden by the class filter, 2 already completed."
-    );
+    expect(copy.sub).toBe("5 things on today — 3 hidden by the class filter, 2 already completed.");
   });
 
   it("prefers the filter explanation when a class filter is also in play", () => {

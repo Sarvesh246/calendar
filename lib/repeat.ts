@@ -37,7 +37,7 @@ function monthlyFrom(start: Date, n: number): Date {
 export function expandRepeat(
   atIso: string,
   endAtIso: string | undefined,
-  rule: RepeatRule
+  rule: RepeatRule,
 ): { at: string; endAt?: string }[] {
   const start = new Date(atIso);
   if (Number.isNaN(+start)) return [{ at: atIso, ...(endAtIso ? { endAt: endAtIso } : {}) }];
@@ -70,7 +70,12 @@ export function expandRepeat(
         for (const dow of days) {
           const occ = new Date(weekAnchor);
           occ.setDate(weekAnchor.getDate() + dow);
-          occ.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+          occ.setHours(
+            start.getHours(),
+            start.getMinutes(),
+            start.getSeconds(),
+            start.getMilliseconds(),
+          );
           if (occ.getTime() + 60_000 < start.getTime()) continue;
           if (!push(occ)) return out;
         }
@@ -100,7 +105,10 @@ export function repeatLabel(rule: RepeatRule): string {
   if (rule.freq === "monthly") return n === 1 ? "Every month" : `Every ${n} months`;
   if (rule.byDay && rule.byDay.length) {
     const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const days = rule.byDay.map((d) => names[d] ?? "").filter(Boolean).join("/");
+    const days = rule.byDay
+      .map((d) => names[d] ?? "")
+      .filter(Boolean)
+      .join("/");
     return n === 1 ? `Weekly · ${days}` : `Every ${n} weeks · ${days}`;
   }
   return n === 1 ? "Every week" : `Every ${n} weeks`;

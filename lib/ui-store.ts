@@ -149,13 +149,28 @@ export const useUIStore = create<UIState>((set, get) => ({
   calendarCommand: null,
 
   setCommandPaletteOpen: (open) =>
-    set(open ? { ...closedPrimarySurfaces, commandPaletteOpen: true, ...closedAdd } : { commandPaletteOpen: false }),
+    set(
+      open
+        ? { ...closedPrimarySurfaces, commandPaletteOpen: true, ...closedAdd }
+        : { commandPaletteOpen: false },
+    ),
   setFilterOpen: (open) =>
-    set(open ? { ...closedPrimarySurfaces, filterOpen: true, ...closedAdd } : { filterOpen: false }),
+    set(
+      open ? { ...closedPrimarySurfaces, filterOpen: true, ...closedAdd } : { filterOpen: false },
+    ),
   setAIDrawerOpen: (open) =>
-    set(open ? { ...closedPrimarySurfaces, aiDrawerOpen: true, ...closedAdd } : { aiDrawerOpen: false }),
+    set(
+      open
+        ? { ...closedPrimarySurfaces, aiDrawerOpen: true, ...closedAdd }
+        : { aiDrawerOpen: false },
+    ),
   askAI: (message) =>
-    set({ ...closedPrimarySurfaces, aiDrawerOpen: true, aiDrawerPendingMessage: message.trim() || null, ...closedAdd }),
+    set({
+      ...closedPrimarySurfaces,
+      aiDrawerOpen: true,
+      aiDrawerPendingMessage: message.trim() || null,
+      ...closedAdd,
+    }),
   consumeAIDrawerPendingMessage: () => {
     const msg = get().aiDrawerPendingMessage;
     if (msg !== null) set({ aiDrawerPendingMessage: null });
@@ -180,7 +195,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         const current = s.categoryFilter ?? [];
         const next = current.includes(id) ? current.filter((c) => c !== id) : [...current, id];
         return { categoryFilter: next.length === 0 ? null : next };
-      })
+      }),
     ),
   clearCategoryFilter: () => set({ categoryFilter: null }),
   clearAllFilters: () => set({ activeViewId: null, viewFilter: null, categoryFilter: null }),
@@ -190,7 +205,12 @@ export const useUIStore = create<UIState>((set, get) => ({
   setQuickAddDurationMin: (minutes) => set({ quickAddDurationMin: minutes }),
   setCalendarFocusDate: (key) => set({ calendarFocusDate: key }),
   openClassSchedule: (categoryId) =>
-    set({ ...closedPrimarySurfaces, classScheduleOpen: true, classScheduleCategoryId: categoryId ?? null, ...closedAdd }),
+    set({
+      ...closedPrimarySurfaces,
+      classScheduleOpen: true,
+      classScheduleCategoryId: categoryId ?? null,
+      ...closedAdd,
+    }),
   closeClassSchedule: () => set({ classScheduleOpen: false, classScheduleCategoryId: null }),
   applyView: (view) => {
     if (!view) {
@@ -211,7 +231,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           // was picked before, and "no classes" means all of them.
           categoryFilter: view.categoryIds?.length ? [...view.categoryIds] : null,
         };
-      })
+      }),
     );
   },
   openInspector: (id) => set({ inspectorItemId: id, contextMenu: null }),
@@ -219,6 +239,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   openContextMenu: (request) => set({ contextMenu: request }),
   closeContextMenu: () => set({ contextMenu: null }),
   setShortcutsOpen: (open) =>
-    set(open ? { ...closedPrimarySurfaces, shortcutsOpen: true, ...closedAdd } : { shortcutsOpen: false }),
+    set(
+      open
+        ? { ...closedPrimarySurfaces, shortcutsOpen: true, ...closedAdd }
+        : { shortcutsOpen: false },
+    ),
   sendCalendarCommand: (command) => set({ calendarCommand: { ...command, nonce: ++commandNonce } }),
 }));

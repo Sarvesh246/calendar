@@ -74,7 +74,10 @@ function reasonStandalone(reason: string | undefined): string {
 
 export function draftEmail(o: EmailDraftInput): string {
   const who = salutationName(o.person);
-  const greet = o.person?.role === "ta" && !/^(?:Dr|Professor|Mr|Ms|Mrs|Mx)\b/.test(who) ? `Hi ${who},` : `Dear ${who},`;
+  const greet =
+    o.person?.role === "ta" && !/^(?:Dr|Professor|Mr|Ms|Mrs|Mx)\b/.test(who)
+      ? `Hi ${who},`
+      : `Dear ${who},`;
   let subject: string;
   let body: string;
   if (o.kind === "extension") {
@@ -94,20 +97,29 @@ export function draftEmail(o: EmailDraftInput): string {
       `Thank you for understanding.`;
   } else {
     subject = `Meeting request (${o.courseLabel})`;
-    const hours = o.person?.officeHours ? ` I saw your office hours are ${o.person.officeHours} — I can come then, or` : " Would";
+    const hours = o.person?.officeHours
+      ? ` I saw your office hours are ${o.person.officeHours} — I can come then, or`
+      : " Would";
     const when = o.dayText ? ` ${o.dayText}` : "";
     body =
       `I'd like to meet with you${when} to talk about ${o.extra ? o.extra : `how I'm doing in ${o.courseLabel}`}${reasonSentence(o.reason)}.${reasonStandalone(o.reason)}` +
       `${hours}${o.person?.officeHours ? " at another time that suits you" : " there be a time that works for you"}?\n\n` +
       `Thank you for your time.`;
   }
-  const to = o.person ? `${bold(o.person.name)}${o.person.email ? ` (${o.person.email})` : ""}` : `your ${o.className} instructor`;
-  const note = o.policy ? `\n\nWorth knowing before you send it — the ${o.className} syllabus says: *${o.policy.text}*` : "";
+  const to = o.person
+    ? `${bold(o.person.name)}${o.person.email ? ` (${o.person.email})` : ""}`
+    : `your ${o.className} instructor`;
+  const note = o.policy
+    ? `\n\nWorth knowing before you send it — the ${o.className} syllabus says: *${o.policy.text}*`
+    : "";
   return `Here's a draft for ${to}:\n\n${bold("Subject:")} ${subject}\n\n${greet}\n\n${body}\n\nBest,\n[Your name]${note}`;
 }
 
 /** The person to write to: the instructor unless the TA was named. */
-export function recipient(info: SyllabusInfo | undefined, wantTa: boolean): SyllabusPerson | undefined {
+export function recipient(
+  info: SyllabusInfo | undefined,
+  wantTa: boolean,
+): SyllabusPerson | undefined {
   if (!info) return undefined;
   const role = wantTa ? "ta" : "instructor";
   const matches = info.people.filter((p) => p.role === role);

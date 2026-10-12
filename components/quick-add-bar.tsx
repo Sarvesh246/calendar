@@ -42,7 +42,7 @@ type Phase = "idle" | "preview" | "ask" | "bulk";
 function readComposerOverrides(): ComposerOverrides {
   const stored = readJsonDraft<Record<string, unknown>>(
     "quick-add-fields",
-    (v): v is Record<string, unknown> => Boolean(v) && typeof v === "object"
+    (v): v is Record<string, unknown> => Boolean(v) && typeof v === "object",
   );
   if (!stored) return {};
   const next: ComposerOverrides = {};
@@ -102,7 +102,7 @@ export function QuickAddBar({
   const pathname = useResolvedPathname();
   const mounted = useHasMounted();
   const calendarDayKey =
-    mounted && pathname === "/calendar" ? readViewState().calendarSelected ?? null : null;
+    mounted && pathname === "/calendar" ? (readViewState().calendarSelected ?? null) : null;
   const contextDateKey = dateKey ?? calendarDayKey;
 
   /** A span swept out on the week grid sizes an event the text didn't. */
@@ -148,7 +148,7 @@ export function QuickAddBar({
         { boxShadow: `0 0 0 3px ${ring}`, offset: 0.2 },
         { boxShadow: `0 0 0 3px transparent` },
       ],
-      { duration: 720, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+      { duration: 720, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
     );
   };
 
@@ -181,9 +181,7 @@ export function QuickAddBar({
   useEffect(() => {
     // Strip the `undefined`s a reset leaves behind, so an emptied override set
     // is stored as "nothing" rather than as three explicit blanks.
-    const stored = Object.fromEntries(
-      Object.entries(overrides).filter(([, v]) => v !== undefined)
-    );
+    const stored = Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined));
     writeJsonDraft("quick-add-fields", stored);
   }, [overrides]);
 
@@ -204,7 +202,7 @@ export function QuickAddBar({
       parseQuickAdd(deferredText, categories, {
         ...(anchor ? { anchor } : {}),
         ...(timeHint ? { hour: timeHint.hour, minute: timeHint.minute } : {}),
-      })
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deferredText, dateKey, timeHint, durationHint, categories]);
@@ -225,9 +223,9 @@ export function QuickAddBar({
           defaultReminderMinutes,
           fallbackCategoryId: categories[0]?.id,
         },
-        overrides
+        overrides,
       ),
-    [liveParse, contextDateKey, contextCategoryId, defaultReminderMinutes, overrides, categories]
+    [liveParse, contextDateKey, contextCategoryId, defaultReminderMinutes, overrides, categories],
   );
 
   /** Try the pasted-schedule path. Returns true when it took over. */
@@ -288,7 +286,7 @@ export function QuickAddBar({
         defaultReminderMinutes,
         fallbackCategoryId: categories[0]?.id,
       },
-      overrides
+      overrides,
     );
 
     const at = fields.date.value;
@@ -402,7 +400,9 @@ export function QuickAddBar({
   // " · 2:00 PM–3:30 PM" when the add came from a spot (or sweep) on the week.
   const hintStart =
     dateKey && timeHint
-      ? new Date(`${dateKey}T${String(timeHint.hour).padStart(2, "0")}:${String(timeHint.minute).padStart(2, "0")}:00`)
+      ? new Date(
+          `${dateKey}T${String(timeHint.hour).padStart(2, "0")}:${String(timeHint.minute).padStart(2, "0")}:00`,
+        )
       : null;
   const hintTimeLabel = hintStart
     ? ` · ${formatTime(hintStart.toISOString(), clock24h)}${
@@ -432,12 +432,13 @@ export function QuickAddBar({
         data-field-group=""
         className={cn(
           "focus-within-ring relative flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5",
-          toolbar && "h-10 rounded-lg border-0 bg-transparent py-0 pl-3 pr-0.5 hover:bg-surface-sunken/40",
+          toolbar &&
+            "h-10 rounded-lg border-0 bg-transparent py-0 pl-3 pr-0.5 hover:bg-surface-sunken/40",
           toolbar && focused && "bg-surface-sunken/60 hover:bg-surface-sunken/60",
           "transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
           // The bar itself is the focus indicator for the field inside it, so it
           // has to be unmistakable rather than a half-tinted hairline.
-          focused && !toolbar && "border-accent"
+          focused && !toolbar && "border-accent",
         )}
       >
         <motion.span
@@ -447,7 +448,7 @@ export function QuickAddBar({
           transition={motionTokens.springSnappy}
           className={cn(
             "shrink-0 transition-colors duration-[var(--motion-standard)]",
-            focused ? "text-accent" : "text-ink-faint"
+            focused ? "text-accent" : "text-ink-faint",
           )}
         >
           <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -525,7 +526,7 @@ export function QuickAddBar({
             "transition-[background-color,color] duration-[var(--motion-standard)]",
             ready
               ? "bg-accent text-accent-ink hover:opacity-90"
-              : "bg-surface-sunken text-ink-faint"
+              : "bg-surface-sunken text-ink-faint",
           )}
         >
           <motion.span
@@ -548,7 +549,7 @@ export function QuickAddBar({
           categories={categories}
           now={now}
           reminderCount={
-            overrides.reminderMinutes === undefined ? liveParse?.reminders?.length ?? 1 : 1
+            overrides.reminderMinutes === undefined ? (liveParse?.reminders?.length ?? 1) : 1
           }
         />
       )}
@@ -559,7 +560,10 @@ export function QuickAddBar({
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+            transition={{
+              default: motionTokens.nudge,
+              opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+            }}
             className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-lg border border-line bg-surface p-4"
           >
             <p className="text-[13px] text-ink-soft">
@@ -597,7 +601,7 @@ export function QuickAddBar({
             onConfirm={confirmBulk}
             onAskAI={() => {
               askAI(
-                `Add these to my calendar. Keep each one on the date shown:\n\n${rawRef.current || text}`
+                `Add these to my calendar. Keep each one on the date shown:\n\n${rawRef.current || text}`,
               );
               reset();
             }}
@@ -607,7 +611,12 @@ export function QuickAddBar({
           <motion.div
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+            exit={{
+              opacity: 0,
+              y: -6,
+              scale: 0.98,
+              transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+            }}
             transition={motionTokens.spring}
             style={{ transformOrigin: "top center" }}
             className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-[min(60dvh,calc(var(--visible-height,100dvh)-8rem))] overflow-y-auto rounded-lg border border-line bg-surface p-4"

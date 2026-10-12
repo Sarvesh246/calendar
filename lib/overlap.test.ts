@@ -41,7 +41,7 @@ describe("findOverlapGroups", () => {
   it("chains a three-way run into one group, not two pairs", () => {
     const groups = findOverlapGroups(
       [event("a", 9, 11), event("b", 10, 12), event("c", 11, 13)],
-      DAY
+      DAY,
     );
     expect(groups).toHaveLength(1);
     expect(groups[0].items.map((i) => i.id)).toEqual(["a", "b", "c"]);
@@ -50,7 +50,7 @@ describe("findOverlapGroups", () => {
   it("keeps separate collisions separate", () => {
     const groups = findOverlapGroups(
       [event("a", 9, 10.5 as number), event("b", 9, 10), event("c", 14, 16), event("d", 15, 17)],
-      DAY
+      DAY,
     );
     expect(groups).toHaveLength(2);
     expect(groups[0].items.map((i) => i.id).sort()).toEqual(["a", "b"]);
@@ -91,7 +91,7 @@ describe("findOverlapGroups", () => {
   it("labels a group by how many collide", () => {
     const groups = findOverlapGroups(
       [event("a", 9, 11), event("b", 10, 12), event("c", 10, 12)],
-      DAY
+      DAY,
     );
     expect(overlapLabel(groups[0])).toBe("3 events overlap");
   });

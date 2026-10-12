@@ -3,7 +3,11 @@
 import { CalendarClock } from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
-import { formatMeetingSummary, savedClassMeetings, type SavedClassMeeting } from "@/lib/class-schedule";
+import {
+  formatMeetingSummary,
+  savedClassMeetings,
+  type SavedClassMeeting,
+} from "@/lib/class-schedule";
 import { haptic } from "@/lib/haptic";
 import type { Category } from "@/lib/types";
 import { classLabel } from "@/lib/course-label";

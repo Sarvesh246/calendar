@@ -47,7 +47,7 @@ describe("extractScheduleMeetings", () => {
 
   it("reads spelled-out split times", () => {
     const r = extractScheduleMeetings(
-      "Tuesdays and Thursdays 5:30-6:45, Mondays and Wednesdays 4:15-5:00"
+      "Tuesdays and Thursdays 5:30-6:45, Mondays and Wednesdays 4:15-5:00",
     );
     expect(r?.meetings).toEqual([
       { days: [2, 4], hour: 17, minute: 30, endHour: 18, endMinute: 45 },
@@ -127,7 +127,7 @@ describe("meetingDateTimes", () => {
     const thu = new Date(2026, 8, 10, 21, 7);
     const range = meetingDateTimes(
       { days: [1, 3, 5], hour: 10, minute: 20, endHour: 11, endMinute: 10 },
-      thu
+      thu,
     );
     expect(range).not.toBeNull();
     expect(range!.at.getDay()).toBe(5);
@@ -154,7 +154,11 @@ describe("savedClassMeetings", () => {
   it("groups a weekly series and labels the meeting", () => {
     const items = [
       item({ id: "a" }),
-      item({ id: "b", at: new Date(2026, 8, 14, 10, 20).toISOString(), endAt: new Date(2026, 8, 14, 11, 10).toISOString() }),
+      item({
+        id: "b",
+        at: new Date(2026, 8, 14, 10, 20).toISOString(),
+        endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
+      }),
     ];
     const saved = savedClassMeetings(items, "pols");
     expect(saved).toHaveLength(1);
@@ -166,8 +170,13 @@ describe("savedClassMeetings", () => {
 
   it("keeps room and until on a saved meeting", () => {
     const saved = savedClassMeetings(
-      [item({ location: "HECC 108", repeat: { freq: "weekly", byDay: [1, 3, 5], until: "2026-12-12T23:59:59.000Z" } })],
-      "pols"
+      [
+        item({
+          location: "HECC 108",
+          repeat: { freq: "weekly", byDay: [1, 3, 5], until: "2026-12-12T23:59:59.000Z" },
+        }),
+      ],
+      "pols",
     );
     expect(saved[0].location).toBe("HECC 108");
     expect(saved[0].until).toMatch(/^2026-12-12/);
@@ -175,8 +184,20 @@ describe("savedClassMeetings", () => {
 
   it("keeps split weekly times as two rows", () => {
     const items = [
-      item({ id: "mw", repeatId: "a", repeat: { freq: "weekly", byDay: [1, 3] }, at: new Date(2026, 8, 14, 16, 15).toISOString(), endAt: new Date(2026, 8, 14, 17, 0).toISOString() }),
-      item({ id: "tth", repeatId: "b", repeat: { freq: "weekly", byDay: [2, 4] }, at: new Date(2026, 8, 15, 17, 30).toISOString(), endAt: new Date(2026, 8, 15, 18, 45).toISOString() }),
+      item({
+        id: "mw",
+        repeatId: "a",
+        repeat: { freq: "weekly", byDay: [1, 3] },
+        at: new Date(2026, 8, 14, 16, 15).toISOString(),
+        endAt: new Date(2026, 8, 14, 17, 0).toISOString(),
+      }),
+      item({
+        id: "tth",
+        repeatId: "b",
+        repeat: { freq: "weekly", byDay: [2, 4] },
+        at: new Date(2026, 8, 15, 17, 30).toISOString(),
+        endAt: new Date(2026, 8, 15, 18, 45).toISOString(),
+      }),
     ];
     const saved = savedClassMeetings(items, "pols");
     expect(saved.map((m) => formatMeetingSummary(m))).toEqual([
@@ -207,8 +228,8 @@ describe("savedClassMeetings", () => {
           at: new Date(2026, 8, 11, 10, 20).toISOString(),
           endAt: new Date(2026, 8, 11, 11, 10).toISOString(),
         }),
-        "ENGL 101"
-      )
+        "ENGL 101",
+      ),
     ).toBe(true);
     expect(
       isClassMeeting(
@@ -219,8 +240,8 @@ describe("savedClassMeetings", () => {
           at: new Date(2026, 8, 11, 18, 0).toISOString(),
           endAt: new Date(2026, 8, 11, 19, 0).toISOString(),
         }),
-        "Personal"
-      )
+        "Personal",
+      ),
     ).toBe(false);
     expect(
       isClassMeeting(
@@ -230,8 +251,8 @@ describe("savedClassMeetings", () => {
           at: new Date(2026, 8, 11, 9, 0).toISOString(),
           endAt: new Date(2026, 8, 11, 17, 0).toISOString(),
         }),
-        "POLS 207"
-      )
+        "POLS 207",
+      ),
     ).toBe(false);
   });
 
@@ -253,7 +274,9 @@ describe("savedClassMeetings", () => {
       endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
     });
     const names = (id?: string) => (id === "pols" ? "POLS 207" : undefined);
-    expect(collapseDuplicateClassMeetings([schedule, feed], names).map((i) => i.id)).toEqual(["feed"]);
+    expect(collapseDuplicateClassMeetings([schedule, feed], names).map((i) => i.id)).toEqual([
+      "feed",
+    ]);
   });
 
   it("keeps a named work session when the feed lecture overlaps", () => {
@@ -273,7 +296,9 @@ describe("savedClassMeetings", () => {
       endAt: new Date(2026, 8, 14, 11, 10).toISOString(),
     });
     const names = (id?: string) => (id === "pols" ? "POLS 207" : undefined);
-    expect(collapseDuplicateClassMeetings([named, feed], names).map((i) => i.id)).toEqual(["named"]);
+    expect(collapseDuplicateClassMeetings([named, feed], names).map((i) => i.id)).toEqual([
+      "named",
+    ]);
   });
 });
 
@@ -294,8 +319,8 @@ describe("savedMeetingSlotEqual", () => {
           title: "POLS 207",
           count: 1,
         },
-        { days: [1, 3, 5], hour: 10, minute: 20, endHour: 11, endMinute: 10 }
-      )
+        { days: [1, 3, 5], hour: 10, minute: 20, endHour: 11, endMinute: 10 },
+      ),
     ).toBe(true);
     expect(
       savedMeetingSlotEqual(
@@ -310,8 +335,8 @@ describe("savedMeetingSlotEqual", () => {
           title: "POLS 207",
           count: 1,
         },
-        { days: [1, 3, 5], hour: 10, minute: 30, endHour: 11, endMinute: 10 }
-      )
+        { days: [1, 3, 5], hour: 10, minute: 30, endHour: 11, endMinute: 10 },
+      ),
     ).toBe(false);
   });
 });

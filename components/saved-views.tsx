@@ -38,25 +38,31 @@ export function SidebarViews() {
   return (
     <div className="flex flex-col gap-0.5">
       <SidebarSectionHeader label="Views">
-          {activeId && (
-            <button
-              type="button"
-              onClick={() => applyView(null)}
-              className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
-            >
-              Clear
-            </button>
-          )}
+        {activeId && (
           <button
             type="button"
-            onClick={() => setEditing((v) => !v)}
-            aria-expanded={editing}
-            aria-label="Save a view"
-            title="Save a view"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+            onClick={() => applyView(null)}
+            className="rounded px-1 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-2"
           >
-            <Plus className={cn("h-3.5 w-3.5 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]", editing && "rotate-45")} strokeWidth={2} />
+            Clear
           </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          aria-expanded={editing}
+          aria-label="Save a view"
+          title="Save a view"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink"
+        >
+          <Plus
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]",
+              editing && "rotate-45",
+            )}
+            strokeWidth={2}
+          />
+        </button>
       </SidebarSectionHeader>
 
       <AnimatePresence initial={false}>
@@ -78,8 +84,10 @@ export function SidebarViews() {
               className={cn(
                 "press-none flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]",
                 "transition-colors duration-[var(--motion-micro)]",
-                active ? "bg-surface-sunken font-medium text-ink" : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink",
-                !view.builtIn && "pr-7"
+                active
+                  ? "bg-surface-sunken font-medium text-ink"
+                  : "text-ink-soft hover:bg-surface-sunken/70 hover:text-ink",
+                !view.builtIn && "pr-7",
               )}
             >
               <motion.span
@@ -87,9 +95,16 @@ export function SidebarViews() {
                 initial={false}
                 animate={{ scale: active ? 1 : 0.85 }}
                 transition={motionTokens.springSnappy}
-                className={cn("flex w-4 shrink-0 justify-center", active ? "text-accent" : "text-ink-faint")}
+                className={cn(
+                  "flex w-4 shrink-0 justify-center",
+                  active ? "text-accent" : "text-ink-faint",
+                )}
               >
-                <Bookmark className="h-3.5 w-3.5" strokeWidth={1.9} fill={active ? "currentColor" : "none"} />
+                <Bookmark
+                  className="h-3.5 w-3.5"
+                  strokeWidth={1.9}
+                  fill={active ? "currentColor" : "none"}
+                />
               </motion.span>
               <span className="min-w-0 flex-1 truncate">{view.name}</span>
             </button>
@@ -150,7 +165,9 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
   const chip = (on: boolean) =>
     cn(
       "h-7 rounded-full border px-2.5 text-[11.5px] font-medium transition-colors duration-[var(--motion-micro)]",
-      on ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-soft hover:border-line-strong hover:text-ink"
+      on
+        ? "border-accent bg-accent-soft text-accent"
+        : "border-line text-ink-soft hover:border-line-strong hover:text-ink",
     );
 
   return (
@@ -164,8 +181,15 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
       }}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
-      transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.standard, ease: motionTokens.ease } }}
+      exit={{
+        opacity: 0,
+        y: -4,
+        transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+      }}
+      transition={{
+        default: motionTokens.nudge,
+        opacity: { duration: motionTokens.standard, ease: motionTokens.ease },
+      }}
       aria-label="New view"
       className="mx-0.5 my-1.5 flex flex-col gap-2.5 rounded-lg border border-line bg-surface-sunken/50 p-2.5"
     >
@@ -179,27 +203,45 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
         className="field-control min-h-8 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
       />
       <fieldset className="flex flex-col gap-1">
-        <legend className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">Status</legend>
+        <legend className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">
+          Status
+        </legend>
         <div className="flex flex-wrap gap-1">
           {VIEW_STATUSES.map((o) => (
-            <button key={o.value} type="button" aria-pressed={statuses.includes(o.value)} onClick={() => setStatuses(toggleIn(statuses, o.value))} className={chip(statuses.includes(o.value))}>
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={statuses.includes(o.value)}
+              onClick={() => setStatuses(toggleIn(statuses, o.value))}
+              className={chip(statuses.includes(o.value))}
+            >
               {o.label}
             </button>
           ))}
         </div>
       </fieldset>
       <fieldset className="flex flex-col gap-1">
-        <legend className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">Type</legend>
+        <legend className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">
+          Type
+        </legend>
         <div className="flex flex-wrap gap-1">
           {VIEW_KINDS.map((o) => (
-            <button key={o.value} type="button" aria-pressed={kinds.includes(o.value)} onClick={() => setKinds(toggleIn(kinds, o.value))} className={chip(kinds.includes(o.value))}>
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={kinds.includes(o.value)}
+              onClick={() => setKinds(toggleIn(kinds, o.value))}
+              className={chip(kinds.includes(o.value))}
+            >
               {o.label}
             </button>
           ))}
         </div>
       </fieldset>
       <label className="flex flex-col gap-1">
-        <span className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">When</span>
+        <span className="text-[10.5px] font-medium uppercase tracking-wider text-ink-faint">
+          When
+        </span>
         <select
           value={range}
           onChange={(e) => setRange(e.target.value as ViewRange)}
@@ -223,7 +265,7 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
         <span
           className={cn(
             "mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-            useClasses ? "border-accent bg-accent" : "border-line-strong bg-surface"
+            useClasses ? "border-accent bg-accent" : "border-line-strong bg-surface",
           )}
         >
           {useClasses && <Check className="h-3 w-3 text-accent-ink" strokeWidth={3} />}
@@ -235,10 +277,17 @@ export function ViewEditor({ onDone }: { onDone: () => void }) {
         </span>
       </button>
       <div className="flex justify-end gap-1.5">
-        <button type="button" onClick={onDone} className="h-8 rounded-md px-2.5 text-[12.5px] font-medium text-ink-soft hover:bg-surface hover:text-ink">
+        <button
+          type="button"
+          onClick={onDone}
+          className="h-8 rounded-md px-2.5 text-[12.5px] font-medium text-ink-soft hover:bg-surface hover:text-ink"
+        >
           Cancel
         </button>
-        <button type="submit" className="h-8 rounded-md bg-accent px-3 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90">
+        <button
+          type="submit"
+          className="h-8 rounded-md bg-accent px-3 text-[12.5px] font-medium text-accent-ink transition-opacity hover:opacity-90"
+        >
           Save
         </button>
       </div>

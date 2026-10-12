@@ -43,7 +43,10 @@ describe("toCategoryRow", () => {
   });
 
   it("keeps good values, trimming the name", () => {
-    const row = toCategoryRow({ id: "c1", name: " ENGL 101 ", classTitle: " Writing Lab ", color: "#007AFF" }, USER);
+    const row = toCategoryRow(
+      { id: "c1", name: " ENGL 101 ", classTitle: " Writing Lab ", color: "#007AFF" },
+      USER,
+    );
     expect(row.name).toBe("ENGL 101");
     expect(row.class_title).toBe("Writing Lab");
     expect(row.color).toBe("#007AFF");
@@ -52,7 +55,12 @@ describe("toCategoryRow", () => {
 
 describe("rowToCategory", () => {
   it("restores a display title without replacing the course name", () => {
-    const cat = rowToCategory({ id: "c1", name: "ENGL 101", class_title: "Writing Lab", color: "#007AFF" });
+    const cat = rowToCategory({
+      id: "c1",
+      name: "ENGL 101",
+      class_title: "Writing Lab",
+      color: "#007AFF",
+    });
     expect(cat).toMatchObject({ name: "ENGL 101", classTitle: "Writing Lab" });
   });
   it("substitutes a fallback for a null colour rather than propagating it", () => {
@@ -76,15 +84,15 @@ describe("toItemRow", () => {
           completedAt: "2026-09-02T00:00:00.000Z",
           endAt: "2026-09-03T00:00:00.000Z",
         }),
-        USER
-      )
+        USER,
+      ),
     ).sort();
     expect(bare).toEqual(full);
   });
 
   it("carries a work session's link both ways", () => {
     expect(Object.keys(toItemRow(item({ workFor: "essay" }), USER)).sort()).toEqual(
-      Object.keys(toItemRow(item(), USER)).sort()
+      Object.keys(toItemRow(item(), USER)).sort(),
     );
     expect(toItemRow(item(), USER).work_for).toBeNull();
     expect(toItemRow(item({ workFor: "essay" }), USER).work_for).toBe("essay");
@@ -226,7 +234,7 @@ describe("toSettingsRow", () => {
     const row = { ...toSettingsRow(local, USER), class_reminder_minutes: 15 };
     expect(rowToSettings(row, local).classReminderMinutes).toBe(15);
     expect(rowToSettings({ ...row, class_reminder_minutes: 10 }, local).classReminderMinutes).toBe(
-      10
+      10,
     );
   });
 

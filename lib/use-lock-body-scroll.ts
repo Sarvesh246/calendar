@@ -45,7 +45,11 @@ function onWheel(e: WheelEvent) {
   const dy = e.deltaY;
   if (dy === 0) return;
   const root = document.scrollingElement;
-  for (let node = e.target as HTMLElement | null; node && node !== document.body && node !== root; node = node.parentElement) {
+  for (
+    let node = e.target as HTMLElement | null;
+    node && node !== document.body && node !== root;
+    node = node.parentElement
+  ) {
     // Something inside the overlay will take this scroll — let it.
     if (canScroll(node, dy)) return;
   }

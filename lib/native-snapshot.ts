@@ -1,11 +1,6 @@
 import { format } from "date-fns";
 import type { Category, ImportSource, Item } from "./types";
-import {
-  happeningNow,
-  isClassStartingSoon,
-  leftoverOverdue,
-  openWorkDueOnDay,
-} from "./date-utils";
+import { happeningNow, isClassStartingSoon, leftoverOverdue, openWorkDueOnDay } from "./date-utils";
 import {
   classCountdownWindowMs,
   DEFAULT_CLASS_REMINDER_MINUTES,
@@ -140,7 +135,7 @@ export function upcomingReminderFires(
   clock24h: boolean,
   classReminderMinutes: number,
   now = Date.now(),
-  cap = NATIVE_REMINDER_CAP
+  cap = NATIVE_REMINDER_CAP,
 ): NativeReminderFire[] {
   const out: NativeReminderFire[] = [];
   for (const item of items) {
@@ -220,23 +215,31 @@ export function buildNativeSnapshot(opts: {
     })
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
-  const today = todayEvents.slice(0, 6).map((i) =>
-    row(
-      i,
-      categories,
-      i.allDay
-        ? "All day"
-        : timeLabel(i.at, clock24h) +
-          (catLabel(categories, i.categoryId) ? ` · ${catLabel(categories, i.categoryId)}` : "")
-    )
-  );
+  const today = todayEvents
+    .slice(0, 6)
+    .map((i) =>
+      row(
+        i,
+        categories,
+        i.allDay
+          ? "All day"
+          : timeLabel(i.at, clock24h) +
+              (catLabel(categories, i.categoryId)
+                ? ` · ${catLabel(categories, i.categoryId)}`
+                : ""),
+      ),
+    );
 
   const upNext = items
     .filter((i) => i.status !== "done" && new Date(i.at).getTime() > now.getTime())
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
     .slice(0, 6)
     .map((i) =>
-      row(i, categories, `${format(new Date(i.at), "EEE")} · ${i.allDay ? "All day" : timeLabel(i.at, clock24h)}`)
+      row(
+        i,
+        categories,
+        `${format(new Date(i.at), "EEE")} · ${i.allDay ? "All day" : timeLabel(i.at, clock24h)}`,
+      ),
     );
 
   const assignments = items
@@ -250,14 +253,14 @@ export function buildNativeSnapshot(opts: {
       (i) =>
         isClassScheduleItem(i) &&
         i.status !== "done" &&
-        new Date(i.at).getTime() >= now.getTime() - 2 * 60 * 60_000
+        new Date(i.at).getTime() >= now.getTime() - 2 * 60 * 60_000,
     )
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
     .slice(0, 6)
     .map((i) => row(i, categories, i.allDay ? "All day" : timeLabel(i.at, clock24h)));
 
   const liveNow = happeningNow(items, now, categories).find((i) =>
-    isClassMeeting(i, catName(categories, i.categoryId))
+    isClassMeeting(i, catName(categories, i.categoryId)),
   );
   const soon = items.find((i) => isClassStartingSoon(i, now, windowMs));
   const liveSrc = liveNow ?? soon;
@@ -314,9 +317,17 @@ export function buildNativeSnapshot(opts: {
     .map((i) => ({
       id: i.id,
       title: i.title,
-      subtitle: [catLabel(categories, i.categoryId), format(new Date(i.at), "MMM d")].filter(Boolean).join(" · "),
+      subtitle: [catLabel(categories, i.categoryId), format(new Date(i.at), "MMM d")]
+        .filter(Boolean)
+        .join(" · "),
       // Both spellings, so Spotlight finds "math 150" and the feed's own code.
-      keywords: [i.title, catLabel(categories, i.categoryId), catName(categories, i.categoryId), i.location, i.type].filter(Boolean) as string[],
+      keywords: [
+        i.title,
+        catLabel(categories, i.categoryId),
+        catName(categories, i.categoryId),
+        i.location,
+        i.type,
+      ].filter(Boolean) as string[],
     }));
 
   const horizon = now.getTime() + 14 * 24 * 60 * 60_000;
@@ -428,9 +439,7 @@ export function buildLiveActivitySnapshot(opts: {
 
   if (current) {
     const startDate = new Date(current.at).getTime();
-    const endDate = current.endAt
-      ? new Date(current.endAt).getTime()
-      : startDate + 45 * 60_000;
+    const endDate = current.endAt ? new Date(current.endAt).getTime() : startDate + 45 * 60_000;
     const next = openToday.find((item) => new Date(item.at).getTime() >= endDate);
     return {
       ...base,

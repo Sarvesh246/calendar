@@ -6,7 +6,7 @@ describe("friendlySyncError", () => {
     for (const raw of [
       "TypeError: Failed to fetch",
       "JWT expired — PGRST301",
-      'permission denied for table items — 42501',
+      "permission denied for table items — 42501",
       "Could not find the 'class_title' column — PGRST204",
       "simulated outage — XX000",
       null,

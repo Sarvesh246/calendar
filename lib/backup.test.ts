@@ -52,8 +52,22 @@ describe("parseBackup hardening", () => {
       version: 1,
       categories: [{ id: "c1", name: "Bio", color: "#007AFF" }, null, { name: "no id" }],
       items: [
-        { id: "i1", categoryId: "c1", type: "event", title: "Lab", at: "2026-09-09T12:00:00.000Z", createdAt: "2026-09-01T00:00:00.000Z" },
-        { id: "i2", categoryId: "c1", type: "event", title: "Broken", at: "nonsense", createdAt: "2026-09-01T00:00:00.000Z" },
+        {
+          id: "i1",
+          categoryId: "c1",
+          type: "event",
+          title: "Lab",
+          at: "2026-09-09T12:00:00.000Z",
+          createdAt: "2026-09-01T00:00:00.000Z",
+        },
+        {
+          id: "i2",
+          categoryId: "c1",
+          type: "event",
+          title: "Broken",
+          at: "nonsense",
+          createdAt: "2026-09-01T00:00:00.000Z",
+        },
         null,
         42,
       ],
@@ -81,7 +95,7 @@ describe("parseBackup hardening", () => {
         reminderPresets: [],
         settings: undefined as never,
         importSources: [],
-      })
+      }),
     );
     expect(parsed.items).toHaveLength(1);
     expect(parsed.items[0].status).toBe("todo");

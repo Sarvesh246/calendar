@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { fetchPublic, isBlockedHost, isBlockedIp, normalizeFeedInput, publicOnlyLookup } from "./ssrf";
+import {
+  fetchPublic,
+  isBlockedHost,
+  isBlockedIp,
+  normalizeFeedInput,
+  publicOnlyLookup,
+} from "./ssrf";
 
 describe("ssrf host checks", () => {
   it("blocks localhost and private hostnames", () => {
@@ -33,12 +39,12 @@ describe("ssrf host checks", () => {
 
   it("refuses private addresses at connect time, not just at check time", async () => {
     const err = await new Promise<NodeJS.ErrnoException | null>((resolve) =>
-      publicOnlyLookup("localhost", {}, (e) => resolve(e))
+      publicOnlyLookup("localhost", {}, (e) => resolve(e)),
     );
     expect(err?.code).toBe("EBLOCKEDHOST");
     // A hostname that resolves to loopback never gets a socket.
     await expect(
-      fetchPublic(new URL("http://localhost/cal.ics"), { timeoutMs: 2_000, maxBytes: 1024 })
+      fetchPublic(new URL("http://localhost/cal.ics"), { timeoutMs: 2_000, maxBytes: 1024 }),
     ).rejects.toMatchObject({ code: "EBLOCKEDHOST" });
   });
 });

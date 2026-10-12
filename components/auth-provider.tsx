@@ -31,7 +31,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(
-    isSupabaseConfigured ? undefined : null
+    isSupabaseConfigured ? undefined : null,
   );
   const [signingIn, setSigningIn] = useState(false);
   const connectCloud = useDatebookStore((s) => s.connectCloud);
@@ -122,7 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Detected via a marker the wrapper appends to its WebView's user
         // agent (applicationNameForUserAgent) rather than the WebView bridge
         // object, which wasn't reliably present when this handler ran.
-        const inNativeWrapper = typeof navigator !== "undefined" && navigator.userAgent.includes("DatebookNativeApp");
+        const inNativeWrapper =
+          typeof navigator !== "undefined" && navigator.userAgent.includes("DatebookNativeApp");
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {

@@ -22,10 +22,7 @@ export function formatOffsetLabel(minutes: number): string {
   return `${minutes} minute${minutes === 1 ? "" : "s"} before`;
 }
 
-export function remindersFromPresetIds(
-  ids: string[],
-  presets: ReminderPreset[]
-): Reminder[] {
+export function remindersFromPresetIds(ids: string[], presets: ReminderPreset[]): Reminder[] {
   const wanted = new Set(ids);
   return presets
     .filter((p) => wanted.has(p.id))

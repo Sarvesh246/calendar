@@ -43,16 +43,16 @@ export function HistoryList() {
     () =>
       applyCategoryFilter(
         allItems.filter((i) => i.type !== "event" && i.status === "done"),
-        categoryFilter
+        categoryFilter,
       ).sort((a, b) => completionTime(b) - completionTime(a)),
-    [allItems, categoryFilter]
+    [allItems, categoryFilter],
   );
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return done;
     return done.filter((i) => {
-      const cls = i.categoryId ? categoriesById.get(i.categoryId)?.name ?? "" : "";
+      const cls = i.categoryId ? (categoriesById.get(i.categoryId)?.name ?? "") : "";
       return `${i.title} ${cls}`.toLowerCase().includes(q);
     });
   }, [done, query, categoriesById]);
@@ -104,7 +104,9 @@ export function HistoryList() {
       </label>
 
       {matches.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-ink-soft">No completed items match “{query.trim()}”.</p>
+        <p className="py-8 text-center text-[13px] text-ink-soft">
+          No completed items match “{query.trim()}”.
+        </p>
       ) : (
         groups.map((group) => (
           <section key={group.key} className="agenda-day">

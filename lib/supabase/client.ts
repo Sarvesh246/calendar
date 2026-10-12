@@ -6,8 +6,7 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Supabase's newer "publishable" key (sb_publishable_…) or the legacy anon JWT —
 // both are browser-safe and gated by row-level security.
 const key =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /** True when the URL + key env vars are set — the app runs in local-only mode otherwise. */
 export const isSupabaseConfigured = Boolean(url && key);

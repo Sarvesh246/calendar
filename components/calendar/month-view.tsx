@@ -8,7 +8,15 @@ import { haptic } from "@/lib/haptic";
 import { prefersReducedMotion, releaseSpring } from "@/lib/motion";
 import { project, rubberband, rubberbandClamp } from "@/lib/gesture";
 import { useDatebookStore } from "@/lib/store";
-import { monthGrid, groupItemsByDay, dayKey, isEventEnded, isOverdue, openItemsOnDay, rankItemsByDay } from "@/lib/date-utils";
+import {
+  monthGrid,
+  groupItemsByDay,
+  dayKey,
+  isEventEnded,
+  isOverdue,
+  openItemsOnDay,
+  rankItemsByDay,
+} from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { useSlidingPill } from "@/lib/sliding-pill";
 import type { Item } from "@/lib/types";
@@ -43,7 +51,7 @@ function fitCountVertical(
   itemCount: number,
   itemSize: number,
   gap: number,
-  moreSize: number
+  moreSize: number,
 ) {
   if (itemCount === 0 || containerSize <= 0) return itemCount;
   const allSize = itemCount * itemSize + Math.max(0, itemCount - 1) * gap;
@@ -96,7 +104,12 @@ function DayCellChips({
         sourceId: item.id,
         resolve: (t) =>
           t.kind === "day"
-            ? { label: t.dayKey === key ? "Keep on this day" : `${item.type === "event" ? "Move to" : "Due"} ${dayLabelFor(t.dayKey)}` }
+            ? {
+                label:
+                  t.dayKey === key
+                    ? "Keep on this day"
+                    : `${item.type === "event" ? "Move to" : "Due"} ${dayLabelFor(t.dayKey)}`,
+              }
             : null,
         onDrop: (t) => {
           if (t.kind === "day") rescheduleToDay(item, t.dayKey, key);
@@ -132,7 +145,7 @@ function DayCellChips({
           chipHeight,
           CHIP_GAP,
           // The overflow line scales with the chips it stands in for.
-          Math.round((MORE_LINE_HEIGHT / CHIP_HEIGHT) * chipHeight)
+          Math.round((MORE_LINE_HEIGHT / CHIP_HEIGHT) * chipHeight),
         )
       : 0;
 
@@ -158,7 +171,10 @@ function DayCellChips({
   }, [firstChipId]);
 
   return (
-    <div ref={ref} className="month-day-chips relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex">
+    <div
+      ref={ref}
+      className="month-day-chips relative z-[1] hidden min-h-0 w-full flex-1 flex-col gap-1 overflow-hidden sm:flex"
+    >
       {visible.map((item, index) => {
         const color = colorOf(item.categoryId);
         const done =
@@ -176,7 +192,7 @@ function DayCellChips({
               task && "cal-chip-task",
               done && "opacity-45",
               isOverdue(item) && "cal-chip-overdue",
-              draggingId === item.id && "opacity-30"
+              draggingId === item.id && "opacity-30",
             )}
             style={{ "--cat": color } as React.CSSProperties}
           >
@@ -206,16 +222,41 @@ function DayCellMobilePreview({
   const open = openItemsOnDay(items);
   const overdue = items.some(isOverdue);
   if (open.length === 0) return null;
-  const event = open.find(i => i.type === "event");
-  const due = open.find(i => i.type !== "event");
-  const markers = [...new Map([event, due, ...open].filter((i): i is Item => Boolean(i)).map(i => [i.id, i])).values()].slice(0, 3);
+  const event = open.find((i) => i.type === "event");
+  const due = open.find((i) => i.type !== "event");
+  const markers = [
+    ...new Map(
+      [event, due, ...open].filter((i): i is Item => Boolean(i)).map((i) => [i.id, i]),
+    ).values(),
+  ].slice(0, 3);
 
   return (
     <div className="month-day-preview mt-1 flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
-      <div className="flex items-center gap-1" aria-label={`${open.filter(i => i.type === "event").length} scheduled, ${open.filter(i => i.type !== "event").length} due`}>
-        {markers.map(i => <span key={i.id} className={cn("h-1.5 w-1.5", i.type === "event" ? "rounded-full" : "rounded-[1px] rotate-45")} style={{ background: colorOf(i.categoryId) }} />)}
+      <div
+        className="flex items-center gap-1"
+        aria-label={`${open.filter((i) => i.type === "event").length} scheduled, ${open.filter((i) => i.type !== "event").length} due`}
+      >
+        {markers.map((i) => (
+          <span
+            key={i.id}
+            className={cn(
+              "h-1.5 w-1.5",
+              i.type === "event" ? "rounded-full" : "rounded-[1px] rotate-45",
+            )}
+            style={{ background: colorOf(i.categoryId) }}
+          />
+        ))}
       </div>
-      {open.length > 3 && <span className={cn("text-[10px] tabular-nums leading-none", overdue ? "text-warn" : "text-ink-faint")}>+{open.length - 3}</span>}
+      {open.length > 3 && (
+        <span
+          className={cn(
+            "text-[10px] tabular-nums leading-none",
+            overdue ? "text-warn" : "text-ink-faint",
+          )}
+        >
+          +{open.length - 3}
+        </span>
+      )}
     </div>
   );
 }
@@ -258,7 +299,11 @@ function MonthGridPanel({
   // re-measured inside every cell. Desktop rings the whole cell; the phone
   // rings just the date.
   const selectedKey = showSelectionRing && selectedDate ? dayKey(selectedDate) : null;
-  const { containerRef: gridRef, pillRef: ringRef, moveTo: moveRing } = useSlidingPill(selectedKey, {
+  const {
+    containerRef: gridRef,
+    pillRef: ringRef,
+    moveTo: moveRing,
+  } = useSlidingPill(selectedKey, {
     keyAttr: "data-drop-day",
     mark: false,
   });
@@ -274,11 +319,19 @@ function MonthGridPanel({
       className="month-grid-panel relative grid h-full min-h-0 w-full shrink-0 grid-cols-7 gap-1 overflow-hidden sm:gap-1.5"
       style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
     >
-      <span ref={ringRef} aria-hidden className="sliding-pill z-[2] hidden rounded-lg ring-2 ring-inset ring-accent sm:block" />
+      <span
+        ref={ringRef}
+        aria-hidden
+        className="sliding-pill z-[2] hidden rounded-lg ring-2 ring-inset ring-accent sm:block"
+      />
       {/* A hairline halo with a little air around the date. Grown by a
           transparent spread, never `scale`: the `scale` property multiplies
           the pill's translate too, which pushed the ring off its date. */}
-      <span ref={dotRingRef} aria-hidden className="sliding-pill z-[2] rounded-full shadow-[0_0_0_2px_transparent,0_0_0_3px_var(--accent)] sm:hidden" />
+      <span
+        ref={dotRingRef}
+        aria-hidden
+        className="sliding-pill z-[2] rounded-full shadow-[0_0_0_2px_transparent,0_0_0_3px_var(--accent)] sm:hidden"
+      />
       {grid.map(({ date, inMonth }, cellIndex) => {
         const dayItems = byDay.get(dayKey(date)) ?? NO_ITEMS;
         const today = isToday(date);
@@ -304,7 +357,9 @@ function MonthGridPanel({
             aria-label={
               `${format(date, "EEEE, MMMM d")}` +
               (today ? ", today" : "") +
-              (dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ", nothing scheduled")
+              (dayItems.length
+                ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
+                : ", nothing scheduled")
             }
             style={undefined}
             className={cn(
@@ -314,11 +369,16 @@ function MonthGridPanel({
               // Today reads as a tinted cell plus a filled date badge; the ring
               // is reserved for selection, so the two never fight for the same
               // outline.
-              today ? "border-transparent bg-accent-soft/60" : "border-transparent hover:bg-surface-sunken/60",
-              !inMonth && "opacity-55"
+              today
+                ? "border-transparent bg-accent-soft/60"
+                : "border-transparent hover:bg-surface-sunken/60",
+              !inMonth && "opacity-55",
             )}
           >
-            <span data-ring-day={dayKey(date)} className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start">
+            <span
+              data-ring-day={dayKey(date)}
+              className="month-day-date-wrap relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center sm:h-auto sm:w-auto sm:justify-start"
+            >
               <span
                 className={cn(
                   "month-day-date relative z-[1] flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold leading-none tabular-nums",
@@ -332,17 +392,15 @@ function MonthGridPanel({
                   // Bigger than the old 12px, and today keeps its filled badge
                   // on desktop too, so "where am I" is answered at a glance.
                   "sm:h-[22px] sm:w-[22px] sm:min-w-0 sm:text-[13px]",
-                  today
-                    ? "bg-accent text-accent-ink"
-                    : inMonth
-                      ? "text-ink"
-                      : "text-ink-faint"
+                  today ? "bg-accent text-accent-ink" : inMonth ? "text-ink" : "text-ink-faint",
                 )}
               >
                 {/* Its own block, trimmed to the numerals' cap height, so the
                     flex centring centres the digits themselves rather than the
                     font's ascender/descender padding (which sat them low). */}
-                <span className="block [text-box:trim-both_cap_alphabetic]">{format(date, "d")}</span>
+                <span className="block [text-box:trim-both_cap_alphabetic]">
+                  {format(date, "d")}
+                </span>
               </span>
             </span>
             <DayCellMobilePreview items={dayItems} colorOf={colorOf} />
@@ -502,7 +560,7 @@ export function MonthView({
     dragX.set(
       onSwipeMonth
         ? rubberbandClamp(raw, -width * 0.92, width * 0.92, width * 0.12)
-        : rubberband(raw, width)
+        : rubberband(raw, width),
     );
   }
 
@@ -547,7 +605,7 @@ export function MonthView({
       }
       onSelectDate(date);
     },
-    [onSelectDate]
+    [onSelectDate],
   );
 
   const byDay = useMemo(() => rankItemsByDay(groupItemsByDay(items)), [items]);

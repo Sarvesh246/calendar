@@ -14,44 +14,36 @@ describe("commitPageFromGesture", () => {
 
   it("snaps back when released before halfway without a flick", () => {
     expect(
-      commitPageFromGesture({ startIndex: 1, dx: -width * 0.3, vx: -80, width, count: 3 })
+      commitPageFromGesture({ startIndex: 1, dx: -width * 0.3, vx: -80, width, count: 3 }),
     ).toBe(1);
-    expect(
-      commitPageFromGesture({ startIndex: 1, dx: width * 0.3, vx: 80, width, count: 3 })
-    ).toBe(1);
+    expect(commitPageFromGesture({ startIndex: 1, dx: width * 0.3, vx: 80, width, count: 3 })).toBe(
+      1,
+    );
   });
 
   it("commits after the halfway point", () => {
     expect(
-      commitPageFromGesture({ startIndex: 1, dx: -width * 0.5, vx: -40, width, count: 3 })
+      commitPageFromGesture({ startIndex: 1, dx: -width * 0.5, vx: -40, width, count: 3 }),
     ).toBe(2);
-    expect(
-      commitPageFromGesture({ startIndex: 1, dx: width * 0.5, vx: 40, width, count: 3 })
-    ).toBe(0);
+    expect(commitPageFromGesture({ startIndex: 1, dx: width * 0.5, vx: 40, width, count: 3 })).toBe(
+      0,
+    );
   });
 
   it("stays home when released moving back toward it", () => {
     expect(
-      commitPageFromGesture({ startIndex: 1, dx: -width * 0.6, vx: 900, width, count: 3 })
+      commitPageFromGesture({ startIndex: 1, dx: -width * 0.6, vx: 900, width, count: 3 }),
     ).toBe(1);
   });
 
   it("lets a flick take the neighbour before halfway", () => {
-    expect(
-      commitPageFromGesture({ startIndex: 0, dx: -40, vx: -900, width, count: 3 })
-    ).toBe(1);
-    expect(
-      commitPageFromGesture({ startIndex: 2, dx: 40, vx: 900, width, count: 3 })
-    ).toBe(1);
+    expect(commitPageFromGesture({ startIndex: 0, dx: -40, vx: -900, width, count: 3 })).toBe(1);
+    expect(commitPageFromGesture({ startIndex: 2, dx: 40, vx: 900, width, count: 3 })).toBe(1);
   });
 
   it("rubber-bands instead of wrapping past the ends", () => {
-    expect(
-      commitPageFromGesture({ startIndex: 0, dx: 200, vx: 1200, width, count: 3 })
-    ).toBe(0);
-    expect(
-      commitPageFromGesture({ startIndex: 2, dx: -200, vx: -1200, width, count: 3 })
-    ).toBe(2);
+    expect(commitPageFromGesture({ startIndex: 0, dx: 200, vx: 1200, width, count: 3 })).toBe(0);
+    expect(commitPageFromGesture({ startIndex: 2, dx: -200, vx: -1200, width, count: 3 })).toBe(2);
   });
 });
 
@@ -84,16 +76,16 @@ describe("commitTabFromGesture", () => {
 
   it("rounds a slow drag to the nearest tab", () => {
     expect(
-      commitTabFromGesture({ startIndex: 0, offset: 50, velocity: 40, tabWidth, count: 3 })
+      commitTabFromGesture({ startIndex: 0, offset: 50, velocity: 40, tabWidth, count: 3 }),
     ).toBe(0);
     expect(
-      commitTabFromGesture({ startIndex: 0, offset: 70, velocity: 40, tabWidth, count: 3 })
+      commitTabFromGesture({ startIndex: 0, offset: 70, velocity: 40, tabWidth, count: 3 }),
     ).toBe(1);
   });
 
   it("commits a flick that has travelled a tenth of a tab", () => {
     expect(
-      commitTabFromGesture({ startIndex: 0, offset: 20, velocity: 1100, tabWidth, count: 3 })
+      commitTabFromGesture({ startIndex: 0, offset: 20, velocity: 1100, tabWidth, count: 3 }),
     ).toBe(1);
   });
 });

@@ -33,7 +33,9 @@ export function UndoToast() {
         >
           <Trash2 className="h-3.5 w-3.5 shrink-0 text-ink-faint" strokeWidth={1.9} />
           <span className="min-w-0 flex-1 truncate">
-            {lastDeleted.items.length > 1 ? `Deleted all ${lastDeleted.items.length} of ` : "Deleted "}
+            {lastDeleted.items.length > 1
+              ? `Deleted all ${lastDeleted.items.length} of `
+              : "Deleted "}
             <span className="font-medium">{lastDeleted.label}</span>
           </span>
           <button
@@ -54,7 +56,10 @@ export function UndoToast() {
           <span
             aria-hidden
             className="toast-drain absolute inset-x-0 bottom-0 h-[2px] origin-left bg-accent/50"
-            style={{ animationDuration: `${UNDO_WINDOW_MS}ms`, animationPlayState: held ? "paused" : "running" }}
+            style={{
+              animationDuration: `${UNDO_WINDOW_MS}ms`,
+              animationPlayState: held ? "paused" : "running",
+            }}
           />
         </DismissibleSnack>
       )}

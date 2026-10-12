@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
-  if (!isJsonRequest(request)) return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
+  if (!isJsonRequest(request))
+    return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   if (Number(request.headers.get("content-length") ?? "0") > 8_192) {
     return NextResponse.json({ ok: false, error: "payload-too-large" }, { status: 413 });
   }
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.json({ ok: false, error: "not-configured" }, { status: 501 });
+  if (!url || !key)
+    return NextResponse.json({ ok: false, error: "not-configured" }, { status: 501 });
 
   let body: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   try {
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
       p256dh: body.keys.p256dh,
       auth: body.keys.auth,
     },
-    { onConflict: "user_id,endpoint" }
+    { onConflict: "user_id,endpoint" },
   );
   if (error) {
     console.error("[push] subscription write failed", error.code);
@@ -89,13 +91,15 @@ export async function DELETE(request: Request) {
   if (!sameOrigin(request)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
-  if (!isJsonRequest(request)) return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
+  if (!isJsonRequest(request))
+    return NextResponse.json({ ok: false, error: "bad-request" }, { status: 400 });
   const user = await getRequestUser(request);
   if (!user) return authenticationRequired();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.json({ ok: false, error: "not-configured" }, { status: 501 });
+  if (!url || !key)
+    return NextResponse.json({ ok: false, error: "not-configured" }, { status: 501 });
 
   let body: { endpoint?: string };
   try {

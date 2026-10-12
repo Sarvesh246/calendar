@@ -51,7 +51,7 @@ describe("mergeCalendars", () => {
   it("lets local win on the same id when neither side is timestamped", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", title: "Local" })] }),
-      snap({ items: [item({ id: "a", title: "Cloud" })] })
+      snap({ items: [item({ id: "a", title: "Cloud" })] }),
     );
     expect(merged.items).toHaveLength(1);
     expect(merged.items[0].title).toBe("Local");
@@ -64,7 +64,9 @@ describe("mergeCalendars", () => {
           item({ id: "local-1", type: "assignment", title: "Essay (edited)", sourceUid: "uid-1" }),
         ],
       }),
-      snap({ items: [item({ id: "cloud-1", type: "assignment", title: "Essay", sourceUid: "uid-1" })] })
+      snap({
+        items: [item({ id: "cloud-1", type: "assignment", title: "Essay", sourceUid: "uid-1" })],
+      }),
     );
     expect(merged.items).toHaveLength(1);
     expect(merged.items[0].title).toBe("Essay (edited)");
@@ -76,10 +78,8 @@ describe("mergeCalendars", () => {
         items: [item({ id: "local-1", sourceUid: "uid-1", updatedAt: EARLY })],
       }),
       snap({
-        items: [
-          item({ id: "cloud-1", sourceUid: "uid-1", status: "done", updatedAt: LATE }),
-        ],
-      })
+        items: [item({ id: "cloud-1", sourceUid: "uid-1", status: "done", updatedAt: LATE })],
+      }),
     );
     expect(merged.items).toHaveLength(1);
     expect(merged.items[0].status).toBe("done");
@@ -128,7 +128,7 @@ describe("mergeCalendars", () => {
           item({ id: "i2", title: "Work standup", sourceId: "src-work", sourceUid: "shared" }),
         ],
       }),
-      snap()
+      snap(),
     );
     expect(merged.items).toHaveLength(2);
   });
@@ -138,16 +138,37 @@ describe("mergeCalendars", () => {
     // same Canvas URL offline, so each minted its own source row, its own course
     // category and its own copy of the assignment — and only one has the tick.
     const feedUrl = "https://canvas.example/f.ics";
-    const srcA = { id: "src-a", url: feedUrl, name: "Canvas", addedAt: EARLY, lastSyncedAt: EARLY, itemCount: 1, createdAt: EARLY, updatedAt: EARLY };
+    const srcA = {
+      id: "src-a",
+      url: feedUrl,
+      name: "Canvas",
+      addedAt: EARLY,
+      lastSyncedAt: EARLY,
+      itemCount: 1,
+      createdAt: EARLY,
+      updatedAt: EARLY,
+    };
     const srcB = { ...srcA, id: "src-b", addedAt: LATE, createdAt: LATE, updatedAt: LATE };
     const merged = mergeCalendars(
       snap({
-        categories: [{ id: "cat-b", name: "ENGL 101", color: "#FF9500", sourceId: "src-b", updatedAt: LATE }],
+        categories: [
+          { id: "cat-b", name: "ENGL 101", color: "#FF9500", sourceId: "src-b", updatedAt: LATE },
+        ],
         importSources: [srcB],
-        items: [item({ id: "i-b", categoryId: "cat-b", sourceId: "src-b", sourceUid: "uid-1", status: "todo" })],
+        items: [
+          item({
+            id: "i-b",
+            categoryId: "cat-b",
+            sourceId: "src-b",
+            sourceUid: "uid-1",
+            status: "todo",
+          }),
+        ],
       }),
       snap({
-        categories: [{ id: "cat-a", name: "ENGL 101", color: "#007AFF", sourceId: "src-a", updatedAt: EARLY }],
+        categories: [
+          { id: "cat-a", name: "ENGL 101", color: "#007AFF", sourceId: "src-a", updatedAt: EARLY },
+        ],
         importSources: [srcA],
         items: [
           item({
@@ -160,7 +181,7 @@ describe("mergeCalendars", () => {
             completedAt: LATE,
           }),
         ],
-      })
+      }),
     );
     expect(merged.importSources).toHaveLength(1);
     expect(merged.categories).toHaveLength(1);
@@ -185,7 +206,7 @@ describe("mergeCalendars", () => {
         importSources: [newer],
         categories: [{ id: "c1", name: "ENGL 101", color: "#007AFF", sourceId: "src-new" }],
       }),
-      snap({ importSources: [older] })
+      snap({ importSources: [older] }),
     );
     expect(merged.importSources).toHaveLength(1);
     const survivor = merged.importSources[0].id;
@@ -200,7 +221,7 @@ describe("mergeCalendars", () => {
   it("takes the newer edit even when it is the cloud's", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", title: "Stale local", updatedAt: EARLY })] }),
-      snap({ items: [item({ id: "a", title: "Fresh cloud", updatedAt: LATE })] })
+      snap({ items: [item({ id: "a", title: "Fresh cloud", updatedAt: LATE })] }),
     );
     expect(merged.items[0].title).toBe("Fresh cloud");
   });
@@ -208,7 +229,7 @@ describe("mergeCalendars", () => {
   it("takes the newer edit when it is the local one", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", title: "Fresh local", updatedAt: LATE })] }),
-      snap({ items: [item({ id: "a", title: "Stale cloud", updatedAt: EARLY })] })
+      snap({ items: [item({ id: "a", title: "Stale cloud", updatedAt: EARLY })] }),
     );
     expect(merged.items[0].title).toBe("Fresh local");
   });
@@ -216,7 +237,7 @@ describe("mergeCalendars", () => {
   it("breaks an exact tie in favour of the further-along status", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", status: "todo", updatedAt: EARLY })] }),
-      snap({ items: [item({ id: "a", status: "done", updatedAt: EARLY })] })
+      snap({ items: [item({ id: "a", status: "done", updatedAt: EARLY })] }),
     );
     expect(merged.items[0].status).toBe("done");
   });
@@ -227,7 +248,7 @@ describe("mergeCalendars", () => {
     const merged = mergeCalendars(
       snap({ items: [] }),
       snap({ items: [item({ id: "a", updatedAt: EARLY })] }),
-      { [tombKey("item", "a")]: LATE }
+      { [tombKey("item", "a")]: LATE },
     );
     expect(merged.items).toEqual([]);
   });
@@ -236,7 +257,7 @@ describe("mergeCalendars", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", title: "Back", updatedAt: LATE })] }),
       snap({ items: [] }),
-      { [tombKey("item", "a")]: EARLY }
+      { [tombKey("item", "a")]: EARLY },
     );
     expect(merged.items).toHaveLength(1);
     expect(merged.items[0].title).toBe("Back");
@@ -259,7 +280,7 @@ describe("mergeCalendars", () => {
           },
         ],
       }),
-      { [tombKey("category", "cat")]: LATE, [tombKey("import_source", "src")]: LATE }
+      { [tombKey("category", "cat")]: LATE, [tombKey("import_source", "src")]: LATE },
     );
     expect(merged.categories).toEqual([]);
     expect(merged.importSources).toEqual([]);
@@ -270,7 +291,7 @@ describe("mergeCalendars", () => {
   it("takes the newer settings rather than always keeping local", () => {
     const merged = mergeCalendars(
       snap({ settings: { ...settings, preset: "minimal", updatedAt: EARLY } }),
-      snap({ settings: { ...settings, preset: "midnight", updatedAt: LATE } })
+      snap({ settings: { ...settings, preset: "midnight", updatedAt: LATE } }),
     );
     expect(merged.settings.preset).toBe("midnight");
   });
@@ -278,7 +299,7 @@ describe("mergeCalendars", () => {
   it("keeps local settings when they are the newer ones", () => {
     const merged = mergeCalendars(
       snap({ settings: { ...settings, preset: "noir", updatedAt: LATE } }),
-      snap({ settings: { ...settings, preset: "midnight", updatedAt: EARLY } })
+      snap({ settings: { ...settings, preset: "midnight", updatedAt: EARLY } }),
     );
     expect(merged.settings.preset).toBe("noir");
   });
@@ -294,7 +315,7 @@ describe("mergeCalendars", () => {
     };
     const merged = mergeCalendars(
       snap({ importSources: [{ ...base, id: "local", lastSyncedAt: EARLY, updatedAt: EARLY }] }),
-      snap({ importSources: [{ ...base, id: "cloud", lastSyncedAt: LATE, updatedAt: LATE }] })
+      snap({ importSources: [{ ...base, id: "cloud", lastSyncedAt: LATE, updatedAt: LATE }] }),
     );
     expect(merged.importSources).toHaveLength(1);
     expect(merged.importSources[0].id).toBe("cloud");
@@ -322,7 +343,7 @@ describe("status is merged on its own clock", () => {
     };
     const merged = mergeCalendars(
       snap({ items: [localAfterImport] }),
-      snap({ items: [remoteMarkedDone] })
+      snap({ items: [remoteMarkedDone] }),
     );
     expect(merged.items[0].description).toBe("Refreshed from the feed");
     expect(merged.items[0].status).toBe("done");
@@ -332,7 +353,7 @@ describe("status is merged on its own clock", () => {
   it("still lets a newer status change win", () => {
     const merged = mergeCalendars(
       snap({ items: [item({ id: "a", status: "done", completedAt: EARLY, statusAt: EARLY })] }),
-      snap({ items: [item({ id: "a", status: "todo", statusAt: LATE })] })
+      snap({ items: [item({ id: "a", status: "todo", statusAt: LATE })] }),
     );
     expect(merged.items[0].status).toBe("todo");
     expect(merged.items[0].completedAt).toBeUndefined();
@@ -376,7 +397,7 @@ describe("dedupeCategories", () => {
       snap({
         categories: [{ id: "orig", name: "ENGR-102", color: "#111", updatedAt: EARLY }],
         items: [],
-      })
+      }),
     );
     expect(merged.categories).toHaveLength(1);
     expect(merged.categories[0].id).toBe("orig");
@@ -388,7 +409,7 @@ describe("preserveClassTitle", () => {
   it("keeps a nickname the winning row lost", () => {
     const kept = preserveClassTitle(
       { id: "c1", name: "ENGL 101", color: "#007AFF", updatedAt: LATE },
-      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF", updatedAt: EARLY }
+      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF", updatedAt: EARLY },
     );
     expect(kept.classTitle).toBe("Writing Lab");
   });
@@ -396,7 +417,7 @@ describe("preserveClassTitle", () => {
   it("does not restore a nickname the winner already has", () => {
     const kept = preserveClassTitle(
       { id: "c1", name: "ENGL 101", classTitle: "Seminar", color: "#007AFF" },
-      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF" }
+      { id: "c1", name: "ENGL 101", classTitle: "Writing Lab", color: "#007AFF" },
     );
     expect(kept.classTitle).toBe("Seminar");
   });
@@ -418,7 +439,7 @@ describe("mergeCalendars class titles", () => {
       }),
       snap({
         categories: [{ id: "c1", name: "ENGL 101", color: "#007AFF", updatedAt: LATE }],
-      })
+      }),
     );
     expect(merged.categories[0]).toMatchObject({ name: "ENGL 101", classTitle: "Writing Lab" });
   });

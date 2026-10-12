@@ -95,7 +95,7 @@ export function offsetFromBody(body: string): ParsedReminderOffset | null {
   }
 
   const m = b.match(
-    /^(?:(one|two|three|four|five|six|couple(?: of)?|few|several|\d+)\s+)?(minutes?|mins?|hours?|hrs?|days?|weeks?)$/
+    /^(?:(one|two|three|four|five|six|couple(?: of)?|few|several|\d+)\s+)?(minutes?|mins?|hours?|hrs?|days?|weeks?)$/,
   );
   if (!m) return null;
   const n = parseCount(m[1]);

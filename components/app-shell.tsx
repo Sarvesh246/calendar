@@ -38,17 +38,27 @@ import { DragOverlay } from "./drag-overlay";
 
 // Overlays are split out of the first load and fetched while idle (see
 // lib/warm-chunks.ts); once in, they open in the same frame as the tap.
-const ItemInspector = lazyComponent<object>(() => import("./item-inspector").then((m) => m.ItemInspector));
+const ItemInspector = lazyComponent<object>(() =>
+  import("./item-inspector").then((m) => m.ItemInspector),
+);
 registerWarmUp(ItemInspector.preload);
-const CommandPalette = lazyComponent<object>(() => import("./command-palette").then((m) => m.CommandPalette));
+const CommandPalette = lazyComponent<object>(() =>
+  import("./command-palette").then((m) => m.CommandPalette),
+);
 registerWarmUp(CommandPalette.preload);
 const AIDrawer = lazyComponent<object>(() => import("./ai-drawer").then((m) => m.AIDrawer));
 registerWarmUp(AIDrawer.preload);
-const MergeCloudDialog = lazyComponent<object>(() => import("./merge-cloud-dialog").then((m) => m.MergeCloudDialog));
+const MergeCloudDialog = lazyComponent<object>(() =>
+  import("./merge-cloud-dialog").then((m) => m.MergeCloudDialog),
+);
 registerWarmUp(MergeCloudDialog.preload);
-const ClassScheduleSheet = lazyComponent<object>(() => import("./class-schedule-sheet").then((m) => m.ClassScheduleSheet));
+const ClassScheduleSheet = lazyComponent<object>(() =>
+  import("./class-schedule-sheet").then((m) => m.ClassScheduleSheet),
+);
 registerWarmUp(ClassScheduleSheet.preload);
-const FilterSheet = lazyComponent<object>(() => import("./filter-sheet").then((m) => m.FilterSheet));
+const FilterSheet = lazyComponent<object>(() =>
+  import("./filter-sheet").then((m) => m.FilterSheet),
+);
 registerWarmUp(FilterSheet.preload);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -146,7 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ? "pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(var(--safe-bottom)+1.25rem)]"
           : onRoom
             ? "pb-[calc(var(--safe-bottom)+var(--dock-clearance))] md:min-h-0 md:pt-4 md:pb-6"
-            : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6"
+            : "pb-[calc(var(--safe-bottom)+var(--tab-bar-rest)+5.75rem)] md:min-h-0 md:pt-4 md:pb-6",
       )}
     >
       {!focusMode && <Sidebar pathname={pathname} />}
@@ -155,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "flex min-w-0 flex-1 flex-col",
           !focusMode && "pt-[var(--mobile-header-height)] md:pt-0",
-          onCalendar && "min-h-0 overflow-hidden"
+          onCalendar && "min-h-0 overflow-hidden",
         )}
       >
         {!focusMode && (
@@ -165,7 +175,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Workspace commands"
               className={cn(
                 "mb-4 hidden w-full min-w-0 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface p-1.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ink)_4%,transparent),0_8px_24px_color-mix(in_srgb,var(--ink)_3%,transparent)] md:flex",
-                onToday && "md:mb-5"
+                onToday && "md:mb-5",
               )}
             >
               {desktop && (
@@ -242,7 +252,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               hidden={!onTab}
               className={cn(
                 onTab && "flex min-h-0 flex-1 flex-col",
-                onCalendar && "overflow-hidden"
+                onCalendar && "overflow-hidden",
               )}
             >
               <TabPageHost pathname={pathname} />

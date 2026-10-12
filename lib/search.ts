@@ -1,10 +1,6 @@
 import type { Category, Item } from "./types";
 
-export function searchItems(
-  items: Item[],
-  categories: Category[],
-  query: string
-): Item[] {
+export function searchItems(items: Item[], categories: Category[], query: string): Item[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const tokens = q.split(/\s+/).filter(Boolean);

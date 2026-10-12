@@ -10,7 +10,8 @@ import {
   sweptRange,
 } from "./calendar-drag-math";
 
-const local = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).toISOString();
+const local = (y: number, m: number, d: number, h = 0, min = 0) =>
+  new Date(y, m - 1, d, h, min).toISOString();
 
 describe("snapping and day keys", () => {
   it("snaps to the quarter hour", () => {
@@ -37,9 +38,11 @@ describe("movedTimes", () => {
   });
 
   it("moves an item with no end", () => {
-    expect(movedTimes({ at: local(2026, 9, 15, 9) }, "2026-09-15", 540, "2026-09-14", 600)).toEqual({
-      at: local(2026, 9, 14, 10),
-    });
+    expect(movedTimes({ at: local(2026, 9, 15, 9) }, "2026-09-15", 540, "2026-09-14", 600)).toEqual(
+      {
+        at: local(2026, 9, 14, 10),
+      },
+    );
   });
 
   it("shifts a multi-day event dragged by a later segment as a whole", () => {
@@ -54,7 +57,9 @@ describe("movedTimes", () => {
 
 describe("shiftedByDays / resizedEnd", () => {
   it("keeps the wall-clock time", () => {
-    expect(shiftedByDays({ at: local(2026, 9, 15, 23, 59) }, 2)).toEqual({ at: local(2026, 9, 17, 23, 59) });
+    expect(shiftedByDays({ at: local(2026, 9, 15, 23, 59) }, 2)).toEqual({
+      at: local(2026, 9, 17, 23, 59),
+    });
   });
 
   it("never resizes below the minimum length", () => {

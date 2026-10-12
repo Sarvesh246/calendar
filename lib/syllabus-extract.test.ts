@@ -82,14 +82,20 @@ describe("normalizeSyllabusExtraction", () => {
         courseCode: "CS 4240",
         items: [
           { title: "HW 1", dueDate: "2026-09-16", type: "assignment", kind: "hw" },
-          { title: "Midterm", dueDate: "2026-10-20", dueTime: "10:00 AM", type: "event", kind: "exam" },
+          {
+            title: "Midterm",
+            dueDate: "2026-10-20",
+            dueTime: "10:00 AM",
+            type: "event",
+            kind: "exam",
+          },
           { title: "Skipped", dueDate: "2020-01-01", kind: "homework" },
           { title: "", dueDate: "2026-09-20" },
           { title: "Office hours", dueDate: "not-a-date" },
         ],
       },
       SEP.toISOString(),
-      TZ
+      TZ,
     );
     expect(out.courseName).toBe("Intro to Compilers");
     expect(out.courseCode).toBe("CS 4240");
@@ -120,7 +126,7 @@ describe("normalizeSyllabusExtraction", () => {
         ],
       },
       SEP.toISOString(),
-      TZ
+      TZ,
     );
     expect(withEnd.items[0].endTime).toBe("11:30");
     const empty = normalizeSyllabusExtraction({ items: [] }, SEP.toISOString(), TZ);
@@ -132,7 +138,7 @@ describe("normalizeSyllabusExtraction", () => {
     const out = normalizeSyllabusExtraction(
       { items: [{ title: "Thing", dueDate: "2026-09-20" }] },
       SEP.toISOString(),
-      TZ
+      TZ,
     );
     expect(out.items[0]).toMatchObject({ type: "assignment", kind: "other" });
   });
@@ -160,7 +166,7 @@ describe("extractedItemToDraft", () => {
         type: "event",
         kind: "exam",
       },
-      TZ
+      TZ,
     );
     expect(timed.endAt).toBe(wallTimeInZoneToIso("2026-10-20", 11, 30, TZ));
     expect(timed.at).toBe(wallTimeInZoneToIso("2026-10-20", 10, 0, TZ));
@@ -173,7 +179,7 @@ describe("extractedItemToDraft", () => {
         type: "event",
         kind: "exam",
       },
-      TZ
+      TZ,
     );
     expect(startOnly.endAt).toBeUndefined();
   });
@@ -181,7 +187,7 @@ describe("extractedItemToDraft", () => {
   it("does not invent an end for a date-only assignment", () => {
     const draft = extractedItemToDraft(
       { title: "HW 1", dueDate: "2026-09-16", type: "assignment", kind: "homework" },
-      TZ
+      TZ,
     );
     expect(draft.endAt).toBeUndefined();
     expect(draft.at).toBe(wallTimeInZoneToIso("2026-09-16", 23, 59, TZ));
@@ -192,7 +198,7 @@ describe("syllabus extract error paths", () => {
   it("maps not-configured, too-large, and invalid PDF to user messages", () => {
     expect(syllabusExtractErrorMessage("assistant-not-configured", 200)).toMatch(/isn't set up/i);
     expect(syllabusExtractErrorMessage("payload-too-large", 413)).toMatch(
-      new RegExp(`max ${(MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1)} MB`)
+      new RegExp(`max ${(MAX_SYLLABUS_PDF_BYTES / (1024 * 1024)).toFixed(1)} MB`),
     );
     expect(syllabusExtractErrorMessage("invalid-pdf", 400)).toMatch(/doesn't look like a PDF/i);
     expect(syllabusExtractErrorMessage("missing-pdf", 400)).toMatch(/choose a pdf/i);
@@ -224,7 +230,7 @@ describe("syllabus extract error paths", () => {
         if (busyCalls === 1) throw new SyllabusExtractRequestError("assistant-busy", 200);
         return "ok";
       },
-      { signal, delayMs: 10, wait: async () => {} }
+      { signal, delayMs: 10, wait: async () => {} },
     );
     expect(ok).toBe("ok");
     expect(busyCalls).toBe(2);
@@ -236,8 +242,8 @@ describe("syllabus extract error paths", () => {
           pdfCalls += 1;
           throw new SyllabusExtractRequestError("invalid-pdf", 400);
         },
-        { signal, delayMs: 10, wait: async () => {} }
-      )
+        { signal, delayMs: 10, wait: async () => {} },
+      ),
     ).rejects.toMatchObject({ code: "invalid-pdf" });
     expect(pdfCalls).toBe(1);
   });

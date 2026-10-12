@@ -32,45 +32,45 @@ export function FeedHealthBanner() {
           className="overflow-hidden"
         >
           <div className="flex flex-col gap-1.5 rounded-xl border border-warn/40 bg-warn/5 px-3 py-2 md:gap-2 md:px-3.5 md:py-3">
-          {failed.map((s) => (
-            <div key={s.id} className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-warn" strokeWidth={2} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-ink">
-                  {s.name} couldn&apos;t sync
-                  <span className="hidden font-normal text-ink-soft md:inline">
-                    {" · "}
-                    {s.lastError}
-                  </span>
-                </p>
-                <p className="hidden text-[11.5px] text-ink-faint md:block">
-                  Last ok {formatDistanceToNow(new Date(s.lastSyncedAt), { addSuffix: true })}
-                </p>
+            {failed.map((s) => (
+              <div key={s.id} className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-warn" strokeWidth={2} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-ink">
+                    {s.name} couldn&apos;t sync
+                    <span className="hidden font-normal text-ink-soft md:inline">
+                      {" · "}
+                      {s.lastError}
+                    </span>
+                  </p>
+                  <p className="hidden text-[11.5px] text-ink-faint md:block">
+                    Last ok {formatDistanceToNow(new Date(s.lastSyncedAt), { addSuffix: true })}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy === s.id}
+                  onClick={async () => {
+                    setBusy(s.id);
+                    // An explicit retry means now, not when the backoff says so.
+                    clearFeedBackoff(s.url);
+                    try {
+                      const feed = await fetchCalendarFeed(s.url);
+                      applyImport(s.url, feed);
+                    } catch (err) {
+                      noteFeedFailure(s.url, { lastSyncedAt: s.lastSyncedAt });
+                      markImportError(s.url, err instanceof Error ? err.message : "Sync failed.");
+                    } finally {
+                      setBusy(null);
+                    }
+                  }}
+                  className="flex min-h-9 shrink-0 items-center gap-1 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft hover:text-ink"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
+                  Retry
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={busy === s.id}
-                onClick={async () => {
-                  setBusy(s.id);
-                  // An explicit retry means now, not when the backoff says so.
-                  clearFeedBackoff(s.url);
-                  try {
-                    const feed = await fetchCalendarFeed(s.url);
-                    applyImport(s.url, feed);
-                  } catch (err) {
-                    noteFeedFailure(s.url, { lastSyncedAt: s.lastSyncedAt });
-                    markImportError(s.url, err instanceof Error ? err.message : "Sync failed.");
-                  } finally {
-                    setBusy(null);
-                  }
-                }}
-                className="flex min-h-9 shrink-0 items-center gap-1 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft hover:text-ink"
-              >
-                <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
-                Retry
-              </button>
-            </div>
-          ))}
+            ))}
           </div>
         </motion.div>
       )}

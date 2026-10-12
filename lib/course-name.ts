@@ -93,7 +93,10 @@ export function courseLabels(categories: Category[]): Map<string, CourseLabel> {
   return out;
 }
 
-export function categoryLabel(categories: Category[], category: Pick<Category, "id" | "name"> | undefined): string {
+export function categoryLabel(
+  categories: Category[],
+  category: Pick<Category, "id" | "name"> | undefined,
+): string {
   if (!category) return "No class";
   return courseLabels(categories).get(category.id)?.label ?? parseCourseName(category.name).label;
 }
@@ -104,7 +107,10 @@ export function categoryLabel(categories: Category[], category: Pick<Category, "
  * a lecture called `POLS 207 508:` — reads as `POLS 207`. Any title with real
  * words in it is shown exactly as written.
  */
-export function itemDisplayTitle(item: Item, category?: Pick<Category, "name" | "classTitle">): string {
+export function itemDisplayTitle(
+  item: Item,
+  category?: Pick<Category, "name" | "classTitle">,
+): string {
   const named = classMeetingTitle(item, category);
   if (named !== item.title) return named;
   return courseOnlyLabel(item.title) ?? item.title;

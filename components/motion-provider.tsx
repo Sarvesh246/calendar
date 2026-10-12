@@ -22,10 +22,7 @@ export function MotionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <MotionConfig
-      reducedMotion="user"
-      transition={tween.standard}
-    >
+    <MotionConfig reducedMotion="user" transition={tween.standard}>
       {children}
     </MotionConfig>
   );

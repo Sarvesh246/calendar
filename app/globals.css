@@ -419,19 +419,137 @@
    nudge (0.32s, 0.76), glide (0.42s, 0.86), settle (0.36s, 1). */
 @supports (transition-timing-function: linear(0, 1)) {
   :root {
-    --spring-press: linear(0, 0.075, 0.252, 0.467, 0.677, 0.855, 0.987, 1.072, 1.115, 1.126, 1.116, 1.093, 1.066, 1.039, 1.017, 1.001, 0.991, 0.985, 0.984, 0.986, 0.988, 0.992, 0.995, 0.998, 1, 1.001, 1.002, 1.002, 1);
+    --spring-press: linear(
+      0,
+      0.075,
+      0.252,
+      0.467,
+      0.677,
+      0.855,
+      0.987,
+      1.072,
+      1.115,
+      1.126,
+      1.116,
+      1.093,
+      1.066,
+      1.039,
+      1.017,
+      1.001,
+      0.991,
+      0.985,
+      0.984,
+      0.986,
+      0.988,
+      0.992,
+      0.995,
+      0.998,
+      1,
+      1.001,
+      1.002,
+      1.002,
+      1
+    );
     --spring-press-ms: 600ms;
-    --spring-nudge: linear(0, 0.037, 0.126, 0.243, 0.37, 0.494, 0.608, 0.709, 0.793, 0.861, 0.914, 0.954, 0.983, 1.003, 1.015, 1.022, 1.025, 1.025, 1.024, 1.021, 1.018, 1.015, 1.012, 1.009, 1.006, 1.004, 1.003, 1.002, 1);
+    --spring-nudge: linear(
+      0,
+      0.037,
+      0.126,
+      0.243,
+      0.37,
+      0.494,
+      0.608,
+      0.709,
+      0.793,
+      0.861,
+      0.914,
+      0.954,
+      0.983,
+      1.003,
+      1.015,
+      1.022,
+      1.025,
+      1.025,
+      1.024,
+      1.021,
+      1.018,
+      1.015,
+      1.012,
+      1.009,
+      1.006,
+      1.004,
+      1.003,
+      1.002,
+      1
+    );
     --spring-nudge-ms: 416ms;
-    --spring-glide: linear(0, 0.037, 0.124, 0.236, 0.355, 0.471, 0.576, 0.668, 0.746, 0.81, 0.862, 0.902, 0.933, 0.956, 0.973, 0.985, 0.993, 0.999, 1.002, 1.004, 1.005, 1.005, 1.005, 1.004, 1.004, 1.003, 1.003, 1.002, 1);
+    --spring-glide: linear(
+      0,
+      0.037,
+      0.124,
+      0.236,
+      0.355,
+      0.471,
+      0.576,
+      0.668,
+      0.746,
+      0.81,
+      0.862,
+      0.902,
+      0.933,
+      0.956,
+      0.973,
+      0.985,
+      0.993,
+      0.999,
+      1.002,
+      1.004,
+      1.005,
+      1.005,
+      1.005,
+      1.004,
+      1.004,
+      1.003,
+      1.003,
+      1.002,
+      1
+    );
     --spring-glide-ms: 552ms;
-    --spring-settle: linear(0, 0.053, 0.167, 0.301, 0.431, 0.547, 0.645, 0.726, 0.79, 0.841, 0.881, 0.911, 0.934, 0.951, 0.964, 0.973, 0.981, 0.986, 0.99, 0.992, 0.995, 0.996, 0.997, 0.998, 1);
+    --spring-settle: linear(
+      0,
+      0.053,
+      0.167,
+      0.301,
+      0.431,
+      0.547,
+      0.645,
+      0.726,
+      0.79,
+      0.841,
+      0.881,
+      0.911,
+      0.934,
+      0.951,
+      0.964,
+      0.973,
+      0.981,
+      0.986,
+      0.99,
+      0.992,
+      0.995,
+      0.996,
+      0.997,
+      0.998,
+      1
+    );
     --spring-settle-ms: 504ms;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -439,7 +557,9 @@
   }
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 /* iOS Safari zooms the whole page in whenever a focused field renders text
    smaller than 16px — which scales the fixed chrome (quick-add bar, AI drawer,
@@ -448,7 +568,9 @@
    above 768px. The :not() chain outweighs the Tailwind size utilities on their
    own, so this needs no !important. */
 @media (max-width: 767px) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not(
+      [type="button"]
+    ):not([type="submit"]):not([type="reset"]):not([type="file"]),
   textarea,
   select,
   [contenteditable]:not([contenteditable="false"]) {
@@ -606,8 +728,7 @@ html.scroll-locked-overflow body {
    that the probe in useKeyboardInset() re-reads every pass, so it converges and
    then unwinds itself — it can never run away and push the bar off screen. */
 .viewport-pinned-bottom {
-  translate: 0
-    calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px) + var(--fixed-drop, 0px));
+  translate: 0 calc(var(--viewport-pan, 0px) + var(--viewport-shrink, 0px) + var(--fixed-drop, 0px));
 }
 
 /* A full-screen overlay (`fixed inset-0`) is laid out against the same short
@@ -681,23 +802,45 @@ html.scroll-locked-overflow body {
 
 /* Kill the 300ms tap delay / accidental double-tap zoom on controls without
    blocking pan on the page itself. */
-button, a, [role="button"], summary, input, textarea, select, label {
+button,
+a,
+[role="button"],
+summary,
+input,
+textarea,
+select,
+label {
   touch-action: manipulation;
 }
 
-::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
 
 /* Scrollbars — thin, unobtrusive, theme-aware */
-* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Shared utility classes                                                 */
 /* ---------------------------------------------------------------------- */
 
-.font-display { font-family: var(--font-display); }
+.font-display {
+  font-family: var(--font-display);
+}
 
 .glass {
   background: var(--surface-floating);
@@ -1130,15 +1273,19 @@ label {
      Transitioning transform globally made animated controls trail their own
      spring one frame at a time. */
   transition-property: scale, color, background-color, border-color, opacity, box-shadow;
-  transition-duration: var(--spring-press-ms), var(--motion-micro), var(--motion-micro),
-    var(--motion-micro), var(--motion-micro), var(--motion-micro);
-  transition-timing-function: var(--spring-press), var(--ease-standard), var(--ease-standard),
-    var(--ease-standard), var(--ease-standard), var(--ease-standard);
+  transition-duration:
+    var(--spring-press-ms), var(--motion-micro), var(--motion-micro), var(--motion-micro),
+    var(--motion-micro), var(--motion-micro);
+  transition-timing-function:
+    var(--spring-press), var(--ease-standard), var(--ease-standard), var(--ease-standard),
+    var(--ease-standard), var(--ease-standard);
 }
 
 /* Press goes down quickly and decelerates; release — the half you actually
    watch — springs back with a whisper of overshoot, like a physical key. */
-button:not(:disabled):not(.press-none):not(.press-surface):not(.press-pop):not([role="menuitem"]):active,
+button:not(:disabled):not(.press-none):not(.press-surface):not(.press-pop):not(
+    [role="menuitem"]
+  ):active,
 a:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 [role="button"]:not([aria-disabled="true"]):not(.press-none):not(.press-surface):active,
 summary:active {
@@ -1182,10 +1329,10 @@ select {
    scale carries the motion; the shadow just drops. */
 .press-surface {
   transition-property: transform, background-color, border-color, opacity;
-  transition-duration: var(--spring-press-ms), var(--motion-standard), var(--motion-standard),
-    var(--motion-standard);
-  transition-timing-function: var(--spring-press), var(--ease-standard), var(--ease-standard),
-    var(--ease-standard);
+  transition-duration:
+    var(--spring-press-ms), var(--motion-standard), var(--motion-standard), var(--motion-standard);
+  transition-timing-function:
+    var(--spring-press), var(--ease-standard), var(--ease-standard), var(--ease-standard);
 }
 
 .press-surface:active {
@@ -1256,7 +1403,13 @@ select {
 .sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-gutter: stable;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
 }
 
 .rail-pill {
@@ -1316,23 +1469,41 @@ body {
    state until React unmounts it. Phone is a compact bottom sheet; desktop is a
    full-height conversation column docked to the right, not a floating popup. */
 @keyframes sheet-in {
-  from { opacity: 0; translate: 0 16px; scale: 0.985; }
+  from {
+    opacity: 0;
+    translate: 0 16px;
+    scale: 0.985;
+  }
 }
 @keyframes sheet-out {
-  to { opacity: 0; translate: 0 16px; scale: 0.985; }
+  to {
+    opacity: 0;
+    translate: 0 16px;
+    scale: 0.985;
+  }
 }
 @keyframes drawer-in {
-  from { opacity: 0; translate: 28px 0; }
+  from {
+    opacity: 0;
+    translate: 28px 0;
+  }
 }
 @keyframes drawer-out {
-  to { opacity: 0; translate: 18px 0; }
+  to {
+    opacity: 0;
+    translate: 18px 0;
+  }
 }
 /* From nothing: a veil that starts part-way visible reads as a pop. */
 @keyframes overlay-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 @keyframes overlay-out {
-  to { opacity: 0; }
+  to {
+    opacity: 0;
+  }
 }
 
 .assistant-panel.is-open {
@@ -1545,8 +1716,12 @@ html.calendar-dragging * {
 
 /* The undo toast's remaining time, drawn rather than guessed at. */
 @keyframes toast-drain {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 
 .toast-drain {
@@ -1578,11 +1753,21 @@ html.calendar-dragging * {
 /* The status circle as it fills: springs past full size and settles. Uses
    the independent `scale` so it composes with the pressed squeeze. */
 @keyframes status-pop {
-  0% { scale: 0.8; }
-  38% { scale: 1.16; }
-  62% { scale: 0.96; }
-  80% { scale: 1.03; }
-  100% { scale: 1; }
+  0% {
+    scale: 0.8;
+  }
+  38% {
+    scale: 1.16;
+  }
+  62% {
+    scale: 0.96;
+  }
+  80% {
+    scale: 1.03;
+  }
+  100% {
+    scale: 1;
+  }
 }
 
 .status-pop {
@@ -1660,8 +1845,12 @@ html.calendar-dragging * {
 }
 
 @keyframes card-arrive {
-  12% { opacity: 1; }
-  100% { opacity: 0; }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .item-card-expand {
@@ -1700,7 +1889,9 @@ html.calendar-dragging * {
 }
 
 @container (max-height: 64px) {
-  .month-day-chips { display: none; }
+  .month-day-chips {
+    display: none;
+  }
   /* The same dots a phone shows, set beside the date they belong to. A bare
      "+1" pinned to the cell's far edge only appeared on busy days and read as
      belonging to the next day's number. */
@@ -1716,7 +1907,8 @@ html.calendar-dragging * {
     max-width: calc(100% - 38px);
     overflow: hidden;
   }
-  .month-day-date-wrap, .month-day-date {
+  .month-day-date-wrap,
+  .month-day-date {
     height: 22px;
     width: 22px;
     min-width: 22px;
@@ -1773,9 +1965,17 @@ html.calendar-dragging * {
   .mobile-composer {
     max-height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top) - 5rem);
   }
-  .mobile-quick-add > div > input { font-size: 16px; }
-  .mobile-quick-add > div:not(:first-child) { position: static; margin-top: 8px; max-height: none; }
-  .mobile-quick-add button:not(.rounded-full) { min-height: 44px; }
+  .mobile-quick-add > div > input {
+    font-size: 16px;
+  }
+  .mobile-quick-add > div:not(:first-child) {
+    position: static;
+    margin-top: 8px;
+    max-height: none;
+  }
+  .mobile-quick-add button:not(.rounded-full) {
+    min-height: 44px;
+  }
   .mobile-quick-add button.rounded-full {
     min-height: 0;
     aspect-ratio: 1;
@@ -1792,7 +1992,11 @@ html.calendar-dragging * {
     bottom: max(0px, calc(100% - var(--visible-height, 100dvh) - var(--viewport-pan, 0px)));
     max-height: calc(var(--visible-height, 100dvh) - env(safe-area-inset-top) - 2rem);
   }
-  .mobile-action-sheet input, .mobile-action-sheet textarea, .mobile-action-sheet select { font-size: 16px; }
+  .mobile-action-sheet input,
+  .mobile-action-sheet textarea,
+  .mobile-action-sheet select {
+    font-size: 16px;
+  }
   /* A sheet resists being pulled above its top detent and lands with a hint
      of overshoot; either way its bottom edge lifts off the screen for a
      moment. This copy of the sheet's own surface, parked below it, means the

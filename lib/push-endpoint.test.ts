@@ -4,7 +4,7 @@ import { parsePushEndpoint, validPushKey } from "./push-endpoint";
 describe("push endpoint validation", () => {
   it("accepts a normal HTTPS push URL", () => {
     expect(parsePushEndpoint("https://fcm.googleapis.com/fcm/send/example")?.hostname).toBe(
-      "fcm.googleapis.com"
+      "fcm.googleapis.com",
     );
   });
 

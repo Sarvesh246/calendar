@@ -43,7 +43,9 @@ export function ItemInspector() {
   if (mobile) {
     return item ? <MobileInspector item={item} onClose={close} /> : null;
   }
-  return <AnimatePresence>{item && <InspectorPanel key="inspector" item={item} />}</AnimatePresence>;
+  return (
+    <AnimatePresence>{item && <InspectorPanel key="inspector" item={item} />}</AnimatePresence>
+  );
 }
 
 function MobileInspector({ item, onClose }: { item: Item; onClose: () => void }) {
@@ -80,7 +82,10 @@ function InspectorPanel({ item }: { item: Item }) {
     if (!panel?.contains(document.activeElement)) panel?.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
-      if (previous?.isConnected && (!active || active === document.body || panel?.contains(active))) {
+      if (
+        previous?.isConnected &&
+        (!active || active === document.body || panel?.contains(active))
+      ) {
         previous.focus({ preventScroll: true });
       }
     };
@@ -91,7 +96,8 @@ function InspectorPanel({ item }: { item: Item }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (document.querySelector('[aria-modal="true"]') || useUIStore.getState().contextMenu) return;
+      if (document.querySelector('[aria-modal="true"]') || useUIStore.getState().contextMenu)
+        return;
       close();
     };
     document.addEventListener("keydown", onKey);
@@ -107,7 +113,11 @@ function InspectorPanel({ item }: { item: Item }) {
       tabIndex={-1}
       initial={{ opacity: 0, x: 28 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+      exit={{
+        opacity: 0,
+        x: 20,
+        transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+      }}
       transition={motionTokens.spring}
       className="fixed bottom-4 right-4 top-4 z-[42] flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)] outline-none"
     >

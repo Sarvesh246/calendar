@@ -15,14 +15,21 @@ import { motion as motionTokens } from "@/lib/motion";
 import { toggleFocusRoom } from "@/lib/focus-session-store";
 
 function isMac() {
-  return typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+  return (
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+  );
 }
 
 const noopSubscribe = () => () => {};
 
 /** "⌘" on Apple keyboards, "Ctrl" everywhere else (and on the server). */
 export function useModKeyLabel() {
-  return useSyncExternalStore(noopSubscribe, () => (isMac() ? "⌘" : "Ctrl"), () => "Ctrl");
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => (isMac() ? "⌘" : "Ctrl"),
+    () => "Ctrl",
+  );
 }
 
 type Shortcut = { keys: string[]; label: string };
@@ -114,7 +121,8 @@ export function KeyboardShortcuts() {
       if ((e.target as HTMLElement | null)?.closest?.("[data-no-shortcuts]")) return;
 
       const ui = useUIStore.getState();
-      if (ui.contextMenu || ui.commandPaletteOpen || document.querySelector('[aria-modal="true"]')) return;
+      if (ui.contextMenu || ui.commandPaletteOpen || document.querySelector('[aria-modal="true"]'))
+        return;
 
       const onCalendar = pathRef.current === "/calendar";
       const toCalendar = () => {
@@ -202,7 +210,12 @@ function ShortcutSheet() {
         tabIndex={-1}
         initial={{ opacity: 0, scale: 0.97, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.98, y: 4, transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }}
+        exit={{
+          opacity: 0,
+          scale: 0.98,
+          y: 4,
+          transition: { duration: motionTokens.exit, ease: motionTokens.easeIn },
+        }}
         transition={motionTokens.spring}
         className="relative max-h-[calc(100dvh-2rem)] w-full max-w-[640px] overflow-y-auto rounded-2xl border border-line bg-surface p-5 shadow-[0_24px_64px_-24px_rgb(0_0_0/0.42)]"
       >
@@ -222,10 +235,15 @@ function ShortcutSheet() {
         <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
           {shortcutGroups(mod).map((group) => (
             <section key={group.title}>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">{group.title}</p>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                {group.title}
+              </p>
               <ul className="flex flex-col">
                 {group.items.map((s) => (
-                  <li key={s.label} className="flex min-h-8 items-center justify-between gap-3 text-[13px] text-ink-soft">
+                  <li
+                    key={s.label}
+                    className="flex min-h-8 items-center justify-between gap-3 text-[13px] text-ink-soft"
+                  >
                     <span>{s.label}</span>
                     <span className="flex shrink-0 items-center gap-1">
                       {s.keys.map((k) => (

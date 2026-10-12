@@ -69,11 +69,13 @@ describe("category edits", () => {
 
 describe("explicit class removal", () => {
   function addDestination() {
-    useDatebookStore.setState({ categories: [
-      ...store().categories,
-      { id: "cat-2", name: "ENGR 102", color: "#007AFF" },
-      { id: "cat-3", name: "History", color: "#FF9500" },
-    ] });
+    useDatebookStore.setState({
+      categories: [
+        ...store().categories,
+        { id: "cat-2", name: "ENGR 102", color: "#007AFF" },
+        { id: "cat-3", name: "History", color: "#FF9500" },
+      ],
+    });
   }
 
   it("deletes every item in the class and tombstones it without moving anything", () => {
@@ -81,7 +83,12 @@ describe("explicit class removal", () => {
     const a = addTask("Current assignment");
     const b = addTask("Completed assignment");
     store().setItemStatus(b.id, "done");
-    const elsewhere = store().addItem({ categoryId: "cat-2", title: "Keep", type: "task", at: a.at });
+    const elsewhere = store().addItem({
+      categoryId: "cat-2",
+      title: "Keep",
+      type: "task",
+      at: a.at,
+    });
     const before = localSnapshot();
     expect(store().deleteCategory("cat-1", { kind: "delete-items" })).toBe(true);
     expect(store().items).toEqual([elsewhere]);
@@ -97,8 +104,14 @@ describe("explicit class removal", () => {
     const item = addTask("Keep my progress");
     store().setItemStatus(item.id, "done");
     const before = store().items[0];
-    expect(store().deleteCategory("cat-1", { kind: "move-items", targetCategoryId: "cat-3" })).toBe(true);
-    expect(store().items[0]).toMatchObject({ ...before, categoryId: "cat-3", updatedAt: expect.any(String) });
+    expect(store().deleteCategory("cat-1", { kind: "move-items", targetCategoryId: "cat-3" })).toBe(
+      true,
+    );
+    expect(store().items[0]).toMatchObject({
+      ...before,
+      categoryId: "cat-3",
+      updatedAt: expect.any(String),
+    });
     expect(store().deletions[tombKey("item", item.id)]).toBeUndefined();
     expect(store().categories.some((c) => c.id === "cat-1")).toBe(false);
   });
@@ -135,8 +148,13 @@ describe("explicit class removal", () => {
 
   it("removes an entire stored repeating class series", () => {
     addDestination();
-    store().addItem({ categoryId: "cat-1", title: "Class", type: "event", at: "2026-10-10T17:00:00.000Z",
-      repeat: { freq: "weekly", until: "2026-11-10T17:00:00.000Z" } });
+    store().addItem({
+      categoryId: "cat-1",
+      title: "Class",
+      type: "event",
+      at: "2026-10-10T17:00:00.000Z",
+      repeat: { freq: "weekly", until: "2026-11-10T17:00:00.000Z" },
+    });
     const ids = store().items.map((i) => i.id);
     expect(ids.length).toBeGreaterThan(1);
     store().deleteCategory("cat-1", { kind: "delete-items" });
@@ -351,7 +369,6 @@ describe("settings", () => {
     expect(merged.settings.preset).toBe("noir");
   });
 });
-
 
 describe("Canvas feed re-sync", () => {
   const FEED = "https://canvas.example/feed.ics";

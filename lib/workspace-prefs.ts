@@ -87,7 +87,9 @@ export const useWorkspacePrefs = create<WorkspacePrefsState>()(
       setAssistantDocked: (assistantDocked) => set({ assistantDocked }),
       setAgendaLayout: (agendaLayout) => set({ agendaLayout }),
       setSessionMinutes: (minutes) =>
-        set({ sessionMinutes: (SESSION_LENGTHS as readonly number[]).includes(minutes) ? minutes : 60 }),
+        set({
+          sessionMinutes: (SESSION_LENGTHS as readonly number[]).includes(minutes) ? minutes : 60,
+        }),
       addSavedView: (view) => {
         const saved: SavedView = { ...view, id: `view-${nanoid()}` };
         const next = sanitizeSavedViews([...get().savedViews, saved]);
@@ -114,6 +116,6 @@ export const useWorkspacePrefs = create<WorkspacePrefsState>()(
         savedViews: s.savedViews,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizeWorkspacePrefs(persisted) }),
-    }
-  )
+    },
+  ),
 );

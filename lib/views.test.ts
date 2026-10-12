@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { applyViewFilter, itemMatchesView, sanitizeSavedViews, viewSummary } from "./views";
 import { applyItemFilters } from "./filters";
-import { sanitizeWorkspacePrefs, clampPaneWidth, PANE_MAX_WIDTH, PANE_MIN_WIDTH } from "./workspace-prefs";
+import {
+  sanitizeWorkspacePrefs,
+  clampPaneWidth,
+  PANE_MAX_WIDTH,
+  PANE_MIN_WIDTH,
+} from "./workspace-prefs";
 import type { Item } from "./types";
 
 const NOW = new Date(2026, 8, 16, 10, 0); // Wed, Sep 16 2026
@@ -27,7 +32,11 @@ describe("itemMatchesView", () => {
     expect(itemMatchesView(item({ status: undefined }), { statuses: ["todo"] }, NOW)).toBe(true);
     expect(itemMatchesView(item({ type: "event", status: undefined }), f, NOW)).toBe(false);
     expect(
-      itemMatchesView(item({ type: "event", status: undefined }), { ...f, kinds: ["event", "assignment"] }, NOW)
+      itemMatchesView(
+        item({ type: "event", status: undefined }),
+        { ...f, kinds: ["event", "assignment"] },
+        NOW,
+      ),
     ).toBe(true);
   });
 
@@ -70,7 +79,10 @@ describe("applyViewFilter / applyItemFilters", () => {
   });
 
   it("stacks the view on top of the class filter", () => {
-    const items = [item({ id: "a", status: "doing" }), item({ id: "b", status: "doing", categoryId: "c2" })];
+    const items = [
+      item({ id: "a", status: "doing" }),
+      item({ id: "b", status: "doing", categoryId: "c2" }),
+    ];
     const out = applyItemFilters(items, {
       categoryFilter: ["c1"],
       viewFilter: { statuses: ["doing"] },
@@ -98,9 +110,15 @@ describe("sanitizeSavedViews", () => {
   });
 
   it("summarises a view", () => {
-    expect(viewSummary({ id: "x", name: "x", statuses: ["doing"], range: "this-week", categoryIds: ["a", "b"] })).toBe(
-      "In progress · This week · 2 classes"
-    );
+    expect(
+      viewSummary({
+        id: "x",
+        name: "x",
+        statuses: ["doing"],
+        range: "this-week",
+        categoryIds: ["a", "b"],
+      }),
+    ).toBe("In progress · This week · 2 classes");
     expect(viewSummary({ id: "x", name: "x" })).toBe("Everything");
   });
 });

@@ -43,7 +43,8 @@ function watch() {
     for (const item of state.items) {
       next.set(item.id, item.status);
       const before = previous.get(item.id);
-      if (item.status === "done" && previous.has(item.id) && before !== "done") finished.push(item.id);
+      if (item.status === "done" && previous.has(item.id) && before !== "done")
+        finished.push(item.id);
     }
     previous = next;
     if (finished.length === 0 || prefersReducedMotion()) return;
@@ -68,6 +69,6 @@ export function useJustCompleted(): ReadonlySet<string> {
   return useSyncExternalStore(
     subscribe,
     () => ids,
-    () => EMPTY
+    () => EMPTY,
   );
 }

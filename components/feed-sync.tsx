@@ -42,7 +42,8 @@ export function FeedSync() {
             const userId = useDatebookStore.getState().userId;
             const feed = await fetchCalendarFeed(source.url);
             const current = useDatebookStore.getState();
-            if (current.userId !== userId || !current.importSources.some((s) => s.id === source.id)) continue;
+            if (current.userId !== userId || !current.importSources.some((s) => s.id === source.id))
+              continue;
             // A re-sync nobody asked for shouldn't pop a "Saved" pill.
             runSilently(() => applyImport(source.url, feed));
             noteFeedSuccess(source.url);

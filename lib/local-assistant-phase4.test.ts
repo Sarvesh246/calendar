@@ -25,7 +25,10 @@ function chat(...messages: string[]): Array<AssistantResponse | null> {
   const history: AssistantTurn[] = [];
   return messages.map((m) => {
     const r = tryLocalAnswer(m, history, ctx, NOW);
-    history.push({ role: "user", text: m }, { role: "assistant", text: r?.text ?? "(model reply)" });
+    history.push(
+      { role: "user", text: m },
+      { role: "assistant", text: r?.text ?? "(model reply)" },
+    );
     return r;
   });
 }
@@ -84,7 +87,9 @@ describe("grades", () => {
   });
 
   it("uses a weight the user gives when there's no syllabus", () => {
-    const t = text("what do i need on the cs 101 final to get a 90 if the final is worth 40% and i have an 85")!;
+    const t = text(
+      "what do i need on the cs 101 final to get a 90 if the final is worth 40% and i have an 85",
+    )!;
     expect(t).toContain("**97.5**");
   });
 
@@ -96,7 +101,9 @@ describe("grades", () => {
   });
 
   it("explains it can't see grades, and shows the breakdown", () => {
-    expect(text("what's my grade in econ")).toMatch(/can't see your grade in \*\*Econ\*\*[\s\S]*Final exam\*\* — 35%/);
+    expect(text("what's my grade in econ")).toMatch(
+      /can't see your grade in \*\*Econ\*\*[\s\S]*Final exam\*\* — 35%/,
+    );
     expect(text("am i passing econ")).toMatch(/Datebook doesn't keep your scores/);
     expect(text("what's my grade")).toMatch(/Datebook doesn't keep your scores/);
   });
@@ -108,7 +115,9 @@ describe("grades", () => {
 
 describe("emails", () => {
   it("drafts an extension request with the item, instructor and late policy", () => {
-    const t = text("write an email to my econ professor asking for an extension on problem set 4 because I've been sick")!;
+    const t = text(
+      "write an email to my econ professor asking for an extension on problem set 4 because I've been sick",
+    )!;
     expect(t).toContain("**Dr. Maria Lopez** (mlopez@uni.edu)");
     expect(t).toContain("Extension request — Problem Set 4 (ECON 101)");
     expect(t).toContain("Dear Dr. Lopez,");
@@ -118,9 +127,13 @@ describe("emails", () => {
   });
 
   it("drafts an absence note for a day", () => {
-    const t = text("draft an email to my econ professor saying i'll miss class tomorrow because of a family emergency")!;
+    const t = text(
+      "draft an email to my econ professor saying i'll miss class tomorrow because of a family emergency",
+    )!;
     expect(t).toContain("Missing class — Friday, Sep 25 (ECON 101)");
-    expect(t).toContain("won't be able to attend ECON 101 tomorrow (Friday, Sep 25) because of a family emergency.");
+    expect(t).toContain(
+      "won't be able to attend ECON 101 tomorrow (Friday, Sep 25) because of a family emergency.",
+    );
     expect(t).toMatch(/Attendance is taken/);
   });
 
@@ -132,7 +145,9 @@ describe("emails", () => {
   });
 
   it("finds the class from the instructor's name", () => {
-    expect(text("write an email to dr lopez about meeting in office hours")).toContain("how I'm doing in ECON 101");
+    expect(text("write an email to dr lopez about meeting in office hours")).toContain(
+      "how I'm doing in ECON 101",
+    );
   });
 
   it("leaves open-ended writing and address lookups alone", () => {
@@ -207,14 +222,24 @@ describe("adds that need a time", () => {
 
   it("keeps 'with' in titles", () => {
     expect(parseQuickAdd("coffee with Alex friday 3pm", []).title).toBe("Coffee with Alex");
-    expect(parseQuickAdd("lunch at 3pm tomorrow with a reminder 10 minutes before", []).title).toBe("Lunch");
+    expect(parseQuickAdd("lunch at 3pm tomorrow with a reminder 10 minutes before", []).title).toBe(
+      "Lunch",
+    );
   });
 });
 
 describe("which one", () => {
   it("asks among up to six matches and takes an ordinal", () => {
     for (let k = 5; k <= 8; k += 1) {
-      ctx.items.push({ id: `ps${k}`, title: `Problem Set ${k}`, type: "assignment", at: new Date(2026, 9, k + 5, 23, 59).toISOString(), categoryId: "c2", status: "todo", createdAt: NOW.toISOString() });
+      ctx.items.push({
+        id: `ps${k}`,
+        title: `Problem Set ${k}`,
+        type: "assignment",
+        at: new Date(2026, 9, k + 5, 23, 59).toISOString(),
+        categoryId: "c2",
+        status: "todo",
+        createdAt: NOW.toISOString(),
+      });
     }
     const [q, a] = chat("mark problem set done", "the fifth one");
     expect(q!.text).toMatch(/^Which one do you mean/);

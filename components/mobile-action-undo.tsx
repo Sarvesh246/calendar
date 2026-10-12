@@ -55,7 +55,10 @@ export function MobileActionUndo() {
           <span
             aria-hidden
             className="toast-drain absolute inset-x-0 bottom-0 h-[2px] origin-left bg-accent/50"
-            style={{ animationDuration: `${UNDO_WINDOW_MS}ms`, animationPlayState: held ? "paused" : "running" }}
+            style={{
+              animationDuration: `${UNDO_WINDOW_MS}ms`,
+              animationPlayState: held ? "paused" : "running",
+            }}
           />
         </DismissibleSnack>
       )}

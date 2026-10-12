@@ -87,19 +87,19 @@ export function BootSplash() {
         }
         className="relative flex flex-col items-center"
       >
-          <span aria-hidden className="boot-splash-bloom" />
-          <span className="boot-splash-plate relative flex h-[96px] w-[96px] items-center justify-center rounded-[26px]">
-            {/* A plain img on purpose: the splash paints before hydration, and
+        <span aria-hidden className="boot-splash-bloom" />
+        <span className="boot-splash-plate relative flex h-[96px] w-[96px] items-center justify-center rounded-[26px]">
+          {/* A plain img on purpose: the splash paints before hydration, and
                 next/image's lazy, optimised path would leave the plate empty. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/icon-192.png"
-              alt=""
-              width={80}
-              height={80}
-              className="boot-splash-mark h-20 w-20 rounded-[20px]"
-            />
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon-192.png"
+            alt=""
+            width={80}
+            height={80}
+            className="boot-splash-mark h-20 w-20 rounded-[20px]"
+          />
+        </span>
         <motion.p
           initial={reduced ? false : { opacity: 0, y: 8 }}
           animate={leaving ? { opacity: 0, y: -4 } : { opacity: 1, y: 0 }}

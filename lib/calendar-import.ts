@@ -77,7 +77,10 @@ export async function fetchCalendarFeed(url: string): Promise<FetchedCalendar> {
   }
   if (!res.ok || !data.ok || typeof data.text !== "string") {
     if (res.status === 429) {
-      throw new FeedFetchError("Checking again shortly — this feed was refreshed very recently.", true);
+      throw new FeedFetchError(
+        "Checking again shortly — this feed was refreshed very recently.",
+        true,
+      );
     }
     throw new FeedFetchError(data.error ?? "Import failed.");
   }
@@ -117,7 +120,7 @@ function detectType(ev: IcsEvent): ItemType {
 export function buildImportPlan(
   { calendarName, events }: FetchedCalendar,
   existingCategories: Category[],
-  sourceId: string
+  sourceId: string,
 ): ImportPlan {
   const newCategories: Category[] = [];
   const fallbackName = (calendarName ?? "").trim() || "Imported";
@@ -144,7 +147,8 @@ export function buildImportPlan(
     const created: Category = {
       id: nanoid(),
       name: wanted,
-      color: IMPORT_PALETTE[(existingCategories.length + newCategories.length) % IMPORT_PALETTE.length],
+      color:
+        IMPORT_PALETTE[(existingCategories.length + newCategories.length) % IMPORT_PALETTE.length],
       sourceId,
     };
     byName.set(key, created);
@@ -174,8 +178,7 @@ export function buildImportPlan(
       ...(type !== "event"
         ? {
             status: (ev.todoStatus && /^COMPLETED$/i.test(ev.todoStatus) ? "done" : "todo") as
-              | "todo"
-              | "done",
+              "todo" | "done",
           }
         : {}),
     };

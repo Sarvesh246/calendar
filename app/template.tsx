@@ -30,7 +30,7 @@ export default function Template({ children }: { children: React.ReactNode }) {
       key={pathname}
       className={cn(
         "page-shell route-enter",
-        fillViewport && "flex min-h-0 flex-1 flex-col md:overflow-hidden"
+        fillViewport && "flex min-h-0 flex-1 flex-col md:overflow-hidden",
       )}
     >
       {children}

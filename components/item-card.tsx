@@ -7,7 +7,16 @@ import { MobileItemSheet, MobileTaskActions } from "@/components/mobile-item-she
 import { changeMobileStatus } from "@/lib/mobile-item-actions";
 import { MobileQuickActions } from "@/components/mobile-quick-actions";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarClock, Check, ChevronDown, MapPin, MoreHorizontal, PanelRightOpen, Play, Square } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  ChevronDown,
+  MapPin,
+  MoreHorizontal,
+  PanelRightOpen,
+  Play,
+  Square,
+} from "lucide-react";
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { itemDisplayTitle } from "@/lib/course-label";
@@ -118,7 +127,7 @@ function CompleteButton({
   return (
     <button
       type="button"
-      onKeyDown={e => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         haptic(done ? "light" : "success");
@@ -152,9 +161,8 @@ function CompleteButton({
             "transition-[background-color,border-color,scale] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
             status === "todo" &&
               "border-[color-mix(in_srgb,var(--cat)_55%,transparent)] bg-transparent group-hover/status:border-[color-mix(in_srgb,var(--cat)_90%,transparent)]",
-            status === "doing" &&
-              "status-doing-ring border-2 border-accent bg-accent-soft",
-            status === "done" && "border-good bg-good"
+            status === "doing" && "status-doing-ring border-2 border-accent bg-accent-soft",
+            status === "done" && "border-good bg-good",
           )}
         >
           <AnimatePresence initial={false}>
@@ -218,7 +226,7 @@ export function StatusSegmented({
             className={cn(
               "press-none relative min-h-9 flex-1 rounded-md px-2 text-[12px] font-medium",
               "transition-colors duration-[var(--motion-micro)]",
-              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink"
+              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
             )}
           >
             <span className="relative z-[1]">{opt.label}</span>
@@ -333,7 +341,7 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
         "group-hover/card:opacity-100 group-focus-within/card:opacity-100",
         // A narrow card (the Calendar's day pane) can't spare the room: the
         // actions float over its corner on hover instead of squeezing the title.
-        "@max-md/card:absolute @max-md/card:right-10 @max-md/card:top-2 @max-md/card:z-[2] @max-md/card:bg-surface-elevated @max-md/card:opacity-0 @max-md/card:shadow-[var(--shadow-md)]"
+        "@max-md/card:absolute @max-md/card:right-10 @max-md/card:top-2 @max-md/card:z-[2] @max-md/card:bg-surface-elevated @max-md/card:opacity-0 @max-md/card:shadow-[var(--shadow-md)]",
       )}
       onClick={stop}
       onKeyDown={stop}
@@ -353,7 +361,13 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
           )}
         </button>
       )}
-      <button type="button" className={btn} aria-label="Open details" title="Open details" onClick={() => openInspector(item.id)}>
+      <button
+        type="button"
+        className={btn}
+        aria-label="Open details"
+        title="Open details"
+        onClick={() => openInspector(item.id)}
+      >
         <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.9} />
       </button>
       <button
@@ -362,7 +376,9 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
         aria-label="Reschedule"
         title="Reschedule"
         aria-haspopup="menu"
-        onClick={(e) => openItemMenuAt(e.currentTarget, item.id, { dayKey: key, section: "reschedule" })}
+        onClick={(e) =>
+          openItemMenuAt(e.currentTarget, item.id, { dayKey: key, section: "reschedule" })
+        }
       >
         <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.9} />
       </button>
@@ -434,7 +450,7 @@ function CardFrame({
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
             dimmed && "opacity-[0.62]",
             arrived && "item-card-arrived",
-            rest.className
+            rest.className,
           )}
         >
           {children}
@@ -529,7 +545,7 @@ function EventCard({
       className={cn(
         "cat-surface px-[var(--card-pad-x)] py-[var(--card-pad-y)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        !mobile && expanded && "border-line-strong"
+        !mobile && expanded && "border-line-strong",
       )}
     >
       <div className="relative flex items-center gap-3">
@@ -537,7 +553,7 @@ function EventCard({
           <span
             className={cn(
               "text-[13px] font-semibold tabular-nums",
-              showCompleteStyle ? "text-ink-soft" : "cat-text"
+              showCompleteStyle ? "text-ink-soft" : "cat-text",
             )}
           >
             {item.allDay ? "All day" : formatTime(item.at, clock24h)}
@@ -553,7 +569,7 @@ function EventCard({
             className={cn(
               "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
-              showCompleteStyle ? "text-ink-soft" : "text-ink"
+              showCompleteStyle ? "text-ink-soft" : "text-ink",
             )}
           >
             {/* Struck line by line: a single absolute line sat in the gap
@@ -602,7 +618,11 @@ function EventCard({
         />
       )}
       {mobile && sheetOpen && (
-        <MobileItemSheet title="Details" note="Changes save as you edit." onClose={() => setSheetOpen(false)}>
+        <MobileItemSheet
+          title="Details"
+          note="Changes save as you edit."
+          onClose={() => setSheetOpen(false)}
+        >
           <ItemEditor
             item={item}
             category={category}
@@ -688,18 +708,24 @@ function AssignmentCard({
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         !mobile && expanded && "border-line-strong",
         overdue && !done && "bg-warn-soft/35",
-        status === "doing" && !done && "bg-accent-soft/30"
+        status === "doing" && !done && "bg-accent-soft/30",
       )}
     >
       <div className="relative flex items-center gap-1">
-        <CompleteButton status={status} color={color} onToggle={() => mobile ? changeMobileStatus(item, done ? "todo" : "done") : toggleItemDone(item.id)} />
+        <CompleteButton
+          status={status}
+          color={color}
+          onToggle={() =>
+            mobile ? changeMobileStatus(item, done ? "todo" : "done") : toggleItemDone(item.id)
+          }
+        />
 
         <div className="min-w-0 flex-1">
           <p
             className={cn(
               "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
               "transition-colors duration-[var(--motion-standard)]",
-              showCompleteStyle ? "text-ink-soft" : "text-ink"
+              showCompleteStyle ? "text-ink-soft" : "text-ink",
             )}
           >
             {/* Struck line by line: a single absolute line sat in the gap
@@ -711,7 +737,7 @@ function AssignmentCard({
           <p
             className={cn(
               "mt-0.5 truncate text-[12px] transition-colors duration-[var(--motion-standard)]",
-              overdue && !done ? "font-medium text-warn" : "text-ink-soft"
+              overdue && !done ? "font-medium text-warn" : "text-ink-soft",
             )}
           >
             {item.allDay ? "All day" : formatTime(item.at, clock24h)}
@@ -728,7 +754,7 @@ function AssignmentCard({
             style={{ "--cat": color } as React.CSSProperties}
             className={cn(
               "cat-dot h-1.5 w-1.5 shrink-0 rounded-full transition-[opacity,transform] duration-[var(--motion-micro)]",
-              !mobile && expanded && "scale-50 opacity-0"
+              !mobile && expanded && "scale-50 opacity-0",
             )}
           />
         )}
@@ -751,7 +777,11 @@ function AssignmentCard({
         />
       )}
       {mobile && actions === "edit" && (
-        <MobileItemSheet title="Details" note="Changes save as you edit." onClose={() => setActions(null)}>
+        <MobileItemSheet
+          title="Details"
+          note="Changes save as you edit."
+          onClose={() => setActions(null)}
+        >
           <ItemEditor
             item={item}
             category={category}

@@ -31,7 +31,7 @@ export function FilterButton({ className }: { className?: string }) {
     categories,
     filter,
     hideCompleted,
-    views.find((v) => v.id === activeViewId)?.name
+    views.find((v) => v.id === activeViewId)?.name,
   );
   const active = summary.active;
 
@@ -45,7 +45,11 @@ export function FilterButton({ className }: { className?: string }) {
       }}
       aria-label={active ? `Filters — ${summary.label}. Change filters` : "Filter"}
       title={active ? `Filters: ${summary.label}` : "Filter"}
-      className={cn("relative", className, active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent")}
+      className={cn(
+        "relative",
+        className,
+        active && "max-md:bg-accent-soft max-md:text-accent max-md:ring-1 max-md:ring-accent",
+      )}
     >
       <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
       {/* The "filters are on" dot springs in rather than blinking, so the state
@@ -71,9 +75,7 @@ export function FilterSheet() {
   const setOpen = useUIStore((s) => s.setFilterOpen);
 
   return (
-    <AnimatePresence>
-      {open && <FilterSheetBody onClose={() => setOpen(false)} />}
-    </AnimatePresence>
+    <AnimatePresence>{open && <FilterSheetBody onClose={() => setOpen(false)} />}</AnimatePresence>
   );
 }
 
@@ -106,165 +108,174 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
     categories,
     filter,
     hideCompleted,
-    views.find((v) => v.id === activeViewId)?.name
+    views.find((v) => v.id === activeViewId)?.name,
   );
 
   return (
-        <div className={cn("viewport-pinned-overlay fixed inset-0 z-50", sheet.leaving && "pointer-events-none")}>
-          <Scrim
-            label="Close filter"
-            onPointerDown={onClose}
-            progress={sheet.scrimOpacity}
-            exitDuration={sheet.gone ? 0 : motionTokens.exit}
-          />
-          <motion.div
-            role="dialog"
-            ref={panelRef}
-            tabIndex={-1}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") { event.stopPropagation(); onClose(); }
-            }}
-            aria-modal="true"
-            aria-label="Filters"
-            exit={
-              sheet.gone
-                ? { opacity: 1, transition: { duration: 0 } }
-                : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
-            }
-            {...sheet.dragProps}
-            // `mobile-action-sheet` rather than its own max-height: that class
-            // is what keeps a sheet clear of the status bar, and this one was
-            // measuring against the full visible viewport like the search sheet
-            // used to — far enough up that its own close button was unreachable.
-            className="mobile-action-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] flex-col rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-0.5 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
-          >
-            <SheetHandle dragControls={dragControls} dragging={dragging} />
-            <div
-              className="mb-4 flex cursor-grab touch-none select-none items-center justify-between gap-2 active:cursor-grabbing"
-              onPointerDown={(e) => startSheetDrag(dragControls, e)}
-            >
-              <div className="min-w-0">
-                <p className="text-[16px] font-semibold text-ink">Filters</p>
-                {/* What's on, right where you turn it off — the sheet showed
+    <div
+      className={cn(
+        "viewport-pinned-overlay fixed inset-0 z-50",
+        sheet.leaving && "pointer-events-none",
+      )}
+    >
+      <Scrim
+        label="Close filter"
+        onPointerDown={onClose}
+        progress={sheet.scrimOpacity}
+        exitDuration={sheet.gone ? 0 : motionTokens.exit}
+      />
+      <motion.div
+        role="dialog"
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            onClose();
+          }
+        }}
+        aria-modal="true"
+        aria-label="Filters"
+        exit={
+          sheet.gone
+            ? { opacity: 1, transition: { duration: 0 } }
+            : { y: "100%", transition: { duration: motionTokens.exit, ease: motionTokens.easeIn } }
+        }
+        {...sheet.dragProps}
+        // `mobile-action-sheet` rather than its own max-height: that class
+        // is what keeps a sheet clear of the status bar, and this one was
+        // measuring against the full visible viewport like the search sheet
+        // used to — far enough up that its own close button was unreachable.
+        className="mobile-action-sheet absolute inset-x-0 bottom-0 mx-auto flex max-h-[85dvh] flex-col rounded-t-2xl border border-line bg-surface px-4 pb-[max(var(--safe-bottom),1rem)] pt-0.5 md:bottom-6 md:max-w-[420px] md:rounded-2xl"
+      >
+        <SheetHandle dragControls={dragControls} dragging={dragging} />
+        <div
+          className="mb-4 flex cursor-grab touch-none select-none items-center justify-between gap-2 active:cursor-grabbing"
+          onPointerDown={(e) => startSheetDrag(dragControls, e)}
+        >
+          <div className="min-w-0">
+            <p className="text-[16px] font-semibold text-ink">Filters</p>
+            {/* What's on, right where you turn it off — the sheet showed
                     ticks only, which say what is selected but never that
                     anything is being hidden. */}
-                <p className="mt-0.5 truncate text-[12.5px] text-ink-soft">
-                  {summary.active ? summary.label : "Showing everything"}
-                </p>
-              </div>
-              <Button
-                variant="tertiary"
-                size="iconSm"
-                onClick={onClose}
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </Button>
-            </div>
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Views</p>
-            <div className="mb-4 flex flex-col gap-1">
-              {views.map((view) => {
-                const active = view.id === activeViewId;
-                // "In progress — In progress" says nothing twice.
-                const detail = viewSummary(view);
-                const showDetail = detail.trim().toLowerCase() !== view.name.trim().toLowerCase();
-                return (
-                  <FilterRow
-                    key={view.id}
-                    selected={active}
-                    onSelect={() => {
-                      haptic("light");
-                      applyView(active ? null : view);
-                    }}
-                  >
-                    {view.name}
-                    {showDetail && <span className="block truncate text-[11.5px] text-ink-faint">{detail}</span>}
-                  </FilterRow>
-                );
-              })}
-              {savingView ? (
-                <ViewEditor onDone={() => setSavingView(false)} />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
+            <p className="mt-0.5 truncate text-[12.5px] text-ink-soft">
+              {summary.active ? summary.label : "Showing everything"}
+            </p>
+          </div>
+          <Button variant="tertiary" size="iconSm" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" strokeWidth={2} />
+          </Button>
+        </div>
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
+            Views
+          </p>
+          <div className="mb-4 flex flex-col gap-1">
+            {views.map((view) => {
+              const active = view.id === activeViewId;
+              // "In progress — In progress" says nothing twice.
+              const detail = viewSummary(view);
+              const showDetail = detail.trim().toLowerCase() !== view.name.trim().toLowerCase();
+              return (
+                <FilterRow
+                  key={view.id}
+                  selected={active}
+                  onSelect={() => {
                     haptic("light");
-                    setSavingView(true);
+                    applyView(active ? null : view);
                   }}
-                  className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
                 >
-                  Save this filter
-                </button>
-              )}
-            </div>
-            <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">Classes</p>
-            <div className="flex flex-col gap-1">
-              <FilterRow
-                selected={!filter && !activeViewId}
-                onSelect={() => {
+                  {view.name}
+                  {showDetail && (
+                    <span className="block truncate text-[11.5px] text-ink-faint">{detail}</span>
+                  )}
+                </FilterRow>
+              );
+            })}
+            {savingView ? (
+              <ViewEditor onDone={() => setSavingView(false)} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
                   haptic("light");
-                  // A saved view set the classes *and* status/kind/range. Clearing
-                  // classes alone would leave those rules quietly in force.
-                  if (activeViewId) applyView(null);
-                  else clear();
-                  onClose();
+                  setSavingView(true);
                 }}
+                className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
               >
-                All classes
-              </FilterRow>
-              {visible.map((cat) => {
-                const active = filter?.includes(cat.id) ?? false;
-                return (
-                  <FilterRow
-                    key={cat.id}
-                    selected={active}
-                    onSelect={() => {
-                      haptic("light");
-                      toggle(cat.id);
-                    }}
-                    dot={cat.color}
-                  >
-                    {classLabel(cat)}
-                  </FilterRow>
-                );
-              })}
-            </div>
+                Save this filter
+              </button>
+            )}
+          </div>
+          <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
+            Classes
+          </p>
+          <div className="flex flex-col gap-1">
+            <FilterRow
+              selected={!filter && !activeViewId}
+              onSelect={() => {
+                haptic("light");
+                // A saved view set the classes *and* status/kind/range. Clearing
+                // classes alone would leave those rules quietly in force.
+                if (activeViewId) applyView(null);
+                else clear();
+                onClose();
+              }}
+            >
+              All classes
+            </FilterRow>
+            {visible.map((cat) => {
+              const active = filter?.includes(cat.id) ?? false;
+              return (
+                <FilterRow
+                  key={cat.id}
+                  selected={active}
+                  onSelect={() => {
+                    haptic("light");
+                    toggle(cat.id);
+                  }}
+                  dot={cat.color}
+                >
+                  {classLabel(cat)}
+                </FilterRow>
+              );
+            })}
+          </div>
 
-            {/* "Hide completed" lived three taps deep in the overflow menu and
+          {/* "Hide completed" lived three taps deep in the overflow menu and
                 emptied lists just as effectively as a class filter. It belongs
                 beside the thing it behaves like. */}
-            <div className="mt-3 border-t border-line pt-3">
-              <FilterRow
-                selected={hideCompleted}
-                onSelect={() => {
+          <div className="mt-3 border-t border-line pt-3">
+            <FilterRow
+              selected={hideCompleted}
+              onSelect={() => {
+                haptic("light");
+                startTransition(() => updateSettings({ hideCompleted: !hideCompleted }));
+              }}
+            >
+              Hide completed
+            </FilterRow>
+            {summary.active && (
+              <button
+                type="button"
+                onClick={() => {
                   haptic("light");
-                  startTransition(() => updateSettings({ hideCompleted: !hideCompleted }));
+                  // The view goes first: it is what set the classes, so
+                  // clearing the classes alone would leave its status, kind
+                  // and range filters quietly in force.
+                  applyView(null);
+                  startTransition(() => updateSettings({ hideCompleted: false }));
+                  onClose();
                 }}
+                className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
               >
-                Hide completed
-              </FilterRow>
-              {summary.active && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic("light");
-                    // The view goes first: it is what set the classes, so
-                    // clearing the classes alone would leave its status, kind
-                    // and range filters quietly in force.
-                    applyView(null);
-                    startTransition(() => updateSettings({ hideCompleted: false }));
-                    onClose();
-                  }}
-                  className="press-none mt-1 flex min-h-11 w-full items-center justify-center rounded-lg text-[13.5px] font-semibold text-accent"
-                >
-                  Reset all filters
-                </button>
-              )}
-            </div>
-            </div>
-          </motion.div>
+                Reset all filters
+              </button>
+            )}
+          </div>
         </div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -292,7 +303,7 @@ function FilterRow({
       className={cn(
         "press-none flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-left text-[14px]",
         "transition-colors duration-[var(--motion-standard)]",
-        selected ? "bg-accent-soft text-ink" : "text-ink-soft active:bg-surface-sunken"
+        selected ? "bg-accent-soft text-ink" : "text-ink-soft active:bg-surface-sunken",
       )}
     >
       {dot && (

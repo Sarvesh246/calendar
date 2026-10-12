@@ -21,27 +21,89 @@ function item(p: Partial<Item> & Pick<Item, "title" | "type" | "at">): Item {
 }
 
 const lecture = (m: number, d: number) =>
-  item({ title: "CS 101 Lecture", type: "event", at: at(m, d, 10), endAt: at(m, d, 11, 15), categoryId: "c1", location: "Hall B", repeat: { freq: "weekly", byDay: [1, 3, 5] }, repeatId: "r1" });
+  item({
+    title: "CS 101 Lecture",
+    type: "event",
+    at: at(m, d, 10),
+    endAt: at(m, d, 11, 15),
+    categoryId: "c1",
+    location: "Hall B",
+    repeat: { freq: "weekly", byDay: [1, 3, 5] },
+    repeatId: "r1",
+  });
 
 const items: Item[] = [
   lecture(9, 23),
   lecture(9, 25),
   lecture(9, 28),
   lecture(9, 30),
-  item({ title: "Econ Seminar", type: "event", at: at(9, 24, 14), endAt: at(9, 24, 15, 15), categoryId: "c2", repeat: { freq: "weekly", byDay: [4] }, repeatId: "r2" }),
-  item({ title: "Econ Seminar", type: "event", at: at(10, 1, 14), endAt: at(10, 1, 15, 15), categoryId: "c2", repeat: { freq: "weekly", byDay: [4] }, repeatId: "r2" }),
-  item({ title: "Dentist appointment", type: "event", at: at(10, 6, 14), location: "Main St Dental" }),
-  item({ title: "Essay draft", type: "assignment", at: at(9, 25, 23, 59), categoryId: "c1", status: "todo" }),
-  item({ title: "Problem Set 3", type: "assignment", at: at(9, 24, 23, 59), categoryId: "c2", status: "doing" }),
-  item({ title: "Problem Set 4", type: "assignment", at: at(10, 1, 23, 59), categoryId: "c2", status: "todo" }),
-  item({ title: "Reading response", type: "assignment", at: at(9, 22, 23, 59), categoryId: "c1", status: "todo" }),
-  item({ title: "Lab report", type: "assignment", at: at(9, 23, 23, 59), categoryId: "c1", status: "done", completedAt: at(9, 23, 20) }),
+  item({
+    title: "Econ Seminar",
+    type: "event",
+    at: at(9, 24, 14),
+    endAt: at(9, 24, 15, 15),
+    categoryId: "c2",
+    repeat: { freq: "weekly", byDay: [4] },
+    repeatId: "r2",
+  }),
+  item({
+    title: "Econ Seminar",
+    type: "event",
+    at: at(10, 1, 14),
+    endAt: at(10, 1, 15, 15),
+    categoryId: "c2",
+    repeat: { freq: "weekly", byDay: [4] },
+    repeatId: "r2",
+  }),
+  item({
+    title: "Dentist appointment",
+    type: "event",
+    at: at(10, 6, 14),
+    location: "Main St Dental",
+  }),
+  item({
+    title: "Essay draft",
+    type: "assignment",
+    at: at(9, 25, 23, 59),
+    categoryId: "c1",
+    status: "todo",
+  }),
+  item({
+    title: "Problem Set 3",
+    type: "assignment",
+    at: at(9, 24, 23, 59),
+    categoryId: "c2",
+    status: "doing",
+  }),
+  item({
+    title: "Problem Set 4",
+    type: "assignment",
+    at: at(10, 1, 23, 59),
+    categoryId: "c2",
+    status: "todo",
+  }),
+  item({
+    title: "Reading response",
+    type: "assignment",
+    at: at(9, 22, 23, 59),
+    categoryId: "c1",
+    status: "todo",
+  }),
+  item({
+    title: "Lab report",
+    type: "assignment",
+    at: at(9, 23, 23, 59),
+    categoryId: "c1",
+    status: "done",
+    completedAt: at(9, 23, 20),
+  }),
   item({ title: "Buy textbook", type: "task", at: at(9, 26, 23, 59), status: "todo" }),
 ];
 
 const ctx: AssistantCtx = { items, categories, clock24h: false, weekStartsOn: 0 };
 beforeEach(() => resetLocalAssistantState());
-const ask = (text: string, history: AssistantTurn[] = []) => tryLocalAnswer(text, history, ctx, NOW);
+const ask = (text: string, history: AssistantTurn[] = []) =>
+  tryLocalAnswer(text, history, ctx, NOW);
 const text = (t: string) => ask(t)?.text ?? null;
 
 describe("local assistant — deferral", () => {
@@ -109,7 +171,14 @@ describe("local assistant — reading the calendar", () => {
   });
 
   it("handles casual phrasings of the same ask", () => {
-    for (const q of ["what do I have tomorrow", "anything tomorrow?", "whats going on tmrw", "tomorrow's schedule", "what's my schedule tomorrow", "show me tomorrow"]) {
+    for (const q of [
+      "what do I have tomorrow",
+      "anything tomorrow?",
+      "whats going on tmrw",
+      "tomorrow's schedule",
+      "what's my schedule tomorrow",
+      "show me tomorrow",
+    ]) {
       expect(text(q), q).toContain("CS 101 Lecture");
     }
   });
@@ -228,7 +297,13 @@ describe("local assistant — reading the calendar", () => {
 
 describe("local assistant — changing the calendar", () => {
   it("completes an item by a loose name", () => {
-    for (const q of ["mark the essay done", "I finished my essay draft", "check off essay", "essay is done", "done with the essay draft"]) {
+    for (const q of [
+      "mark the essay done",
+      "I finished my essay draft",
+      "check off essay",
+      "essay is done",
+      "done with the essay draft",
+    ]) {
       const r = ask(q)!;
       expect(r.actions?.[0], q).toMatchObject({ kind: "update", patch: { status: "done" } });
       expect(r.text).toContain("Essay draft");
@@ -293,7 +368,10 @@ describe("local assistant — changing the calendar", () => {
   });
 
   it("deletes with a confirm card and refuses bulk wipes", () => {
-    expect(ask("delete the dentist appointment")?.actions?.[0]).toMatchObject({ kind: "delete", itemTitle: "Dentist appointment" });
+    expect(ask("delete the dentist appointment")?.actions?.[0]).toMatchObject({
+      kind: "delete",
+      itemTitle: "Dentist appointment",
+    });
     expect(ask("delete all my events")).toBeNull();
     expect(ask("clear my calendar")).toBeNull();
   });
@@ -317,9 +395,18 @@ describe("local assistant — changing the calendar", () => {
     expect(due.actions?.[0]).toMatchObject({ kind: "create", draft: { type: "assignment" } });
     expect(ask("remind me to call mom tomorrow")?.actions?.[0]).toMatchObject({ kind: "create" });
     expect(ask("add something later")).toBeNull();
-    expect(ask("add dinner with sam tomorrow")?.text).toMatch(/^What time is \*\*Dinner with sam\*\* /); // no time: ask, don't guess
-    expect(ask("add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before")?.actions?.[0]).toMatchObject({ kind: "create" });
-    expect(ask("add yoga every monday at 7am")?.actions?.[0]).toMatchObject({ kind: "create", draft: { repeat: { freq: "weekly", byDay: [1] } } });
+    expect(ask("add dinner with sam tomorrow")?.text).toMatch(
+      /^What time is \*\*Dinner with sam\*\* /,
+    ); // no time: ask, don't guess
+    expect(
+      ask(
+        "add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before",
+      )?.actions?.[0],
+    ).toMatchObject({ kind: "create" });
+    expect(ask("add yoga every monday at 7am")?.actions?.[0]).toMatchObject({
+      kind: "create",
+      draft: { repeat: { freq: "weekly", byDay: [1] } },
+    });
   });
 
   it("splits a pasted list into events", () => {
@@ -347,11 +434,17 @@ describe("local assistant — more phrasings", () => {
   it("keeps titles faithful when adding", () => {
     expect(ask("add lunch with sam friday at noon")).toBeNull();
     expect(ask("schedule a meeting with prof tomorrow at 2pm")).toBeNull();
-    expect(ask("add dentist on oct 12 at 9am")?.actions?.[0]).toMatchObject({ kind: "create", draft: { title: "Dentist" } });
+    expect(ask("add dentist on oct 12 at 9am")?.actions?.[0]).toMatchObject({
+      kind: "create",
+      draft: { title: "Dentist" },
+    });
   });
 
   it("does not hijack how-to and advice questions", () => {
-    for (const q of ["what's the best way to study for finals", "what do I need to do to prepare for the dentist"]) {
+    for (const q of [
+      "what's the best way to study for finals",
+      "what do I need to do to prepare for the dentist",
+    ]) {
       expect(ask(q), q).toBeNull();
     }
   });

@@ -4,7 +4,14 @@ import { formatTimeSpan, groupItemsByDay } from "./date-utils";
 import type { Item } from "./types";
 
 const item = (over: Partial<Item>): Item =>
-  ({ id: Math.random().toString(36), categoryId: "c", type: "assignment", title: "x", createdAt: "", ...over }) as Item;
+  ({
+    id: Math.random().toString(36),
+    categoryId: "c",
+    type: "assignment",
+    title: "x",
+    createdAt: "",
+    ...over,
+  }) as Item;
 
 describe("summarizeWeek", () => {
   // Friday, Oct 9 2026, mid-afternoon.
@@ -15,8 +22,18 @@ describe("summarizeWeek", () => {
       item({ at: new Date(2026, 9, 9, 23, 59).toISOString() }),
       item({ at: new Date(2026, 9, 9, 9, 0).toISOString() }),
       item({ at: new Date(2026, 9, 8, 12, 0).toISOString(), status: "done" }),
-      item({ type: "event", at: new Date(2026, 9, 9, 10, 0).toISOString(), endAt: new Date(2026, 9, 9, 11, 0).toISOString(), repeat: { freq: "weekly" } as Item["repeat"] }),
-      item({ type: "event", at: new Date(2026, 9, 10, 19, 0).toISOString(), endAt: new Date(2026, 9, 10, 22, 0).toISOString(), title: "Concert" }),
+      item({
+        type: "event",
+        at: new Date(2026, 9, 9, 10, 0).toISOString(),
+        endAt: new Date(2026, 9, 9, 11, 0).toISOString(),
+        repeat: { freq: "weekly" } as Item["repeat"],
+      }),
+      item({
+        type: "event",
+        at: new Date(2026, 9, 10, 19, 0).toISOString(),
+        endAt: new Date(2026, 9, 10, 22, 0).toISOString(),
+        title: "Concert",
+      }),
     ];
     const week = summarizeWeek(groupItemsByDay(items), now, 0, () => "Personal");
     const fri = week.find((d) => d.isToday)!;

@@ -26,7 +26,7 @@ describe("normalizeActions", () => {
   it("does not update from a substring title", () => {
     const out = normalizeActions(
       [{ kind: "update", summary: "Move lab", title: "lab", at: "2026-09-05T23:59:00.000Z" }],
-      body
+      body,
     );
     expect(out).toHaveLength(0);
   });
@@ -34,7 +34,7 @@ describe("normalizeActions", () => {
   it("updates by itemId", () => {
     const out = normalizeActions(
       [{ kind: "update", summary: "Move", itemId: "1", at: "2026-09-05T23:59:00.000Z" }],
-      body
+      body,
     );
     expect(out).toHaveLength(1);
     expect(out[0].kind).toBe("update");
@@ -42,8 +42,16 @@ describe("normalizeActions", () => {
 
   it("does not treat an empty string as a field wipe", () => {
     const out = normalizeActions(
-      [{ kind: "update", summary: "Move", itemId: "1", at: "2026-09-05T23:59:00.000Z", location: "" }],
-      body
+      [
+        {
+          kind: "update",
+          summary: "Move",
+          itemId: "1",
+          at: "2026-09-05T23:59:00.000Z",
+          location: "",
+        },
+      ],
+      body,
     );
     expect(out[0].kind === "update" && out[0].patch.location).toBeUndefined();
   });
@@ -61,18 +69,26 @@ describe("normalizeActions", () => {
           reminders: [{ offsetMinutes: 1440 }, { offsetMinutes: 120, label: "2 hours before" }],
         },
       ],
-      body
+      body,
     );
     expect(withBoth).toHaveLength(1);
     expect(withBoth[0].kind === "create" && withBoth[0].draft.location).toMatch(/PLNK/);
     expect(
       withBoth[0].kind === "create" &&
-        withBoth[0].draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b)
+        withBoth[0].draft.reminders?.map((r) => r.offsetMinutes).sort((a, b) => a - b),
     ).toEqual([120, 1440]);
 
     const omitted = normalizeActions(
-      [{ kind: "create", summary: "Add gym", title: "Gym", itemType: "event", at: "2026-09-13T18:00:00.000Z" }],
-      body
+      [
+        {
+          kind: "create",
+          summary: "Add gym",
+          title: "Gym",
+          itemType: "event",
+          at: "2026-09-13T18:00:00.000Z",
+        },
+      ],
+      body,
     );
     expect(omitted[0].kind === "create" && omitted[0].draft.reminders).toBeUndefined();
 
@@ -87,7 +103,7 @@ describe("normalizeActions", () => {
           reminders: [],
         },
       ],
-      body
+      body,
     );
     expect(none[0].kind === "create" && none[0].draft.reminders).toEqual([]);
   });
@@ -107,7 +123,7 @@ describe("normalizeActions", () => {
           until: "2026-12-12T23:59:00.000Z",
         },
       ],
-      body
+      body,
     );
     expect(out).toHaveLength(1);
     expect(out[0].kind === "create" && out[0].draft.repeat).toEqual({

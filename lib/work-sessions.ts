@@ -60,7 +60,7 @@ export function findFreeSlot(
     dayEndHour?: number;
     days?: number;
     before?: Date;
-  }
+  },
 ): Date | null {
   const step = 15 * 60_000;
   const length = Math.max(15, opts.minutes) * 60_000;

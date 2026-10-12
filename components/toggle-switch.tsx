@@ -30,7 +30,7 @@ export function ToggleSwitch({
         "before:absolute before:-inset-x-1.5 before:-inset-y-2 before:content-['']",
         "transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-base)]",
-        checked ? "bg-accent" : "bg-surface-sunken"
+        checked ? "bg-accent" : "bg-surface-sunken",
       )}
     >
       <motion.span

@@ -144,10 +144,15 @@ describe("persist", () => {
   it("rejects malformed JSON", () => {
     sessionStorage.setItem("datebook-draft:focus-session", "{not json");
     expect(loadFocusSession()).toBeNull();
-    sessionStorage.setItem("datebook-draft:focus-session", JSON.stringify({ clock: "nope", segments: [] }));
+    sessionStorage.setItem(
+      "datebook-draft:focus-session",
+      JSON.stringify({ clock: "nope", segments: [] }),
+    );
     expect(loadFocusSession()).toBeNull();
     expect(isFocusSession(null)).toBe(false);
-    expect(isFocusSession({ clock: "stopwatch", durationMs: null, targetEndsAt: null, segments: "x" })).toBe(false);
+    expect(
+      isFocusSession({ clock: "stopwatch", durationMs: null, targetEndsAt: null, segments: "x" }),
+    ).toBe(false);
   });
 });
 
@@ -157,7 +162,12 @@ describe("default pick and rank", () => {
   it("prefers an in-progress item over the queue", () => {
     const items = [
       work({ id: "later", at: new Date("2026-09-16T18:00:00").toISOString() }),
-      work({ id: "doing", title: "Lab", status: "doing", at: new Date("2026-09-20T18:00:00").toISOString() }),
+      work({
+        id: "doing",
+        title: "Lab",
+        status: "doing",
+        at: new Date("2026-09-20T18:00:00").toISOString(),
+      }),
     ];
     expect(defaultFocusItem(items, now)?.id).toBe("doing");
   });

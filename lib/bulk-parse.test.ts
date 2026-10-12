@@ -10,7 +10,7 @@ const categories: Category[] = [
 
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
+    d.getDate(),
   ).padStart(2, "0")}`;
 }
 
@@ -59,11 +59,7 @@ describe("parseBulk", () => {
   });
 
   it("classifies deadline wording as an assignment", () => {
-    const { drafts } = parseBulk(
-      "Oct 3\tEssay 1 due\nOct 10\tGuest lecture",
-      categories,
-      NOW
-    );
+    const { drafts } = parseBulk("Oct 3\tEssay 1 due\nOct 10\tGuest lecture", categories, NOW);
     expect(drafts[0].type).toBe("assignment");
     expect(drafts[1].type).toBe("event");
   });
@@ -77,14 +73,18 @@ describe("parseBulk", () => {
     const { drafts, skipped } = parseBulk(
       "Sept. 9\tOrientation\nsomething with no date\nSept. 12\tAdvising",
       categories,
-      NOW
+      NOW,
     );
     expect(drafts).toHaveLength(2);
     expect(skipped).toEqual(["something with no date"]);
   });
 
   it("handles pipe-separated and multi-space tables", () => {
-    const piped = parseBulk("Sept. 9 | Orientation | Rudder\nSept. 12 | Advising | Zach", categories, NOW);
+    const piped = parseBulk(
+      "Sept. 9 | Orientation | Rudder\nSept. 12 | Advising | Zach",
+      categories,
+      NOW,
+    );
     expect(piped.drafts).toHaveLength(2);
     expect(piped.drafts[0].location).toBe("Rudder");
 

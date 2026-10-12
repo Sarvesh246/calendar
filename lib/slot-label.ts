@@ -8,8 +8,15 @@ export function minuteLabel(key: string, minute: number, clock24h: boolean): str
 }
 
 /** "Tue, Sep 15 · 2:30 PM" or, with an end, "Tue, Sep 15 · 2:30 PM – 3:30 PM". */
-export function slotLabel(key: string, startMin: number, endMin: number | null, clock24h: boolean): string {
+export function slotLabel(
+  key: string,
+  startMin: number,
+  endMin: number | null,
+  clock24h: boolean,
+): string {
   const day = format(dateFromDayKey(key), "EEE, MMM d");
   const start = minuteLabel(key, startMin, clock24h);
-  return endMin == null ? `${day} · ${start}` : `${day} · ${start} – ${minuteLabel(key, endMin, clock24h)}`;
+  return endMin == null
+    ? `${day} · ${start}`
+    : `${day} · ${start} – ${minuteLabel(key, endMin, clock24h)}`;
 }

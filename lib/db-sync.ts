@@ -1,11 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  Category,
-  ImportSource,
-  Item,
-  ReminderPreset,
-  UserSettings,
-} from "./types";
+import type { Category, ImportSource, Item, ReminderPreset, UserSettings } from "./types";
 import { tombKey, type EntityKind, type TombstoneMap } from "./tombstones";
 import { sanitizeCustomTheme } from "./custom-theme";
 import { normalizeClassReminderMinutes } from "./class-reminder";
@@ -96,7 +90,7 @@ export function describeError(e: unknown): string {
   if (typeof e === "object") {
     const o = e as Record<string, unknown>;
     const parts = [o.message, o.details, o.hint, o.code].filter(
-      (x): x is string => typeof x === "string" && x.length > 0
+      (x): x is string => typeof x === "string" && x.length > 0,
     );
     if (parts.length) return parts.join(" — ");
     try {
@@ -129,7 +123,9 @@ export function rowToCategory(r: Row): Category {
   return {
     id: r.id as string,
     name: safeCategoryName(r.name),
-    ...(typeof r.class_title === "string" && r.class_title.trim() ? { classTitle: r.class_title.trim() } : {}),
+    ...(typeof r.class_title === "string" && r.class_title.trim()
+      ? { classTitle: r.class_title.trim() }
+      : {}),
     color: safeCategoryColor(r.color),
     ...(r.archived ? { archived: true } : {}),
     ...(r.source_id ? { sourceId: r.source_id as string } : {}),
@@ -314,27 +310,27 @@ export function rowToSettings(r: Row, local?: UserSettings): UserSettings {
     classReminderMinutes: carried(
       "class_reminder_minutes",
       normalizeClassReminderMinutes(r.class_reminder_minutes),
-      local?.classReminderMinutes
+      local?.classReminderMinutes,
     ),
     appleCalendarSync: carried(
       "apple_calendar_sync",
       Boolean(r.apple_calendar_sync),
-      local?.appleCalendarSync
+      local?.appleCalendarSync,
     ),
     liveActivityEnabled: carried(
       "live_activity_enabled",
       r.live_activity_enabled === undefined ? true : Boolean(r.live_activity_enabled),
-      local?.liveActivityEnabled
+      local?.liveActivityEnabled,
     ),
     liveActivityPrivacy: carried(
       "live_activity_privacy",
       r.live_activity_privacy === "hide" ? "hide" : "show",
-      local?.liveActivityPrivacy
+      local?.liveActivityPrivacy,
     ),
     mobileDayDetails: carried(
       "mobile_day_details",
       r.mobile_day_details === "inline" ? "inline" : "sheet",
-      local?.mobileDayDetails
+      local?.mobileDayDetails,
     ),
     ...(customTheme
       ? { customTheme }
@@ -388,7 +384,7 @@ export function deletionsSupported(): boolean {
 
 export async function fetchDeletions(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
 ): Promise<TombstoneMap> {
   if (deletionsUnavailable) return {};
   const { data, error } = await supabase
@@ -400,7 +396,7 @@ export async function fetchDeletions(
       deletionsUnavailable = true;
       console.warn(
         "[datebook] `deletions` table not found — run supabase/migrations/0006. " +
-          "Until then, a delete made while a device is offline won't reach it."
+          "Until then, a delete made while a device is offline won't reach it.",
       );
     } else {
       console.warn("[datebook] tombstone fetch failed:", describeError(error));
@@ -419,7 +415,7 @@ export async function fetchDeletions(
 export async function pushDeletions(
   supabase: SupabaseClient,
   userId: string,
-  tombstones: TombstoneMap
+  tombstones: TombstoneMap,
 ) {
   if (deletionsUnavailable) return;
   const rows = Object.entries(tombstones).map(([key, at]) => {
@@ -479,7 +475,7 @@ function chunk<T>(rows: T[], size: number): T[][] {
 async function selectAllRows(
   supabase: SupabaseClient,
   table: string,
-  userId: string
+  userId: string,
 ): Promise<Row[]> {
   const out: Row[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -501,7 +497,7 @@ export async function fetchAllForUser(
   userId: string,
   /** This device's settings, so a column the project's schema lacks keeps its
    *  local value instead of reverting to the default. See `rowToSettings`. */
-  localSettings?: UserSettings
+  localSettings?: UserSettings,
 ): Promise<CloudSnapshot> {
   const [c, i, rp, is, us, deletions] = await Promise.all([
     selectAllRows(supabase, "categories", userId),
@@ -544,7 +540,7 @@ async function upsertRows(
   supabase: SupabaseClient,
   table: string,
   rows: Row[],
-  onConflict?: string
+  onConflict?: string,
 ) {
   if (rows.length === 0) return;
   stripCols(table, rows);
@@ -557,7 +553,7 @@ async function upsertRows(
       if (!col) break;
       stripped[table].add(col);
       console.warn(
-        `[datebook] ${table}.${col} column not found — run supabase/migrations. Syncing without it until then.`
+        `[datebook] ${table}.${col} column not found — run supabase/migrations. Syncing without it until then.`,
       );
       ({ error } = await supabase.from(table).upsert(stripCols(table, batch), opts));
     }
@@ -590,25 +586,32 @@ async function upsertSettings(supabase: SupabaseClient, userId: string, s: UserS
 export async function pushAllToCloud(
   supabase: SupabaseClient,
   userId: string,
-  s: PushableSnapshot
+  s: PushableSnapshot,
 ) {
   const knownCategoryIds = new Set(s.categories.map((c) => c.id));
-  await upsertRows(supabase, "categories", mapRows(s.categories, (x) => toCategoryRow(x, userId), "category"));
+  await upsertRows(
+    supabase,
+    "categories",
+    mapRows(s.categories, (x) => toCategoryRow(x, userId), "category"),
+  );
   await upsertRows(
     supabase,
     "reminder_presets",
     mapRows(s.reminderPresets, (x) => toPresetRow(x, userId), "reminder preset"),
-    "user_id,id"
+    "user_id,id",
   );
   await upsertRows(
     supabase,
     "import_sources",
-    mapRows(s.importSources, (x) => toImportSourceRow(x, userId), "import source")
+    mapRows(s.importSources, (x) => toImportSourceRow(x, userId), "import source"),
   );
   await upsertRows(
     supabase,
     "items",
-    sanitizeItemRows(mapRows(s.items, (x) => toItemRow(x, userId), "item"), knownCategoryIds)
+    sanitizeItemRows(
+      mapRows(s.items, (x) => toItemRow(x, userId), "item"),
+      knownCategoryIds,
+    ),
   );
   if (s.settings) await upsertSettings(supabase, userId, s.settings);
 }
@@ -633,28 +636,31 @@ export async function pushChanges(
   supabase: SupabaseClient,
   userId: string,
   c: PendingChanges,
-  knownCategoryIds: Set<string>
+  knownCategoryIds: Set<string>,
 ) {
   await upsertRows(
     supabase,
     "categories",
-    mapRows(c.categories.upserts, (x) => toCategoryRow(x, userId), "category")
+    mapRows(c.categories.upserts, (x) => toCategoryRow(x, userId), "category"),
   );
   await upsertRows(
     supabase,
     "reminder_presets",
     mapRows(c.reminderPresets.upserts, (x) => toPresetRow(x, userId), "reminder preset"),
-    "user_id,id"
+    "user_id,id",
   );
   await upsertRows(
     supabase,
     "import_sources",
-    mapRows(c.importSources.upserts, (x) => toImportSourceRow(x, userId), "import source")
+    mapRows(c.importSources.upserts, (x) => toImportSourceRow(x, userId), "import source"),
   );
   await upsertRows(
     supabase,
     "items",
-    sanitizeItemRows(mapRows(c.items.upserts, (x) => toItemRow(x, userId), "item"), knownCategoryIds)
+    sanitizeItemRows(
+      mapRows(c.items.upserts, (x) => toItemRow(x, userId), "item"),
+      knownCategoryIds,
+    ),
   );
 
   // Tombstones before the deletes: if the connection drops between the two, a
@@ -671,10 +677,7 @@ export async function pushChanges(
 }
 
 /** Shallow diff two id-keyed collections. Equality via JSON string (models are small & flat-ish). */
-export function diffCollection<T extends { id: string }>(
-  prev: T[],
-  next: T[]
-): CollectionDelta<T> {
+export function diffCollection<T extends { id: string }>(prev: T[], next: T[]): CollectionDelta<T> {
   const prevById = new Map(prev.map((x) => [x.id, x]));
   const nextIds = new Set(next.map((x) => x.id));
   const upserts = next.filter((x) => {

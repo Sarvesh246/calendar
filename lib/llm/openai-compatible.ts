@@ -46,7 +46,7 @@ export class ProviderRequestError extends Error {
     message: string,
     readonly status: number,
     readonly retryAfterMs?: number,
-    readonly modelNotFound = false
+    readonly modelNotFound = false,
   ) {
     super(message);
     this.name = "ProviderRequestError";
@@ -92,9 +92,7 @@ export async function createChatCompletion(opts: {
     model: opts.provider.model,
     messages: opts.messages,
     tools: opts.tools,
-    tool_choice: opts.forceTool
-      ? { type: "function", function: { name: opts.forceTool } }
-      : "auto",
+    tool_choice: opts.forceTool ? { type: "function", function: { name: opts.forceTool } } : "auto",
     parallel_tool_calls: true,
     ...(opts.provider.reasoningEffort ? { reasoning_effort: opts.provider.reasoningEffort } : {}),
     temperature: 0.2,
@@ -107,7 +105,7 @@ export async function createChatCompletion(opts: {
       headers: headers(opts.provider, opts.key),
       body: JSON.stringify(body),
     },
-    opts.timeoutMs ?? 18_000
+    opts.timeoutMs ?? 18_000,
   );
   const text = await response.text();
   if (!response.ok) {
@@ -118,7 +116,7 @@ export async function createChatCompletion(opts: {
       `Provider request failed (${response.status})`,
       response.status,
       retryAfterMs(response.headers.get("retry-after")),
-      notFound
+      notFound,
     );
   }
   let data: ChatCompletion;
@@ -128,7 +126,8 @@ export async function createChatCompletion(opts: {
     throw new ProviderRequestError("Provider returned invalid completion JSON", response.status);
   }
   const raw = data.choices?.[0]?.message;
-  if (!raw) throw new ProviderRequestError("Provider returned no assistant message", response.status);
+  if (!raw)
+    throw new ProviderRequestError("Provider returned no assistant message", response.status);
   const toolCalls: ToolCall[] | undefined = raw.tool_calls
     ?.map((call, index) => ({
       id: call.id || `call-${index}`,

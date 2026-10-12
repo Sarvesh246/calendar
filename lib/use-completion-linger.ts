@@ -80,6 +80,6 @@ export function useCompletionLinger(items: Item[]): Item[] {
   // Re-inserted in time order rather than appended, so a card settles where it
   // was standing instead of jumping to the end of the list to do it.
   return [...items, ...lingering].sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
   );
 }

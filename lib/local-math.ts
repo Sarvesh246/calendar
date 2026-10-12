@@ -27,7 +27,7 @@ const WORD_OPS: Array<[RegExp, string]> = [
 /** An "x" that means times: between a number (or ")") and a number (or "("). */
 const TIMES_X = /([\d)])\s*x\s*(?=[\d(])/g;
 
-type Tok ={ k: "n"; v: number } | { k: "op"; v: string };
+type Tok = { k: "n"; v: number } | { k: "op"; v: string };
 
 function tokenize(src: string): Tok[] | null {
   const out: Tok[] = [];
@@ -138,7 +138,13 @@ function parse(toks: Tok[]): number | null {
 export function evaluate(exprIn: string): number | null {
   let e = exprIn.toLowerCase().trim();
   for (const [re, op] of WORD_OPS) e = e.replace(re, ` ${op} `);
-  e = e.replace(TIMES_X, "$1*").replace(/[×✕·]/g, "*").replace(/[÷]/g, "/").replace(/[−–]/g, "-").replace(/\s+/g, " ").trim();
+  e = e
+    .replace(TIMES_X, "$1*")
+    .replace(/[×✕·]/g, "*")
+    .replace(/[÷]/g, "/")
+    .replace(/[−–]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
   const toks = tokenize(e);
   if (!toks || !toks.length) return null;
   // At least one real operator: a bare number isn't a calculation.
@@ -163,7 +169,14 @@ function pretty(expr: string): string {
 }
 
 const UNIT_MIN: Record<string, number> = {
-  second: 1 / 60, sec: 1 / 60, minute: 1, min: 1, hour: 60, hr: 60, day: 1440, week: 10080,
+  second: 1 / 60,
+  sec: 1 / 60,
+  minute: 1,
+  min: 1,
+  hour: 60,
+  hr: 60,
+  day: 1440,
+  week: 10080,
 };
 const UNIT_RE = "(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)";
 
@@ -182,22 +195,33 @@ function unitLabel(u: string, n: number): string {
  * lowercased with fillers stripped ("what is 15% of 80", "calculate 3*(4+5)").
  */
 export function answerMath(q: string): string | undefined {
-  const body = q.replace(/^(?:what is|what are|what does|calculate|compute|work out|figure out|how much is|quick math:?|math:?)\s+/, "").replace(/\s+(?:equal|equals|come to|make)$/, "").trim();
+  const body = q
+    .replace(
+      /^(?:what is|what are|what does|calculate|compute|work out|figure out|how much is|quick math:?|math:?)\s+/,
+      "",
+    )
+    .replace(/\s+(?:equal|equals|come to|make)$/, "")
+    .trim();
 
   // Dates ("9/25"), times ("3:30") and clock math ("2 hours from now") belong elsewhere.
   if (/^\d{1,2}\/\d{1,2}(?:\/\d{2,4})?$/.test(body) || /\d:\d{2}/.test(body)) return undefined;
-  if (/\b(?:from now|ago|until|till|since|after|before|am|pm|today|tomorrow)\b/.test(body)) return undefined;
+  if (/\b(?:from now|ago|until|till|since|after|before|am|pm|today|tomorrow)\b/.test(body))
+    return undefined;
 
   // "15% of 80", "15 percent of $80"
   let m = /^(-?[\d.,]+)\s*(?:%|percent) of \$?(-?[\d.,]+)$/.exec(body);
   if (m) {
     const pct = Number(m[1].replace(/,/g, ""));
     const of = Number(m[2].replace(/,/g, ""));
-    if (Number.isFinite(pct) && Number.isFinite(of)) return `${m[1]}% of ${m[2]} is ${bold(formatNumber((pct / 100) * of))}.`;
+    if (Number.isFinite(pct) && Number.isFinite(of))
+      return `${m[1]}% of ${m[2]} is ${bold(formatNumber((pct / 100) * of))}.`;
   }
 
   // "42 out of 50 as a percent", "what percent is 42 of 50", "42/50 as a percentage"
-  m = /^(?:what (?:percent(?:age)?) (?:is|of) )?([\d.,]+)\s*(?:out of|of|\/)\s*([\d.,]+)(?: (?:as|in|to) (?:an? )?percent(?:age)?| (?:is )?what percent(?:age)?| percent(?:age)?)?$/.exec(body);
+  m =
+    /^(?:what (?:percent(?:age)?) (?:is|of) )?([\d.,]+)\s*(?:out of|of|\/)\s*([\d.,]+)(?: (?:as|in|to) (?:an? )?percent(?:age)?| (?:is )?what percent(?:age)?| percent(?:age)?)?$/.exec(
+      body,
+    );
   if (m && (/percent/.test(body) || /\bout of\b/.test(body))) {
     const a = Number(m[1].replace(/,/g, ""));
     const b = Number(m[2].replace(/,/g, ""));
@@ -205,9 +229,12 @@ export function answerMath(q: string): string | undefined {
   }
 
   // "3.5 hours in minutes", "convert 90 minutes to hours", "how many minutes in 2 hours"
-  m = new RegExp(`^(?:convert )?([\\d.,]+) ${UNIT_RE} (?:in|to|into|as) ${UNIT_RE}$`).exec(body) ??
+  m =
+    new RegExp(`^(?:convert )?([\\d.,]+) ${UNIT_RE} (?:in|to|into|as) ${UNIT_RE}$`).exec(body) ??
     (() => {
-      const r = new RegExp(`^how many ${UNIT_RE} (?:are )?in (?:an? |one )?([\\d.,]*)\\s*${UNIT_RE}$`).exec(q);
+      const r = new RegExp(
+        `^how many ${UNIT_RE} (?:are )?in (?:an? |one )?([\\d.,]*)\\s*${UNIT_RE}$`,
+      ).exec(q);
       return r ? ([r[0], r[2] || "1", r[3], r[1]] as unknown as RegExpExecArray) : null;
     })();
   if (m) {
@@ -222,7 +249,10 @@ export function answerMath(q: string): string | undefined {
 
   // Plain arithmetic. Only digits, operators and operator words may appear.
   if (!/\d/.test(body)) return undefined;
-  const scrub = body.replace(/\b(?:multiplied by|divided by|to the power of|raised to|added to|times|over|plus|minus|squared|cubed|percent|subtract(?:ed)?)\b/g, " ");
+  const scrub = body.replace(
+    /\b(?:multiplied by|divided by|to the power of|raised to|added to|times|over|plus|minus|squared|cubed|percent|subtract(?:ed)?)\b/g,
+    " ",
+  );
   // "x" counts only between numbers ("12 x 3"); "2x + 3" is algebra, not ours.
   if (/[a-z]/i.test(scrub.replace(TIMES_X, "$1 "))) return undefined;
   const v = evaluate(body);

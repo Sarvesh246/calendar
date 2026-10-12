@@ -12,13 +12,20 @@ export async function ensureAssistantThread(userId: string, threadId: string) {
     .maybeSingle();
   if (readError) throw new Error(`Could not read assistant thread: ${readError.message}`);
   const query = existing
-    ? db.from("assistant_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId).eq("user_id", userId)
+    ? db
+        .from("assistant_threads")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", threadId)
+        .eq("user_id", userId)
     : db.from("assistant_threads").insert({ id: threadId, user_id: userId });
   const { error } = await query;
   if (error) throw new Error(`Could not store assistant thread: ${error.message}`);
 }
 
-export async function loadAssistantHistory(userId: string, threadId: string): Promise<ChatMessage[]> {
+export async function loadAssistantHistory(
+  userId: string,
+  threadId: string,
+): Promise<ChatMessage[]> {
   const db = assistantDatabase();
   if (!db) return [];
   const { data, error } = await db
@@ -29,18 +36,16 @@ export async function loadAssistantHistory(userId: string, threadId: string): Pr
     .order("created_at", { ascending: false })
     .limit(24);
   if (error) throw new Error(`Could not load assistant history: ${error.message}`);
-  return (data ?? [])
-    .reverse()
-    .map((row) => {
-      const content = row.content as { text?: unknown; toolCallId?: unknown; name?: unknown } | null;
-      const role = row.role as ChatMessage["role"];
-      return {
-        role,
-        content: typeof content?.text === "string" ? content.text : "",
-        tool_call_id: typeof content?.toolCallId === "string" ? content.toolCallId : undefined,
-        name: typeof content?.name === "string" ? content.name : undefined,
-      };
-    });
+  return (data ?? []).reverse().map((row) => {
+    const content = row.content as { text?: unknown; toolCallId?: unknown; name?: unknown } | null;
+    const role = row.role as ChatMessage["role"];
+    return {
+      role,
+      content: typeof content?.text === "string" ? content.text : "",
+      tool_call_id: typeof content?.toolCallId === "string" ? content.toolCallId : undefined,
+      name: typeof content?.name === "string" ? content.name : undefined,
+    };
+  });
 }
 
 export async function storeAssistantMessage(opts: {

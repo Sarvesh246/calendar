@@ -3,7 +3,14 @@
 import { useUIStore } from "@/lib/ui-store";
 import { collapseTiming } from "@/lib/use-animated-collapse";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useTransform,
+  type MotionValue,
+} from "framer-motion";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   classCountdownLabel,
@@ -92,7 +99,11 @@ export function UpNextStack({
     if (!x) return;
     const at = x.get();
     const projected = project(at, velocity);
-    if (count > 1 && Math.abs(projected) > THROW_DISTANCE && Math.sign(projected) === Math.sign(at || projected)) {
+    if (
+      count > 1 &&
+      Math.abs(projected) > THROW_DISTANCE &&
+      Math.sign(projected) === Math.sign(at || projected)
+    ) {
       go(projected < 0 ? 1 : -1, { velocity, thrown: true });
       return;
     }
@@ -183,7 +194,7 @@ export function UpNextStack({
         el.style.overflow = "";
         shellHeight.current = el.offsetHeight;
       },
-      () => {}
+      () => {},
     );
   }, [expanded]);
 
@@ -295,7 +306,11 @@ export function UpNextStack({
                   }
                   onRelease={(velocity) => release(current.id, velocity)}
                 >
-                  <UpNextFace item={current} category={categoryOf(current)} mode={modeOf(current)} />
+                  <UpNextFace
+                    item={current}
+                    category={categoryOf(current)}
+                    mode={modeOf(current)}
+                  />
                 </DeckCard>
               </AnimatePresence>
             </div>
@@ -319,7 +334,7 @@ export function UpNextStack({
                       }}
                       className={cn(
                         "h-1.5 rounded-full transition-[width,background-color] duration-[var(--spring-nudge-ms)] ease-[var(--spring-nudge)]",
-                        i === safeIndex ? "w-4 bg-accent" : "w-1.5 bg-line-strong"
+                        i === safeIndex ? "w-4 bg-accent" : "w-1.5 bg-line-strong",
                       )}
                     />
                   ))}
@@ -493,8 +508,8 @@ function UpNextFace({
           Math.max(
             0,
             (now.getTime() - session.start.getTime()) /
-              (session.end.getTime() - session.start.getTime())
-          )
+              (session.end.getTime() - session.start.getTime()),
+          ),
         )
       : 0;
 
@@ -537,7 +552,9 @@ function UpNextFace({
         {eyebrow}
       </p>
       <div className="mt-2 flex items-baseline justify-between gap-3">
-        <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">{itemDisplayTitle(item, category)}</h3>
+        <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">
+          {itemDisplayTitle(item, category)}
+        </h3>
         <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
           {aside}
         </span>
@@ -566,7 +583,10 @@ function UpNextFace({
             />
           </div>
           {remaining && (
-            <span className="shrink-0 text-[11px] tabular-nums text-ink-faint" suppressHydrationWarning>
+            <span
+              className="shrink-0 text-[11px] tabular-nums text-ink-faint"
+              suppressHydrationWarning
+            >
               {remaining}
             </span>
           )}

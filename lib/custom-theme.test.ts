@@ -50,7 +50,9 @@ describe("sanitizeCustomTheme", () => {
 
   it("drops incomplete or invalid palettes", () => {
     expect(sanitizeCustomTheme({ background: "#fff" })).toBeUndefined();
-    expect(sanitizeCustomTheme({ background: "nope", surface: "#fff", accent: "#000" })).toBeUndefined();
+    expect(
+      sanitizeCustomTheme({ background: "nope", surface: "#fff", accent: "#000" }),
+    ).toBeUndefined();
   });
 });
 
@@ -65,10 +67,10 @@ describe("buildCustomThemeVars", () => {
 
   it("keys light/dark off surface, not background", () => {
     expect(
-      customThemeColorScheme({ background: "#111111", surface: "#fafafa", accent: "#007aff" })
+      customThemeColorScheme({ background: "#111111", surface: "#fafafa", accent: "#007aff" }),
     ).toBe("light");
     expect(
-      customThemeColorScheme({ background: "#fafafa", surface: "#1c1c1e", accent: "#0a84ff" })
+      customThemeColorScheme({ background: "#fafafa", surface: "#1c1c1e", accent: "#0a84ff" }),
     ).toBe("dark");
     expect(isLightColor("#ffffff")).toBe(true);
     expect(isLightColor("#111111")).toBe(false);
@@ -80,7 +82,7 @@ describe("applyCustomThemeToDocument", () => {
     const root = mockRoot();
     applyCustomThemeToDocument(
       { background: "#112233", surface: "#ffffff", accent: "#ff0000" },
-      root
+      root,
     );
     expect(root.attrs["data-preset"]).toBe("custom");
     expect(root.props["--surface-base"]).toBe("#112233");
@@ -156,7 +158,7 @@ describe("custom theme contrast", () => {
     const surface = DEFAULT_CUSTOM_THEME.surface;
     expect(ratio(vars["--ink"], surface)).toBeGreaterThan(ratio(vars["--ink-soft"], surface));
     expect(ratio(vars["--ink-soft"], surface)).toBeGreaterThanOrEqual(
-      ratio(vars["--ink-faint"], surface)
+      ratio(vars["--ink-faint"], surface),
     );
   });
 });

@@ -91,8 +91,8 @@ export function NativeIosSection() {
   if (!wrapped) return null;
 
   const label = liveStatus
-    ? statusCopy[liveStatus.code] ??
-      (liveStatus.activeCount ? "Active" : liveStatus.activitiesEnabled ? "Ready" : "Unavailable")
+    ? (statusCopy[liveStatus.code] ??
+      (liveStatus.activeCount ? "Active" : liveStatus.activitiesEnabled ? "Ready" : "Unavailable"))
     : "Checking…";
   const tone =
     label === "Active" || label === "Ready"
@@ -148,7 +148,11 @@ export function NativeIosSection() {
 
         <div className="border-t border-line/70 px-3 py-3">
           <p className="text-[12px] font-medium text-ink-soft">Lock Screen details</p>
-          <div className="mt-2 grid grid-cols-2 rounded-lg bg-surface-sunken p-1" role="radiogroup" aria-label="Lock Screen details">
+          <div
+            className="mt-2 grid grid-cols-2 rounded-lg bg-surface-sunken p-1"
+            role="radiogroup"
+            aria-label="Lock Screen details"
+          >
             {(["show", "hide"] as const).map((value) => (
               <button
                 key={value}
@@ -188,7 +192,12 @@ export function NativeIosSection() {
               postToNative("stopAllLiveActivities");
             }}
           />
-          <DiagnosticButton icon={RefreshCw} label="Refresh Status" busy={busy === "refresh"} onClick={refresh} />
+          <DiagnosticButton
+            icon={RefreshCw}
+            label="Refresh Status"
+            busy={busy === "refresh"}
+            onClick={refresh}
+          />
         </div>
 
         <div className="border-t border-line/70 px-3 py-2.5">
@@ -214,10 +223,13 @@ export function NativeIosSection() {
                       setCopied(true);
                       window.setTimeout(() => setCopied(false), 1400);
                     })
-                    .catch((error) => console.error("Could not copy Live Activity diagnostics", error));
+                    .catch((error) =>
+                      console.error("Could not copy Live Activity diagnostics", error),
+                    );
                 }}
               >
-                <Copy className="h-3.5 w-3.5" aria-hidden /> {copied ? "Copied" : "Copy debug report"}
+                <Copy className="h-3.5 w-3.5" aria-hidden />{" "}
+                {copied ? "Copied" : "Copy debug report"}
               </button>
             </div>
           )}
@@ -242,10 +254,22 @@ export function NativeIosSection() {
       </div>
       {calendarStatus && <p className="px-1 text-[12px] text-ink-faint">{calendarStatus}</p>}
       <ul className="grid gap-2 text-[12.5px] leading-relaxed text-ink-soft">
-        <Li icon={LayoutGrid} text="Today, Up Next, assignments, and classes widgets — add them from the Home Screen." />
-        <Li icon={Sparkles} text="Siri and Shortcuts: “Add to Datebook”, Start Focus, Open Today." />
-        <Li icon={Share2} text="Share a syllabus, ICS, link, or screenshot into Datebook from any app." />
-        <Li icon={MapPin} text="On an item, add When I arrive so the reminder fires at that place." />
+        <Li
+          icon={LayoutGrid}
+          text="Today, Up Next, assignments, and classes widgets — add them from the Home Screen."
+        />
+        <Li
+          icon={Sparkles}
+          text="Siri and Shortcuts: “Add to Datebook”, Start Focus, Open Today."
+        />
+        <Li
+          icon={Share2}
+          text="Share a syllabus, ICS, link, or screenshot into Datebook from any app."
+        />
+        <Li
+          icon={MapPin}
+          text="On an item, add When I arrive so the reminder fires at that place."
+        />
         <Li icon={Calendar} text="Search assignments and classes from Spotlight." />
       </ul>
     </div>

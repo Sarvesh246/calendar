@@ -58,8 +58,12 @@ describe("createDebouncedStorage", () => {
 
   it("keeps restricted storage from crashing hydration or reset", () => {
     vi.stubGlobal("localStorage", {
-      getItem: () => { throw new Error("denied"); },
-      removeItem: () => { throw new Error("denied"); },
+      getItem: () => {
+        throw new Error("denied");
+      },
+      removeItem: () => {
+        throw new Error("denied");
+      },
     });
     const storage = createDebouncedStorage();
     expect(storage.getItem("test")).toBeNull();

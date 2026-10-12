@@ -36,7 +36,7 @@ describe("summarizeItemWhen", () => {
         completedAt: new Date(2026, 9, 8, 9).toISOString(),
       }),
       now,
-      false
+      false,
     );
     expect(s.chip).toEqual({ label: "Done yesterday", tone: "good" });
   });
@@ -49,7 +49,7 @@ describe("summarizeItemWhen", () => {
         endAt: new Date(2026, 9, 10, 10, 15).toISOString(),
       }),
       now,
-      false
+      false,
     );
     expect(s.time).toBe("9:00 AM – 10:15 AM");
     expect(s.chip.label).toBe("Tomorrow");

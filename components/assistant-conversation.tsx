@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Check, PanelRight, PictureInPicture2, RotateCw, SquarePen, Sparkles, Trash2, X } from "lucide-react";
+import {
+  ArrowUp,
+  Check,
+  PanelRight,
+  PictureInPicture2,
+  RotateCw,
+  SquarePen,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { useUIStore } from "@/lib/ui-store";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
@@ -127,10 +137,23 @@ export function AssistantConversation({
               ask, so the header is just controls — a label here only truncated. */}
           <div className="flex-1" />
           <AssistantModelSelector compact />
-          <button type="button" onClick={reset} disabled={thinking} aria-label="New conversation" title="New conversation" className={cn(headerButton, "disabled:opacity-40")}>
+          <button
+            type="button"
+            onClick={reset}
+            disabled={thinking}
+            aria-label="New conversation"
+            title="New conversation"
+            className={cn(headerButton, "disabled:opacity-40")}
+          >
             <SquarePen className="h-4 w-4" strokeWidth={1.9} />
           </button>
-          <button type="button" onClick={popOut} aria-label="Pop out assistant" title="Pop out" className={headerButton}>
+          <button
+            type="button"
+            onClick={popOut}
+            aria-label="Pop out assistant"
+            title="Pop out"
+            className={headerButton}
+          >
             <PictureInPicture2 className="h-4 w-4" strokeWidth={1.9} />
           </button>
         </div>
@@ -147,7 +170,14 @@ export function AssistantConversation({
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <AssistantModelSelector />
-            <button type="button" onClick={reset} disabled={thinking} aria-label="New conversation" title="New conversation" className={cn(headerButton, "hidden disabled:opacity-40 md:flex")}>
+            <button
+              type="button"
+              onClick={reset}
+              disabled={thinking}
+              aria-label="New conversation"
+              title="New conversation"
+              className={cn(headerButton, "hidden disabled:opacity-40 md:flex")}
+            >
               <SquarePen className="h-4 w-4" strokeWidth={1.9} />
             </button>
             {canDock && (
@@ -161,7 +191,12 @@ export function AssistantConversation({
                 <PanelRight className="h-4 w-4" strokeWidth={1.9} />
               </button>
             )}
-            <button type="button" onClick={onClose} aria-label="Close assistant" className={headerButton}>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close assistant"
+              className={headerButton}
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -172,7 +207,7 @@ export function AssistantConversation({
         ref={scrollRef}
         className={cn(
           "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-3.5",
-          !docked && "md:space-y-4 md:px-6 md:py-6"
+          !docked && "md:space-y-4 md:px-6 md:py-6",
         )}
       >
         {messages.map((m, mi) => {
@@ -183,13 +218,19 @@ export function AssistantConversation({
                 m.role === "user"
                   ? cn(
                       "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink",
-                      !docked && "md:max-w-[78%] md:rounded-2xl md:rounded-br-md md:px-4 md:py-2.5 md:text-[14px]"
+                      !docked &&
+                        "md:max-w-[78%] md:rounded-2xl md:rounded-br-md md:px-4 md:py-2.5 md:text-[14px]",
                     )
                   : cn("max-w-[92%] space-y-2", !docked && "md:max-w-[88%] md:space-y-2.5")
               }
             >
               {m.role === "assistant" ? (
-                <AssistantMarkdown text={m.text} className={docked ? "text-[13.5px] leading-[1.5]" : "md:text-[14.5px] md:leading-[1.55]"} />
+                <AssistantMarkdown
+                  text={m.text}
+                  className={
+                    docked ? "text-[13.5px] leading-[1.5]" : "md:text-[14.5px] md:leading-[1.55]"
+                  }
+                />
               ) : (
                 m.text
               )}
@@ -212,10 +253,23 @@ export function AssistantConversation({
                 const state = m.resolved?.[ai];
                 const facts = actionFacts(action);
                 return (
-                  <div key={ai} className={cn("rounded-lg border border-line bg-surface-sunken p-2.5", !docked && "md:rounded-xl md:p-3")}>
-                    <p className={cn("text-[12px] text-ink-soft", !docked && "md:text-[13px]")}>{action.summary}</p>
+                  <div
+                    key={ai}
+                    className={cn(
+                      "rounded-lg border border-line bg-surface-sunken p-2.5",
+                      !docked && "md:rounded-xl md:p-3",
+                    )}
+                  >
+                    <p className={cn("text-[12px] text-ink-soft", !docked && "md:text-[13px]")}>
+                      {action.summary}
+                    </p>
                     {facts && (
-                      <p className={cn("mt-0.5 text-[11px] text-ink-faint", !docked && "md:text-[12px]")}>
+                      <p
+                        className={cn(
+                          "mt-0.5 text-[11px] text-ink-faint",
+                          !docked && "md:text-[12px]",
+                        )}
+                      >
                         {facts}
                       </p>
                     )}
@@ -242,10 +296,12 @@ export function AssistantConversation({
                           onClick={() => applyAction(mi, ai)}
                           className={cn(
                             "flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90",
-                            action.kind === "delete" ? "bg-warn" : "bg-accent"
+                            action.kind === "delete" ? "bg-warn" : "bg-accent",
                           )}
                         >
-                          {action.kind === "delete" && <Trash2 className="h-3 w-3" strokeWidth={2} />}
+                          {action.kind === "delete" && (
+                            <Trash2 className="h-3 w-3" strokeWidth={2} />
+                          )}
                           {actionVerb(action)}
                         </button>
                       </div>
@@ -255,14 +311,19 @@ export function AssistantConversation({
               })}
 
               {m.suggestions && m.suggestions.length > 0 && (
-                <div className={cn("flex flex-wrap gap-1.5", !docked && "md:grid md:grid-cols-2 md:gap-2")}>
+                <div
+                  className={cn(
+                    "flex flex-wrap gap-1.5",
+                    !docked && "md:grid md:grid-cols-2 md:gap-2",
+                  )}
+                >
                   {m.suggestions.map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}
                       className={cn(
                         "rounded-full border border-line px-3 py-1.5 text-left text-[12px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent",
-                        !docked && "text-[11.5px] md:rounded-xl md:px-3.5 md:py-2.5 md:text-[13px]"
+                        !docked && "text-[11.5px] md:rounded-xl md:px-3.5 md:py-2.5 md:text-[13px]",
                       )}
                     >
                       {s}
@@ -300,7 +361,10 @@ export function AssistantConversation({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ default: motionTokens.nudge, opacity: { duration: motionTokens.micro, ease: motionTokens.ease } }}
+              transition={{
+                default: motionTokens.nudge,
+                opacity: { duration: motionTokens.micro, ease: motionTokens.ease },
+              }}
               className="flex items-center gap-2 px-1"
             >
               <div className="flex items-center gap-1">
@@ -320,7 +384,9 @@ export function AssistantConversation({
 
       <div className={cn("shrink-0 border-t border-line p-2.5", !docked && "md:p-5")}>
         {queued && (
-          <p className="mb-1.5 px-1 text-[11px] text-ink-faint">Queued — sending after this reply</p>
+          <p className="mb-1.5 px-1 text-[11px] text-ink-faint">
+            Queued — sending after this reply
+          </p>
         )}
         <div
           ref={composerRef}
@@ -329,7 +395,7 @@ export function AssistantConversation({
           data-field-group=""
           className={cn(
             "field-shell focus-within-ring flex items-end gap-2 rounded-xl border border-line bg-surface-sunken/70 px-2.5 py-1.5 transition-[border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:border-accent",
-            !docked && "md:px-3 md:py-2"
+            !docked && "md:px-3 md:py-2",
           )}
         >
           <textarea
@@ -338,11 +404,7 @@ export function AssistantConversation({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (
-                e.key === "Enter" &&
-                (e.metaKey || e.ctrlKey) &&
-                !e.nativeEvent.isComposing
-              ) {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send(input);
               }
@@ -360,7 +422,7 @@ export function AssistantConversation({
             aria-label="Message the assistant"
             className={cn(
               "min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-2 text-[13px] leading-[1.4] text-ink placeholder:text-ink-faint focus:outline-none",
-              docked ? "min-h-9 max-h-32" : "min-h-11 max-h-32 md:min-h-10 md:text-[14px]"
+              docked ? "min-h-9 max-h-32" : "min-h-11 max-h-32 md:min-h-10 md:text-[14px]",
             )}
           />
           <button
@@ -372,7 +434,7 @@ export function AssistantConversation({
             title="Send (Ctrl/Command + Enter)"
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30",
-              docked ? "h-8 w-8" : "h-11 w-11 md:h-10 md:w-10"
+              docked ? "h-8 w-8" : "h-11 w-11 md:h-10 md:w-10",
             )}
           >
             <motion.span

@@ -9,7 +9,7 @@ export type AppearanceSnapshot = {
 };
 
 export function writeAppearanceSnapshot(
-  settings: Pick<UserSettings, "preset" | "density" | "customTheme">
+  settings: Pick<UserSettings, "preset" | "density" | "customTheme">,
 ) {
   try {
     const snapshot: AppearanceSnapshot = {

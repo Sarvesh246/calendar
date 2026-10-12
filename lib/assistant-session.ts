@@ -62,7 +62,9 @@ function itemFromServer(row: Record<string, unknown>): Item {
     ...(typeof row.status === "string" ? { status: row.status as Item["status"] } : {}),
     ...(typeof row.completed_at === "string" ? { completedAt: row.completed_at } : {}),
     ...(typeof row.status_at === "string" ? { statusAt: row.status_at } : {}),
-    ...(Array.isArray(row.reminders) && row.reminders.length ? { reminders: row.reminders as Item["reminders"] } : {}),
+    ...(Array.isArray(row.reminders) && row.reminders.length
+      ? { reminders: row.reminders as Item["reminders"] }
+      : {}),
     ...(typeof row.updated_at === "string" ? { updatedAt: row.updated_at } : {}),
   };
 }
@@ -73,7 +75,11 @@ async function confirmServerAction(serverActionId: string) {
     headers: await authHeaders(),
     body: JSON.stringify({ confirmationId: serverActionId }),
   });
-  const result = (await response.json()) as { item?: Record<string, unknown>; deletedId?: string; error?: string };
+  const result = (await response.json()) as {
+    item?: Record<string, unknown>;
+    deletedId?: string;
+    error?: string;
+  };
   if (!response.ok || result.error) throw new Error(result.error || "Could not apply this change");
   useDatebookStore.setState((state) => ({
     items: result.item
@@ -106,7 +112,11 @@ interface AssistantSessionState {
   ask: (query: string) => void;
   retry: (messageIndex: number) => void;
   applyAction: (messageIndex: number, actionIndex: number) => void;
-  resolveAction: (messageIndex: number, actionIndex: number, outcome: "applied" | "dismissed") => void;
+  resolveAction: (
+    messageIndex: number,
+    actionIndex: number,
+    outcome: "applied" | "dismissed",
+  ) => void;
   reset: () => void;
 }
 
@@ -156,15 +166,19 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               fallbackNotice: res.fallbackNotice,
             },
           ],
-        }))
+        })),
       )
       .catch(() =>
         set((s) => ({
           messages: [
             ...s.messages,
-            { role: "assistant", text: "Something went wrong reaching the assistant.", degraded: true },
+            {
+              role: "assistant",
+              text: "Something went wrong reaching the assistant.",
+              degraded: true,
+            },
           ],
-        }))
+        })),
       )
       .finally(() => {
         inFlight = false;
@@ -215,9 +229,12 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
             set((state) => ({
               messages: [
                 ...state.messages,
-                { role: "assistant", text: error instanceof Error ? error.message : "Could not apply this change." },
+                {
+                  role: "assistant",
+                  text: error instanceof Error ? error.message : "Could not apply this change.",
+                },
               ],
-            }))
+            })),
           );
         return;
       }
@@ -225,7 +242,10 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       if (action.kind === "create") {
         let draft = action.draft;
         if (draft.reminders === undefined) {
-          const defaults = remindersFromPresetIds(store.settings.defaultReminderPresetIds, store.reminderPresets);
+          const defaults = remindersFromPresetIds(
+            store.settings.defaultReminderPresetIds,
+            store.reminderPresets,
+          );
           if (defaults.length) draft = { ...draft, reminders: defaults };
         }
         store.addItem(draft);
@@ -241,7 +261,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     resolveAction: (mi, ai, outcome) =>
       set((s) => ({
         messages: s.messages.map((msg, i) =>
-          i === mi ? { ...msg, resolved: { ...msg.resolved, [ai]: outcome } } : msg
+          i === mi ? { ...msg, resolved: { ...msg.resolved, [ai]: outcome } } : msg,
         ),
       })),
 

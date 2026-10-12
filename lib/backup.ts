@@ -36,7 +36,7 @@ export function parseBackup(raw: string): DatebookBackup {
     // than written straight into the store, where it crashes every view that
     // formats a date and survives a reload.
     categories: sanitizeCategories(
-      data.categories.filter((c) => c && typeof c === "object" && typeof c.id === "string" && c.id)
+      data.categories.filter((c) => c && typeof c === "object" && typeof c.id === "string" && c.id),
     ),
     items: sanitizeItems(data.items),
     reminderPresets: Array.isArray(data.reminderPresets) ? data.reminderPresets : [],
