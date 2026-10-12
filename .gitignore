@@ -32,8 +32,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — real values never leave the machine; the example is the contract
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -44,3 +45,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Skipper — machine-local artifacts (hook scratch + derived index), never commit
+.claude/.skipper-*
+.skipper/*
+!.skipper/receipts/
+
+# editor / AI tooling local state
+.cursor/
+.playwright-mcp/
+graphify-out/
+.idea/
+.vscode/*
+!.vscode/extensions.json

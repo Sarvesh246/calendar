@@ -1,0 +1,17 @@
+.next/
+node_modules/
+out/
+build/
+coverage/
+output/
+.playwright-cli/
+.playwright-mcp/
+.cursor/
+.skipper/
+graphify-out/
+public/sw.js
+package-lock.json
+supabase/migrations/
+*.tsbuildinfo
+AGENTS.md
+CLAUDE.md
