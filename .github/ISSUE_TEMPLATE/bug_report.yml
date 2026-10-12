@@ -1,0 +1,22 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Device and browser
+      placeholder: iPhone 16 / Safari, installed PWA, or the iOS app
+  - type: checkboxes
+    id: signed-in
+    attributes:
+      label: Context
+      options:
+        - label: I was signed in with Google (cloud sync on)
