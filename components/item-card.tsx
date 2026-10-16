@@ -32,6 +32,7 @@ import {
 } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
+import { isPageRevealing } from "@/lib/page-reveal";
 import { cn } from "@/lib/utils";
 import { useSlidingPill } from "@/lib/sliding-pill";
 import type { ItemCardChrome } from "@/lib/card-chrome";
@@ -61,6 +62,18 @@ const CARD_EXIT = {
     scale: { duration: 0.18, ease: motionTokens.ease },
     gridTemplateRows: { ...motionTokens.settle, delay: 0.06 },
   },
+};
+
+/**
+ * Resolved when the exit starts, not when the card last rendered: a card that
+ * left while its page was hidden is gone by the time you look, rather than
+ * fading out in its stale state (see `lib/page-reveal.ts`).
+ */
+const CARD_VARIANTS = {
+  exit: () =>
+    isPageRevealing()
+      ? { opacity: 0, gridTemplateRows: "0fr", transition: { duration: 0 } }
+      : CARD_EXIT,
 };
 
 export const ItemCard = memo(function ItemCard({
@@ -440,7 +453,8 @@ function CardFrame({
       className="item-card-presence"
       initial={false}
       style={{ gridTemplateRows: "1fr" }}
-      exit={CARD_EXIT}
+      variants={CARD_VARIANTS}
+      exit="exit"
     >
       <div className="item-card-presence-inner">
         <div

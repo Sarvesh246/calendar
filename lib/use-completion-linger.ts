@@ -25,6 +25,7 @@ import type { Item } from "./types";
  */
 
 import { LINGER_MS } from "./just-completed";
+import { isPageRevealing } from "./page-reveal";
 
 export function useCompletionLinger(items: Item[]): Item[] {
   const [lingering, setLingering] = useState<Item[]>([]);
@@ -40,7 +41,8 @@ export function useCompletionLinger(items: Item[]): Item[] {
     previous.current = items;
     if (dropped.length === 0) return;
 
-    if (prefersReducedMotion()) return;
+    // Completed while this page was hidden: there was no tap here to finish.
+    if (prefersReducedMotion() || isPageRevealing()) return;
 
     // Why it left matters. An item still in the store and now marked done was
     // hidden by "hide completed"; one that is gone from the store was deleted,

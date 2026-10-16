@@ -18,8 +18,20 @@ import { flushViewState, recallScroll, rememberScroll } from "@/lib/view-state";
 import { useTabPageSwipe } from "@/lib/use-tab-page-swipe";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { usePageEnter } from "@/lib/page-enter";
+import {
+  beginPageReveal,
+  endPageReveal,
+  revisionOnReveal,
+  type PageRevision,
+} from "@/lib/page-reveal";
+import { useDatebookStore } from "@/lib/store";
+import { useUIStore } from "@/lib/ui-store";
 
-const loaders: Record<TabRoute, () => Promise<{ default: ComponentType }>> = {
+// Pages ignore their `PageRevision` props; they exist so `memo` lets a page
+// re-render with fresh data in the commit that reveals it, and bails out
+// everywhere else.
+
+const loaders: Record<TabRoute, () => Promise<{ default: ComponentType<PageRevision> }>> = {
   "/today": () => import("@/components/pages/today-page"),
   "/calendar": () => import("@/components/pages/calendar-page"),
   "/agenda": () => import("@/components/pages/agenda-page"),
@@ -38,15 +50,39 @@ function TabLoading() {
   );
 }
 
-const TodayPage = memo(dynamic(loaders["/today"], { loading: TabLoading }));
-const CalendarPage = memo(dynamic(loaders["/calendar"], { loading: TabLoading }));
-const AgendaPage = memo(dynamic(loaders["/agenda"], { loading: TabLoading }));
+const TodayPage = memo(dynamic<PageRevision>(loaders["/today"], { loading: TabLoading }));
+const CalendarPage = memo(dynamic<PageRevision>(loaders["/calendar"], { loading: TabLoading }));
+const AgendaPage = memo(dynamic<PageRevision>(loaders["/agenda"], { loading: TabLoading }));
 
-const pages: Record<TabRoute, ComponentType> = {
+const pages: Record<TabRoute, ComponentType<PageRevision>> = {
   "/today": TodayPage,
   "/calendar": CalendarPage,
   "/agenda": AgendaPage,
 };
+
+function currentRevision(): PageRevision {
+  return { data: useDatebookStore.getState(), ui: useUIStore.getState() };
+}
+
+/**
+ * A hidden page isn't subscribed to anything, so it is whatever it was when it
+ * was last on screen. Coming into view, it is handed the current store state:
+ * memo sees the change and the reveal commit renders fresh data, instead of
+ * painting the stale list (a finished item still "Overdue") and catching up
+ * after. Nothing changed while it was away, nothing re-renders.
+ */
+function RevealedPage({ Page, visible }: { Page: ComponentType<PageRevision>; visible: boolean }) {
+  const [revision, setRevision] = useState(currentRevision);
+  const [shown, setShown] = useState(visible);
+  if (visible !== shown) {
+    setShown(visible);
+    if (visible) {
+      setRevision(revisionOnReveal(revision, currentRevision()));
+      beginPageReveal();
+    }
+  }
+  return <Page data={revision.data} ui={revision.ui} />;
+}
 
 const ALL_MOUNTED = Object.fromEntries(TAB_ROUTES.map((href) => [href, true])) as Record<
   TabRoute,
@@ -108,6 +144,12 @@ export function TabPageHost({ pathname }: { pathname: string }) {
   const enterRef = usePageEnter(active, Boolean(active));
   const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
   const pageLive = swipe.dragging || swipe.offsetting;
+
+  // Passive, so it runs after a revealed page's layout effects have decided
+  // what to animate out (see `RevealedPage`).
+  useEffect(() => {
+    endPageReveal();
+  });
 
   if (!isTabRoute(pathname) && !TAB_ROUTES.some((href) => mounted[href])) return null;
 
@@ -177,7 +219,7 @@ export function TabPageHost({ pathname }: { pathname: string }) {
                     : undefined
               }
             >
-              <Page />
+              <RevealedPage Page={Page} visible={isActive || floating} />
             </motion.div>
           </Activity>
         );
