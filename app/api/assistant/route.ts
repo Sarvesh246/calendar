@@ -145,13 +145,27 @@ export async function POST(request: Request) {
   ];
 
   const budget = { left: MAX_MODEL_CALLS };
-  try {
+
+  /** Run the agent and build the response payload; `stream` taps the text. */
+  const compute = async (stream?: { onText: (d: string) => void; onReset: () => void }) => {
     const result = await callRoutedProvider({
       selectedId,
       messages,
       tools: DATEBOOK_TOOLS,
-      run: (provider, key) =>
-        runAgent({ provider, key, messages, userId: user?.id ?? null, threadId, body, budget }),
+      run: (provider, key) => {
+        // A fallback provider starts the reply over.
+        stream?.onReset();
+        return runAgent({
+          provider,
+          key,
+          messages,
+          userId: user?.id ?? null,
+          threadId,
+          body,
+          budget,
+          stream,
+        });
+      },
     });
     let actions = normalizeActions(result.actions, body);
     if (isPureQuestion(body.message))
@@ -176,7 +190,7 @@ export async function POST(request: Request) {
     const fallbackNotice = result.fellBack
       ? `The selected model was unavailable, so Datebook used ${result.provider.label}.`
       : undefined;
-    return NextResponse.json({
+    return {
       // Deterministic last line of defence: a "Weekday, Month D" that
       // disagrees with the calendar is corrected rather than shown.
       text: fixWeekdays(polishReply(result.text), body.now, body.timeZone || "UTC"),
@@ -185,12 +199,50 @@ export async function POST(request: Request) {
       actions: actions.length ? actions : undefined,
       providerLabel: result.provider.label,
       fallbackNotice,
-    });
-  } catch (error) {
+    };
+  };
+
+  const logFailure = (error: unknown) =>
     console.error(
       "[assistant] all providers unavailable",
       error instanceof Error ? error.name : "unknown",
     );
-    return NextResponse.json({ error: "assistant-unreachable" }, { status: 200 });
+
+  // Server-sent events: text as it is written, then one final event carrying the
+  // finished reply with its cards. Errors are typed, never a 200 that hides them.
+  if ((request.headers.get("accept") ?? "").includes("text/event-stream")) {
+    const encoder = new TextEncoder();
+    const sse = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: string, data: unknown) =>
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        try {
+          const payload = await compute({
+            onText: (delta) => send("text", { delta }),
+            onReset: () => send("reset", {}),
+          });
+          send("done", payload);
+        } catch (error) {
+          logFailure(error);
+          send("error", { error: "assistant-unreachable" });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(sse, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  try {
+    return NextResponse.json(await compute());
+  } catch (error) {
+    logFailure(error);
+    return NextResponse.json({ error: "assistant-unreachable" }, { status: 502 });
   }
 }

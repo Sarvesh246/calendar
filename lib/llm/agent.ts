@@ -35,6 +35,9 @@ export async function runAgent(opts: {
   threadId: string | null;
   body: ReqBody;
   budget: { left: number };
+  /** Streams the reply text as it is written; `reset` fires when a turn that
+   *  streamed text goes on to call tools (that text was chatter, not the answer). */
+  stream?: { onText: (delta: string) => void; onReset: () => void };
 }) {
   const messages = [...opts.messages];
   const actions: unknown[] = [];
@@ -50,6 +53,7 @@ export async function runAgent(opts: {
       key: opts.key,
       messages,
       tools: DATEBOOK_TOOLS,
+      ...(opts.stream ? { onText: opts.stream.onText } : {}),
     });
     latencyMs += completion.latencyMs;
     const reply = completion.message;
@@ -67,6 +71,7 @@ export async function runAgent(opts: {
         latencyMs,
       };
     }
+    opts.stream?.onReset();
     let allStaged = true;
     const iterationStart = messages.length;
     for (const call of reply.tool_calls) {

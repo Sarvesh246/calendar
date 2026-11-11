@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { LlmProviderConfig } from "./providers";
+import { readChatStream } from "./stream";
 
 export type ToolCall = {
   id: string;
@@ -86,6 +87,8 @@ export async function createChatCompletion(opts: {
   tools: OpenAiTool[];
   timeoutMs?: number;
   forceTool?: string;
+  /** Stream the reply: text deltas are passed here as they arrive. */
+  onText?: (delta: string) => void;
 }): Promise<{ message: ChatMessage; latencyMs: number }> {
   const started = Date.now();
   const body: Record<string, unknown> = {
@@ -99,6 +102,7 @@ export async function createChatCompletion(opts: {
     // time it is asked, which is what the eval suite pins.
     temperature: 0,
     max_tokens: 1_200,
+    ...(opts.onText ? { stream: true } : {}),
   };
   const response = await fetchWithTimeout(
     `${opts.provider.baseURL.replace(/\/$/, "")}/chat/completions`,
@@ -109,6 +113,14 @@ export async function createChatCompletion(opts: {
     },
     opts.timeoutMs ?? 18_000,
   );
+  if (opts.onText && response.ok && response.body) {
+    try {
+      const message = await readChatStream(response.body, opts.onText);
+      return { message, latencyMs: Date.now() - started };
+    } catch {
+      throw new ProviderRequestError("Provider stream failed", 0);
+    }
+  }
   const text = await response.text();
   if (!response.ok) {
     const notFound =

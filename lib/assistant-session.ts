@@ -207,6 +207,8 @@ interface AssistantSessionState {
   thinking: boolean;
   /** A reply is taking long enough to say so. */
   slow: boolean;
+  /** The reply so far, while it is being written. */
+  streaming: string;
   /** Follow-ups typed while a reply was still coming, in order. Each is sent
    *  after the one before it, and each shows as a pending bubble. */
   queued: string[];
@@ -308,6 +310,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       modelId,
       conversationId: conversationId(),
       context: chatContext(),
+      onPartial: (text) => set({ streaming: text }),
     })
       .then((res) => {
         res = { ...res, actions: withResolvedClasses(res.actions, categories) };
@@ -350,7 +353,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       .finally(() => {
         inFlight = false;
         clearTimeout(slowTimer);
-        set({ thinking: false, slow: false });
+        set({ thinking: false, slow: false, streaming: "" });
         const [next, ...rest] = get().queued;
         if (next) {
           set((s) => ({ queued: rest, messages: [...s.messages, { role: "user", text: next }] }));
@@ -363,6 +366,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     messages: loadSessionMessages(),
     thinking: false,
     slow: false,
+    streaming: "",
     queued: [],
 
     ask: (query) => {

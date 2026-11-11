@@ -49,6 +49,7 @@ export function AssistantConversation({
   const messages = useAssistantSession((s) => s.messages);
   const thinking = useAssistantSession((s) => s.thinking);
   const slow = useAssistantSession((s) => s.slow);
+  const streaming = useAssistantSession((s) => s.streaming);
   const queued = useAssistantSession((s) => s.queued);
   const ask = useAssistantSession((s) => s.ask);
   const retry = useAssistantSession((s) => s.retry);
@@ -421,8 +422,21 @@ export function AssistantConversation({
           </div>
         ))}
 
+        {thinking && streaming && (
+          <div className="max-w-[92%]" aria-live="off">
+            <AssistantMarkdown
+              text={streaming}
+              className={
+                docked
+                  ? "text-[13.5px] leading-[1.5]"
+                  : "text-[15px] leading-[1.5] md:text-[14.5px] md:leading-[1.55]"
+              }
+            />
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
-          {thinking && (
+          {thinking && !streaming && (
             <motion.div
               key="thinking"
               initial={{ opacity: 0, y: 4 }}

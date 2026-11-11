@@ -72,6 +72,8 @@ export interface AssistantCtx {
   conversationId?: string;
   /** Where the chat was opened from. */
   context?: { selectedDay?: string; openItemId?: string; activeClass?: string };
+  /** Called with the reply so far while it is being written. */
+  onPartial?: (text: string) => void;
 }
 
 /** Compact facts pre-computed for the model and offline heuristics. */
@@ -417,9 +419,10 @@ export async function askAssistant(
   const timer = setTimeout(() => controller.abort(), 60_000);
   try {
     const { authHeaders } = await import("./auth-headers");
+    const { readAssistantStream } = await import("./sse");
     const res = await fetch("/api/assistant", {
       method: "POST",
-      headers: await authHeaders(),
+      headers: { ...(await authHeaders()), Accept: "text/event-stream" },
       signal: controller.signal,
       body: JSON.stringify({
         message,
@@ -445,9 +448,12 @@ export async function askAssistant(
         error: "signed-out",
       };
     }
-    const data = (await res.json().catch(() => ({}))) as Omit<AssistantResponse, "error"> & {
-      error?: string;
-    };
+    type Wire = Omit<AssistantResponse, "error"> & { error?: string };
+    const data = (
+      (res.headers.get("content-type") ?? "").includes("text/event-stream") && res.body
+        ? await readAssistantStream<Wire>(res.body, (text) => ctx.onPartial?.(text))
+        : await res.json().catch(() => ({}))
+    ) as Wire;
     if (res.ok && !data.error && typeof data.text === "string") {
       return {
         text: data.text,
