@@ -36,7 +36,7 @@ export function SelectMenu({
   className?: string;
   buttonClassName?: string;
   leading?: ReactNode;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
@@ -145,7 +145,11 @@ export function SelectMenu({
           className={cn(
             "select-menu-pop absolute z-[60] max-h-64 min-w-[12rem] max-w-[min(20rem,80vw)] overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-1.5 shadow-[0_18px_44px_-14px_rgb(0_0_0_/_0.45)]",
             up ? "bottom-full mb-2 origin-bottom" : "top-full mt-2 origin-top",
-            align === "right" ? "right-0" : "left-0",
+            align === "right"
+              ? "right-0"
+              : align === "center"
+                ? "left-1/2 -translate-x-1/2"
+                : "left-0",
           )}
         >
           {options.map((option, i) => {

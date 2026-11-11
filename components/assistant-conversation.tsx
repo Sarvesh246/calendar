@@ -174,7 +174,7 @@ export function AssistantConversation({
           </button>
         </div>
       ) : (
-        <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3 md:gap-3 md:px-6 md:py-4">
+        <div className="relative z-20 flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3 md:gap-3 md:px-6 md:py-4">
           <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent md:flex">
             <Sparkles className="h-4 w-4" strokeWidth={1.9} />
           </span>
@@ -183,6 +183,9 @@ export function AssistantConversation({
               Assistant
             </p>
             <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2 md:hidden">
+            <AssistantModelSelector compact centered />
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <div className="hidden md:block">
@@ -403,13 +406,6 @@ export function AssistantConversation({
             </motion.div>
           );
         })}
-
-        {messages.length <= 1 && (
-          <div className="flex items-center gap-2 text-[12px] text-ink-faint md:hidden">
-            <span>Model</span>
-            <AssistantModelSelector compact />
-          </div>
-        )}
 
         {queued.map((text, qi) => (
           <div key={`q-${qi}`} className="flex flex-col items-end gap-0.5">
