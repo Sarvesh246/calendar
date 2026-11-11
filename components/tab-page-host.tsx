@@ -144,6 +144,15 @@ export function TabPageHost({ pathname }: { pathname: string }) {
   const enterRef = usePageEnter(active, Boolean(active));
   const swipe = useTabPageSwipe(hostRef, active, phone && Boolean(active));
   const pageLive = swipe.dragging || swipe.offsetting;
+  const wasPageLive = useRef(false);
+  useEffect(() => {
+    if (wasPageLive.current && !pageLive) {
+      // A preview may have been measured before the destination got its final
+      // width. Reseat highlights after the page reaches its resting geometry.
+      window.dispatchEvent(new Event("datebook:page-settled"));
+    }
+    wasPageLive.current = pageLive;
+  }, [pageLive]);
 
   // Passive, so it runs after a revealed page's layout effects have decided
   // what to animate out (see `RevealedPage`).
@@ -175,7 +184,7 @@ export function TabPageHost({ pathname }: { pathname: string }) {
         // A short page must still cover the screen while a long neighbour
         // floats over it, or the neighbour is clipped mid-viewport.
         pageLive && active !== "/calendar"
-          ? { minHeight: `calc(100dvh + ${scrollY}px)` }
+          ? { minHeight: Math.max(0, swipe.viewportFloor + scrollY - swipe.scrollAtStart) }
           : undefined
       }
     >
@@ -195,8 +204,11 @@ export function TabPageHost({ pathname }: { pathname: string }) {
           <Activity key={href} mode={isActive || floating ? "visible" : "hidden"}>
             <motion.div
               ref={isActive ? enterRef : undefined}
+              aria-hidden={floating || undefined}
+              inert={floating || undefined}
               className={cn(
                 href === "/calendar" && "flex min-h-0 flex-1 flex-col overflow-hidden",
+                pageLive && "bg-surface-base",
                 floating && "pointer-events-none absolute inset-x-0",
               )}
               style={
@@ -294,7 +306,12 @@ function useTabScrollMemory(active: TabRoute | null) {
     if (!active) return;
     const y = recallScroll(active);
     liveY.current = y;
-    if (y <= 0) return;
+    if (y <= 0) {
+      // The previous tab may be scrolled even when this one was left at the
+      // top. Next's navigation must not leave that offset on the incoming tab.
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+      return;
+    }
 
     const target = active;
     let done = false;

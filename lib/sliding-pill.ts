@@ -2,6 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
 import { prefersReducedMotion, springEasing, supportsLinearEasing } from "./motion";
+import { isPageRevealing } from "./page-reveal";
 
 /**
  * The selected-segment highlight shared by every segmented control, tab strip
@@ -213,7 +214,7 @@ export function useSlidingPill<
           .forEach((n) => n.removeAttribute("data-pill-on"));
       return;
     }
-    slideTo(el, current.current !== null);
+    slideTo(el, current.current !== null && !isPageRevealing());
   }, [activeKey, keyAttr, mark, slideTo, getContainer]);
 
   // Re-seat without animating when the control itself changes size (window
@@ -222,18 +223,30 @@ export function useSlidingPill<
   useLayoutEffect(() => {
     const container = getContainer();
     if (!container || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
+    const reseat = () => {
       const el = target.current;
       const pill = pillRef.current;
-      if (!el || !pill || !el.isConnected || anim.current?.playState === "running") return;
+      if (
+        !el ||
+        !pill ||
+        !el.isConnected ||
+        !el.getClientRects().length ||
+        anim.current?.playState === "running"
+      )
+        return;
       const box = boxOf(el, container, pill);
       const cur = current.current;
       if (cur && cur.x === box.x && cur.y === box.y && cur.w === box.w && cur.h === box.h) return;
       place(pill, box);
       current.current = box;
-    });
+    };
+    const ro = new ResizeObserver(reseat);
     ro.observe(container);
-    return () => ro.disconnect();
+    window.addEventListener("datebook:page-settled", reseat);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("datebook:page-settled", reseat);
+    };
   }, [getContainer]);
 
   return { containerRef, pillRef, moveTo };

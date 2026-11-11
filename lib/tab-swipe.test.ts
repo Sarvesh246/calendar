@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjacentPageX,
   commitPageFromGesture,
   commitTabFromGesture,
   neighbourTab,
@@ -103,5 +104,17 @@ describe("pillSpringForVelocity", () => {
 describe("pageSwipeIgnores", () => {
   it("lets a blank event through", () => {
     expect(pageSwipeIgnores(null)).toBe(false);
+  });
+});
+
+describe("adjacent page positioning", () => {
+  it("keeps a gap and preserves both page positions at a commit in either direction", () => {
+    for (const direction of [-1, 1]) {
+      const width = 390;
+      const outgoing = -direction * 230;
+      const incoming = adjacentPageX(outgoing, direction, width);
+      expect(Math.abs(adjacentPageX(0, direction, width))).toBe(406);
+      expect(adjacentPageX(incoming, -direction, width)).toBe(outgoing);
+    }
   });
 });

@@ -6,6 +6,8 @@ const PAGE_SWIPE_IGNORE =
   'input, textarea, select, option, [contenteditable="true"], [data-page-swipe="off"], .mobile-tab-bar';
 
 export const PAGE_SWIPE_AXIS = 10;
+/** Space between adjacent pages while they are moving. */
+export const PAGE_SWIPE_GAP = 16;
 export const PAGE_SWIPE_HALFWAY = 0.5;
 
 function clamp(n: number, min: number, max: number) {
@@ -27,6 +29,12 @@ export function rubberbandPageX(dx: number, index: number, count: number, width:
   if (index <= 0 && dx > 0) return rubberband(dx, width);
   if (index >= count - 1 && dx < 0) return rubberband(dx, width);
   return dx;
+}
+
+/** Positions are measured from the host so the incoming page keeps the
+ * same screen position when the gesture commits and becomes the active page. */
+export function adjacentPageX(activeX: number, side: number, width: number): number {
+  return activeX + side * (width + PAGE_SWIPE_GAP);
 }
 
 /**

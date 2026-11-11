@@ -11,6 +11,8 @@ import { navigateTab } from "@/lib/tab-nav";
 import { TAB_ROUTES, type TabRoute } from "@/lib/tab-routes";
 import {
   PAGE_SWIPE_AXIS,
+  PAGE_SWIPE_GAP,
+  adjacentPageX,
   commitPageFromGesture,
   neighbourTab,
   pageSpringForVelocity,
@@ -43,6 +45,8 @@ export function useTabPageSwipe(
   dragging: boolean;
   /** True while a swipe transform is on the page — including the settle spring. */
   offsetting: boolean;
+  viewportFloor: number;
+  scrollAtStart: number;
 } {
   const router = useRouter();
   const x = useMotionValue(0);
@@ -52,6 +56,7 @@ export function useTabPageSwipe(
   const [trailing, setTrailing] = useState<TabRoute | null>(null);
   const [dragging, setDragging] = useState(false);
   const [offsetting, setOffsetting] = useState(false);
+  const [geometry, setGeometry] = useState({ viewportFloor: 0, scrollAtStart: 0 });
   const axis = useRef<Axis>("undecided");
   const start = useRef({ x: 0, y: 0 });
   const tracker = useRef(new VelocityTracker());
@@ -61,6 +66,7 @@ export function useTabPageSwipe(
   /** Which way the trailing page sits from the active one (−1 left, +1 right). */
   const trailingSide = useRef(0);
   const width = useRef(0);
+  const gestureVersion = useRef(0);
   const reduced = prefersReducedMotion();
 
   useEffect(() => {
@@ -68,7 +74,7 @@ export function useTabPageSwipe(
       const w = width.current;
       if (w > 0) {
         pagerPosition.set(boundIndex.current - v / w);
-        trailingX.set(v + trailingSide.current * w);
+        trailingX.set(adjacentPageX(v, trailingSide.current, w));
       }
     });
     return unsubscribe;
@@ -122,8 +128,14 @@ export function useTabPageSwipe(
           axis.current = "x";
           // Catch a page that is still settling from the last swipe: grab it
           // where it is rather than letting it jump home first.
+          gestureVersion.current += 1;
           x.stop();
+          peekX.stop();
           width.current = widthOf();
+          setGeometry({
+            viewportFloor: Math.max(0, window.innerHeight - host.getBoundingClientRect().top),
+            scrollAtStart: window.scrollY,
+          });
           boundIndex.current = index;
           trailingSide.current = 0;
           setTrailing(null);
@@ -145,7 +157,7 @@ export function useTabPageSwipe(
       const visual = rubberbandPageX(drag, index, TAB_ROUTES.length, w);
       x.set(visual);
       setPeek(neighbourTab(index, drag));
-      peekX.set(visual + (drag >= 0 ? -w : w));
+      peekX.set(adjacentPageX(visual, drag >= 0 ? -1 : 1, w));
     };
 
     const finish = (e: PointerEvent) => {
@@ -159,15 +171,22 @@ export function useTabPageSwipe(
       if (locked !== "x" || index < 0) return;
 
       const w = width.current || widthOf();
-      const nextIndex = commitPageFromGesture({
-        startIndex: index,
-        dx,
-        vx,
-        width: w,
-        count: TAB_ROUTES.length,
-      });
+      const nextIndex =
+        e.type === "pointercancel"
+          ? index
+          : commitPageFromGesture({
+              startIndex: index,
+              dx,
+              vx,
+              width: w,
+              count: TAB_ROUTES.length,
+            });
       const to = TAB_ROUTES[nextIndex];
       const spring = pageSpringForVelocity(vx);
+      const version = gestureVersion.current;
+      const finishIfCurrent = () => {
+        if (gestureVersion.current === version) settleDone();
+      };
 
       const swallowClick = () => {
         const swallow = (ev: MouseEvent) => {
@@ -189,9 +208,11 @@ export function useTabPageSwipe(
           settleDone();
           return;
         }
-        void animate(x, 0, spring).then(settleDone);
-        const home = x.get() >= 0 ? -w : w;
-        void animate(peekX, home, spring).then(() => setPeek(null));
+        void animate(x, 0, spring).then(finishIfCurrent);
+        const home = x.get() >= 0 ? -(w + PAGE_SWIPE_GAP) : w + PAGE_SWIPE_GAP;
+        void animate(peekX, home, spring).then(() => {
+          if (gestureVersion.current === version) setPeek(null);
+        });
         return;
       }
 
@@ -210,14 +231,14 @@ export function useTabPageSwipe(
       // the peek, the page you left becomes the trailing one beside it, and
       // both ride the same spring home together.
       const dir = nextIndex - index;
-      const remaining = x.get() + dir * w;
+      const remaining = adjacentPageX(x.get(), dir, w);
       boundIndex.current = nextIndex;
       trailingSide.current = -dir;
       setTrailing(active);
       setPeek(null);
       navigateTab(router, to);
-      x.set(remaining);
-      void animate(x, 0, spring).then(settleDone);
+      x.jump(remaining);
+      void animate(x, 0, spring).then(finishIfCurrent);
     };
 
     host.addEventListener("pointerdown", onDown);
@@ -237,5 +258,5 @@ export function useTabPageSwipe(
     };
   }, [active, enabled, hostRef, peekX, reduced, router, x]);
 
-  return { x, peekX, trailingX, peek, trailing, dragging, offsetting };
+  return { x, peekX, trailingX, peek, trailing, dragging, offsetting, ...geometry };
 }

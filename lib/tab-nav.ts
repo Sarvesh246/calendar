@@ -95,7 +95,10 @@ export function useResolvedPathname(): string {
  * Switch tabs. The view swaps on this frame; the router follows in a
  * transition, where a slow commit can no longer hold the paint hostage.
  */
-export function navigateTab(router: { push: (href: string) => void }, href: string) {
+export function navigateTab(
+  router: { push: (href: string, options?: { scroll?: boolean }) => void },
+  href: string,
+) {
   if (isTabRoute(href)) {
     if (pending === null) pendingFrom = window.location.pathname;
     inFlight.push(href);
@@ -105,6 +108,6 @@ export function navigateTab(router: { push: (href: string) => void }, href: stri
     }
   }
   startTransition(() => {
-    router.push(href);
+    router.push(href, isTabRoute(href) ? { scroll: false } : undefined);
   });
 }
