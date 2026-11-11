@@ -114,6 +114,34 @@ function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
   useLockBodyScroll(true);
   useDialogFocus(panelRef, true);
 
+  // While the field is focused the sheet is sized straight from the live visual
+  // viewport. The shared `--visible-height` flags depend on the keyboard being
+  // detected as a "covered" amount, which iOS does not always report (it pans
+  // the page instead), and a sheet that stays full height sits under the
+  // keyboard with the composer behind it.
+  const [typing, setTyping] = useState(false);
+  const [band, setBand] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!typing || !vv) return;
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      setBand({ top: Math.max(0, vv.offsetTop), height: Math.round(vv.height) });
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(read);
+    };
+    schedule();
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
+    };
+  }, [typing]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") close();
@@ -137,10 +165,19 @@ function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
         aria-modal="true"
         aria-labelledby="assistant-title"
         {...dragProps}
+        data-typing={typing ? "" : undefined}
+        onFocusCapture={(e) => {
+          if ((e.target as HTMLElement).tagName === "TEXTAREA") setTyping(true);
+        }}
+        onBlurCapture={(e) => {
+          if ((e.target as HTMLElement).tagName === "TEXTAREA") setTyping(false);
+        }}
         style={{
           ...dragProps.style,
-          top: "var(--viewport-pan, 0px)",
-          height: "var(--assistant-room-height, var(--visible-height, 100dvh))",
+          top: typing && band ? `${band.top}px` : "var(--viewport-pan, 0px)",
+          height: typing && band
+            ? `${band.height}px`
+            : "var(--assistant-room-height, var(--visible-height, 100dvh))",
         }}
         className="assistant-room absolute inset-x-0 flex flex-col overflow-hidden rounded-t-[22px] border border-b-0 border-line bg-surface pt-[env(safe-area-inset-top)] shadow-[0_-12px_40px_-12px_rgb(0_0_0_/_0.28)]"
       >
