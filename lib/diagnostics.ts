@@ -146,6 +146,8 @@ export function startDiagnostics() {
     "event",
     (entry) => {
       const e = entry as PerformanceEventTiming;
+      // Exclude hover, mouse compatibility, and focus events that duplicate a gesture.
+      if (!["click", "pointerdown", "pointerup", "keydown"].includes(e.name)) return;
       const kind = e.name.startsWith("key")
         ? "key"
         : e.name === "click"
