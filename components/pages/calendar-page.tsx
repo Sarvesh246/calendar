@@ -290,7 +290,9 @@ export default function CalendarPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 sm:gap-4">
-      <header className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      {/* The grid runs nearly edge to edge on a phone (the shell gives this tab
+          an 8px gutter); the title keeps the 16px every other tab's title has. */}
+      <header className="flex shrink-0 flex-col gap-2 px-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between md:px-0">
         <DateJump anchor={anchor} open={jumpOpen} onOpenChange={setJumpOpen} onJump={jumpTo}>
           <h1 className="flex items-baseline overflow-hidden text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
             {/* The title travels with the grid rather than swapping a frame early,

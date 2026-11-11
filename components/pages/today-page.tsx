@@ -53,6 +53,8 @@ import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 const WIDE_QUERY = "(min-width: 1280px)";
 const COMING_UP_DAYS = 7;
 const COMING_UP_ROWS = 8;
+/** Overdue cards shown up front on a desk before "Show n more". */
+const OVERDUE_PREVIEW = 3;
 
 export default function TodayPage() {
   return <TodayDashboard />;
@@ -77,6 +79,7 @@ function TodayDashboard() {
   const mobile = useMediaQuery("(max-width: 767px)");
   const wide = useMediaQuery(WIDE_QUERY);
   const [reviewOverdue, setReviewOverdue] = useState(false);
+  const [showAllOverdue, setShowAllOverdue] = useState(false);
   const items = useFilteredItems();
   const allItems = useDatebookStore((s) => s.items);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -204,6 +207,8 @@ function TodayDashboard() {
     </button>
   );
 
+  const overdueShown = mobile || showAllOverdue ? overdue : overdue.slice(0, OVERDUE_PREVIEW);
+
   const overdueSection = overdue.length > 0 && (!mobile || reviewOverdue) && (
     <section id="today-overdue" className="scroll-mt-[calc(var(--mobile-header-height)+0.75rem)]">
       <div className="flex items-center justify-between">
@@ -222,7 +227,7 @@ function TodayDashboard() {
       </div>
       <div className="flex flex-col gap-2">
         <AnimatePresence initial={false}>
-          {overdue.map((item) => (
+          {overdueShown.map((item) => (
             <ItemCard
               key={item.id}
               item={item}
@@ -231,6 +236,20 @@ function TodayDashboard() {
             />
           ))}
         </AnimatePresence>
+        {/* A long backlog used to push today's own schedule below the fold on
+            a desk. The first few stay up front; the rest are one click away. */}
+        {!mobile && overdue.length > OVERDUE_PREVIEW && (
+          <button
+            type="button"
+            onClick={() => setShowAllOverdue((v) => !v)}
+            aria-expanded={showAllOverdue}
+            className="press-none flex h-9 items-center justify-center rounded-lg border border-dashed border-warn/35 text-[12.5px] font-medium text-warn transition-colors hover:bg-warn-soft/40"
+          >
+            {showAllOverdue
+              ? "Show fewer"
+              : `Show ${overdue.length - OVERDUE_PREVIEW} more overdue`}
+          </button>
+        )}
       </div>
     </section>
   );

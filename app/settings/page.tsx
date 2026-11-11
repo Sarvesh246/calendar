@@ -772,23 +772,29 @@ function CategoryEditor({
           Save
         </button>
         {cat.archived && <span className="shrink-0 text-[11px] text-ink-faint">Archived</span>}
-        <button
-          type="button"
-          onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-          className="shrink-0 text-[12px] font-medium text-ink-faint hover:text-ink"
-        >
-          {cat.archived ? "Restore" : "Archive"}
-        </button>
-        {categories.length > 1 && (
+        {/* From `sm` up there is room beside the name. On a phone these two sat
+            in the same row and cut the name to "ENGR-102:204,21", with Delete a
+            12px word one slip away from Archive — so there they get their own
+            footer row with real touch targets (below). */}
+        <div className="hidden shrink-0 items-center gap-2 sm:flex sm:gap-3">
           <button
             type="button"
-            onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
-            aria-expanded={confirmDeleteId === cat.id}
-            className="shrink-0 text-[12px] font-medium text-warn"
+            onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+            className="text-[12px] font-medium text-ink-faint hover:text-ink"
           >
-            Delete
+            {cat.archived ? "Restore" : "Archive"}
           </button>
-        )}
+          {categories.length > 1 && (
+            <button
+              type="button"
+              onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
+              aria-expanded={confirmDeleteId === cat.id}
+              className="text-[12px] font-medium text-warn"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
       <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
         <span className="shrink-0">Meeting name</span>
@@ -823,6 +829,25 @@ function CategoryEditor({
           </div>
         </div>
       )}
+      <div className="mt-1 flex items-center justify-between border-t border-line/60 pt-1 sm:hidden">
+        <button
+          type="button"
+          onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
+          className="press-none -ml-1 flex min-h-11 items-center rounded-lg px-2 text-[13px] font-medium text-ink-soft active:bg-surface-sunken"
+        >
+          {cat.archived ? "Restore class" : "Archive class"}
+        </button>
+        {categories.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
+            aria-expanded={confirmDeleteId === cat.id}
+            className="press-none -mr-1 flex min-h-11 items-center rounded-lg px-2 text-[13px] font-medium text-warn active:bg-warn-soft"
+          >
+            Delete…
+          </button>
+        )}
+      </div>
       {confirmDeleteId === cat.id && (
         <CategoryDeleteConfirm
           category={cat}
@@ -1238,7 +1263,7 @@ function Segmented({
     <div
       ref={containerRef}
       data-segment={segmentId}
-      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-auto"
+      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-fit"
     >
       <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
       {options.map((opt) => {

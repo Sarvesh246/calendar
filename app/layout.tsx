@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Nunito } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
@@ -37,9 +38,19 @@ export const viewport: Viewport = {
   ],
 };
 
+// The rounded face for small caps labels on platforms without SF Rounded
+// (`--font-label` in globals.css tries `ui-rounded` first). Self-hosted by
+// next/font, so it works offline once cached and never calls Google at runtime.
+const nunito = Nunito({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-nunito",
+  display: "swap",
+});
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en" className={`${nunito.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <SplashScreenLinks />
       </head>

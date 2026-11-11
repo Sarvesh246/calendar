@@ -417,7 +417,9 @@ export function AssistantConversation({
                 scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
               }, 300);
             }}
-            placeholder="Ask or tell me to change something…"
+            // Short enough to stay on one line at 16px in a 375pt sheet; the
+            // longer sentence wrapped and doubled the composer's height.
+            placeholder="Ask or make a change…"
             enterKeyHint="enter"
             aria-label="Message the assistant"
             className={cn(

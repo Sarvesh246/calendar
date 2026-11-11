@@ -78,6 +78,38 @@ export function parseQuickAdd(
     }
   }
 
+  // Imported classes are named by the registrar ("MATH-150:533,534,535"), and
+  // nobody types that. So also accept what people do type: the course code
+  // ("math 150", "math150") and, when only one class has that subject, the
+  // subject alone ("math quiz friday").
+  if (!categoryId) {
+    const courses = categories
+      .filter((c) => !c.archived)
+      .map((c) => ({ id: c.id, code: /^([A-Za-z]{2,5})[\s-]*(\d{2,4}[A-Za-z]?)/.exec(c.name) }))
+      .filter((c): c is { id: string; code: RegExpExecArray } => c.code !== null);
+    for (const { id, code } of courses) {
+      const re = new RegExp(`\\b${escapeRegExp(code[1])}[\\s-]*${escapeRegExp(code[2])}\\b`, "i");
+      if (!re.test(text)) continue;
+      categoryId = id;
+      confidence.category = true;
+      text = text.replace(re, "").trim();
+      break;
+    }
+    if (!categoryId) {
+      for (const { id, code } of courses) {
+        const subject = code[1].toLowerCase();
+        const unique = courses.filter((c) => c.code[1].toLowerCase() === subject).length === 1;
+        if (!unique || subject.length < 3) continue;
+        if (!new RegExp(`\\b${escapeRegExp(subject)}\\b`, "i").test(text)) continue;
+        // The word stays in the title: "math quiz" is the item's name, where
+        // "MATH 150" above was only an address.
+        categoryId = id;
+        confidence.category = true;
+        break;
+      }
+    }
+  }
+
   const pulled = extractReminders(text);
   const reminders = pulled.reminders;
   text = pulled.rest;

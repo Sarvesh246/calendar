@@ -20,7 +20,9 @@ export function AssistantModelSelector({ compact = false }: { compact?: boolean 
     <label
       className={cn(
         "assistant-web-model-selector relative block min-w-0",
-        compact ? "max-w-40" : "w-[min(48vw,190px)] md:w-48",
+        // On a phone the picker is a quiet setting, not the sheet's headline:
+        // at 48vw it was wider than the title beside it.
+        compact ? "max-w-40" : "w-[min(34vw,140px)] md:w-48",
       )}
     >
       <span className="sr-only">Assistant model</span>

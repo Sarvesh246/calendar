@@ -29,6 +29,7 @@ import {
   isEventEnded,
   itemOccupiesDay,
   isOverdue,
+  overdueMetaLabel,
 } from "@/lib/date-utils";
 import { haptic } from "@/lib/haptic";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
@@ -344,13 +345,15 @@ function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
   const canStart = item.type !== "event" && status !== "done";
   const doing = status === "doing";
   const btn =
-    "flex h-7 w-7 items-center justify-center rounded-md text-ink-faint transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+    "flex h-7 w-7 items-center justify-center rounded-md text-ink-soft transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <div
       className={cn(
         "card-quick-actions hidden shrink-0 items-center gap-0.5 rounded-lg border border-line/80 bg-surface-sunken/80 p-0.5 md:flex",
-        "opacity-55 transition-opacity duration-[var(--motion-micro)]",
+        // Resting state still has to read as four controls: faint ink at 55%
+        // left them as smudges on the dark presets.
+        "opacity-75 transition-opacity duration-[var(--motion-micro)]",
         "group-hover/card:opacity-100 group-focus-within/card:opacity-100",
         // A narrow card (the Calendar's day pane) can't spare the room: the
         // actions float over its corner on hover instead of squeezing the title.
@@ -563,7 +566,14 @@ function EventCard({
       )}
     >
       <div className="relative flex items-center gap-3">
-        <div className="flex w-[74px] shrink-0 flex-col leading-tight">
+        {/* 74px fits "12:30 PM"; "18:00" needs far less, and on a phone the
+            spare 24px belongs to the title. */}
+        <div
+          className={cn(
+            "flex shrink-0 flex-col leading-tight",
+            clock24h && !item.allDay ? "w-[50px] md:w-[74px]" : "w-[74px]",
+          )}
+        >
           <span
             className={cn(
               "text-[13px] font-semibold tabular-nums",
@@ -593,7 +603,18 @@ function EventCard({
             </span>
           </p>
           {remaining && !ended && (
-            <p className="mt-0.5 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
+            // Marked as the live row, so in a day list it reads as "you are
+            // here" rather than a second copy of the In class card above it.
+            <p
+              className="mt-0.5 flex items-center gap-1.5 text-[12px] tabular-nums text-ink-soft"
+              suppressHydrationWarning
+            >
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent motion-reduce:animate-none"
+              />
+              <span className="font-medium text-accent">Now</span>
+              <span aria-hidden>·</span>
               {remaining}
             </p>
           )}
@@ -682,6 +703,7 @@ function AssignmentCard({
   // Named Start/Reschedule on Today are the primary path — swipe competed with
   // tab swipe and sheet dismiss, so it stays off when those buttons are shown.
   const allowSwipe = mobile && !showQuickActions && !onMobileOpen;
+  const dotInMeta = showCategoryDot && mobile && showQuickActions;
 
   const openDetails = () => {
     if (mobile) {
@@ -750,19 +772,35 @@ function AssignmentCard({
           </p>
           <p
             className={cn(
-              "mt-0.5 truncate text-[12px] transition-colors duration-[var(--motion-standard)]",
+              "mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] transition-colors duration-[var(--motion-standard)]",
               overdue && !done ? "font-medium text-warn" : "text-ink-soft",
             )}
           >
-            {item.allDay ? "All day" : formatTime(item.at, clock24h)}
-            {overdue && !done && " · overdue"}
-            {status === "doing" && !overdue && " · in progress"}
-            {done && " · done"}
+            {/* Beside two action buttons the class dot floated alone in the
+                middle of the row; on the meta line it labels something. */}
+            {dotInMeta && (
+              <span
+                aria-hidden
+                style={{ "--cat": color } as React.CSSProperties}
+                className="cat-dot h-1.5 w-1.5 shrink-0 rounded-full"
+              />
+            )}
+            <span className="min-w-0 truncate">
+              {overdue && !done ? (
+                overdueMetaLabel(item, clock24h)
+              ) : (
+                <>
+                  {item.allDay ? "All day" : formatTime(item.at, clock24h)}
+                  {status === "doing" && " · in progress"}
+                  {done && " · done"}
+                </>
+              )}
+            </span>
           </p>
           {!mobile && <CollapsedDescription show={!expanded} text={item.description} />}
         </div>
 
-        {showCategoryDot && (
+        {showCategoryDot && !dotInMeta && (
           <span
             aria-hidden
             style={{ "--cat": color } as React.CSSProperties}

@@ -139,7 +139,7 @@ export default function SchedulePage() {
             nameOf={nameOf}
           />
 
-          <p className="px-0.5 text-[12px] leading-relaxed text-ink-faint">
+          <p className="order-last px-0.5 text-[12px] leading-relaxed text-ink-faint md:order-none">
             Built from anything weekly — class times you entered and repeating events from imported
             calendars. One-off events stay on the calendar.
           </p>
@@ -185,7 +185,9 @@ function SummaryStrip({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+    // On a phone the totals follow the day timeline (`order-last`): five tiles
+    // above it filled half the screen before the schedule itself appeared.
+    <div className="order-last grid grid-cols-2 gap-2 sm:grid-cols-3 md:order-none lg:grid-cols-5">
       {stats.map((stat) => (
         <div
           key={stat.label}

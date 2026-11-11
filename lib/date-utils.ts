@@ -248,6 +248,20 @@ export function isOverdue(item: Item) {
   return isOverdueAt(item, new Date());
 }
 
+/**
+ * The meta line under an overdue card's title.
+ *
+ * It used to be the due *time* plus " · overdue" — so something 26 days late
+ * read "19:10 · overdue", identical to something that slipped an hour ago.
+ * The line has roughly 22 characters on a phone before it truncates.
+ */
+export function overdueMetaLabel(item: Item, clock24h: boolean): string {
+  const time = item.allDay ? "All day" : formatTime(item.at, clock24h);
+  // Past the deadline with nothing ticked is more often a forgotten tick than
+  // a missed task, so ask rather than accuse. The card's Done circle answers it.
+  return `${time} · did you finish?`;
+}
+
 /** Overdue, or was until it was completed just now (it keeps its place). */
 export function isOverdueOrJustFinished(item: Item, now: Date, keep?: ReadonlySet<string>) {
   if (isOverdueAt(item, now)) return true;

@@ -18,6 +18,33 @@ describe("parseQuickAdd", () => {
     expect(r.confidence.category).toBe(true);
   });
 
+  describe("registrar-named classes", () => {
+    const imported = [
+      { id: "comu", name: "COMU-010-CORT", color: "#000" },
+      { id: "math", name: "MATH-150:533,534,535", color: "#000" },
+      { id: "engr-a", name: "ENGR-102:204,218", color: "#000" },
+      { id: "engr-b", name: "ENGR-102:201", color: "#000" },
+    ];
+
+    it("matches the course code as people type it, and drops it from the title", () => {
+      const r = parseQuickAdd("math 150 quiz friday", imported);
+      expect(r.categoryId).toBe("math");
+      expect(r.confidence.category).toBe(true);
+      expect(r.title.toLowerCase()).not.toContain("150");
+    });
+
+    it("matches a subject on its own when one class has it, and keeps the word", () => {
+      const r = parseQuickAdd("math quiz friday 3pm", imported);
+      expect(r.categoryId).toBe("math");
+      expect(r.title.toLowerCase()).toContain("math");
+    });
+
+    it("does not guess between two classes that share a subject", () => {
+      const r = parseQuickAdd("engr lab friday", imported);
+      expect(r.confidence.category).toBe(false);
+    });
+  });
+
   it("parses a 2–3pm range", () => {
     const r = parseQuickAdd("lab 2-3pm tomorrow", cats);
     expect(r.at.getHours()).toBe(14);

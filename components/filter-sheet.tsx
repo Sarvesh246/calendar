@@ -194,7 +194,9 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
             })}
             {savingView ? (
               <ViewEditor onDone={() => setSavingView(false)} />
-            ) : (
+            ) : summary.active && !activeViewId ? (
+              // Only when there is an unsaved filter to keep: with nothing on,
+              // or a saved view already applied, the button had nothing to save.
               <button
                 type="button"
                 onClick={() => {
@@ -205,7 +207,7 @@ function FilterSheetBody({ onClose: onClosed }: { onClose: () => void }) {
               >
                 Save this filter
               </button>
-            )}
+            ) : null}
           </div>
           <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
             Classes

@@ -94,7 +94,9 @@ export function DaySheet({
   const eventCount = items.filter((i) => i.type === "event").length;
   const dueCount = items.filter((i) => i.type !== "event" && i.status !== "done").length;
   const subtitle = isRelative
-    ? format(date, "EEEE, MMMM d")
+    ? // Short for the same reason the label is: "Wednesday, Nove…" was the
+      // long form losing to the five buttons beside it.
+      format(date, "EEE, MMM d")
     : items.length === 0
       ? "Nothing scheduled"
       : [eventCount > 0 && `${eventCount} scheduled`, dueCount > 0 && `${dueCount} due`]

@@ -8,7 +8,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { useItemCardChrome } from "@/lib/card-chrome";
 import { searchItems } from "@/lib/search";
-import { dayKey } from "@/lib/date-utils";
+import { dayKey, formatTime } from "@/lib/date-utils";
 import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
 import { MobileItemSheet } from "@/components/mobile-item-sheet";
 import { ItemCard } from "@/components/item-card";
@@ -186,8 +186,16 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
               >
                 <span className="text-[14px] font-medium">{itemDisplayTitle(i)}</span>
                 <span className="text-[12px] text-ink-soft">
-                  {format(new Date(i.at), "EEE, MMM d, yyyy")}
-                  {!i.allDay && ` · ${format(new Date(i.at), "p")}`} ·{" "}
+                  {/* The year only when it isn't this one, and the clock the
+                      user chose — this row used to print "11:59 PM" in an app
+                      set to 24-hour time. */}
+                  {format(
+                    new Date(i.at),
+                    new Date(i.at).getFullYear() === new Date().getFullYear()
+                      ? "EEE, MMM d"
+                      : "EEE, MMM d, yyyy",
+                  )}
+                  {!i.allDay && ` · ${formatTime(i.at, chrome.clock24h)}`} ·{" "}
                   {classLabel(categoriesById.get(i.categoryId ?? ""))} ·{" "}
                   {i.type === "event"
                     ? "Scheduled"

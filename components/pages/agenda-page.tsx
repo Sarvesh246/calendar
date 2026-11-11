@@ -243,7 +243,9 @@ export default function AgendaPage() {
     <div
       className={cn(
         "mx-auto flex w-full flex-col gap-6",
-        rows ? "max-w-[1080px]" : "max-w-[880px]",
+        // Same measure as Today's wide layout, so the page title doesn't jump
+        // sideways when you switch tabs.
+        rows ? "max-w-[1240px]" : "max-w-[880px]",
       )}
     >
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { format, isSameDay, isToday } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import {
@@ -16,7 +15,8 @@ import {
 import { useCategoriesById, useItemCardChrome } from "@/lib/card-chrome";
 import { ItemCard } from "@/components/item-card";
 import { EmptyState } from "@/components/empty-state";
-import { motion as motionTokens } from "@/lib/motion";
+import { prefersReducedMotion } from "@/lib/motion";
+import { haptic } from "@/lib/haptic";
 import { cn } from "@/lib/utils";
 import { assignOverlapColumns } from "@/lib/event-layout";
 import type { Item } from "@/lib/types";
@@ -858,6 +858,59 @@ function MobileWeekPager({ days, byDay }: { days: Date[]; byDay: Map<string, Ite
 
   return (
     <div className="flex min-h-0 flex-1 flex-col md:hidden">
+      {/* The week, as seven named days you can tap. This replaced a row of
+          anonymous pager dots: those said "page 3 of 7" without saying which
+          day that was, or which days had anything on them. */}
+      <div role="tablist" aria-label="Days this week" className="mb-3 grid grid-cols-7 gap-1 px-2">
+        {days.map((day, i) => {
+          const active = i === page;
+          const count = (byDay.get(dayKey(day)) ?? NO_ITEMS).length;
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-label={`${format(day, "EEEE, MMMM d")}, ${count} item${count === 1 ? "" : "s"}`}
+              onClick={() => {
+                const el = scroller.current;
+                if (!el) return;
+                haptic("selection");
+                el.scrollTo({
+                  left: el.clientWidth * i,
+                  behavior: prefersReducedMotion() ? "instant" : "smooth",
+                });
+              }}
+              className={cn(
+                "press-none flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl border",
+                "transition-colors duration-[var(--motion-standard)]",
+                active
+                  ? "border-accent/60 bg-accent-soft text-ink"
+                  : "border-transparent text-ink-soft active:bg-surface-sunken",
+              )}
+            >
+              <span
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-[0.06em]",
+                  isToday(day) ? "text-accent" : "text-ink-faint",
+                )}
+              >
+                {format(day, "EEEEE")}
+              </span>
+              <span className="text-[15px] font-semibold leading-none tabular-nums">
+                {format(day, "d")}
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  "h-1 w-1 rounded-full",
+                  count > 0 ? (active ? "bg-accent" : "bg-ink-faint") : "bg-transparent",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
       <div
         ref={scroller}
         onScroll={(e) => {
@@ -881,7 +934,11 @@ function MobileWeekPager({ days, byDay }: { days: Date[]; byDay: Map<string, Ite
             >
               <div className="mb-3 flex items-baseline justify-between">
                 <p className="text-[15px] font-semibold text-ink">{label}</p>
-                <p className="text-[12.5px] text-ink-faint">{format(day, "MMM d")}</p>
+                {/* Only beside "Today"/"Tomorrow": a full "Thursday, November 12"
+                    already is the date. */}
+                {label !== format(day, "EEEE, MMMM d") && (
+                  <p className="text-[12.5px] text-ink-faint">{format(day, "MMM d")}</p>
+                )}
               </div>
               {dayItems.length === 0 ? (
                 <EmptyState title="Nothing scheduled." sub="A free day." />
@@ -905,23 +962,6 @@ function MobileWeekPager({ days, byDay }: { days: Date[]; byDay: Map<string, Ite
             </section>
           );
         })}
-      </div>
-      <div className="mt-3 flex justify-center gap-1.5">
-        {days.map((day, i) => (
-          <motion.span
-            key={day.toISOString()}
-            aria-hidden
-            // `transition-all` put width and colour on one curve; the pill now
-            // widens on a spring while the colour crossfades on its own timing.
-            initial={false}
-            animate={{ width: i === page ? 16 : 6 }}
-            transition={motionTokens.spring}
-            className={cn(
-              "h-1.5 rounded-full transition-colors duration-[var(--motion-standard)]",
-              i === page ? "bg-accent" : "bg-line-strong",
-            )}
-          />
-        ))}
       </div>
     </div>
   );

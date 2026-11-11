@@ -1,4 +1,5 @@
 import { addDays, format, isSameDay } from "date-fns";
+import { categoryLabel } from "./course-name";
 import type { Category } from "./types";
 
 /**
@@ -151,7 +152,10 @@ export function dayChipLabel(date: Date, now = new Date()): string {
 
 export function classChipLabel(categoryId: string | undefined, categories: Category[]): string {
   if (!categoryId) return "No class";
-  return categories.find((c) => c.id === categoryId)?.name ?? "No class";
+  const category = categories.find((c) => c.id === categoryId);
+  // The short course label every other surface uses — the raw registrar name
+  // ("COMU-010-CORT") truncated to "COMU-010-CO…" inside a chip this narrow.
+  return category ? categoryLabel(categories, category) : "No class";
 }
 
 export function reminderChipLabel(minutes: number | null): string {
