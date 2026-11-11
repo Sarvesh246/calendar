@@ -4,6 +4,7 @@ import { nanoid } from "@/lib/nanoid";
 import type { OpenAiTool } from "./openai-compatible";
 import { assistantDatabase } from "./database";
 import { actionFor } from "@/lib/assistant-tool-actions";
+import { findPossibleDuplicate } from "@/lib/duplicates";
 import { checkAvailability, type AvailabilityItem } from "@/lib/availability";
 
 const id = z.string().min(1).max(100);
@@ -17,6 +18,15 @@ const reminders = z
     }),
   )
   .max(4)
+  .optional();
+
+/** A repeating add must say when it ends: a series with no end is hundreds of items. */
+const repeat = z
+  .object({
+    freq: z.enum(["daily", "weekly", "monthly"]),
+    byDay: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    until: iso,
+  })
   .optional();
 
 const schemas = {
@@ -35,6 +45,8 @@ const schemas = {
     description: optionalText,
     categoryId: id.optional(),
     reminders,
+    repeat,
+    allowDuplicate: z.boolean().optional(),
   }),
   update_event: z.object({
     id,
@@ -63,6 +75,7 @@ const schemas = {
     description: optionalText,
     categoryId: id.optional(),
     reminders,
+    allowDuplicate: z.boolean().optional(),
   }),
   update_task: z.object({
     id,
@@ -174,7 +187,8 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
     type: "function",
     function: {
       name: "add_event",
-      description: "Propose adding one calendar event. The user must confirm before it is written.",
+      description:
+        "Propose adding one calendar event. The user must confirm before it is written. For 'every Monday' style requests pass repeat {freq, byDay, until} on ONE call rather than many events; if the user gave no end date, ask 'until when?' instead of calling. If the tool reports possibleDuplicate, ask the user before adding a copy.",
       parameters: object(
         {
           title: str("Event title"),
@@ -185,6 +199,22 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
           description: str("Optional notes"),
           categoryId: str("Optional class/category id"),
           reminders: reminderSchema,
+          repeat: object(
+            {
+              freq: { type: "string", enum: ["daily", "weekly", "monthly"] },
+              byDay: {
+                type: "array",
+                items: { type: "integer", minimum: 0, maximum: 6 },
+                description: "Weekly only: 0=Sunday ... 6=Saturday",
+              },
+              until: dateTime("Last day of the series, with timezone offset. Required."),
+            },
+            ["freq", "until"],
+          ),
+          allowDuplicate: {
+            type: "boolean",
+            description: "Only after the user confirmed they want a second copy",
+          },
         },
         ["title", "start"],
       ),
@@ -248,6 +278,10 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
           description: str("Optional notes"),
           categoryId: str("Optional class/category id"),
           reminders: reminderSchema,
+          allowDuplicate: {
+            type: "boolean",
+            description: "Only after the user confirmed they want a second copy",
+          },
         },
         ["title", "due"],
       ),
@@ -464,6 +498,23 @@ export async function executeDatebookTool(
   if (tool === "list_events") return { output: await listFromDatabase(ctx, "event", args) };
   if (tool === "list_tasks") return { output: await listFromDatabase(ctx, "task", args) };
   if (!MUTATIONS.has(tool)) throw new MalformedToolArgumentsError(name, "unsupported tool");
+
+  if (tool === "add_event" || tool === "add_task") {
+    const proposedAt = String(tool === "add_event" ? args.start : args.due);
+    const twin = args.allowDuplicate
+      ? null
+      : findPossibleDuplicate(ctx.body.items, { title: String(args.title), at: proposedAt });
+    if (twin) {
+      return {
+        output: {
+          ok: false,
+          possibleDuplicate: { id: twin.id, title: twin.title, at: twin.at },
+          instruction:
+            "Nothing was staged. Ask the user whether they want a second copy; only if they say yes, call again with allowDuplicate true.",
+        },
+      };
+    }
+  }
 
   const target =
     tool.startsWith("update_") || tool.startsWith("delete_")

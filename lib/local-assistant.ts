@@ -1871,6 +1871,29 @@ function titleIsFaithful(
   );
 }
 
+/**
+ * The parser keeps the words it could not place, so "calc homework due friday
+ * 11:59pm for math" becomes "calc homework due for math". Once the class has
+ * been matched, "for math" is the class and a trailing "due" is the verb —
+ * neither belongs in the title.
+ */
+function tidyTitle(title: string, cat: Category | undefined): string {
+  let out = title;
+  if (cat) {
+    const m = /\s+(?:due\s+)?for\s+(.+)$/i.exec(out);
+    if (
+      m &&
+      m[1]
+        .toLowerCase()
+        .split(/\s+/)
+        .every((w) => cat.name.toLowerCase().includes(w))
+    )
+      out = out.slice(0, m.index);
+  }
+  out = out.replace(/\s+due$/i, "").trim();
+  return out || title;
+}
+
 /** "olive garden" → "Olive Garden"; anything the user already cased, or "the library"-style common places, stays as typed. */
 function placeName(location: string): string {
   if (
@@ -1965,7 +1988,10 @@ function addIntent(env: Env): Outcome {
     ? /\b(meeting|appointment|event|call|interview|session)\b/i.exec(stripped)?.[1]
     : undefined;
   if (bareNoun) parsed.title = bareNoun;
-  const title = parsed.title.replace(/^(?:a|an|the)\s+/i, "").trim();
+  const title = tidyTitle(
+    parsed.title.replace(/^(?:a|an|the)\s+/i, "").trim(),
+    ctx.categories.find((c) => c.id === parsed.categoryId),
+  );
   if (
     !titleIsFaithful(
       stripped,

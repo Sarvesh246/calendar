@@ -15,7 +15,12 @@ export function actionFor(
   args: Record<string, unknown>,
   target?: Record<string, unknown> | SlimItem | null,
 ) {
-  const title = String(args.title || target?.title || (tool.includes("event") ? "Event" : "Task"));
+  const raw = String(args.title || target?.title || (tool.includes("event") ? "Event" : "Task"));
+  // A model writes "dentist"; the app writes "Dentist". Only for adds: a title
+  // the user already has is shown exactly as they wrote it.
+  const title = tool.startsWith("add_") ? raw.charAt(0).toUpperCase() + raw.slice(1) : raw;
+  const repeat = (args.repeat ?? undefined) as
+    { freq?: unknown; byDay?: unknown; until?: unknown } | undefined;
   if (tool === "add_event") {
     return {
       kind: "create",
@@ -29,6 +34,7 @@ export function actionFor(
       description: args.description,
       categoryId: args.categoryId,
       reminders: args.reminders,
+      ...(repeat ? { repeatFreq: repeat.freq, repeatDays: repeat.byDay, until: repeat.until } : {}),
     };
   }
   if (tool === "add_task") {
