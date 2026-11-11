@@ -19,168 +19,181 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeColors = {
   accent: "#7c5cf0",
 };
 
-type Rgb = [number, number, number];
+/** Self-contained so the exact same palette can run before hydration. */
+export function createCustomThemeEngine() {
+  type Rgb = [number, number, number];
 
-function hexToRgb(hex: string): Rgb {
-  const h = hex.replace("#", "").trim();
-  const full =
-    h.length === 3
-      ? h
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : h.padEnd(6, "0");
-  const num = parseInt(full.slice(0, 6), 16) || 0;
-  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
-}
-
-function clampByte(v: number): number {
-  return Math.min(255, Math.max(0, Math.round(v)));
-}
-
-function rgbToHex([r, g, b]: Rgb): string {
-  return "#" + [r, g, b].map((v) => clampByte(v).toString(16).padStart(2, "0")).join("");
-}
-
-function mix(a: Rgb, b: Rgb, t: number): Rgb {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-}
-
-function relativeLuminance([r, g, b]: Rgb): number {
-  const s = [r, g, b].map((v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
-}
-
-function contrastRatio(a: Rgb, b: Rgb): number {
-  const la = relativeLuminance(a);
-  const lb = relativeLuminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-
-/** WCAG AA for body text. The faint tier carries real content — times, counts,
- *  dates — so it is held to the same bar as everything else. */
-const MIN_TEXT_CONTRAST = 4.5;
-
-/**
- * Walk a derived text colour back toward the full-strength ink until it is
- * legible on the surface it actually sits on.
- *
- * The faint and soft tiers used to be a blind percentage mix: fine against the
- * background they were mixed with, arbitrary against anything else. Pick a
- * mid-grey surface in the theme editor and the faint tier lands near 2:1, which
- * is a smudge, not text — and it is carrying times, counts and dates.
- *
- * `surface` is the hard requirement, matching the rule the rest of this file
- * already follows: ink is pinned to the cards because that is where text
- * overwhelmingly renders. `alsoOn` (the page backdrop) is best-effort, because
- * a light-surface/dark-backdrop palette is a perfectly reasonable pick for
- * which no single colour can clear AA on both — insisting would only drag the
- * tier to the ink and throw away the hierarchy for nothing.
- *
- * Stepping rather than solving keeps the chosen hue as long as it can.
- */
-function ensureReadable(colour: Rgb, ink: Rgb, surface: Rgb, alsoOn: Rgb): Rgb {
-  const scoreOf = (c: Rgb) =>
-    contrastRatio(c, surface) >= MIN_TEXT_CONTRAST && contrastRatio(c, alsoOn) >= MIN_TEXT_CONTRAST;
-  if (scoreOf(colour)) return colour;
-
-  let bestOnSurface: Rgb | null =
-    contrastRatio(colour, surface) >= MIN_TEXT_CONTRAST ? colour : null;
-
-  for (let step = 1; step <= 20; step += 1) {
-    const next = mix(colour, ink, step / 20);
-    if (scoreOf(next)) return next;
-    if (!bestOnSurface && contrastRatio(next, surface) >= MIN_TEXT_CONTRAST) {
-      bestOnSurface = next;
-    }
+  function hexToRgb(hex: string): Rgb {
+    const h = hex.replace("#", "").trim();
+    const full =
+      h.length === 3
+        ? h
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : h.padEnd(6, "0");
+    const num = parseInt(full.slice(0, 6), 16) || 0;
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
   }
-  // Both unreachable: keep whatever cleared the surface, else the ink, which is
-  // the most legible colour this palette has.
-  return bestOnSurface ?? ink;
+
+  function clampByte(v: number): number {
+    return Math.min(255, Math.max(0, Math.round(v)));
+  }
+
+  function rgbToHex([r, g, b]: Rgb): string {
+    return "#" + [r, g, b].map((v) => clampByte(v).toString(16).padStart(2, "0")).join("");
+  }
+
+  function mix(a: Rgb, b: Rgb, t: number): Rgb {
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  }
+
+  function relativeLuminance([r, g, b]: Rgb): number {
+    const s = [r, g, b].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+  }
+
+  function contrastRatio(a: Rgb, b: Rgb): number {
+    const la = relativeLuminance(a);
+    const lb = relativeLuminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+
+  /** WCAG AA for body text. The faint tier carries real content — times, counts,
+   *  dates — so it is held to the same bar as everything else. */
+  const MIN_TEXT_CONTRAST = 4.5;
+
+  /**
+   * Walk a derived text colour back toward the full-strength ink until it is
+   * legible on the surface it actually sits on.
+   *
+   * The faint and soft tiers used to be a blind percentage mix: fine against the
+   * background they were mixed with, arbitrary against anything else. Pick a
+   * mid-grey surface in the theme editor and the faint tier lands near 2:1, which
+   * is a smudge, not text — and it is carrying times, counts and dates.
+   *
+   * `surface` is the hard requirement, matching the rule the rest of this file
+   * already follows: ink is pinned to the cards because that is where text
+   * overwhelmingly renders. `alsoOn` (the page backdrop) is best-effort, because
+   * a light-surface/dark-backdrop palette is a perfectly reasonable pick for
+   * which no single colour can clear AA on both — insisting would only drag the
+   * tier to the ink and throw away the hierarchy for nothing.
+   *
+   * Stepping rather than solving keeps the chosen hue as long as it can.
+   */
+  function ensureReadable(colour: Rgb, ink: Rgb, surface: Rgb, alsoOn: Rgb): Rgb {
+    const scoreOf = (c: Rgb) =>
+      contrastRatio(c, surface) >= MIN_TEXT_CONTRAST &&
+      contrastRatio(c, alsoOn) >= MIN_TEXT_CONTRAST;
+    if (scoreOf(colour)) return colour;
+
+    let bestOnSurface: Rgb | null =
+      contrastRatio(colour, surface) >= MIN_TEXT_CONTRAST ? colour : null;
+
+    for (let step = 1; step <= 20; step += 1) {
+      const next = mix(colour, ink, step / 20);
+      if (scoreOf(next)) return next;
+      if (!bestOnSurface && contrastRatio(next, surface) >= MIN_TEXT_CONTRAST) {
+        bestOnSurface = next;
+      }
+    }
+    // Both unreachable: keep whatever cleared the surface, else the ink, which is
+    // the most legible colour this palette has.
+    return bestOnSurface ?? ink;
+  }
+
+  /** True if `hex` reads as a light color — the same test used to decide body
+   *  text color and `color-scheme` for a custom background or accent. */
+  function isLightColor(hex: string): boolean {
+    const rgb = hexToRgb(hex);
+    return contrastRatio(rgb, [0, 0, 0]) >= contrastRatio(rgb, [255, 255, 255]);
+  }
+
+  function rgba([r, g, b]: Rgb, alpha: number): string {
+    return `rgba(${clampByte(r)}, ${clampByte(g)}, ${clampByte(b)}, ${alpha})`;
+  }
+
+  /** Ink, lines, and every other content-adjacent token are pinned to `surface`
+   *  rather than `background` — text overwhelmingly renders on `bg-surface`
+   *  cards, not the page backdrop, so a dark background paired with a light
+   *  surface (a perfectly reasonable pick) needs *light-mode* ink, not dark. */
+  function customThemeColorScheme(colors: CustomThemeColors): "light" | "dark" {
+    return isLightColor(colors.surface) ? "light" : "dark";
+  }
+
+  /** Full set of CSS custom properties (matching the built-in `:root[data-preset]`
+   *  blocks in globals.css) that a custom theme needs applied inline, since its
+   *  values can't be known ahead of time as static CSS. */
+  function buildCustomThemeVars(colors: CustomThemeColors): Record<string, string> {
+    const bg = hexToRgb(colors.background);
+    const surface = hexToRgb(colors.surface);
+    const accent = hexToRgb(colors.accent);
+    const dark = !isLightColor(colors.surface);
+    const white: Rgb = [255, 255, 255];
+    const black: Rgb = [0, 0, 0];
+
+    const extreme = dark ? white : black;
+    const tintedInk = mix(extreme, surface, dark ? 0.05 : 0.11);
+    const ink = contrastRatio(tintedInk, surface) >= MIN_TEXT_CONTRAST ? tintedInk : extreme;
+    // Both dimmer tiers are checked against the two things they can sit on: the
+    // page backdrop and the cards. A custom palette has no designer keeping an
+    // eye on that, so the derivation does it.
+    const inkSoft = ensureReadable(mix(ink, bg, dark ? 0.42 : 0.34), ink, surface, bg);
+    const inkFaint = ensureReadable(mix(ink, bg, dark ? 0.66 : 0.58), ink, surface, bg);
+
+    // Mixed from `surface` (not `background`) for the same reason as `dark`
+    // above — borders overwhelmingly outline surface cards, not the page.
+    const line = mix(surface, ink, dark ? 0.12 : 0.1);
+    const lineStrong = mix(surface, ink, dark ? 0.22 : 0.18);
+
+    const surfaceElevated = mix(surface, white, dark ? 0.06 : 0.35);
+    const surfaceSunken = mix(bg, ink, dark ? 0.08 : 0.06);
+
+    const accentInk =
+      contrastRatio(accent, black) >= contrastRatio(accent, white) ? "#000000" : "#ffffff";
+    const accent2 = mix(accent, dark ? white : black, 0.22);
+    const accentSoft = mix(surface, accent, dark ? 0.22 : 0.12);
+
+    const warn: Rgb = dark ? [227, 168, 92] : [201, 52, 0];
+    const good: Rgb = dark ? [95, 208, 160] : [36, 138, 61];
+    const warnSoft = mix(surface, warn, dark ? 0.18 : 0.12);
+    const goodSoft = mix(surface, good, dark ? 0.18 : 0.12);
+
+    return {
+      "--surface-base": colors.background,
+      "--surface": colors.surface,
+      "--surface-elevated": rgbToHex(surfaceElevated),
+      "--surface-sunken": rgbToHex(surfaceSunken),
+      "--surface-floating": rgba(surface, dark ? 0.65 : 0.75),
+      "--line": rgbToHex(line),
+      "--line-strong": rgbToHex(lineStrong),
+      "--ink": rgbToHex(ink),
+      "--ink-soft": rgbToHex(inkSoft),
+      "--ink-faint": rgbToHex(inkFaint),
+      "--accent": colors.accent,
+      "--accent-text": rgbToHex(ensureReadable(accent, ink, surface, bg)),
+      "--accent-2": rgbToHex(accent2),
+      "--accent-ink": accentInk,
+      "--accent-soft": rgbToHex(accentSoft),
+      "--warn": rgbToHex(ensureReadable(warn, ink, warnSoft, surface)),
+      "--warn-soft": rgbToHex(warnSoft),
+      "--good": rgbToHex(ensureReadable(good, ink, goodSoft, surface)),
+      "--good-soft": rgbToHex(goodSoft),
+      "--shadow-sm": dark ? "0 1px 2px rgba(0, 0, 0, 0.4)" : "0 1px 2px rgba(0, 0, 0, 0.08)",
+      "--shadow-md": dark ? "0 8px 24px rgba(0, 0, 0, 0.45)" : "0 6px 20px rgba(0, 0, 0, 0.1)",
+      "--shadow-lg": dark ? "0 24px 60px rgba(0, 0, 0, 0.55)" : "0 20px 48px rgba(0, 0, 0, 0.14)",
+      "--ambient": "none",
+    };
+  }
+
+  return { buildCustomThemeVars, customThemeColorScheme, isLightColor };
 }
 
-/** True if `hex` reads as a light color — the same test used to decide body
- *  text color and `color-scheme` for a custom background or accent. */
-export function isLightColor(hex: string): boolean {
-  return relativeLuminance(hexToRgb(hex)) > 0.5;
-}
-
-function rgba([r, g, b]: Rgb, alpha: number): string {
-  return `rgba(${clampByte(r)}, ${clampByte(g)}, ${clampByte(b)}, ${alpha})`;
-}
-
-/** Ink, lines, and every other content-adjacent token are pinned to `surface`
- *  rather than `background` — text overwhelmingly renders on `bg-surface`
- *  cards, not the page backdrop, so a dark background paired with a light
- *  surface (a perfectly reasonable pick) needs *light-mode* ink, not dark. */
-export function customThemeColorScheme(colors: CustomThemeColors): "light" | "dark" {
-  return isLightColor(colors.surface) ? "light" : "dark";
-}
-
-/** Full set of CSS custom properties (matching the built-in `:root[data-preset]`
- *  blocks in globals.css) that a custom theme needs applied inline, since its
- *  values can't be known ahead of time as static CSS. */
-export function buildCustomThemeVars(colors: CustomThemeColors): Record<string, string> {
-  const bg = hexToRgb(colors.background);
-  const surface = hexToRgb(colors.surface);
-  const accent = hexToRgb(colors.accent);
-  const dark = !isLightColor(colors.surface);
-  const white: Rgb = [255, 255, 255];
-  const black: Rgb = [0, 0, 0];
-
-  const ink: Rgb = dark ? [244, 244, 245] : [28, 28, 30];
-  // Both dimmer tiers are checked against the two things they can sit on: the
-  // page backdrop and the cards. A custom palette has no designer keeping an
-  // eye on that, so the derivation does it.
-  const inkSoft = ensureReadable(mix(ink, bg, dark ? 0.42 : 0.34), ink, surface, bg);
-  const inkFaint = ensureReadable(mix(ink, bg, dark ? 0.66 : 0.58), ink, surface, bg);
-
-  // Mixed from `surface` (not `background`) for the same reason as `dark`
-  // above — borders overwhelmingly outline surface cards, not the page.
-  const line = mix(surface, ink, dark ? 0.12 : 0.1);
-  const lineStrong = mix(surface, ink, dark ? 0.22 : 0.18);
-
-  const surfaceElevated = dark ? mix(surface, white, 0.06) : surface;
-  const surfaceSunken = mix(surface, bg, 0.55);
-
-  const accentIsLight = isLightColor(colors.accent);
-  const accentInk = accentIsLight ? "#1c1c1e" : "#ffffff";
-  const accent2 = mix(accent, dark ? white : black, 0.22);
-  const accentSoft = mix(surface, accent, dark ? 0.22 : 0.12);
-
-  const warn: Rgb = dark ? [227, 168, 92] : [201, 52, 0];
-  const good: Rgb = dark ? [95, 208, 160] : [36, 138, 61];
-  const warnSoft = mix(surface, warn, dark ? 0.18 : 0.12);
-  const goodSoft = mix(surface, good, dark ? 0.18 : 0.12);
-
-  return {
-    "--surface-base": colors.background,
-    "--surface": colors.surface,
-    "--surface-elevated": rgbToHex(surfaceElevated),
-    "--surface-sunken": rgbToHex(surfaceSunken),
-    "--surface-floating": rgba(surface, dark ? 0.65 : 0.75),
-    "--line": rgbToHex(line),
-    "--line-strong": rgbToHex(lineStrong),
-    "--ink": rgbToHex(ink),
-    "--ink-soft": rgbToHex(inkSoft),
-    "--ink-faint": rgbToHex(inkFaint),
-    "--accent": colors.accent,
-    "--accent-2": rgbToHex(accent2),
-    "--accent-ink": accentInk,
-    "--accent-soft": rgbToHex(accentSoft),
-    "--warn": rgbToHex(warn),
-    "--warn-soft": rgbToHex(warnSoft),
-    "--good": rgbToHex(good),
-    "--good-soft": rgbToHex(goodSoft),
-    "--shadow-sm": dark ? "0 1px 2px rgba(0, 0, 0, 0.4)" : "0 1px 2px rgba(0, 0, 0, 0.08)",
-    "--shadow-md": dark ? "0 8px 24px rgba(0, 0, 0, 0.45)" : "0 6px 20px rgba(0, 0, 0, 0.1)",
-    "--shadow-lg": dark ? "0 24px 60px rgba(0, 0, 0, 0.55)" : "0 20px 48px rgba(0, 0, 0, 0.14)",
-    "--ambient": "none",
-  };
-}
+const themeEngine = createCustomThemeEngine();
+export const { buildCustomThemeVars, customThemeColorScheme, isLightColor } = themeEngine;
 
 /** Every CSS variable a custom theme can set inline — used to clear them
  *  cleanly when switching away, since an inline style always outranks the

@@ -92,8 +92,18 @@ export default function SettingsPage() {
   const [newReminderMinutes, setNewReminderMinutes] = useState("30");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const colorPersist = useRef(0);
+  const pendingColors = useRef<CustomThemeColors | null>(null);
 
-  useEffect(() => () => window.clearTimeout(colorPersist.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(colorPersist.current);
+      if (pendingColors.current) {
+        useDatebookStore.getState().updateSettings({ customTheme: pendingColors.current });
+        pendingColors.current = null;
+      }
+    },
+    [],
+  );
 
   // Deep links from onboarding and the palette open the section they point into
   // and bring it on screen, instead of dropping you at the top of a long page.
@@ -120,16 +130,19 @@ export default function SettingsPage() {
   }, []);
 
   const applyPreset = (preset: AppearancePreset) => {
+    window.clearTimeout(colorPersist.current);
+    const pending = pendingColors.current;
+    pendingColors.current = null;
     // Same-frame paint (ahead of ThemeProvider's layout effect) so a click
     // feels like the built-in `:root[data-preset]` swap. Selecting Custom also
     // seeds `customTheme` so a reload has something to restore.
     if (preset === "custom") {
-      const colors = settings.customTheme ?? DEFAULT_CUSTOM_THEME;
+      const colors = pending ?? settings.customTheme ?? DEFAULT_CUSTOM_THEME;
       paintAppearance("custom", colors);
       updateSettings({ preset: "custom", customTheme: colors });
     } else {
       paintAppearance(preset);
-      updateSettings({ preset });
+      updateSettings({ preset, ...(pending ? { customTheme: pending } : {}) });
     }
   };
 
@@ -141,7 +154,9 @@ export default function SettingsPage() {
       customTheme: colors,
     });
     window.clearTimeout(colorPersist.current);
+    pendingColors.current = colors;
     colorPersist.current = window.setTimeout(() => {
+      pendingColors.current = null;
       updateSettings({ preset: "custom", customTheme: colors });
     }, 140);
   };

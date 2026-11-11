@@ -147,10 +147,17 @@ describe("custom theme contrast", () => {
     }
   });
 
-  it("falls back to the ink when no dimmer colour can clear the surface", () => {
+  it("chooses readable ink on a mid-tone surface", () => {
     const colors = { background: "#808080", surface: "#8a8a8a", accent: "#333333" };
     const vars = buildCustomThemeVars(colors);
-    expect(vars["--ink-faint"]).toBe(vars["--ink"]);
+    expect(ratio(vars["--ink-faint"], colors.surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("selects high contrast ink for saturated and mid-tone accent fills", () => {
+    for (const accent of ["#007aff", "#ff0000", "#808080", "#f7d25c", "#5726a8"]) {
+      const vars = buildCustomThemeVars({ ...DEFAULT_CUSTOM_THEME, accent });
+      expect(ratio(vars["--accent-ink"], accent)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("still leaves the tiers in order, faintest last", () => {

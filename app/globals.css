@@ -333,6 +333,12 @@
   color-scheme: light;
 }
 
+/* Custom accent fills keep the chosen color; text gets a readable variant. */
+:root[data-preset="custom"] .text-accent,
+:root[data-preset="custom"] .hover\:text-accent:hover {
+  color: var(--accent-text);
+}
+
 /* Motion + radius scale, referenced directly (not via @theme).
    These mirror lib/motion.ts one-for-one — change both together. */
 :root {

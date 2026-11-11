@@ -7,6 +7,7 @@ import {
   applyCustomThemeToDocument,
   clearCustomThemeFromDocument,
   DEFAULT_CUSTOM_THEME,
+  createCustomThemeEngine,
 } from "@/lib/custom-theme";
 import { writeAppearanceSnapshot } from "@/lib/appearance-storage";
 import type { AppearancePreset } from "@/lib/types";
@@ -70,10 +71,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Inline, blocking script to set the preset before first paint — avoids a flash of the default theme.
- *  Ports the same math as `buildCustomThemeVars` in lib/custom-theme.ts (kept in sync by hand — this
- *  runs before any bundle is parsed, so it can't import that module) so a reload on the Custom preset
- *  paints the right colors immediately instead of flashing the default theme and then correcting. */
+/** Paint the same palette before hydration to avoid a flash on reload.
+ *  The engine is self-contained so its source can run in this blocking script. */
 export const themeInitScript = `
 (function () {
   try {
@@ -101,65 +100,19 @@ export const themeInitScript = `
     var themeColor = ${JSON.stringify(presetThemeColor)}[preset];
 
     if (preset === "custom") {
-      var c = (settings && settings.customTheme) || ${JSON.stringify(DEFAULT_CUSTOM_THEME)};
-      function hexToRgb(hex) {
-        var h = hex.replace("#", "");
-        if (h.length === 3) h = h.replace(/./g, function (ch) { return ch + ch; });
-        var n = parseInt(h.slice(0, 6), 16) || 0;
-        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      var candidate = settings && settings.customTheme;
+      var valid = candidate && [candidate.background, candidate.surface, candidate.accent].every(function (value) {
+        return typeof value === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
+      });
+      function normalize(value) {
+        var h = value.trim().toLowerCase();
+        return h.length === 4 ? "#" + h.slice(1).replace(/./g, function (ch) { return ch + ch; }) : h;
       }
-      function clampByte(v) { return Math.min(255, Math.max(0, Math.round(v))); }
-      function toHex(rgb) {
-        return "#" + rgb.map(function (v) { return clampByte(v).toString(16).padStart(2, "0"); }).join("");
-      }
-      function mix(a, b, t) {
-        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-      }
-      function luminance(rgb) {
-        var s = rgb.map(function (v) {
-          var x = v / 255;
-          return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
-        });
-        return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
-      }
-      function rgba(rgb, a) {
-        return "rgba(" + clampByte(rgb[0]) + ", " + clampByte(rgb[1]) + ", " + clampByte(rgb[2]) + ", " + a + ")";
-      }
-      var bg = hexToRgb(c.background), surface = hexToRgb(c.surface), accent = hexToRgb(c.accent);
-      // Keyed off surface, not background — text and borders overwhelmingly
-      // render on surface cards, not the page backdrop, so a dark background
-      // paired with a light surface still needs light-mode ink (see the
-      // matching comment on customThemeColorScheme in lib/custom-theme.ts).
-      var dark = luminance(surface) <= 0.5;
-      var white = [255, 255, 255], black = [0, 0, 0];
-      var ink = dark ? [244, 244, 245] : [28, 28, 30];
-      var accentIsLight = luminance(accent) > 0.5;
-      var vars = {
-        "--surface-base": c.background,
-        "--surface": c.surface,
-        "--surface-elevated": dark ? toHex(mix(surface, white, 0.06)) : c.surface,
-        "--surface-sunken": toHex(mix(surface, bg, 0.55)),
-        "--surface-floating": rgba(surface, dark ? 0.65 : 0.75),
-        "--line": toHex(mix(surface, ink, dark ? 0.12 : 0.1)),
-        "--line-strong": toHex(mix(surface, ink, dark ? 0.22 : 0.18)),
-        "--ink": toHex(ink),
-        "--ink-soft": toHex(mix(ink, bg, dark ? 0.42 : 0.34)),
-        "--ink-faint": toHex(mix(ink, bg, dark ? 0.66 : 0.58)),
-        "--accent": c.accent,
-        "--accent-2": toHex(mix(accent, dark ? white : black, 0.22)),
-        "--accent-ink": accentIsLight ? "#1c1c1e" : "#ffffff",
-        "--accent-soft": toHex(mix(surface, accent, dark ? 0.22 : 0.12)),
-        "--warn": dark ? "#e3a85c" : "#c93400",
-        "--good": dark ? "#5fd0a0" : "#248a3d",
-        "--shadow-sm": dark ? "0 1px 2px rgba(0, 0, 0, 0.4)" : "0 1px 2px rgba(0, 0, 0, 0.08)",
-        "--shadow-md": dark ? "0 8px 24px rgba(0, 0, 0, 0.45)" : "0 6px 20px rgba(0, 0, 0, 0.1)",
-        "--shadow-lg": dark ? "0 24px 60px rgba(0, 0, 0, 0.55)" : "0 20px 48px rgba(0, 0, 0, 0.14)",
-        "--ambient": "none",
-      };
-      vars["--warn-soft"] = toHex(mix(surface, hexToRgb(vars["--warn"]), dark ? 0.18 : 0.12));
-      vars["--good-soft"] = toHex(mix(surface, hexToRgb(vars["--good"]), dark ? 0.18 : 0.12));
+      var c = valid ? { background: normalize(candidate.background), surface: normalize(candidate.surface), accent: normalize(candidate.accent) } : ${JSON.stringify(DEFAULT_CUSTOM_THEME)};
+      var engine = (${createCustomThemeEngine.toString()})();
+      var vars = engine.buildCustomThemeVars(c);
       for (var name in vars) root.style.setProperty(name, vars[name]);
-      root.style.colorScheme = dark ? "dark" : "light";
+      root.style.colorScheme = engine.customThemeColorScheme(c);
       themeColor = c.background;
     }
 
