@@ -51,9 +51,9 @@ export interface AssistantResponse {
   items?: { ids: string[]; heading?: string }[];
   /** A question's possible answers, drawn as tap-to-send choices. */
   choices?: string[];
-  /** True when the network assistant couldn't be reached and this is the
-   *  offline heuristic answer — the UI offers a retry. */
-  degraded?: boolean;
+  /** Why there is no real answer: the user is signed out (offer sign-in), the
+   *  assistant could not be reached or is busy (offer Retry). Never a guess. */
+  error?: "signed-out" | "unreachable" | "busy";
   providerLabel?: string;
   fallbackNotice?: string;
 }
@@ -439,45 +439,41 @@ export async function askAssistant(
     if (res.status === 401) {
       return {
         text: "Sign in with Google to use the cloud assistant. I can still answer common calendar questions on this device.",
-        degraded: true,
+        error: "signed-out",
       };
     }
-    if (res.ok) {
-      const data = (await res.json()) as AssistantResponse & { error?: string };
-      if (!data.error && typeof data.text === "string") {
-        return {
-          text: data.text,
-          suggestions: data.suggestions,
-          actions: sanitizeActions(data.actions, ctx),
-          items: cleanItemsBlocks(data.items),
-          choices: cleanChoices(data.choices),
-          providerLabel: data.providerLabel,
-          fallbackNotice: data.fallbackNotice,
-        };
-      }
-      if (data.error === "assistant-busy") {
-        return {
-          text: "The assistant's a bit overloaded right now — give it a few seconds and tap retry.",
-          degraded: true,
-        };
-      }
+    const data = (await res.json().catch(() => ({}))) as Omit<AssistantResponse, "error"> & {
+      error?: string;
+    };
+    if (res.ok && !data.error && typeof data.text === "string") {
+      return {
+        text: data.text,
+        suggestions: data.suggestions,
+        actions: sanitizeActions(data.actions, ctx),
+        items: cleanItemsBlocks(data.items),
+        choices: cleanChoices(data.choices),
+        providerLabel: data.providerLabel,
+        fallbackNotice: data.fallbackNotice,
+      };
+    }
+    if (res.status === 429 || data.error === "assistant-busy") {
+      return {
+        text: "The assistant's a bit overloaded right now. Give it a few seconds and try again.",
+        error: "busy",
+      };
     }
   } catch {
-    /* offline / timeout / server error — fall through to the local engine */
+    /* offline / timeout — falls through to the typed error below */
   } finally {
     clearTimeout(timer);
   }
 
-  // A local guess at move/delete/rename is risky (wrong target), so only fall
-  // back to the offline heuristic for questions and for add/create (the parser
-  // can build a draft the user still has to confirm).
-  if (COMMAND_VERBS.test(message.trim())) {
-    return {
-      text: "I couldn't reach the assistant just now. Tap retry, or add it straight from the quick-add bar.",
-      degraded: true,
-    };
-  }
-  return { ...localAnswer(message, ctx), degraded: true };
+  // Not a guess dressed up as an answer: say it could not be reached, and let
+  // the user retry. (The on-device engine already had its turn above.)
+  return {
+    text: "I couldn't reach the assistant just now.",
+    error: "unreachable",
+  };
 }
 
 /** Defensive pass over server actions before the store applies them. */

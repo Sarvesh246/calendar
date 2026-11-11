@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, Trash2 } from "lucide-react";
+import { ArrowRight, Check, Trash2 } from "lucide-react";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { motion } from "framer-motion";
 import { OUTCOME_COPY, type ActionOutcome } from "@/lib/assistant-staleness";
 import { describeAction, type DescribableItem } from "@/lib/assistant-actions";
@@ -25,6 +26,7 @@ export function AssistantActionCard({
   docked,
   onApply,
   onDismiss,
+  onUndo,
   onClassChange,
 }: {
   action: AssistantAction;
@@ -35,6 +37,8 @@ export function AssistantActionCard({
   docked?: boolean;
   onApply: () => void;
   onDismiss: () => void;
+  /** Offered beside "Done"; puts back what this card changed. */
+  onUndo?: () => void;
   onClassChange?: (categoryId: string) => void;
 }) {
   const d = describeAction(action, items, clock24h, categories);
@@ -78,40 +82,52 @@ export function AssistantActionCard({
       )}
 
       {action.kind === "create" && live.length > 0 && !outcome && (
-        <label className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-surface px-2.5 text-[12px] text-ink-soft focus-within:border-accent">
-          <span className="sr-only">Class</span>
-          {current && (
-            <span
-              aria-hidden
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: current.color }}
-            />
-          )}
-          <select
-            value={d.categoryId ?? ""}
-            onChange={(e) => onClassChange?.(e.target.value)}
-            className="min-h-9 max-w-[14rem] cursor-pointer appearance-none truncate bg-transparent pr-4 text-ink-soft focus:outline-none"
-          >
-            {!current && <option value="">No class</option>}
-            {live.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryLabel(categories, c)}
-              </option>
-            ))}
-          </select>
-          <ChevronDown aria-hidden className="-ml-4 h-3 w-3 shrink-0 text-ink-faint" />
-        </label>
+        <SelectMenu
+          label="Class"
+          value={d.categoryId ?? ""}
+          onChange={(id) => onClassChange?.(id)}
+          className="mt-2 inline-block max-w-full"
+          buttonClassName="min-h-10 rounded-full border border-line bg-surface px-3 text-[12.5px] text-ink-soft transition-colors hover:border-ink-faint focus-visible:border-accent"
+          leading={
+            current ? (
+              <span
+                aria-hidden
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: current.color }}
+              />
+            ) : null
+          }
+          options={[
+            ...(current ? [] : [{ value: "", label: "No class" }]),
+            ...live.map((c) => ({
+              value: c.id,
+              label: categoryLabel(categories, c),
+              color: c.color,
+            })),
+          ]}
+        />
       )}
 
       {outcome === "applied" ? (
-        <motion.p
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={motionTokens.springSnappy}
-          className="mt-2 flex items-center gap-1 text-[13px] font-medium text-good"
-        >
-          <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Done
-        </motion.p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <motion.p
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={motionTokens.springSnappy}
+            className="flex items-center gap-1 text-[13px] font-medium text-good"
+          >
+            <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Done
+          </motion.p>
+          {onUndo && (
+            <button
+              type="button"
+              onClick={onUndo}
+              className="min-h-11 rounded-lg px-3 text-[13px] font-medium text-ink-soft hover:bg-surface hover:text-accent"
+            >
+              Undo
+            </button>
+          )}
+        </div>
       ) : outcome === "dismissed" ? (
         <p className="mt-2 text-[13px] text-ink-faint">Dismissed</p>
       ) : outcome ? (

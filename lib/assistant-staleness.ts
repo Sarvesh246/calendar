@@ -11,7 +11,7 @@ import type { AssistantAction } from "./ai-assistant";
 /** Matches the server's `expires_at` on a staged action. */
 export const ACTION_TTL_MS = 30 * 60 * 1000;
 
-export type ActionOutcome = "applied" | "dismissed" | "stale" | "superseded" | "expired";
+export type ActionOutcome = "applied" | "dismissed" | "stale" | "superseded" | "expired" | "undone";
 
 export type OpenOutcomes = Record<number, ActionOutcome> | undefined;
 
@@ -34,6 +34,7 @@ export function staleReason(
 }
 
 export const OUTCOME_COPY: Record<Exclude<ActionOutcome, "applied" | "dismissed">, string> = {
+  undone: "Undone",
   stale: "This item no longer exists",
   superseded: "Replaced by a newer suggestion",
   expired: "Expired — ask again",

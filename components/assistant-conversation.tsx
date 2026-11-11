@@ -24,6 +24,7 @@ import { AssistantMarkdown } from "@/lib/markdown";
 import { AssistantActionCard } from "@/components/assistant-action-card";
 import { AssistantItemRows } from "@/components/assistant-item-rows";
 import { partsOf } from "@/lib/assistant-parts";
+import { useAuth } from "@/components/auth-provider";
 import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AssistantModelSelector } from "@/components/assistant-model-selector";
@@ -55,6 +56,8 @@ export function AssistantConversation({
   const resolveAction = useAssistantSession((s) => s.resolveAction);
   const setActionClass = useAssistantSession((s) => s.setActionClass);
   const applyAll = useAssistantSession((s) => s.applyAll);
+  const undoAction = useAssistantSession((s) => s.undoAction);
+  const { signInWithGoogle, signingIn } = useAuth();
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -274,6 +277,36 @@ export function AssistantConversation({
                         </p>
                       );
                     }
+                    if (part.type === "error") {
+                      return (
+                        <div
+                          key={pi}
+                          role="status"
+                          className="space-y-2 rounded-xl border border-line bg-surface-sunken p-3"
+                        >
+                          <p className="text-[13px] leading-relaxed text-ink-soft">{part.text}</p>
+                          {part.kind === "signed-out" ? (
+                            <button
+                              type="button"
+                              onClick={() => void signInWithGoogle()}
+                              disabled={signingIn}
+                              className="min-h-11 w-full rounded-lg bg-accent px-4 text-[13.5px] font-semibold text-accent-ink hover:opacity-90 disabled:opacity-60"
+                            >
+                              Sign in with Google
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => retry(mi)}
+                              className="flex min-h-11 items-center gap-1.5 rounded-lg border border-line bg-surface px-4 text-[13px] font-medium text-ink-soft transition-colors hover:border-accent hover:text-accent"
+                            >
+                              <RotateCw className="h-3.5 w-3.5" strokeWidth={2} />
+                              Retry
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
                     if (part.type === "choice") {
                       return (
                         <div key={pi} className="flex flex-wrap gap-2">
@@ -304,6 +337,7 @@ export function AssistantConversation({
                         docked={docked}
                         onApply={() => applyAction(mi, ai)}
                         onDismiss={() => resolveAction(mi, ai, "dismissed")}
+                        onUndo={() => undoAction(mi, ai)}
                         onClassChange={(id) => setActionClass(mi, ai, id)}
                       />
                     );
@@ -317,16 +351,6 @@ export function AssistantConversation({
                   className="min-h-11 w-full rounded-lg bg-accent px-4 text-[13.5px] font-semibold text-accent-ink hover:opacity-90"
                 >
                   Confirm all ({openCount(m)})
-                </button>
-              )}
-
-              {m.degraded && (
-                <button
-                  onClick={() => retry(mi)}
-                  className="flex items-center gap-1 text-[11px] font-medium text-ink-faint transition-colors hover:text-accent"
-                >
-                  <RotateCw className="h-3 w-3" strokeWidth={2} />
-                  Offline answer · retry
                 </button>
               )}
 
@@ -374,6 +398,17 @@ export function AssistantConversation({
           );
         })}
 
+        {queued.map((text, qi) => (
+          <div key={`q-${qi}`} className="flex flex-col items-end gap-0.5">
+            <div className="max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent/55 px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink">
+              {text}
+            </div>
+            <span className="px-1 text-[11px] text-ink-faint">
+              Queued, sending after this reply
+            </span>
+          </div>
+        ))}
+
         <AnimatePresence initial={false}>
           {thinking && (
             <motion.div
@@ -411,11 +446,6 @@ export function AssistantConversation({
           !docked && "md:p-5",
         )}
       >
-        {queued && (
-          <p className="mb-1.5 px-1 text-[11px] text-ink-faint">
-            Queued — sending after this reply
-          </p>
-        )}
         <div
           ref={composerRef}
           // Marks the field and Send as one unit, so the keyboard never covers

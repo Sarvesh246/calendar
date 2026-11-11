@@ -41,6 +41,7 @@ const modelId = z.string().trim().min(1).max(80);
 const MAX_MODEL_CALLS = 4;
 const HISTORY_TURNS = 8;
 const HISTORY_TURN_CHARS = 700;
+const LAST_ASSISTANT_TURN_CHARS = 4_000;
 
 /** Only recent plain user/assistant turns matter; long old replies just burn tokens. */
 function trimHistory(messages: ChatMessage[]): ChatMessage[] {
@@ -52,7 +53,17 @@ function trimHistory(messages: ChatMessage[]): ChatMessage[] {
         m.content.trim(),
     )
     .slice(-HISTORY_TURNS)
-    .map((m) => ({ role: m.role, content: (m.content as string).slice(0, HISTORY_TURN_CHARS) }));
+    .map((m, i, all) => {
+      const text = m.content as string;
+      // The last assistant turn is what "that one" and "move it" refer to:
+      // keep it whole (within reason). Older turns are only context.
+      const lastAssistant =
+        m.role === "assistant" && i === all.map((x) => x.role).lastIndexOf("assistant");
+      return {
+        role: m.role,
+        content: text.slice(0, lastAssistant ? LAST_ASSISTANT_TURN_CHARS : HISTORY_TURN_CHARS),
+      };
+    });
 }
 
 function requestHistory(body: ReqBody): ChatMessage[] {
@@ -77,6 +88,13 @@ export async function POST(request: Request) {
     !rateLimit(limitKey, 60, 60 * 60_000) ||
     !rateLimit(`${limitKey}:${clientKey(request)}:burst`, 8, 60_000) ||
     !rateLimit("assistant:global:minute", 240, 60_000) ||
+    // The per-minute limits survive a cold start too: the in-memory ones above
+    // reset with every new instance, these do not.
+    !(await durableHourlyLimit(`${limitKey}:burst`, 8, { failClosed: true, windowMs: 60_000 })) ||
+    !(await durableHourlyLimit("assistant:global:minute", 240, {
+      failClosed: true,
+      windowMs: 60_000,
+    })) ||
     !(await durableHourlyLimit(limitKey, 60, { failClosed: true })) ||
     !(await durableHourlyLimit("assistant:global", 3_000, { failClosed: true }))
   )

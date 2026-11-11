@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { ChevronDown } from "lucide-react";
 import { useAssistantModelStore } from "@/lib/assistant-models";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 
 export function AssistantModelSelector({ compact = false }: { compact?: boolean }) {
@@ -17,35 +17,20 @@ export function AssistantModelSelector({ compact = false }: { compact?: boolean 
   }, [load]);
 
   return (
-    <label
-      className={cn(
-        "assistant-web-model-selector relative block min-w-0",
-        // On a phone the picker is a quiet setting, not the sheet's headline:
-        // at 48vw it was wider than the title beside it.
-        compact ? "max-w-40" : "w-[min(34vw,140px)] md:w-48",
+    <SelectMenu
+      label="Assistant model"
+      value={selectedId}
+      onChange={select}
+      align="right"
+      options={[
+        { value: "auto", label: loading && models.length === 0 ? "Checking models…" : "Auto" },
+        ...models.map((model) => ({ value: model.id, label: model.label })),
+      ]}
+      className={compact ? "max-w-40" : "w-[min(34vw,140px)] md:w-48"}
+      buttonClassName={cn(
+        "h-9 rounded-xl border border-line bg-surface-sunken px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-ink-faint focus-visible:border-accent",
+        compact && "h-8 text-[12px]",
       )}
-    >
-      <span className="sr-only">Assistant model</span>
-      <select
-        aria-label="Assistant model"
-        value={selectedId}
-        onChange={(event) => select(event.target.value)}
-        className={cn(
-          "h-8 w-full appearance-none truncate rounded-lg border border-line bg-surface-sunken pl-2.5 pr-7 text-[11.5px] font-medium text-ink-soft outline-none transition-colors hover:border-ink-faint focus:border-accent",
-          compact && "h-7 text-[11px]",
-        )}
-      >
-        <option value="auto">{loading && models.length === 0 ? "Checking models…" : "Auto"}</option>
-        {models.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        aria-hidden
-        className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint"
-      />
-    </label>
+    />
   );
 }

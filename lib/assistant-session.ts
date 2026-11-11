@@ -12,7 +12,7 @@ import { reminderContext } from "./store-selectors";
 import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
 import { useUIStore } from "./ui-store";
-import { normalizeActions, resolveDraftClass, whenWord } from "./assistant-actions";
+import { actionVerb, normalizeActions, resolveDraftClass, whenWord } from "./assistant-actions";
 import { buildParts, historyText, type MessagePart } from "./assistant-parts";
 import { actionFor, type MutationToolName } from "./assistant-tool-actions";
 import { useAssistantModelStore } from "./assistant-models";
@@ -24,7 +24,9 @@ export interface AssistantMessage {
   text: string;
   suggestions?: string[];
   actions?: AssistantAction[];
-  degraded?: boolean;
+  /** Why there is no real answer. Drawn as a sign-in card or a Retry, never
+   *  as a guess. */
+  error?: "signed-out" | "unreachable" | "busy";
   providerLabel?: string;
   fallbackNotice?: string;
   /** Outcome per action index. Lives on the message so it's saved with the
@@ -107,9 +109,37 @@ async function confirmServerAction(card: AssistantAction): Promise<AssistantActi
   return withResolvedClasses([action], categories)![0];
 }
 
-/** Apply one action through the store's own actions. */
-function applyToStore(action: AssistantAction) {
+/** How to put back what an applied card changed. In memory only: an undo that
+ *  outlived the page would be undoing something the user has long since moved on from. */
+interface Undoable {
+  label: string;
+  undo: () => boolean;
+}
+const undoers = new Map<string, Undoable>();
+let latestUndo: string | null = null;
+
+const UNDO_PHRASE =
+  /^(?:undo|undo (?:that|it|this|the last (?:one|change))|revert(?: that| it)?|take (?:that|it) back)[.!]?$/i;
+
+/** "undo that": put back the most recent change this chat made. */
+function undoLatest(): string {
+  const key = latestUndo;
+  const entry = key ? undoers.get(key) : undefined;
+  if (!key || !entry) return "There's nothing to undo yet.";
+  const [mi, ai] = key.split(":").map(Number);
+  if (!entry.undo()) return "I can't undo that one any more.";
+  undoers.delete(key);
+  latestUndo = null;
+  useAssistantSession.getState().resolveAction(mi, ai, "undone");
+  return `Undid ${entry.label}.`;
+}
+
+/** Apply one action through the store's own actions, and say how to reverse it. */
+function applyToStore(action: AssistantAction): Undoable {
   const store = useDatebookStore.getState();
+  const label = `${actionVerb(action).toLowerCase()} “${
+    action.kind === "create" ? action.draft.title : action.itemTitle
+  }”`;
   if (action.kind === "create") {
     let draft = action.draft;
     if (draft.reminders === undefined) {
@@ -119,13 +149,45 @@ function applyToStore(action: AssistantAction) {
       );
       if (defaults.length) draft = { ...draft, reminders: defaults };
     }
-    store.addItem(draft);
+    const created = store.addItem(draft);
     if (draft.reminders?.length) void maybePromptForReminders(reminderContext);
-  } else if (action.kind === "update") {
-    store.updateItem(action.itemId, action.patch);
-  } else {
-    store.deleteItem(action.itemId);
+    return {
+      label,
+      undo: () => {
+        const live = useDatebookStore.getState();
+        if (created.repeatId) live.deleteSeries(created.repeatId);
+        else live.deleteItem(created.id);
+        return true;
+      },
+    };
   }
+  if (action.kind === "update") {
+    const before = store.items.find((item) => item.id === action.itemId);
+    store.updateItem(action.itemId, action.patch);
+    return {
+      label,
+      undo: () => {
+        if (!before) return false;
+        const revert: Record<string, unknown> = {};
+        for (const key of Object.keys(action.patch)) {
+          revert[key] = (before as unknown as Record<string, unknown>)[key];
+        }
+        useDatebookStore.getState().updateItem(action.itemId, revert as Partial<typeof before>);
+        return true;
+      },
+    };
+  }
+  store.deleteItem(action.itemId);
+  return {
+    label,
+    undo: () => {
+      const live = useDatebookStore.getState();
+      // The store's own Undo: it puts the item back and out-ranks the tombstone.
+      if (!live.lastDeleted?.items.some((item) => item.id === action.itemId)) return false;
+      live.restoreLastDeleted();
+      return true;
+    },
+  };
 }
 
 function loadSessionMessages(): AssistantMessage[] {
@@ -145,11 +207,14 @@ interface AssistantSessionState {
   thinking: boolean;
   /** A reply is taking long enough to say so. */
   slow: boolean;
-  /** A follow-up typed while a reply was still coming. */
-  queued: string | null;
+  /** Follow-ups typed while a reply was still coming, in order. Each is sent
+   *  after the one before it, and each shows as a pending bubble. */
+  queued: string[];
   ask: (query: string) => void;
   retry: (messageIndex: number) => void;
   applyAction: (messageIndex: number, actionIndex: number) => void;
+  /** Put back what a card changed. */
+  undoAction: (messageIndex: number, actionIndex: number) => void;
   resolveAction: (messageIndex: number, actionIndex: number, outcome: ActionOutcome) => void;
   /** Apply every card in a reply that is still open. */
   applyAll: (messageIndex: number) => void;
@@ -230,7 +295,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               suggestions: res.suggestions,
               actions: res.actions,
               parts: buildParts(res),
-              degraded: res.degraded,
+              ...(res.error ? { error: res.error } : {}),
               providerLabel: res.providerLabel,
               fallbackNotice: res.fallbackNotice,
               ...(res.actions?.length ? { createdAt: Date.now() } : {}),
@@ -244,8 +309,15 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
             ...s.messages,
             {
               role: "assistant",
-              text: "Something went wrong reaching the assistant.",
-              degraded: true,
+              text: "I couldn't reach the assistant just now.",
+              error: "unreachable" as const,
+              parts: [
+                {
+                  type: "error" as const,
+                  kind: "unreachable" as const,
+                  text: "I couldn't reach the assistant just now.",
+                },
+              ],
             },
           ],
         })),
@@ -254,9 +326,9 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
         inFlight = false;
         clearTimeout(slowTimer);
         set({ thinking: false, slow: false });
-        const queued = get().queued;
-        if (queued) {
-          set((s) => ({ queued: null, messages: [...s.messages, { role: "user", text: queued }] }));
+        const [next, ...rest] = get().queued;
+        if (next) {
+          set((s) => ({ queued: rest, messages: [...s.messages, { role: "user", text: next }] }));
           run();
         }
       });
@@ -266,13 +338,21 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     messages: loadSessionMessages(),
     thinking: false,
     slow: false,
-    queued: null,
+    queued: [],
 
     ask: (query) => {
       const text = query.trim();
       if (!text) return;
       if (inFlight) {
-        set({ queued: text });
+        set((s) => ({ queued: [...s.queued, text] }));
+        return;
+      }
+      // "undo that" is not a question for a model: put back the last change.
+      if (UNDO_PHRASE.test(text)) {
+        const note = undoLatest();
+        set((s) => ({
+          messages: [...s.messages, { role: "user", text }, { role: "assistant", text: note }],
+        }));
         return;
       }
       set((s) => ({ messages: [...s.messages, { role: "user", text }] }));
@@ -308,7 +388,9 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       if (action.serverActionId) {
         void confirmServerAction(action)
           .then((confirmed) => {
-            applyToStore(confirmed);
+            const done = applyToStore(confirmed);
+            undoers.set(`${mi}:${ai}`, done);
+            latestUndo = `${mi}:${ai}`;
             get().resolveAction(mi, ai, "applied");
           })
           .catch((error) => {
@@ -322,8 +404,26 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
           });
         return;
       }
-      applyToStore(action);
+      const done = applyToStore(action);
+      undoers.set(`${mi}:${ai}`, done);
+      latestUndo = `${mi}:${ai}`;
       get().resolveAction(mi, ai, "applied");
+    },
+
+    undoAction: (mi, ai) => {
+      const entry = undoers.get(`${mi}:${ai}`);
+      if (!entry || get().messages[mi]?.resolved?.[ai] !== "applied") return;
+      if (entry.undo()) {
+        undoers.delete(`${mi}:${ai}`);
+        get().resolveAction(mi, ai, "undone");
+      } else {
+        set((state) => ({
+          messages: [
+            ...state.messages,
+            { role: "assistant", text: "I can't undo that one any more." },
+          ],
+        }));
+      }
     },
 
     applyAll: (mi) => {
@@ -356,7 +456,8 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
 
     reset: () => {
       if (inFlight) return;
-      set({ messages: [WELCOME], queued: null });
+      set({ messages: [WELCOME], queued: [] });
+      undoers.clear();
       try {
         sessionStorage.removeItem(SESSION_KEY);
         sessionStorage.removeItem(THREAD_KEY);

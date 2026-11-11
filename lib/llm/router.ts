@@ -13,7 +13,19 @@ import {
   type PublicLlmModel,
 } from "./providers";
 
-const cooldownUntil = new Map<string, number>();
+import { loadDurableCooldowns, mergeCooldowns, persistDurableCooldown } from "./cooldown-store";
+
+/** This instance's view of provider cooldowns; the durable store is the source
+ *  of truth across cold starts and instances (see cooldown-store.ts). */
+let cooldownUntil = new Map<string, number>();
+let lastDurableRead = 0;
+const DURABLE_REFRESH_MS = 5_000;
+
+async function refreshCooldowns() {
+  if (Date.now() - lastDurableRead < DURABLE_REFRESH_MS) return;
+  lastDurableRead = Date.now();
+  cooldownUntil = mergeCooldowns(cooldownUntil, await loadDurableCooldowns());
+}
 const COOLDOWN_429_MS = 15 * 60_000;
 const COOLDOWN_413_MS = 5 * 60_000;
 const COOLDOWN_5XX_MS = 60_000;
@@ -38,6 +50,7 @@ export async function providerCandidates(selectedId?: string): Promise<{
   providers: LlmProviderConfig[];
   requestedUnavailable: boolean;
 }> {
+  await refreshCooldowns();
   const configured = configuredProviders();
   const enabled = configured.filter(
     (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
@@ -64,7 +77,11 @@ export function putProviderOnCooldown(provider: LlmProviderConfig, error: unknow
         : status >= 500
           ? COOLDOWN_5XX_MS
           : COOLDOWN_DEFAULT_MS;
-  cooldownUntil.set(provider.id, Date.now() + Math.max(retryAfter ?? fallback, 5_000));
+  const until = Date.now() + Math.max(retryAfter ?? fallback, 5_000);
+  cooldownUntil.set(provider.id, until);
+  // Remembered beyond this instance, so the next cold start does not retry a
+  // provider that just said 429.
+  void persistDurableCooldown(provider.id, until);
 }
 
 export function shouldFallbackProvider(error: unknown) {

@@ -259,3 +259,5 @@ export function answerMath(q: string): string | undefined {
   if (v === null) return undefined;
   return `${pretty(body)} = ${bold(formatNumber(v))}.`;
 }
+
+export { nextUsHoliday } from "./holidays";

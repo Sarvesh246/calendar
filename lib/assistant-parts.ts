@@ -16,6 +16,8 @@ export type MessagePart =
   /** A tap-to-answer question. Tapping sends the option as the user's message. */
   | { type: "choice"; options: string[] }
   | { type: "notice"; tone: "info" | "warn"; text: string }
+  /** No real answer: signed out (offer sign-in) or unreachable/busy (offer Retry). */
+  | { type: "error"; kind: "signed-out" | "unreachable" | "busy"; text: string }
   /** A staged change; `index` points into the message's `actions`. */
   | { type: "action"; index: number };
 
@@ -30,6 +32,7 @@ export interface ReplyShape {
   choices?: string[];
   fallbackNotice?: string;
   actions?: unknown[];
+  error?: "signed-out" | "unreachable" | "busy";
 }
 
 const MAX_ROWS = 25;
@@ -72,6 +75,7 @@ export function cleanChoices(raw: unknown): string[] | undefined {
 /** The parts of a fresh reply, in reading order. */
 export function buildParts(reply: ReplyShape): MessagePart[] {
   const parts: MessagePart[] = [];
+  if (reply.error) return [{ type: "error", kind: reply.error, text: reply.text }];
   if (reply.text.trim()) parts.push({ type: "text", text: reply.text });
   for (const block of reply.items ?? []) {
     parts.push({
@@ -94,6 +98,7 @@ export function partsOf(message: {
   parts?: MessagePart[];
   actions?: unknown[];
   fallbackNotice?: string;
+  error?: "signed-out" | "unreachable" | "busy";
 }): MessagePart[] {
   return message.parts ?? buildParts(message);
 }

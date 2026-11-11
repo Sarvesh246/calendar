@@ -301,7 +301,7 @@ describe("local assistant — reading the calendar", () => {
     for (const q of ["what's on tomorrow", "what's overdue", "hi"]) {
       const r = ask(q)!;
       expect(r.suggestions).toBeUndefined();
-      expect(r.degraded).toBeUndefined();
+      expect(r.error).toBeUndefined();
     }
   });
 });
@@ -466,11 +466,12 @@ describe("local assistant — more phrasings", () => {
 });
 
 describe("local reply pacing", () => {
-  it("stays within a natural range", () => {
+  it("stays within a short, natural range", () => {
     for (const s of ["ok", "a".repeat(400)]) {
       const ms = localReplyDelayMs(s);
-      expect(ms).toBeGreaterThanOrEqual(380);
-      expect(ms).toBeLessThanOrEqual(1100);
+      expect(ms).toBeGreaterThanOrEqual(100);
+      // A beat, not a wait: never more than 300ms on-device.
+      expect(ms).toBeLessThanOrEqual(300);
     }
   });
 });

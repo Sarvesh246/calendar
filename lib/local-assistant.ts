@@ -63,7 +63,7 @@ import {
   weightedSoFar,
   weightFraction,
 } from "./local-grades";
-import { answerMath } from "./local-math";
+import { answerMath, nextUsHoliday } from "./local-math";
 import { draftEmail, recipient, type EmailKind } from "./local-writing";
 import type { SyllabusGradeCutoff } from "./syllabus-info";
 import { isSyllabusSourceUid } from "./syllabus-match";
@@ -93,8 +93,22 @@ const LEAD_FILLER =
 const TAIL_FILLER =
   /[\s,]*(?:please|pls|plz|for me|real quick|thanks|thank you|thx|ty|if you can|when you can)[.!\s]*$/i;
 
+/**
+ * The shorthand people actually type: "whats du tmrw" went to the model because
+ * no pattern knew `du` or `tmrw`. Fixed before any intent sees the text.
+ */
+function fixTypos(text: string): string {
+  return text
+    .replace(/\bdu\b/gi, "due")
+    .replace(
+      /\b(?:tmrw|tmr|tmrrw|tmmrw|2moro|2morrow|2mrw|tmw|tomorow|tommorow|tomarrow)\b/gi,
+      "tomorrow",
+    )
+    .replace(/\bhw\b/gi, "homework");
+}
+
 function normalize(raw: string): string {
-  let t = raw.trim().replace(/\s+/g, " ").replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
+  let t = fixTypos(raw).trim().replace(/\s+/g, " ").replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
   while (LEAD_FILLER.test(t)) t = t.replace(LEAD_FILLER, "");
   t = t
     .replace(/^(?:can|could|would|will) (?:you|u) (?:please |pls )?/i, "")
@@ -3165,6 +3179,9 @@ function dateMathIntent(env: Env): Outcome {
     const ref = findDayRef(subject, now);
     if (ref && !subject.replace(ref.text, "").trim())
       return say(cap(ref.label), ref.kind === "day" ? ref.day : ref.start, false);
+    // A US holiday is arithmetic, not a question for the model.
+    const holiday = nextUsHoliday(subject, now);
+    if (holiday) return say(bold(holiday.label), holiday.date, false);
     const target = resolveTarget(env, subject, "any");
     if (target.kind === "one")
       return say(bold(target.item.title), new Date(target.item.at), !target.item.allDay);
@@ -5958,7 +5975,9 @@ export function tryLocalAnswer(
  * instant one reads as canned. Scales lightly with length and never blocks.
  */
 export function localReplyDelayMs(text: string, seed = text): number {
-  const base = 420 + Math.min(text.length, 240) * 2.2;
-  const jitter = (hash(seed) % 240) - 60;
-  return Math.round(Math.min(1100, Math.max(380, base + jitter)));
+  // A beat, not a wait: an on-device answer needs no thinking time, and anything
+  // longer made the same question feel slower than it was. Capped at 300ms.
+  const base = 120 + Math.min(text.length, 240) * 0.5;
+  const jitter = (hash(seed) % 60) - 20;
+  return Math.round(Math.min(300, Math.max(120, base + jitter)));
 }
