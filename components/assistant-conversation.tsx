@@ -24,6 +24,7 @@ import { navigateTab } from "@/lib/tab-nav";
 import { useAssistantSession } from "@/lib/assistant-session";
 import type { AssistantAction } from "@/lib/ai-assistant";
 import { AssistantMarkdown } from "@/lib/markdown";
+import { OUTCOME_COPY } from "@/lib/assistant-staleness";
 import { cn } from "@/lib/utils";
 import { AssistantModelSelector } from "@/components/assistant-model-selector";
 
@@ -282,6 +283,8 @@ export function AssistantConversation({
                       </motion.p>
                     ) : state === "dismissed" ? (
                       <p className="mt-1.5 text-[12px] text-ink-faint">Dismissed</p>
+                    ) : state ? (
+                      <p className="mt-1.5 text-[12px] text-ink-faint">{OUTCOME_COPY[state]}</p>
                     ) : (
                       <div className="mt-2 flex gap-2">
                         <button

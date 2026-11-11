@@ -8,6 +8,7 @@ import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
 import { useAssistantModelStore } from "./assistant-models";
 import { authHeaders } from "./auth-headers";
+import { supersedeOpenCards, staleReason, type ActionOutcome } from "./assistant-staleness";
 import type { Item } from "./types";
 
 export interface AssistantMessage {
@@ -20,7 +21,10 @@ export interface AssistantMessage {
   fallbackNotice?: string;
   /** Outcome per action index. Lives on the message so it's saved with the
    *  session and travels with it when a retry trims the list. */
-  resolved?: Record<number, "applied" | "dismissed">;
+  resolved?: Record<number, ActionOutcome>;
+  /** When the reply landed (ms). Cards expire 30 minutes later, like the
+   *  server's staged action does. */
+  createdAt?: number;
 }
 
 export const WELCOME: AssistantMessage = {
@@ -112,11 +116,7 @@ interface AssistantSessionState {
   ask: (query: string) => void;
   retry: (messageIndex: number) => void;
   applyAction: (messageIndex: number, actionIndex: number) => void;
-  resolveAction: (
-    messageIndex: number,
-    actionIndex: number,
-    outcome: "applied" | "dismissed",
-  ) => void;
+  resolveAction: (messageIndex: number, actionIndex: number, outcome: ActionOutcome) => void;
   reset: () => void;
 }
 
@@ -155,7 +155,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       .then((res) =>
         set((s) => ({
           messages: [
-            ...s.messages,
+            ...supersedeOpenCards(s.messages, res.actions),
             {
               role: "assistant",
               text: res.text,
@@ -164,6 +164,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               degraded: res.degraded,
               providerLabel: res.providerLabel,
               fallbackNotice: res.fallbackNotice,
+              ...(res.actions?.length ? { createdAt: Date.now() } : {}),
             },
           ],
         })),
@@ -222,6 +223,19 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       const message = get().messages[mi];
       const action = message?.actions?.[ai];
       if (!action || message.resolved?.[ai]) return;
+      // The card may have outlived what it is about. Say so rather than
+      // report "Done" for a change that cannot happen.
+      const live = useDatebookStore.getState().items;
+      const stale = staleReason(
+        action,
+        message.createdAt,
+        (id) => live.some((item) => item.id === id),
+        Date.now(),
+      );
+      if (stale) {
+        get().resolveAction(mi, ai, stale);
+        return;
+      }
       if (action.serverActionId) {
         void confirmServerAction(action.serverActionId)
           .then(() => get().resolveAction(mi, ai, "applied"))

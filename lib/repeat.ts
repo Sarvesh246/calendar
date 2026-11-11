@@ -99,6 +99,16 @@ export function expandRepeat(
   return out.length ? out : [{ at: atIso, ...(endAtIso ? { endAt: endAtIso } : {}) }];
 }
 
+/** How many items a series would create — what a confirm card should say
+ *  before anyone taps Add. */
+export function countOccurrences(
+  atIso: string,
+  endAtIso: string | undefined,
+  rule: RepeatRule,
+): number {
+  return expandRepeat(atIso, endAtIso, rule).length;
+}
+
 export function repeatLabel(rule: RepeatRule): string {
   const n = rule.interval ?? 1;
   if (rule.freq === "daily") return n === 1 ? "Every day" : `Every ${n} days`;

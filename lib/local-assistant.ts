@@ -51,6 +51,7 @@ import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import { parseQuickAdd } from "./quick-add-parser";
 import { findOverlapGroups } from "./overlap";
+import { countOccurrences } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
@@ -1887,13 +1888,43 @@ function placeName(location: string): string {
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function repeatText(rule: RepeatRule): string {
-  const until = rule.until ? ` until ${format(new Date(rule.until), "MMM d")}` : "";
-  if (rule.freq === "daily") return `every day${until}`;
-  if (rule.freq === "monthly") return `every month${until}`;
+  if (rule.freq === "daily") return "every day";
+  if (rule.freq === "monthly") return "every month";
   const days = rule.byDay?.length ? rule.byDay.map((d) => DAY_NAMES[d]) : [];
   if (days.length === 5 && !rule.byDay!.includes(0) && !rule.byDay!.includes(6))
-    return `every weekday${until}`;
-  return `${days.length ? `every ${joinNatural(days)}` : "every week"}${until}`;
+    return "every weekday";
+  return days.length ? `every ${joinNatural(days)}` : "every week";
+}
+
+/** A word that actually says "repeat" — as opposed to two weekday names the
+ *  quick-add parser would happily read as a weekly series. */
+const RECURRENCE_WORD =
+  /\b(?:every|each|weekly|daily|monthly|biweekly|fortnightly|nightly|weekdays?|weekends?|(?:mon|tues|wednes|thurs|fri|satur|sun)days|mwf|mw|tth|tr|mtwrf|mtwr|mtw|twr|wf|mf)\b/i;
+
+const WEEKDAY_MENTION =
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)s?\b/gi;
+const DAY_MENTION =
+  /\b(?:today|tomorrow|tonight)\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b|\b\d{1,2}\/\d{1,2}\b/gi;
+const TIME_MENTION =
+  /\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)(?![a-z])|\bat\s+\d{1,2}(?::\d{2})?\b|\b\d{1,2}:\d{2}\b|\bnoon\b|\bmidnight\b/gi;
+
+/**
+ * "study group thursday 7pm and lab report due sunday" is two things, and the
+ * quick-add parser reads it as one weekly series with no end. When a sentence
+ * joins two date or time expressions — or names two weekdays without saying
+ * they repeat — the right answer is the model's, which can split it, or a
+ * question, never a silent bulk write.
+ */
+function joinsTwoDatedThings(text: string): boolean {
+  const weekdays = text.match(WEEKDAY_MENTION)?.length ?? 0;
+  const recurs = RECURRENCE_WORD.test(text);
+  if (weekdays >= 2 && !recurs) return true;
+  if (!/\band\b|[,;]|\bthen\b|\balso\b/i.test(text)) return false;
+  // "every monday and wednesday" is one rule with two days, not two dates.
+  const dates =
+    (recurs ? Math.min(weekdays, 1) : weekdays) + (text.match(DAY_MENTION)?.length ?? 0);
+  const times = text.match(TIME_MENTION)?.length ?? 0;
+  return dates >= 2 || times >= 2;
 }
 
 function addIntent(env: Env): Outcome {
@@ -1917,6 +1948,9 @@ function addIntent(env: Env): Outcome {
     .length;
   if (reminderWords > reminderCount && !isTask) return null;
   if (reminderCount > 4) return null;
+  // Two things in one sentence, or a series nobody called a series.
+  if (joinsTwoDatedThings(stripped)) return null;
+  if (parsed.repeat && !RECURRENCE_WORD.test(stripped)) return null;
   // No date, or an event with no time: ask, never guess "today" or a time.
   const timed = HAS_TIME.test(stripped);
   const explicitAdd = /^(?:add|create|schedule|new|put|book|set up|remind me)\b/.test(q);
@@ -2010,14 +2044,29 @@ function addIntent(env: Env): Outcome {
     parsed.reminderLabel ? `with a reminder ${parsed.reminderLabel}` : "",
   ].filter(Boolean);
   if (parsed.repeat) {
+    // A series with no end is hundreds of items. Ask rather than stage it.
+    if (!parsed.repeat.until) {
+      const askUntil = `Until when should ${bold(draft.title)} repeat?`;
+      pendingAdd = { prompt: askUntil, text: n, until: true };
+      return { text: askUntil };
+    }
     draft.repeat = parsed.repeat;
     const rep = repeatText(parsed.repeat);
     const time = parsed.allDay ? "" : ` at ${fmtTime(due, ctx.clock24h)}`;
     const starting = relDay ? ` starting ${day}` : ` starting ${format(due, "MMM d")}`;
-    extras.unshift(`${rep}${time}${starting}`);
+    const until = ` until ${format(new Date(parsed.repeat.until), "MMM d")}`;
+    const count = countOccurrences(draft.at, draft.endAt, parsed.repeat);
+    const noun = type === "event" ? "events" : "items";
+    extras.unshift(`${rep}${time}${starting}${until}`);
     return {
-      text: `I'll add ${bold(draft.title)}, ${bold(`${rep}${time}`)}${starting}${extras.length > 1 ? `, ${extras.slice(1).join(", ")}` : ""}. Confirm below.`,
-      actions: [{ kind: "create", summary: `Add “${draft.title}” — ${rep}${time}`, draft }],
+      text: `I'll add ${bold(draft.title)}, ${bold(`${rep}${time}`)}${starting}${until}${extras.length > 1 ? `, ${extras.slice(1).join(", ")}` : ""}. That's ${bold(`${count} ${noun}`)} in all. Confirm below.`,
+      actions: [
+        {
+          kind: "create",
+          summary: `Add “${draft.title}” — ${rep}${time}${until} (${count} ${noun})`,
+          draft,
+        },
+      ],
     };
   }
   if ((parsed.reminders?.length ?? 0) > 1) {
@@ -4795,7 +4844,7 @@ let pendingGrade: {
   target?: { label: string; floor: number };
 } | null = null;
 /** We asked when something is ("What time is Dinner with Sam tomorrow?"); the reply finishes the add. */
-let pendingAdd: { prompt: string; text: string } | null = null;
+let pendingAdd: { prompt: string; text: string; until?: boolean } | null = null;
 
 /** "what's 23 × 17", "15% of 80", "3.5 hours in minutes". */
 function mathIntent(env: Env): Outcome {
@@ -5707,8 +5756,14 @@ export function tryLocalAnswer(
         return { text: "No problem — I won't add it." };
       const when = r
         .replace(/^(?:it is|it's|its|how about|make it|let's say|say|um|uh)\s+/, "")
-        .replace(/^(\d{1,2}(?::\d{2})?)$/, "at $1");
-      if (
+        .replace(/^(\d{1,2}(?::\d{2})?)$/, p.until ? "$1" : "at $1");
+      if (p.until) {
+        // "Until when?" — only a day finishes it.
+        const day = when.replace(/^(?:until|through|thru|to)\s+/, "");
+        if (day.split(" ").length <= 7 && findDayRef(day, now)) {
+          return tryLocalAnswer(`${p.text} until ${day}`, [], ctx, now, 1);
+        }
+      } else if (
         when.split(" ").length <= 7 &&
         (findDayRef(when, now) || findTime(when) || /\ball[- ]day\b/.test(when))
       ) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { tryLocalAnswer, localReplyDelayMs, resetLocalAssistantState } from "./local-assistant";
 import { beforeEach } from "vitest";
 import type { AssistantCtx, AssistantTurn } from "./ai-assistant";
@@ -403,7 +403,11 @@ describe("local assistant — changing the calendar", () => {
         "add a meeting at the library tomorrow at 3pm with a reminder a day before and a reminder an hour before",
       )?.actions?.[0],
     ).toMatchObject({ kind: "create" });
-    expect(ask("add yoga every monday at 7am")?.actions?.[0]).toMatchObject({
+    // A series with no end is hundreds of items: ask until when, don't stage it.
+    const open = ask("add yoga every monday at 7am")!;
+    expect(open.actions).toBeUndefined();
+    expect(open.text).toMatch(/^Until when should \*\*Yoga\*\* repeat\?/i);
+    expect(ask("add yoga every monday at 7am until dec 14")?.actions?.[0]).toMatchObject({
       kind: "create",
       draft: { repeat: { freq: "weekly", byDay: [1] } },
     });
@@ -457,5 +461,58 @@ describe("local reply pacing", () => {
       expect(ms).toBeGreaterThanOrEqual(380);
       expect(ms).toBeLessThanOrEqual(1100);
     }
+  });
+});
+
+describe("local assistant — series guard", () => {
+  // The clock is pinned so "thursday", "dec 14" and the occurrence count are
+  // the same on every day the suite runs.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("does not turn two things joined by 'and' into one weekly series", () => {
+    expect(ask("add ZZTEST study group thursday 7pm and ZZTEST lab report due sunday")).toBeNull();
+    expect(ask("add study group thursday 7pm and lab report due sunday")).toBeNull();
+    expect(ask("add lunch tomorrow at 12 and dinner tomorrow at 7pm")).toBeNull();
+  });
+
+  it("does not read two bare weekday names as a repeat", () => {
+    expect(ask("add dinner friday saturday")).toBeNull();
+    expect(ask("add gym monday wednesday friday at 6am")).toBeNull();
+  });
+
+  it("still takes a sentence that really does say it repeats", () => {
+    const r = ask("add gym every wednesday at 6am until dec 14")!;
+    expect(r.actions?.[0]).toMatchObject({
+      kind: "create",
+      draft: { repeat: { freq: "weekly", byDay: [3] } },
+    });
+  });
+
+  it("says how many items a series adds, on the card and in the text", () => {
+    const r = ask("add yoga every monday at 7am until dec 14")!;
+    const summary = r.actions?.[0].summary ?? "";
+    // Mondays from Sep 28 to Dec 14, 2026 inclusive.
+    expect(summary).toMatch(/\(12 events\)$/);
+    expect(r.text).toContain("12 events");
+    expect(r.text).toMatch(/until Dec 14/);
+  });
+
+  it("asks until when, and the answer finishes the add", () => {
+    const first = ask("add yoga every monday at 7am")!;
+    expect(first.actions).toBeUndefined();
+    const history: AssistantTurn[] = [
+      { role: "user", text: "add yoga every monday at 7am" },
+      { role: "assistant", text: first.text },
+    ];
+    const done = ask("dec 14", history)!;
+    expect(done.actions?.[0]).toMatchObject({
+      kind: "create",
+      draft: { repeat: { freq: "weekly", byDay: [1] } },
+    });
+    expect(done.text).toContain("12 events");
   });
 });
