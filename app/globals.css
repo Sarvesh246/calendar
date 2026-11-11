@@ -1575,10 +1575,18 @@ body {
   /* Sits low, just clear of the home indicator, rather than floating a full
      safe-area above it. With the keyboard up the keyboard is the bottom edge. */
   .assistant-composer {
-    padding-bottom: calc(0.375rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) * 0.4);
+    padding-bottom: calc(0.5rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) * 0.7);
   }
   html[data-keyboard] .assistant-composer {
     padding-bottom: 0.5rem;
+  }
+  /* iOS floats its ↑ ↓ ✓ accessory bar above the keyboard and WebKit does not
+     count it in the visual viewport, so a composer sitting on the viewport's
+     bottom edge ends up underneath it. Lift the field clear of that bar. */
+  @supports (-webkit-touch-callout: none) {
+    html[data-keyboard] .assistant-composer {
+      padding-bottom: 4rem;
+    }
   }
 }
 
