@@ -28,7 +28,9 @@ export async function POST(request: Request) {
     return NextResponse.json(await confirmPendingAction(user.id, parsed.data.confirmationId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    const publicMessage = /missing, expired, or already used|already used/i.test(message)
+    const publicMessage = /missing, expired, or already used|already used|no longer exists/i.test(
+      message,
+    )
       ? message
       : "confirmation-failed";
     if (publicMessage === "confirmation-failed") {

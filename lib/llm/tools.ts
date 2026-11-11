@@ -3,6 +3,7 @@ import type { AssistantReqBody, SlimItem } from "@/lib/assistant-actions";
 import { nanoid } from "@/lib/nanoid";
 import type { OpenAiTool } from "./openai-compatible";
 import { assistantDatabase } from "./database";
+import { actionFor } from "@/lib/assistant-tool-actions";
 import { checkAvailability, type AvailabilityItem } from "@/lib/availability";
 
 const id = z.string().min(1).max(100);
@@ -371,74 +372,6 @@ async function ownedItem(ctx: ToolContext, itemId: string) {
   return data;
 }
 
-function actionFor(
-  tool: DatebookToolName,
-  args: Record<string, unknown>,
-  target?: Record<string, unknown> | SlimItem | null,
-) {
-  const title = String(args.title || target?.title || (tool.includes("event") ? "Event" : "Task"));
-  if (tool === "add_event") {
-    return {
-      kind: "create",
-      summary: `Add event “${title}”`,
-      title,
-      itemType: "event",
-      at: args.start,
-      endAt: args.end,
-      allDay: args.allDay,
-      location: args.location,
-      description: args.description,
-      categoryId: args.categoryId,
-      reminders: args.reminders,
-    };
-  }
-  if (tool === "add_task") {
-    return {
-      kind: "create",
-      summary: `Add ${args.itemType === "assignment" ? "assignment" : "task"} “${title}”`,
-      title,
-      itemType: args.itemType,
-      at: args.due,
-      status: args.status,
-      description: args.description,
-      categoryId: args.categoryId,
-      reminders: args.reminders,
-    };
-  }
-  if (tool === "delete_event" || tool === "delete_task") {
-    return { kind: "delete", summary: `Delete “${title}”`, itemId: args.id, title };
-  }
-  const event = tool === "update_event";
-  return {
-    kind: "update",
-    summary: `Update “${title}”`,
-    itemId: args.id,
-    title,
-    ...(args.title ? { title: args.title } : {}),
-    ...(event && args.start ? { at: args.start } : {}),
-    ...(!event && args.due ? { at: args.due } : {}),
-    ...(event && "end" in args
-      ? args.end === null
-        ? { clearEndAt: true }
-        : { endAt: args.end }
-      : {}),
-    ...("location" in args
-      ? args.location === null
-        ? { clearLocation: true }
-        : { location: args.location }
-      : {}),
-    ...("description" in args
-      ? args.description === null
-        ? { clearDescription: true }
-        : { description: args.description }
-      : {}),
-    ...(args.categoryId ? { categoryId: args.categoryId } : {}),
-    ...(args.status ? { status: args.status } : {}),
-    ...(typeof args.allDay === "boolean" ? { allDay: args.allDay } : {}),
-    ...(args.reminders ? { reminders: args.reminders } : {}),
-  };
-}
-
 export async function executeDatebookTool(
   name: string,
   rawArguments: string,
@@ -506,7 +439,21 @@ export async function executeDatebookTool(
   };
 }
 
-export async function confirmPendingAction(userId: string, confirmationId: string) {
+/**
+ * Confirming a staged action is a validation step, nothing more.
+ *
+ * It used to write to Postgres itself — hard deletes with no tombstone, a lossy
+ * row mapping pushed back into the client with `setState`, no reminder
+ * scheduling, no undo, no save pill. The client already owns all of that
+ * through `addItem` / `updateItem` / `deleteItem`, so the server now only
+ * checks that the confirmation is real, unexpired and unused, that the target
+ * still exists and the class belongs to the user, claims it (so it cannot be
+ * used twice) and hands the validated arguments back for the client to apply.
+ */
+export async function confirmPendingAction(
+  userId: string,
+  confirmationId: string,
+): Promise<{ tool: DatebookToolName; arguments: Record<string, unknown> }> {
   const db = assistantDatabase();
   if (!db) throw new Error("Assistant database is not configured");
   const { data: pending, error } = await db
@@ -520,8 +467,13 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
     throw new Error("This confirmation is missing, expired, or already used");
   }
   const tool = pending.tool_name as DatebookToolName;
-  const args = pending.arguments as Record<string, unknown>;
-  let categoryId: string | null = null;
+  if (!MUTATIONS.has(tool))
+    throw new Error("This confirmation is missing, expired, or already used");
+  // Re-validate what was stored: the row is data, not something to trust.
+  const checked = schemas[tool].safeParse(pending.arguments);
+  if (!checked.success) throw new Error("This confirmation is missing, expired, or already used");
+  const args = { ...(checked.data as Record<string, unknown>) };
+
   if (typeof args.categoryId === "string") {
     const { data: category, error: categoryError } = await db
       .from("categories")
@@ -530,12 +482,25 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
       .eq("user_id", userId)
       .maybeSingle();
     if (categoryError) throw new Error(categoryError.message);
-    categoryId = category?.id ?? null;
+    // A class that is not this user's is dropped, never applied; the client
+    // then files the item the way it files any unclassed add.
+    if (!category) delete args.categoryId;
   }
-  const claimedAt = new Date().toISOString();
+
+  if (tool.startsWith("update_") || tool.startsWith("delete_")) {
+    const { data: target, error: targetError } = await db
+      .from("items")
+      .select("id")
+      .eq("id", String(args.id))
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (targetError) throw new Error(targetError.message);
+    if (!target) throw new Error("This item no longer exists");
+  }
+
   const { data: claimed, error: claimError } = await db
     .from("assistant_pending_actions")
-    .update({ status: "applied", applied_at: claimedAt })
+    .update({ status: "applied", applied_at: new Date().toISOString() })
     .eq("id", confirmationId)
     .eq("user_id", userId)
     .eq("status", "pending")
@@ -543,105 +508,5 @@ export async function confirmPendingAction(userId: string, confirmationId: strin
     .maybeSingle();
   if (claimError) throw new Error(claimError.message);
   if (!claimed) throw new Error("This confirmation was already used");
-  let item: Record<string, unknown> | null = null;
-  try {
-    if (tool === "add_event" || tool === "add_task") {
-      const event = tool === "add_event";
-      const itemId = nanoid();
-      let reminderRows = Array.isArray(args.reminders) ? args.reminders : null;
-      if (!reminderRows) {
-        const { data: settings } = await db
-          .from("user_settings")
-          .select("default_reminder_preset_ids")
-          .eq("user_id", userId)
-          .maybeSingle();
-        const presetIds = Array.isArray(settings?.default_reminder_preset_ids)
-          ? settings.default_reminder_preset_ids.filter(
-              (value): value is string => typeof value === "string",
-            )
-          : [];
-        if (presetIds.length) {
-          const { data: presets } = await db
-            .from("reminder_presets")
-            .select("id,label,offset_minutes")
-            .eq("user_id", userId)
-            .in("id", presetIds);
-          reminderRows = (presets ?? []).map((preset) => ({
-            label: preset.label,
-            offsetMinutes: preset.offset_minutes,
-          }));
-        }
-      }
-      const row = {
-        id: itemId,
-        user_id: userId,
-        category_id: categoryId,
-        type: event ? "event" : (args.itemType ?? "task"),
-        title: args.title,
-        at: event ? args.start : args.due,
-        end_at: event ? (args.end ?? null) : null,
-        all_day: event ? Boolean(args.allDay) : false,
-        status: event ? null : (args.status ?? "todo"),
-        location: event ? (args.location ?? null) : null,
-        description: args.description ?? null,
-        reminders: reminderRows
-          ? reminderRows.map((reminder) => ({ ...(reminder as object), id: nanoid(), itemId }))
-          : [],
-        updated_at: new Date().toISOString(),
-      };
-      const { data, error: insertError } = await db.from("items").insert(row).select("*").single();
-      if (insertError) throw new Error(insertError.message);
-      item = data;
-    } else if (tool === "update_event" || tool === "update_task") {
-      const event = tool === "update_event";
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (args.title) patch.title = args.title;
-      if (event && args.start) patch.at = args.start;
-      if (!event && args.due) patch.at = args.due;
-      if (event && "end" in args) patch.end_at = args.end;
-      if (event && "allDay" in args) patch.all_day = args.allDay;
-      if (event && "location" in args) patch.location = args.location;
-      if ("description" in args) patch.description = args.description;
-      if (args.categoryId) patch.category_id = categoryId;
-      if (!event && args.status) {
-        const statusAt = new Date().toISOString();
-        patch.status = args.status;
-        patch.status_at = statusAt;
-        patch.completed_at = args.status === "done" ? statusAt : null;
-      }
-      if (Array.isArray(args.reminders)) {
-        patch.reminders = args.reminders.map((reminder) => ({
-          ...(reminder as object),
-          id: nanoid(),
-          itemId: String(args.id),
-        }));
-      }
-      const { data, error: updateError } = await db
-        .from("items")
-        .update(patch)
-        .eq("id", args.id)
-        .eq("user_id", userId)
-        .select("*")
-        .single();
-      if (updateError) throw new Error(updateError.message);
-      item = data;
-    } else {
-      const { error: deleteError } = await db
-        .from("items")
-        .delete()
-        .eq("id", args.id)
-        .eq("user_id", userId);
-      if (deleteError) throw new Error(deleteError.message);
-    }
-  } catch (error) {
-    await db
-      .from("assistant_pending_actions")
-      .update({ status: "pending", applied_at: null })
-      .eq("id", confirmationId)
-      .eq("user_id", userId)
-      .eq("status", "applied")
-      .eq("applied_at", claimedAt);
-    throw error;
-  }
-  return { tool, item, deletedId: tool.startsWith("delete_") ? args.id : undefined };
+  return { tool, arguments: args };
 }

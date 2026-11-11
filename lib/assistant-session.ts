@@ -1,17 +1,22 @@
 "use client";
 
 import { create } from "zustand";
-import { askAssistant, type AssistantAction, type AssistantTurn } from "./ai-assistant";
+import {
+  askAssistant,
+  toAssistantSlimItem,
+  type AssistantAction,
+  type AssistantTurn,
+} from "./ai-assistant";
 import { maybePromptForReminders } from "./reminders";
 import { reminderContext } from "./store-selectors";
 import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
 import { useUIStore } from "./ui-store";
-import { resolveDraftClass } from "./assistant-actions";
+import { normalizeActions, resolveDraftClass } from "./assistant-actions";
+import { actionFor, type MutationToolName } from "./assistant-tool-actions";
 import { useAssistantModelStore } from "./assistant-models";
 import { authHeaders } from "./auth-headers";
 import { supersedeOpenCards, staleReason, type ActionOutcome } from "./assistant-staleness";
-import type { Item } from "./types";
 
 export interface AssistantMessage {
   role: "user" | "assistant";
@@ -53,47 +58,70 @@ function conversationId() {
   return id;
 }
 
-function itemFromServer(row: Record<string, unknown>): Item {
-  return {
-    id: String(row.id),
-    categoryId: typeof row.category_id === "string" ? row.category_id : "",
-    type: row.type as Item["type"],
-    title: String(row.title),
-    at: String(row.at),
-    createdAt: String(row.created_at || new Date().toISOString()),
-    ...(typeof row.description === "string" ? { description: row.description } : {}),
-    ...(typeof row.location === "string" ? { location: row.location } : {}),
-    ...(typeof row.end_at === "string" ? { endAt: row.end_at } : {}),
-    ...(row.all_day ? { allDay: true } : {}),
-    ...(typeof row.status === "string" ? { status: row.status as Item["status"] } : {}),
-    ...(typeof row.completed_at === "string" ? { completedAt: row.completed_at } : {}),
-    ...(typeof row.status_at === "string" ? { statusAt: row.status_at } : {}),
-    ...(Array.isArray(row.reminders) && row.reminders.length
-      ? { reminders: row.reminders as Item["reminders"] }
-      : {}),
-    ...(typeof row.updated_at === "string" ? { updatedAt: row.updated_at } : {}),
-  };
-}
-
-async function confirmServerAction(serverActionId: string) {
+/**
+ * Ask the server to confirm a staged action. It validates and claims it and
+ * hands back the arguments — it writes nothing. The change itself is applied
+ * here, through the same store actions the on-device engine uses, so
+ * tombstones, sync, reminder scheduling, the save pill, widget refresh and Undo
+ * all behave identically whichever engine staged the card.
+ */
+async function confirmServerAction(card: AssistantAction): Promise<AssistantAction> {
+  const serverActionId = card.serverActionId;
+  if (!serverActionId) throw new Error("Could not apply this change");
   const response = await fetch("/api/assistant/confirm", {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ confirmationId: serverActionId }),
   });
   const result = (await response.json()) as {
-    item?: Record<string, unknown>;
-    deletedId?: string;
+    tool?: MutationToolName;
+    arguments?: Record<string, unknown>;
     error?: string;
   };
-  if (!response.ok || result.error) throw new Error(result.error || "Could not apply this change");
-  useDatebookStore.setState((state) => ({
-    items: result.item
-      ? [...state.items.filter((item) => item.id !== result.item!.id), itemFromServer(result.item)]
-      : result.deletedId
-        ? state.items.filter((item) => item.id !== result.deletedId)
-        : state.items,
-  }));
+  if (!response.ok || result.error || !result.tool || !result.arguments) {
+    throw new Error(result.error || "Could not apply this change");
+  }
+  const { items, categories } = useDatebookStore.getState();
+  const target = result.arguments.id
+    ? items.find((item) => item.id === String(result.arguments!.id))
+    : undefined;
+  const [action] = normalizeActions(
+    [actionFor(result.tool, result.arguments, target ? toAssistantSlimItem(target) : null)],
+    {
+      message: "",
+      now: new Date().toISOString(),
+      items: items.map(toAssistantSlimItem),
+      categories,
+    },
+  );
+  if (!action) throw new Error("This item no longer exists");
+  // The class on the card is the one the user saw and may have changed; the
+  // server's copy only says what the model asked for.
+  if (action.kind === "create" && card.kind === "create") {
+    action.draft = { ...action.draft, categoryId: card.draft.categoryId };
+  }
+  return withResolvedClasses([action], categories)![0];
+}
+
+/** Apply one action through the store's own actions. */
+function applyToStore(action: AssistantAction) {
+  const store = useDatebookStore.getState();
+  if (action.kind === "create") {
+    let draft = action.draft;
+    if (draft.reminders === undefined) {
+      const defaults = remindersFromPresetIds(
+        store.settings.defaultReminderPresetIds,
+        store.reminderPresets,
+      );
+      if (defaults.length) draft = { ...draft, reminders: defaults };
+    }
+    store.addItem(draft);
+    if (draft.reminders?.length) void maybePromptForReminders(reminderContext);
+  } else if (action.kind === "update") {
+    store.updateItem(action.itemId, action.patch);
+  } else {
+    store.deleteItem(action.itemId);
+  }
 }
 
 function loadSessionMessages(): AssistantMessage[] {
@@ -263,38 +291,23 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
         return;
       }
       if (action.serverActionId) {
-        void confirmServerAction(action.serverActionId)
-          .then(() => get().resolveAction(mi, ai, "applied"))
-          .catch((error) =>
-            set((state) => ({
-              messages: [
-                ...state.messages,
-                {
-                  role: "assistant",
-                  text: error instanceof Error ? error.message : "Could not apply this change.",
-                },
-              ],
-            })),
-          );
+        void confirmServerAction(action)
+          .then((confirmed) => {
+            applyToStore(confirmed);
+            get().resolveAction(mi, ai, "applied");
+          })
+          .catch((error) => {
+            const text = error instanceof Error ? error.message : "Could not apply this change.";
+            // An item that vanished is the card's own state, not a new message.
+            if (/no longer exists/i.test(text)) get().resolveAction(mi, ai, "stale");
+            else
+              set((state) => ({
+                messages: [...state.messages, { role: "assistant", text }],
+              }));
+          });
         return;
       }
-      const store = useDatebookStore.getState();
-      if (action.kind === "create") {
-        let draft = action.draft;
-        if (draft.reminders === undefined) {
-          const defaults = remindersFromPresetIds(
-            store.settings.defaultReminderPresetIds,
-            store.reminderPresets,
-          );
-          if (defaults.length) draft = { ...draft, reminders: defaults };
-        }
-        store.addItem(draft);
-        if (draft.reminders?.length) void maybePromptForReminders(reminderContext);
-      } else if (action.kind === "update") {
-        store.updateItem(action.itemId, action.patch);
-      } else if (action.kind === "delete") {
-        store.deleteItem(action.itemId);
-      }
+      applyToStore(action);
       get().resolveAction(mi, ai, "applied");
     },
 
