@@ -179,7 +179,10 @@ export function AssistantConversation({
             <Sparkles className="h-4 w-4" strokeWidth={1.9} />
           </span>
           <div className="min-w-0">
-            <p id="assistant-title" className="text-[13.5px] font-semibold text-ink md:text-[16px]">
+            <p
+              id="assistant-title"
+              className="translate-y-[5px] text-[13.5px] font-semibold text-ink md:translate-y-0 md:text-[16px]"
+            >
               Assistant
             </p>
             <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
