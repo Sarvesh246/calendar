@@ -11,6 +11,15 @@ import { useAssistantDockable } from "@/lib/assistant-dock";
 import { useLockBodyScroll } from "@/lib/use-lock-body-scroll";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { cn } from "@/lib/utils";
+import { KEYBOARD_HEIGHT_KEY } from "@/lib/use-keyboard-inset";
+
+/** Less than this covered is a rounding error, not a keyboard. */
+const KEYBOARD_REPORTED_MIN = 120;
+/** Keyboard + its accessory bar as a share of an iPhone-portrait window
+ *  (≈386pt of 852pt), for when the browser says nothing. */
+const KEYBOARD_WINDOW_SHARE = 0.46;
+/** iOS's floating ↑ ↓ ✓ bar, which sits above the keyboard. */
+const ACCESSORY_BAR_HEIGHT = 57;
 import { AssistantConversation } from "@/components/assistant-conversation";
 
 /**
@@ -114,31 +123,59 @@ function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
   useLockBodyScroll(true);
   useDialogFocus(panelRef, true);
 
-  // While the field is focused the sheet is sized straight from the live visual
-  // viewport. The shared `--visible-height` flags depend on the keyboard being
-  // detected as a "covered" amount, which iOS does not always report (it pans
-  // the page instead), and a sheet that stays full height sits under the
-  // keyboard with the composer behind it.
+  // While the field is focused the sheet is sized for the keyboard itself,
+  // not from the shared `--visible-height` flags. The site asks for
+  // `interactive-widget=overlays-content`, and iOS then resizes *neither*
+  // viewport when the keyboard opens — it simply covers the page, so a sheet
+  // that is full height keeps its composer underneath it. When the visual
+  // viewport does report a keyboard we use that; when it reports nothing we
+  // assume the keyboard's usual height (last real one, else a share of the
+  // window) so the composer still rides above it.
   const [typing, setTyping] = useState(false);
-  const [band, setBand] = useState<{ top: number; height: number } | null>(null);
+  const [band, setBand] = useState<{ top: number; height: number; estimated: boolean } | null>(
+    null,
+  );
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!typing || !vv) return;
+    if (!typing) return;
     let raf = 0;
     const read = () => {
       raf = 0;
-      setBand({ top: Math.max(0, vv.offsetTop), height: Math.round(vv.height) });
+      const windowH = window.innerHeight;
+      const top = vv ? Math.max(0, vv.offsetTop) : 0;
+      const visible = vv ? vv.height : windowH;
+      const reported = Math.max(0, windowH - visible - top);
+      if (reported >= KEYBOARD_REPORTED_MIN) {
+        setBand({ top, height: Math.round(visible), estimated: false });
+        return;
+      }
+      let assumed = 0;
+      try {
+        assumed = Number(window.sessionStorage.getItem(KEYBOARD_HEIGHT_KEY)) || 0;
+      } catch {
+        /* no storage — fall back to the share of the window */
+      }
+      // A remembered height is the keyboard alone; iOS floats its accessory bar
+      // on top of that, so leave room for it too.
+      assumed =
+        assumed >= KEYBOARD_REPORTED_MIN
+          ? assumed + ACCESSORY_BAR_HEIGHT
+          : Math.round(windowH * KEYBOARD_WINDOW_SHARE);
+      setBand({ top: 0, height: Math.max(240, windowH - assumed), estimated: true });
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(read);
     };
     schedule();
-    vv.addEventListener("resize", schedule);
-    vv.addEventListener("scroll", schedule);
+    // iOS reports the real geometry only once the keyboard animation ends.
+    const late = [350, 900].map((ms) => setTimeout(schedule, ms));
+    vv?.addEventListener("resize", schedule);
+    vv?.addEventListener("scroll", schedule);
     return () => {
       if (raf) cancelAnimationFrame(raf);
-      vv.removeEventListener("resize", schedule);
-      vv.removeEventListener("scroll", schedule);
+      late.forEach(clearTimeout);
+      vv?.removeEventListener("resize", schedule);
+      vv?.removeEventListener("scroll", schedule);
     };
   }, [typing]);
 
@@ -166,6 +203,7 @@ function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
         aria-labelledby="assistant-title"
         {...dragProps}
         data-typing={typing ? "" : undefined}
+        data-kb-estimated={typing && band?.estimated ? "" : undefined}
         onFocusCapture={(e) => {
           if ((e.target as HTMLElement).tagName === "TEXTAREA") setTyping(true);
         }}

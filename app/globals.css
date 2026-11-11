@@ -1589,6 +1589,10 @@ body {
     .assistant-room[data-typing] .assistant-composer {
       padding-bottom: 4rem;
     }
+    /* An assumed keyboard height already includes the accessory bar. */
+    .assistant-room[data-typing][data-kb-estimated] .assistant-composer {
+      padding-bottom: 0.75rem;
+    }
   }
 }
 
