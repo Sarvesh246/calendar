@@ -22,18 +22,20 @@ export default function PrivacyPage() {
           <li>Your Google account identifier and email when you sign in for sync.</li>
           <li>Push notification subscription data if you enable reminders and sign in.</li>
           <li>
-            Performance diagnostics, enabled by default: a random device and session ID, coarse page
-            and interaction types, timing measurements, and error counts. Typed text, calendar
-            details, chat content, URLs and error messages are not collected. Turn this off on each
-            device in Settings.
+            Performance diagnostics are enabled by default, including when you use Datebook without
+            signing in. They contain a random device ID and session ID, timestamps, broad page and
+            interaction categories, performance and same-origin request timings, and error events.
+            They do not include typed text, calendar details, assistant conversations, full URLs,
+            request contents, or error messages and stack traces.
           </li>
         </ul>
         <h2 className="text-[15px] font-semibold text-ink">How we use it</h2>
         <p>
           Data is used only to operate Datebook: display your calendar, sync across your devices,
           send reminders you request, and run the optional assistant when you ask a question. We do
-          not sell your data or use it for advertising. Diagnostics are stored in Supabase for up to
-          30 days and used to investigate reliability and performance.
+          not sell your data or use it for advertising. Diagnostics help investigate reliability and
+          performance. They are stored in Supabase, with a daily process that removes records older
+          than 30 days.
         </p>
         <h2 className="text-[15px] font-semibold text-ink">Third parties</h2>
         <p>
@@ -46,7 +48,10 @@ export default function PrivacyPage() {
         <p>
           You can use Datebook offline without signing in. You can export a JSON backup or .ics file
           from Settings at any time. Signing out stops cloud sync on that device. Resetting calendar
-          data removes items and feeds from the device.
+          data removes items and feeds from the device. You can turn off Performance diagnostics in
+          Settings under Account &amp; sync on each device. Turning it off stops new collection on
+          that device; previously sent records remain until the scheduled deletion. The diagnostic
+          device ID shown in Settings can be shared with the maintainer if you request help.
         </p>
         <h2 className="text-[15px] font-semibold text-ink">Contact</h2>
         <p>
