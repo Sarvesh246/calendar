@@ -22,6 +22,8 @@ import { navigateTab } from "@/lib/tab-nav";
 import { useAssistantSession } from "@/lib/assistant-session";
 import { AssistantMarkdown } from "@/lib/markdown";
 import { AssistantActionCard } from "@/components/assistant-action-card";
+import { AssistantItemRows } from "@/components/assistant-item-rows";
+import { partsOf } from "@/lib/assistant-parts";
 import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AssistantModelSelector } from "@/components/assistant-model-selector";
@@ -52,6 +54,7 @@ export function AssistantConversation({
   const applyAction = useAssistantSession((s) => s.applyAction);
   const resolveAction = useAssistantSession((s) => s.resolveAction);
   const setActionClass = useAssistantSession((s) => s.setActionClass);
+  const applyAll = useAssistantSession((s) => s.applyAll);
   const items = useDatebookStore((s) => s.items);
   const categories = useDatebookStore((s) => s.categories);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
@@ -111,6 +114,14 @@ export function AssistantConversation({
     // Sent is not interrupted — the words are in the thread now.
     clearDraft("assistant");
     ask(text);
+  }
+
+  /** A row opens the real item. The overlay assistant steps aside so the
+   *  sheet is not drawn underneath it; the thread is kept for when you return. */
+  function openItem(id: string) {
+    const ui = useUIStore.getState();
+    if (!docked) ui.setAIDrawerOpen(false);
+    ui.openInspector(id);
   }
 
   function dockBesideCalendar() {
@@ -225,15 +236,88 @@ export function AssistantConversation({
                   : cn("max-w-[92%] space-y-2", !docked && "md:max-w-[88%] md:space-y-2.5")
               }
             >
-              {m.role === "assistant" ? (
-                <AssistantMarkdown
-                  text={m.text}
-                  className={
-                    docked ? "text-[13.5px] leading-[1.5]" : "md:text-[14.5px] md:leading-[1.55]"
-                  }
-                />
-              ) : (
-                m.text
+              {m.role === "assistant"
+                ? partsOf(m).map((part, pi) => {
+                    if (part.type === "text") {
+                      return (
+                        <AssistantMarkdown
+                          key={pi}
+                          text={part.text}
+                          className={
+                            docked
+                              ? "text-[13.5px] leading-[1.5]"
+                              : "md:text-[14.5px] md:leading-[1.55]"
+                          }
+                        />
+                      );
+                    }
+                    if (part.type === "items") {
+                      return (
+                        <AssistantItemRows
+                          key={pi}
+                          ids={part.ids}
+                          heading={part.heading}
+                          onOpen={openItem}
+                        />
+                      );
+                    }
+                    if (part.type === "notice") {
+                      return (
+                        <p
+                          key={pi}
+                          className={cn(
+                            "text-[11px] leading-relaxed",
+                            part.tone === "warn" ? "text-warn" : "text-ink-faint",
+                          )}
+                        >
+                          {part.text}
+                        </p>
+                      );
+                    }
+                    if (part.type === "choice") {
+                      return (
+                        <div key={pi} className="flex flex-wrap gap-2">
+                          {part.options.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => send(option)}
+                              className="min-h-11 rounded-full border border-line bg-surface px-4 text-left text-[13px] font-medium text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    }
+                    const action = m.actions?.[part.index];
+                    if (!action) return null;
+                    const ai = part.index;
+                    return (
+                      <AssistantActionCard
+                        key={pi}
+                        action={action}
+                        outcome={m.resolved?.[ai]}
+                        items={items}
+                        categories={categories}
+                        clock24h={clock24h}
+                        docked={docked}
+                        onApply={() => applyAction(mi, ai)}
+                        onDismiss={() => resolveAction(mi, ai, "dismissed")}
+                        onClassChange={(id) => setActionClass(mi, ai, id)}
+                      />
+                    );
+                  })
+                : m.text}
+
+              {openCount(m) >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => applyAll(mi)}
+                  className="min-h-11 w-full rounded-lg bg-accent px-4 text-[13.5px] font-semibold text-accent-ink hover:opacity-90"
+                >
+                  Confirm all ({openCount(m)})
+                </button>
               )}
 
               {m.degraded && (
@@ -245,25 +329,6 @@ export function AssistantConversation({
                   Offline answer · retry
                 </button>
               )}
-
-              {m.fallbackNotice && (
-                <p className="text-[11px] leading-relaxed text-ink-faint">{m.fallbackNotice}</p>
-              )}
-
-              {m.actions?.map((action, ai) => (
-                <AssistantActionCard
-                  key={ai}
-                  action={action}
-                  outcome={m.resolved?.[ai]}
-                  items={items}
-                  categories={categories}
-                  clock24h={clock24h}
-                  docked={docked}
-                  onApply={() => applyAction(mi, ai)}
-                  onDismiss={() => resolveAction(mi, ai, "dismissed")}
-                  onClassChange={(id) => setActionClass(mi, ai, id)}
-                />
-              ))}
 
               {m.suggestions && m.suggestions.length > 0 && (
                 <div
@@ -416,4 +481,9 @@ export function AssistantConversation({
       </div>
     </>
   );
+}
+
+/** Cards in a reply that nobody has confirmed, dismissed or lost yet. */
+function openCount(m: { actions?: unknown[]; resolved?: Record<number, unknown> }): number {
+  return (m.actions ?? []).filter((_, i) => !m.resolved?.[i]).length;
 }

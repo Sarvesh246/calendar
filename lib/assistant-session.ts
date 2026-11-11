@@ -12,7 +12,8 @@ import { reminderContext } from "./store-selectors";
 import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
 import { useUIStore } from "./ui-store";
-import { normalizeActions, resolveDraftClass } from "./assistant-actions";
+import { normalizeActions, resolveDraftClass, whenWord } from "./assistant-actions";
+import { buildParts, historyText, type MessagePart } from "./assistant-parts";
 import { actionFor, type MutationToolName } from "./assistant-tool-actions";
 import { useAssistantModelStore } from "./assistant-models";
 import { authHeaders } from "./auth-headers";
@@ -29,6 +30,9 @@ export interface AssistantMessage {
   /** Outcome per action index. Lives on the message so it's saved with the
    *  session and travels with it when a retry trims the list. */
   resolved?: Record<number, ActionOutcome>;
+  /** The reply as typed parts: text, item rows, cards, choices. Messages saved
+   *  before parts existed have none and derive them from `text`/`actions`. */
+  parts?: MessagePart[];
   /** When the reply landed (ms). Cards expire 30 minutes later, like the
    *  server's staged action does. */
   createdAt?: number;
@@ -147,9 +151,19 @@ interface AssistantSessionState {
   retry: (messageIndex: number) => void;
   applyAction: (messageIndex: number, actionIndex: number) => void;
   resolveAction: (messageIndex: number, actionIndex: number, outcome: ActionOutcome) => void;
+  /** Apply every card in a reply that is still open. */
+  applyAll: (messageIndex: number) => void;
   /** Change the class a staged "add" will be filed under. */
   setActionClass: (messageIndex: number, actionIndex: number, categoryId: string) => void;
   reset: () => void;
+}
+
+/** One line per item for history: what the model needs to resolve "the second one". */
+function describeItem(id: string): string | undefined {
+  const { items, settings } = useDatebookStore.getState();
+  const item = items.find((i) => i.id === id);
+  if (!item) return undefined;
+  return `${item.title} (${whenWord(item.at, { type: item.type, allDay: item.allDay, clock24h: settings.clock24h })})`;
 }
 
 /** The class implied by where the chat was opened: a single filtered class. */
@@ -194,7 +208,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     const history: AssistantTurn[] = messages
       .slice(0, -1)
       .filter((m) => m.text && m.text !== WELCOME.text)
-      .map((m) => ({ role: m.role, text: m.text }));
+      .map((m) => ({ role: m.role, text: historyText(m, describeItem) }));
     const { items, categories, settings } = useDatebookStore.getState();
     const modelId = useAssistantModelStore.getState().selectedId;
     askAssistant(last.text, history, {
@@ -215,6 +229,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               text: res.text,
               suggestions: res.suggestions,
               actions: res.actions,
+              parts: buildParts(res),
               degraded: res.degraded,
               providerLabel: res.providerLabel,
               fallbackNotice: res.fallbackNotice,
@@ -309,6 +324,13 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       }
       applyToStore(action);
       get().resolveAction(mi, ai, "applied");
+    },
+
+    applyAll: (mi) => {
+      const message = get().messages[mi];
+      message?.actions?.forEach((_, ai) => {
+        if (!get().messages[mi]?.resolved?.[ai]) get().applyAction(mi, ai);
+      });
     },
 
     setActionClass: (mi, ai, categoryId) =>

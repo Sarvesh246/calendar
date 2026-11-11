@@ -13,6 +13,7 @@ import {
   setMinutes,
   startOfDay,
 } from "date-fns";
+import { cleanChoices, cleanItemsBlocks } from "./assistant-parts";
 import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
 import { toNewItem } from "./bulk-parse";
@@ -46,6 +47,10 @@ export interface AssistantResponse {
   text: string;
   suggestions?: string[];
   actions?: AssistantAction[];
+  /** The user's own items to draw as tappable rows, by id (see assistant-parts). */
+  items?: { ids: string[]; heading?: string }[];
+  /** A question's possible answers, drawn as tap-to-send choices. */
+  choices?: string[];
   /** True when the network assistant couldn't be reached and this is the
    *  offline heuristic answer — the UI offers a retry. */
   degraded?: boolean;
@@ -444,6 +449,8 @@ export async function askAssistant(
           text: data.text,
           suggestions: data.suggestions,
           actions: sanitizeActions(data.actions, ctx),
+          items: cleanItemsBlocks(data.items),
+          choices: cleanChoices(data.choices),
           providerLabel: data.providerLabel,
           fallbackNotice: data.fallbackNotice,
         };
@@ -487,8 +494,9 @@ function sanitizeActions(
     if (a.kind === "create") {
       if (!a.draft?.title || !a.draft?.at || Number.isNaN(+new Date(a.draft.at))) continue;
       const draft = { ...a.draft };
-      if (!draft.categoryId || !catIds.has(draft.categoryId))
-        draft.categoryId = ctx.categories[0]?.id ?? "";
+      // No silent default here either: an unclassed add is resolved, shown and
+      // editable on its card (see resolveDraftClass).
+      if (!draft.categoryId || !catIds.has(draft.categoryId)) draft.categoryId = "";
       out.push({ kind: "create", summary: a.summary, draft, serverActionId: a.serverActionId });
     } else if (a.kind === "update") {
       if (!ids.has(a.itemId) || !a.patch || Object.keys(a.patch).length === 0) continue;

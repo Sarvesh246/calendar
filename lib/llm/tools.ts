@@ -75,6 +75,13 @@ const schemas = {
   }),
   delete_task: z.object({ id }),
   check_availability: z.object({ start: iso, end: iso }),
+  show_items: z.object({
+    ids: z.array(id).min(1).max(25),
+    heading: z.string().trim().min(1).max(80).optional(),
+  }),
+  offer_choices: z.object({
+    options: z.array(z.string().trim().min(1).max(80)).min(2).max(4),
+  }),
 } as const;
 
 export type DatebookToolName = keyof typeof schemas;
@@ -108,6 +115,33 @@ const reminderSchema = {
 };
 
 export const DATEBOOK_TOOLS: OpenAiTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "show_items",
+      description:
+        "Show the user's own items as tappable rows the app formats itself (title, class, time, status). Use it whenever the answer is a list of two or more items, passing their ids from the snapshot or list_*; then reply with ONE short framing sentence and do not list the items yourself.",
+      parameters: object(
+        {
+          ids: { type: "array", minItems: 1, maxItems: 25, items: { type: "string" } },
+          heading: str("Optional short heading, e.g. 'Due this week'"),
+        },
+        ["ids"],
+      ),
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "offer_choices",
+      description:
+        "When a request is ambiguous, offer 2-4 short answers as tappable choices instead of making the user retype. Ask the question in your reply text, e.g. 'Which one?'.",
+      parameters: object(
+        { options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } } },
+        ["options"],
+      ),
+    },
+  },
   {
     type: "function",
     function: {
@@ -355,6 +389,23 @@ async function availability(ctx: ToolContext, args: Record<string, unknown>) {
   return checkAvailability(items, start, end, timeZone);
 }
 
+/** Only ids that are really this user's: the snapshot, then the database. */
+async function knownItemIds(ctx: ToolContext, ids: string[]): Promise<string[]> {
+  const inSnapshot = new Set(ctx.body.items.map((item) => item.id));
+  const unknown = ids.filter((id) => !inSnapshot.has(id));
+  const db = assistantDatabase();
+  let found = new Set<string>();
+  if (unknown.length && ctx.userId && db) {
+    const { data } = await db
+      .from("items")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .in("id", unknown);
+    found = new Set((data ?? []).map((row) => String(row.id)));
+  }
+  return [...new Set(ids)].filter((id) => inSnapshot.has(id) || found.has(id));
+}
+
 function findFallback(ctx: ToolContext, itemId: string) {
   return ctx.body.items.find((item) => item.id === itemId);
 }
@@ -376,7 +427,11 @@ export async function executeDatebookTool(
   name: string,
   rawArguments: string,
   ctx: ToolContext,
-): Promise<{ output: unknown; action?: Record<string, unknown> }> {
+): Promise<{
+  output: unknown;
+  action?: Record<string, unknown>;
+  display?: { items?: { ids: string[]; heading?: string }; choices?: string[] };
+}> {
   if (!(name in schemas)) throw new MalformedToolArgumentsError(name, "unknown tool");
   let json: unknown;
   try {
@@ -393,6 +448,19 @@ export async function executeDatebookTool(
   const tool = name as DatebookToolName;
   const args = parsed.data as Record<string, unknown>;
   if (tool === "check_availability") return { output: await availability(ctx, args) };
+  if (tool === "show_items") {
+    const ids = await knownItemIds(ctx, args.ids as string[]);
+    if (!ids.length) return { output: { ok: false, error: "None of those ids exist" } };
+    return {
+      output: { ok: true, shown: ids.length, instruction: "Reply with one short sentence only." },
+      display: {
+        items: { ids, ...(typeof args.heading === "string" ? { heading: args.heading } : {}) },
+      },
+    };
+  }
+  if (tool === "offer_choices") {
+    return { output: { ok: true }, display: { choices: args.options as string[] } };
+  }
   if (tool === "list_events") return { output: await listFromDatabase(ctx, "event", args) };
   if (tool === "list_tasks") return { output: await listFromDatabase(ctx, "task", args) };
   if (!MUTATIONS.has(tool)) throw new MalformedToolArgumentsError(name, "unsupported tool");

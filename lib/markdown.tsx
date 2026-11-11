@@ -5,8 +5,10 @@ import { safeExternalUrl } from "./safe-url";
 /**
  * Tiny Markdown renderer for the assistant's chat replies. Deliberately narrow —
  * `**bold**`, `*italic*` / `_italic_`, `` `code` ``, `[label](url)`, `- ` / `1. `
- * lists, blank-line paragraphs, and single line breaks. Builds React nodes (no
- * `dangerouslySetInnerHTML`), so LLM output can't inject markup.
+ * lists (one level of nesting), blank-line paragraphs, and single line breaks.
+ * A pipe table is drawn as stacked rows, since a phone has no room for one.
+ * Builds React nodes (no `dangerouslySetInnerHTML`), so LLM output can't inject
+ * markup.
  */
 
 const INLINE_RE =
@@ -64,12 +66,30 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-type Block = { kind: "p"; lines: string[] } | { kind: "list"; ordered: boolean; items: string[] };
+/** A list item and, at most one level down, the items nested under it. */
+export type ListItem = { text: string; sub?: { ordered: boolean; items: string[] } };
+export type Block =
+  | { kind: "p"; lines: string[] }
+  | { kind: "list"; ordered: boolean; items: ListItem[] }
+  /** Rendered as stacked rows: a pipe table has no room on a phone. */
+  | { kind: "table"; header: string[]; rows: string[][] };
 
-function parseBlocks(text: string): Block[] {
+const splitRow = (line: string) =>
+  line
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map((cell) => cell.trim());
+const isTableLine = (line: string) => /^\s*\|.*\|\s*$/.test(line);
+const isSeparator = (line: string) => /^[\s|:-]+$/.test(line) && line.includes("-");
+
+export function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
   let para: string[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
+  // Asserted, not annotated: the flush closures reassign these, which control
+  // flow analysis cannot see, and would otherwise narrow them to `null`.
+  let list = null as { ordered: boolean; items: ListItem[] } | null;
+  let table = null as string[] | null;
 
   const flushPara = () => {
     if (para.length) blocks.push({ kind: "p", lines: para });
@@ -79,25 +99,42 @@ function parseBlocks(text: string): Block[] {
     if (list) blocks.push({ kind: "list", ordered: list.ordered, items: list.items });
     list = null;
   };
+  const flushTable = () => {
+    if (table) {
+      const rows = table.filter((l) => !isSeparator(l)).map(splitRow);
+      if (rows.length >= 2) blocks.push({ kind: "table", header: rows[0], rows: rows.slice(1) });
+      else para.push(...table);
+    }
+    table = null;
+  };
 
   for (const raw of text.replace(/\r\n/g, "\n").split("\n")) {
     const line = raw.replace(/\s+$/, "");
-    const bullet = /^\s*[-*+]\s+(.*)$/.exec(line);
-    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-    if (bullet) {
+    if (isTableLine(line)) {
       flushPara();
-      if (!list || list.ordered) {
-        flushList();
-        list = { ordered: false, items: [] };
-      }
-      list.items.push(bullet[1]);
-    } else if (numbered) {
+      flushList();
+      (table ??= []).push(line);
+      continue;
+    }
+    flushTable();
+    const bullet = /^(\s*)[-*+]\s+(.*)$/.exec(line);
+    const numbered = /^(\s*)\d+[.)]\s+(.*)$/.exec(line);
+    const marker = bullet ?? numbered;
+    if (marker) {
       flushPara();
-      if (!list || !list.ordered) {
-        flushList();
-        list = { ordered: true, items: [] };
+      const ordered = !bullet;
+      const current: { ordered: boolean; items: ListItem[] } | null = list;
+      if (marker[1].length >= 2 && current && current.items.length > 0) {
+        const parent = current.items[current.items.length - 1];
+        parent.sub ??= { ordered, items: [] };
+        parent.sub.items.push(marker[2]);
+        continue;
       }
-      list.items.push(numbered[1]);
+      if (!current || current.ordered !== ordered) {
+        flushList();
+        list = { ordered, items: [] };
+      }
+      list!.items.push({ text: marker[2] });
     } else if (line.trim() === "") {
       flushPara();
       flushList();
@@ -106,6 +143,7 @@ function parseBlocks(text: string): Block[] {
       para.push(line.replace(/^\s*#+\s*/, "")); // strip stray heading marks
     }
   }
+  flushTable();
   flushPara();
   flushList();
   return blocks;
@@ -125,20 +163,60 @@ export function AssistantMarkdown({ text, className }: { text: string; className
               </Fragment>
             ))}
           </p>
-        ) : b.ordered ? (
-          <ol key={bi} className="ml-4 list-decimal space-y-1 marker:text-ink-faint">
-            {b.items.map((it, li) => (
-              <li key={li}>{renderInline(it, `${bi}-${li}`)}</li>
+        ) : b.kind === "table" ? (
+          <div key={bi} className="space-y-1.5">
+            {b.rows.map((row, ri) => (
+              <div key={ri} className="rounded-lg border border-line bg-surface-sunken px-3 py-2">
+                <p className="font-semibold text-ink">
+                  {renderInline(row[0] ?? "", `${bi}-${ri}-0`)}
+                </p>
+                {row.slice(1).map((cell, ci) =>
+                  cell ? (
+                    <p key={ci} className="text-ink-soft">
+                      {b.header[ci + 1] ? (
+                        <span className="text-ink-faint">{b.header[ci + 1]}: </span>
+                      ) : null}
+                      {renderInline(cell, `${bi}-${ri}-${ci + 1}`)}
+                    </p>
+                  ) : null,
+                )}
+              </div>
             ))}
-          </ol>
+          </div>
         ) : (
-          <ul key={bi} className="ml-4 list-disc space-y-1 marker:text-ink-faint">
-            {b.items.map((it, li) => (
-              <li key={li}>{renderInline(it, `${bi}-${li}`)}</li>
-            ))}
-          </ul>
+          <ListBlock key={bi} block={b} base={`${bi}`} />
         ),
       )}
     </div>
+  );
+}
+
+function ListBlock({ block, base }: { block: Extract<Block, { kind: "list" }>; base: string }) {
+  const Tag = block.ordered ? "ol" : "ul";
+  return (
+    <Tag
+      className={cn(
+        "ml-4 space-y-1 marker:text-ink-faint",
+        block.ordered ? "list-decimal" : "list-disc",
+      )}
+    >
+      {block.items.map((it, li) => (
+        <li key={li}>
+          {renderInline(it.text, `${base}-${li}`)}
+          {it.sub && (
+            <ul
+              className={cn(
+                "ml-4 mt-1 space-y-1 marker:text-ink-faint",
+                it.sub.ordered ? "list-decimal" : "list-[circle]",
+              )}
+            >
+              {it.sub.items.map((sub, si) => (
+                <li key={si}>{renderInline(sub, `${base}-${li}-${si}`)}</li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </Tag>
   );
 }

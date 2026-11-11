@@ -116,6 +116,9 @@ export async function callRoutedProvider(opts: {
     text: string;
     actions: unknown[];
     latencyMs: number;
+    /** Rows and choices the model asked the app to draw. */
+    items?: { ids: string[]; heading?: string }[];
+    choices?: string[];
   }>;
 }) {
   const { providers, requestedUnavailable } = await providerCandidates(opts.selectedId);

@@ -95,7 +95,9 @@ export async function createChatCompletion(opts: {
     tool_choice: opts.forceTool ? { type: "function", function: { name: opts.forceTool } } : "auto",
     parallel_tool_calls: true,
     ...(opts.provider.reasoningEffort ? { reasoning_effort: opts.provider.reasoningEffort } : {}),
-    temperature: 0.2,
+    // Zero: a tool-calling turn should pick the same tool and arguments every
+    // time it is asked, which is what the eval suite pins.
+    temperature: 0,
     max_tokens: 1_200,
   };
   const response = await fetchWithTimeout(

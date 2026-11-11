@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { selectAssistantItems } from "@/lib/ai-assistant";
 import { fixWeekdays } from "@/lib/assistant-dates";
+import { polishReply } from "@/lib/assistant-polish";
+import { cleanChoices, cleanItemsBlocks } from "@/lib/assistant-parts";
 import {
   MAX_ASSISTANT_BODY,
   MAX_ASSISTANT_ITEMS,
@@ -89,6 +91,8 @@ async function runAgent(opts: {
 }) {
   const messages = [...opts.messages];
   const actions: unknown[] = [];
+  const items: { ids: string[]; heading?: string }[] = [];
+  let choices: string[] | undefined;
   let latencyMs = 0;
   let malformedRetries = 0;
   for (let loop = 0; loop < MAX_AGENT_LOOPS; loop += 1) {
@@ -107,8 +111,12 @@ async function runAgent(opts: {
       return {
         text:
           reply.content?.trim() ||
-          "I couldn't produce a useful answer. Try rephrasing that request.",
+          (items.length || choices
+            ? "Here you go."
+            : "I couldn't produce a useful answer. Try rephrasing that request."),
         actions,
+        items,
+        choices,
         latencyMs,
       };
     }
@@ -122,6 +130,8 @@ async function runAgent(opts: {
         });
         if (result.action) actions.push(result.action);
         else allStaged = false;
+        if (result.display?.items) items.push(result.display.items);
+        if (result.display?.choices) choices = result.display.choices;
         if (!MUTATION_TOOLS.has(call.function.name)) allStaged = false;
         messages.push({
           role: "tool",
@@ -148,7 +158,13 @@ async function runAgent(opts: {
     // reason about: skip the follow-up call (it would re-send the whole prompt) and
     // answer from the text it already wrote or the staged summaries.
     if (allStaged && actions.length) {
-      return { text: reply.content?.trim() || confirmationText(actions), actions, latencyMs };
+      return {
+        text: reply.content?.trim() || confirmationText(actions),
+        actions,
+        items,
+        choices,
+        latencyMs,
+      };
     }
   }
   throw new Error("Assistant exceeded the maximum tool-call loop count");
@@ -252,7 +268,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       // Deterministic last line of defence: a "Weekday, Month D" that
       // disagrees with the calendar is corrected rather than shown.
-      text: fixWeekdays(result.text, body.now, body.timeZone || "UTC"),
+      text: fixWeekdays(polishReply(result.text), body.now, body.timeZone || "UTC"),
+      items: cleanItemsBlocks(result.items),
+      choices: cleanChoices(result.choices),
       actions: actions.length ? actions : undefined,
       providerLabel: result.provider.label,
       fallbackNotice,

@@ -104,7 +104,18 @@ const ctx: AssistantCtx = { items, categories, clock24h: false, weekStartsOn: 0 
 beforeEach(() => resetLocalAssistantState());
 const ask = (text: string, history: AssistantTurn[] = []) =>
   tryLocalAnswer(text, history, ctx, NOW);
-const text = (t: string) => ask(t)?.text ?? null;
+/** The words plus the titles of any rows the answer draws — rows are how long
+ *  lists are shown, so "does the answer include X" has to look at both. */
+const withRows = (r: { text: string; items?: { ids: string[] }[] } | null | undefined) =>
+  r
+    ? [
+        r.text,
+        ...(r.items ?? []).flatMap((b) =>
+          b.ids.map((id) => ctx.items.find((i) => i.id === id)?.title ?? ""),
+        ),
+      ].join("\n")
+    : null;
+const text = (t: string) => withRows(ask(t));
 
 describe("local assistant — deferral", () => {
   it.each([
@@ -146,7 +157,7 @@ describe("local assistant — what's due this week", () => {
 
   it("looks a week ahead when the week is down to its last day", () => {
     const saturday = new Date(2026, 8, 26, 10, 0, 0);
-    const r = tryLocalAnswer("what's due this week", [], ctx, saturday)?.text ?? "";
+    const r = withRows(tryLocalAnswer("what's due this week", [], ctx, saturday)) ?? "";
     expect(r).toMatch(/next 7 days/i);
     expect(r).toContain("Problem Set 4"); // due the following Thursday
   });

@@ -2476,11 +2476,12 @@ function dueBetweenWork(
       ),
     };
   }
+  // Past a few items the answer is rows you can tap, drawn by the same code
+  // the model's show_items uses, so both engines read alike. The sentence
+  // stays for history and for anything that only has text.
   return {
-    text: `You have ${bold(`${all.length} due`)} ${label}${suffix}:\n${bullets(
-      all.map((i) => dueLine(env, i, true)),
-      8,
-    )}`,
+    text: `You have ${bold(`${all.length} due`)} ${label}${suffix}:`,
+    items: [{ ids: all.slice(0, 25).map((i) => i.id) }],
   };
 }
 
