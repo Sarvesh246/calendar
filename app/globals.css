@@ -1546,6 +1546,17 @@ body {
   animation: overlay-out 160ms ease-in forwards;
 }
 
+/* The phone assistant keeps its composer clear of the home indicator while the
+   keyboard is closed; with the keyboard up, the keyboard is the bottom edge. */
+@media (max-width: 767px) {
+  .assistant-composer {
+    padding-bottom: calc(0.625rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+  html[data-keyboard] .assistant-composer {
+    padding-bottom: 0.625rem;
+  }
+}
+
 @media (min-width: 768px) {
   .assistant-panel {
     top: 12px;

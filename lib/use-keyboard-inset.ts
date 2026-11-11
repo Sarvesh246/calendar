@@ -40,6 +40,47 @@ const NUDGE_SPACING_MS = 200;
  *  a single frame instead of stepping towards the right place over several. */
 const MAX_DROP_PASSES = 4;
 
+/** The VirtualKeyboard API, where Chromium has it. Typed by hand: lib.dom does
+ *  not ship it. */
+type VirtualKeyboardLike = EventTarget & {
+  overlaysContent: boolean;
+  boundingRect: { height: number };
+};
+
+function virtualKeyboard(): VirtualKeyboardLike | null {
+  const vk = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboardLike }).virtualKeyboard;
+  return vk ?? null;
+}
+
+/** The last real keyboard height, so the next `focusin` can lift the composer
+ *  with the keyboard instead of half a second after it (iOS only reports the
+ *  new `visualViewport` once the animation has finished). Session-scoped and
+ *  read inside an effect — never from a `useState` initialiser. */
+export const KEYBOARD_HEIGHT_KEY = "datebook-kb-height";
+/** Below this a reading is a floating bar or a rounding error, not a keyboard. */
+const MIN_KEYBOARD_HEIGHT = 120;
+/** How long a remembered height is trusted with no real reading behind it —
+ *  longer than iOS's animation, short enough that a hardware keyboard (which
+ *  never reports one) does not leave a gap under the composer. */
+const PREDICTION_TTL_MS = 1100;
+
+function readStoredKeyboardHeight(): number {
+  try {
+    const n = Number(window.sessionStorage.getItem(KEYBOARD_HEIGHT_KEY));
+    return Number.isFinite(n) && n >= MIN_KEYBOARD_HEIGHT ? Math.round(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function storeKeyboardHeight(px: number) {
+  try {
+    window.sessionStorage.setItem(KEYBOARD_HEIGHT_KEY, String(Math.round(px)));
+  } catch {
+    /* private mode — the prediction just has nothing to use */
+  }
+}
+
 function isStandaloneWindow(): boolean {
   const nav = window.navigator as Navigator & { standalone?: boolean };
   if (nav.standalone === true) return true;
@@ -138,6 +179,14 @@ export function useKeyboardInset() {
     let launchedAt = Date.now();
     let nudges = 0;
     let lastNudge = 0;
+    let predictedKeyboard = 0;
+    let predictionTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Chromium under `interactive-widget=overlays-content` resizes neither
+    // viewport for the keyboard; this is the only place it is reported.
+    const vk = virtualKeyboard();
+    const vkWasOverlaying = vk?.overlaysContent ?? false;
+    if (vk) vk.overlaysContent = true;
 
     const phoneChrome = () => window.matchMedia("(max-width: 767px)").matches;
 
@@ -213,11 +262,33 @@ export function useKeyboardInset() {
         typing: isTypingTarget(document.activeElement),
         keyboardBase,
         sinceLaunch: Date.now() - launchedAt,
+        keyboardRect: vk ? Math.max(0, Math.round(vk.boundingRect.height)) : 0,
+        predictedKeyboard,
       };
+    };
+
+    const clearPrediction = () => {
+      predictedKeyboard = 0;
+      if (predictionTimer) clearTimeout(predictionTimer);
+      predictionTimer = undefined;
     };
 
     const apply = () => {
       let metrics = readMetrics();
+
+      // A real reading ends the guess and becomes the next one. The height is
+      // taken from the layout viewport, not the covered amount, so a pan does
+      // not shrink what we remember.
+      if (metrics.typing) {
+        const real = Math.max(metrics.keyboardRect, metrics.layoutHeight - metrics.visibleHeight);
+        if (real >= MIN_KEYBOARD_HEIGHT) {
+          storeKeyboardHeight(real);
+          if (predictedKeyboard) {
+            clearPrediction();
+            metrics = readMetrics();
+          }
+        }
+      }
       let next = resolveViewportOffsets(metrics);
 
       // Reading a rect flushes layout, so writing --fixed-drop and measuring
@@ -238,10 +309,12 @@ export function useKeyboardInset() {
         root.style.setProperty("--window-height", `${next.windowHeight}px`);
       }
       root.style.setProperty("--safe-bottom", `${next.safeBottom}px`);
-      root.style.setProperty("--visible-height", `${Math.round(metrics.visibleHeight)}px`);
+      root.style.setProperty("--visible-height", `${next.visibleHeight}px`);
       root.style.setProperty("--viewport-pan", `${next.pan}px`);
       root.style.setProperty("--viewport-shrink", `${next.shrink}px`);
       root.style.setProperty("--keyboard-inset", `${next.keyboardInset}px`);
+      if (next.keyboardInset > 0) root.setAttribute("data-keyboard", "1");
+      else root.removeAttribute("data-keyboard");
 
       if (next.needsRelayout) nudgeRelayout();
     };
@@ -304,10 +377,25 @@ export function useKeyboardInset() {
     const onFocusIn = (e: FocusEvent) => {
       if (!isTypingTarget(e.target as Element | null)) return;
       if (keyboardBase === null) keyboardBase = root.clientHeight;
+      // Phone only, and only when nothing is covered yet: move with the
+      // keyboard using the height it had last time, then let the real reading
+      // correct it. Expires on its own if no keyboard ever shows up.
+      if (phoneChrome() && !predictedKeyboard) {
+        const stored = readStoredKeyboardHeight();
+        const covered = root.clientHeight - (vv ? vv.height : window.innerHeight);
+        if (stored && covered < MIN_KEYBOARD_HEIGHT && !(vk && vk.boundingRect.height > 0)) {
+          predictedKeyboard = stored;
+          predictionTimer = setTimeout(() => {
+            clearPrediction();
+            schedule();
+          }, PREDICTION_TTL_MS);
+        }
+      }
       schedule();
     };
     const onFocusOut = (e: FocusEvent) => {
       if (!isTypingTarget(e.target as Element | null)) return;
+      clearPrediction();
       schedule();
       timers.push(setTimeout(schedule, 250), setTimeout(schedule, 500));
     };
@@ -334,6 +422,7 @@ export function useKeyboardInset() {
 
     vv?.addEventListener("resize", schedule);
     vv?.addEventListener("scroll", onViewportScroll);
+    vk?.addEventListener("geometrychange", schedule);
     window.addEventListener("focusin", onFocusIn);
     window.addEventListener("focusout", onFocusOut);
     window.addEventListener("resize", schedule);
@@ -351,6 +440,9 @@ export function useKeyboardInset() {
       ro.disconnect();
       vv?.removeEventListener("resize", schedule);
       vv?.removeEventListener("scroll", onViewportScroll);
+      vk?.removeEventListener("geometrychange", schedule);
+      if (vk) vk.overlaysContent = vkWasOverlaying;
+      clearPrediction();
       window.removeEventListener("focusin", onFocusIn);
       window.removeEventListener("focusout", onFocusOut);
       window.removeEventListener("resize", schedule);
@@ -366,6 +458,7 @@ export function useKeyboardInset() {
       root.style.removeProperty("--window-height");
       root.style.setProperty("--fixed-drop", "0px");
       root.style.setProperty("--keyboard-inset", "0px");
+      root.removeAttribute("data-keyboard");
       root.style.setProperty("--viewport-pan", "0px");
       root.style.setProperty("--viewport-shrink", "0px");
     };

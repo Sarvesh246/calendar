@@ -32,6 +32,8 @@ function metrics(over: Partial<ViewportMetrics> = {}): ViewportMetrics {
     typing: false,
     keyboardBase: null,
     sinceLaunch: LAUNCH_WINDOW_MS + 1,
+    keyboardRect: 0,
+    predictedKeyboard: 0,
     ...over,
   };
 }
@@ -376,5 +378,71 @@ describe("convergence", () => {
 
   it("settles at the ceiling rather than running away on a nonsense reading", () => {
     expect(converge(2000, 759, 8, 999)).toBe(MAX_FIXED_DROP);
+  });
+});
+
+/** The audit's keyboard table, on a 375x812 phone. Whatever a browser reports,
+ *  a sheet pinned to `top: pan; height: visibleHeight` must end with its bottom
+ *  edge (where the composer sits) inside the band the user can see. */
+describe("keyboard rows (visible band is always pan .. pan + visibleHeight)", () => {
+  const phone = (over: Partial<ViewportMetrics>) =>
+    metrics({ layoutHeight: 812, windowHeight: 812, standalone: false, typing: true, ...over });
+  const band = (m: ViewportMetrics) => {
+    const o = resolveViewportOffsets(m);
+    return { top: o.pan, bottom: o.pan + o.visibleHeight, inset: o.keyboardInset };
+  };
+
+  it("row 1: field focused, the browser reports no viewport change (VirtualKeyboard API)", () => {
+    const b = band(phone({ visibleHeight: 812, keyboardRect: 336 }));
+    expect(b).toEqual({ top: 0, bottom: 476, inset: 336 });
+  });
+
+  it("row 1 without the API: nothing to go on, nothing invented", () => {
+    expect(band(phone({ visibleHeight: 812 }))).toEqual({ top: 0, bottom: 812, inset: 0 });
+  });
+
+  it("row 2: visualViewport shrinks to 476, no pan", () => {
+    expect(band(phone({ visibleHeight: 476 }))).toEqual({ top: 0, bottom: 476, inset: 336 });
+  });
+
+  it("row 3: visualViewport 476, panned 300 — the band moves with the pan", () => {
+    expect(band(phone({ visibleHeight: 476, offsetTop: 300 }))).toEqual({
+      top: 300,
+      bottom: 776,
+      inset: 36,
+    });
+  });
+
+  it("row 4: visualViewport 476, panned 120", () => {
+    expect(band(phone({ visibleHeight: 476, offsetTop: 120 }))).toEqual({
+      top: 120,
+      bottom: 596,
+      inset: 216,
+    });
+  });
+
+  it("row 5: keyboard plus suggestion bar, visualViewport 420", () => {
+    expect(band(phone({ visibleHeight: 420 }))).toEqual({ top: 0, bottom: 420, inset: 392 });
+  });
+
+  it("does not double count when both the API and visualViewport report the keyboard", () => {
+    expect(band(phone({ visibleHeight: 476, keyboardRect: 336 }))).toEqual({
+      top: 0,
+      bottom: 476,
+      inset: 336,
+    });
+  });
+
+  it("a predicted keyboard lifts the sheet before the browser has reported anything", () => {
+    const b = band(phone({ visibleHeight: 812, predictedKeyboard: 336 }));
+    expect(b).toEqual({ top: 0, bottom: 476, inset: 336 });
+  });
+
+  it("a stale prediction never exceeds the layout viewport", () => {
+    expect(band(phone({ visibleHeight: 812, predictedKeyboard: 5000 })).inset).toBe(812);
+  });
+
+  it("at rest the band is the whole viewport", () => {
+    expect(band(metrics({ typing: false }))).toEqual({ top: 0, bottom: 852, inset: 0 });
   });
 });

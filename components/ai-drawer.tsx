@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { animate, motion, useDragControls, useMotionValue, useTransform } from "framer-motion";
-import { haptic } from "@/lib/haptic";
-import { releaseSpring } from "@/lib/motion";
-import { sheetRelease } from "@/lib/sheet-gesture";
+import { motion } from "framer-motion";
+import { startSheetDrag } from "@/lib/sheet-gesture";
+import { useSheetPhysics } from "@/lib/use-sheet-physics";
+import { Scrim } from "@/components/ui/scrim";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useUIStore } from "@/lib/ui-store";
 import { useAssistantDockable } from "@/lib/assistant-dock";
@@ -31,22 +31,6 @@ export function AIDrawer() {
   const [present, setPresent] = useState(open);
   const panelRef = useRef<HTMLDivElement>(null);
   const phone = useMediaQuery("(max-width: 767px)");
-  // On a phone the assistant is a sheet, so it has a sheet's manners: grab
-  // the top edge and it follows the finger, flick it down and it leaves at
-  // that speed, let go short and it springs home. The veil follows it.
-  const dragControls = useDragControls();
-  const y = useMotionValue(0);
-  const veil = useTransform(y, (v) => {
-    const h = panelRef.current?.offsetHeight || 1;
-    return Math.max(0, Math.min(1, 1 - v / h));
-  });
-  const [seenOpen, setSeenOpen] = useState(open);
-  if (seenOpen !== open) {
-    setSeenOpen(open);
-    // A fresh open starts from the resting position, whatever the last
-    // dismissal left behind.
-    if (open) y.set(0);
-  }
   useDialogFocus(panelRef, open && present);
   useEffect(() => {
     if (open) {
@@ -58,16 +42,24 @@ export function AIDrawer() {
     return () => clearTimeout(t);
   }, [open]);
 
-  useLockBodyScroll(present);
+  useLockBodyScroll(present && !phone);
 
   useEffect(() => {
-    if (!open) return;
+    // The phone sheet owns its own Escape so it can leave with its physics.
+    if (!open || phone) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, setOpen]);
+  }, [open, phone, setOpen]);
+
+  // Phone: a full-height room pinned to the visible band, with the same
+  // sheet physics as every other sheet. It owns its exit, so it is mounted
+  // only while open and is never wrapped in AnimatePresence.
+  if (phone) {
+    return open ? <PhoneAssistantSheet onClosed={() => setOpen(false)} /> : null;
+  }
 
   if (!present) return null;
 
@@ -77,67 +69,89 @@ export function AIDrawer() {
     <div
       className={cn("viewport-pinned-overlay fixed inset-0 z-50", !open && "pointer-events-none")}
     >
-      <motion.div
+      <div
         // On press, like every other sheet's veil.
         onPointerDown={() => setOpen(false)}
-        style={{ opacity: veil }}
         className={cn(
           "assistant-overlay overlay-scrim absolute inset-0",
           open ? "is-open" : "is-closed",
         )}
       />
-      <motion.div
+      <div
         role="dialog"
         ref={panelRef}
-        style={{ y }}
-        drag={phone ? "y" : false}
-        dragListener={false}
-        dragControls={dragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.1, bottom: 1 }}
-        dragMomentum={false}
-        onDragEnd={(_, info) => {
-          const h = panelRef.current?.offsetHeight ?? 500;
-          const release = sheetRelease({
-            at: y.get(),
-            velocity: info.velocity.y,
-            height: h,
-            points: [0],
-          });
-          if (release.kind === "close") {
-            haptic("light");
-            void animate(y, h + 40, {
-              ...releaseSpring(Math.max(0, info.velocity.y), 1, 0.34),
-              restDelta: 2,
-            }).then(() => setOpen(false));
-            return;
-          }
-          void animate(y, 0, releaseSpring(info.velocity.y, 0.86, 0.4));
-        }}
         tabIndex={-1}
         aria-modal="true"
         aria-labelledby="assistant-title"
         className={cn(
           "assistant-panel absolute flex flex-col overflow-hidden border border-line bg-surface",
-          "max-md:transition-[bottom] max-md:duration-[280ms] max-md:ease-[var(--ease-standard)]",
-          "max-md:inset-x-3 max-md:bottom-[max(0.9rem,calc(var(--keyboard-inset,0px)+env(safe-area-inset-bottom)+0.65rem))] max-md:mx-auto max-md:h-[70dvh] max-md:max-h-[min(560px,calc(100%-env(safe-area-inset-top)-1.25rem-var(--keyboard-inset,0px)))] max-md:w-auto max-md:max-w-[400px] max-md:rounded-[22px] max-md:shadow-[0_16px_40px_-12px_rgb(0_0_0_/_0.28)]",
           open ? "is-open" : "is-closed",
         )}
       >
-        {phone && (
-          <div
-            aria-hidden
-            onPointerDown={(e) => dragControls.start(e)}
-            className="absolute left-1/2 top-0 z-10 flex h-5 w-24 -translate-x-1/2 cursor-grab touch-none justify-center pt-1.5 active:cursor-grabbing"
-          >
-            <span className="h-1 w-9 rounded-full bg-line-strong opacity-70" />
-          </div>
-        )}
         <AssistantConversation
           variant="modal"
           active={open && present}
           onClose={() => setOpen(false)}
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The assistant on a phone: a sheet pinned to the band the user can see —
+ * `top: --viewport-pan`, `height: --visible-height`, both published by
+ * `useKeyboardInset`. The conversation is a flex column (header, thread,
+ * composer), so with the sheet equal to the visible band the composer is the
+ * last thing in it and cannot be covered, and the header cannot leave the top,
+ * whatever the keyboard or the pan is doing. No `bottom` transition: the sheet
+ * does not chase the keyboard, it is the keyboard's complement.
+ */
+function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const sheet = useSheetPhysics({ panelRef, onClosed });
+  const { close, dragControls, dragProps } = sheet;
+  useLockBodyScroll(true);
+  useDialogFocus(panelRef, true);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+
+  return (
+    <div
+      className={cn(
+        "viewport-pinned-overlay fixed inset-0 z-50",
+        sheet.leaving && "pointer-events-none",
+      )}
+    >
+      <Scrim onPointerDown={() => close()} progress={sheet.scrimOpacity} exitDuration={0} />
+      <motion.div
+        role="dialog"
+        ref={panelRef}
+        tabIndex={-1}
+        aria-modal="true"
+        aria-labelledby="assistant-title"
+        {...dragProps}
+        style={{
+          ...dragProps.style,
+          top: "var(--viewport-pan, 0px)",
+          height: "var(--visible-height, 100dvh)",
+        }}
+        className="assistant-room absolute inset-x-0 flex flex-col overflow-hidden rounded-t-[22px] border border-b-0 border-line bg-surface pt-[env(safe-area-inset-top)] shadow-[0_-12px_40px_-12px_rgb(0_0_0_/_0.28)]"
+      >
+        <div
+          aria-hidden
+          onPointerDown={(e) => startSheetDrag(dragControls, e)}
+          className="absolute left-1/2 top-[env(safe-area-inset-top)] z-10 flex h-5 w-24 -translate-x-1/2 cursor-grab touch-none justify-center pt-1.5 active:cursor-grabbing"
+        >
+          <span className="h-1 w-9 rounded-full bg-line-strong opacity-70" />
+        </div>
+        <AssistantConversation variant="modal" active onClose={() => close()} />
       </motion.div>
     </div>
   );

@@ -106,6 +106,15 @@ export type ViewportMetrics = {
   keyboardBase: number | null;
   /** Milliseconds since the app launched or was resumed from the background. */
   sinceLaunch: number;
+  /** Height of the on-screen keyboard from the VirtualKeyboard API
+   *  (`navigator.virtualKeyboard.boundingRect.height`), 0 when absent or
+   *  hidden. Under `interactive-widget=overlays-content` Chromium resizes
+   *  neither viewport, so this is the only place the keyboard shows up. */
+  keyboardRect: number;
+  /** The last keyboard height seen, applied on `focusin` before the browser
+   *  has reported the real one (iOS only does so after the animation ends).
+   *  0 once a real reading has arrived or the guess has expired. */
+  predictedKeyboard: number;
 };
 
 export type ViewportOffsets = {
@@ -129,6 +138,10 @@ export type ViewportOffsets = {
    *  window — the half of "navigate to Agenda" that actually fixed the
    *  launch bug. Never a translate. */
   needsRelayout: boolean;
+  /** Height of the band the user can actually see: the visual viewport, less
+   *  any keyboard the browser did not subtract itself. A sheet pinned to
+   *  `top: pan; height: visibleHeight` can never be covered. */
+  visibleHeight: number;
 };
 
 function clampDrop(px: number, headroom: number): number {
@@ -250,11 +263,24 @@ export function resolveViewportOffsets(m: ViewportMetrics): ViewportOffsets {
     const hidden = m.layoutHeight - m.visibleHeight - m.offsetTop;
     keyboardInset = hidden > 1 ? Math.round(hidden) : 0;
   }
+  // A keyboard the browser reported through the VirtualKeyboard API, or one we
+  // are expecting because it was up last time. Whichever is largest wins: each
+  // is a lower bound on what is covered, and none of them over-reports.
+  const keyboardFloor = Math.max(0, Math.round(m.keyboardRect), Math.round(m.predictedKeyboard));
+  if (keyboardFloor > keyboardInset) keyboardInset = Math.min(keyboardFloor, m.layoutHeight);
+
+  // The visual viewport already excludes the keyboard when the browser resizes
+  // for it; when it does not, subtract the floor ourselves.
+  const visibleHeight = Math.max(
+    0,
+    Math.round(Math.min(m.visibleHeight, m.layoutHeight - keyboardInset - pan)),
+  );
 
   return {
     pan,
     shrink,
     keyboardInset,
+    visibleHeight,
     keyboardBase,
     safeBottom: resolveSafeBottom(m),
     fixedDrop: resolveFixedDrop({ ...m, keyboardBase }),

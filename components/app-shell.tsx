@@ -24,6 +24,7 @@ import { useDatebookStore } from "@/lib/store";
 import { useFocusSessionStore } from "@/lib/focus-session-store";
 import { setStatusWithUndo } from "@/lib/item-actions";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { KeyboardDebugOverlay } from "@/components/keyboard-debug";
 import { FocusedItemRelay } from "@/lib/item-focus";
 import { isTabRoute } from "@/lib/tab-routes";
 import { useResolvedPathname } from "@/lib/tab-nav";
@@ -274,6 +275,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <FilterSheet />
       <CommandPalette />
       <AIDrawer />
+      <KeyboardDebugOverlay />
       <ReminderScheduler />
       <NativeShellSync />
       <ToastViewport />

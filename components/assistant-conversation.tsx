@@ -17,7 +17,6 @@ import {
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
 import { useUIStore } from "@/lib/ui-store";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
-import { useKeepFieldVisible } from "@/lib/use-keep-field-visible";
 import { useWorkspacePrefs } from "@/lib/workspace-prefs";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { DOCK_MEDIA_QUERY } from "@/lib/assistant-dock";
@@ -62,7 +61,6 @@ export function AssistantConversation({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
-  useKeepFieldVisible(composerRef, active && !docked);
 
   useEffect(() => {
     writeDraft("assistant", input);
@@ -382,7 +380,15 @@ export function AssistantConversation({
         </AnimatePresence>
       </div>
 
-      <div className={cn("shrink-0 border-t border-line p-2.5", !docked && "md:p-5")}>
+      <div
+        className={cn(
+          // Clear of the home indicator while the keyboard is closed; once it
+          // is up the keyboard is the bottom edge (data-keyboard is set by
+          // useKeyboardInset).
+          "assistant-composer shrink-0 border-t border-line p-2.5",
+          !docked && "md:p-5",
+        )}
+      >
         {queued && (
           <p className="mb-1.5 px-1 text-[11px] text-ink-faint">
             Queued — sending after this reply
