@@ -187,10 +187,10 @@ export function AssistantConversation({
             </p>
             <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
           </div>
-          <div className="absolute left-1/2 -translate-x-1/2 md:hidden">
+          <div className="absolute left-1/2 -translate-x-1/2 translate-y-[5px] md:hidden">
             <AssistantModelSelector compact centered />
           </div>
-          <div className="ml-auto flex items-center gap-0.5">
+          <div className="ml-auto flex translate-y-[5px] items-center gap-0.5 md:translate-y-0">
             <div className="hidden md:block">
               <AssistantModelSelector />
             </div>
