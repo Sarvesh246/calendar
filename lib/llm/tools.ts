@@ -3,6 +3,7 @@ import type { AssistantReqBody, SlimItem } from "@/lib/assistant-actions";
 import { nanoid } from "@/lib/nanoid";
 import type { OpenAiTool } from "./openai-compatible";
 import { assistantDatabase } from "./database";
+import { checkAvailability, type AvailabilityItem } from "@/lib/availability";
 
 const id = z.string().min(1).max(100);
 const optionalText = z.string().trim().min(1).max(2_000).optional();
@@ -72,6 +73,7 @@ const schemas = {
     reminders,
   }),
   delete_task: z.object({ id }),
+  check_availability: z.object({ start: iso, end: iso }),
 } as const;
 
 export type DatebookToolName = keyof typeof schemas;
@@ -105,6 +107,21 @@ const reminderSchema = {
 };
 
 export const DATEBOOK_TOOLS: OpenAiTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "check_availability",
+      description:
+        "Answer whether the user is free in a window, computed in code. Use it for every 'am I free', 'can I fit', 'any conflicts' question. Returns {free, conflicts, allDay}; trust it over the snapshot. For a single moment pass the same instant as start and end.",
+      parameters: object(
+        {
+          start: dateTime("Window start with timezone offset"),
+          end: dateTime("Window end with timezone offset (equal to start for a moment)"),
+        },
+        ["start", "end"],
+      ),
+    },
+  },
   {
     type: "function",
     function: {
@@ -284,7 +301,9 @@ async function listFromDatabase(
   if (!ctx.userId || !db) return filterFallback(fallbackItems(ctx, kind), args);
   let query = db
     .from("items")
-    .select("id,title,type,at,end_at,all_day,status,category_id,location,description,url")
+    .select(
+      "id,title,type,at,end_at,all_day,status,completed_at,category_id,location,description,url",
+    )
     .eq("user_id", ctx.userId)
     .order("at", { ascending: true })
     .limit(typeof args.limit === "number" ? args.limit : 50);
@@ -299,6 +318,40 @@ async function listFromDatabase(
   const { data, error } = await query;
   if (error) throw new Error(`Calendar lookup failed: ${error.message}`);
   return data ?? [];
+}
+
+/** `check_availability`: events from the database (or the request's snapshot),
+ *  judged by the same pure function the tests pin. */
+async function availability(ctx: ToolContext, args: Record<string, unknown>) {
+  const start = String(args.start);
+  const end = String(args.end);
+  const timeZone = ctx.body.timeZone || "UTC";
+  const db = assistantDatabase();
+  let items: AvailabilityItem[];
+  if (!ctx.userId || !db) {
+    items = fallbackItems(ctx, "event");
+  } else {
+    // Reach a day back: an event that began earlier can still be running.
+    const from = new Date(+new Date(start) - 24 * 60 * 60_000).toISOString();
+    const { data, error } = await db
+      .from("items")
+      .select("id,title,type,at,end_at,all_day")
+      .eq("user_id", ctx.userId)
+      .eq("type", "event")
+      .gte("at", from)
+      .lte("at", end)
+      .limit(200);
+    if (error) throw new Error(`Calendar lookup failed: ${error.message}`);
+    items = (data ?? []).map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      type: "event",
+      at: String(row.at),
+      endAt: (row.end_at as string | null) ?? null,
+      allDay: Boolean(row.all_day),
+    }));
+  }
+  return checkAvailability(items, start, end, timeZone);
 }
 
 function findFallback(ctx: ToolContext, itemId: string) {
@@ -406,6 +459,7 @@ export async function executeDatebookTool(
     );
   const tool = name as DatebookToolName;
   const args = parsed.data as Record<string, unknown>;
+  if (tool === "check_availability") return { output: await availability(ctx, args) };
   if (tool === "list_events") return { output: await listFromDatabase(ctx, "event", args) };
   if (tool === "list_tasks") return { output: await listFromDatabase(ctx, "task", args) };
   if (!MUTATIONS.has(tool)) throw new MalformedToolArgumentsError(name, "unsupported tool");

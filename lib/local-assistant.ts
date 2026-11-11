@@ -2409,7 +2409,40 @@ function upcomingWork(
   return { text: `${head}\n${bullets(lines, 8)}${open.length > 8 ? "" : ""}` };
 }
 
+/**
+ * What is due in a window — work only. A 19:00 event is something you attend,
+ * not something that is due, so one-off events are reported in their own
+ * clause ("On your calendar: …") instead of being listed as due. A class that
+ * meets three times a week is skipped: it is not news.
+ */
 function dueBetween(
+  env: Env,
+  start: Date,
+  end: Date,
+  label: string,
+  cls?: Category,
+  opts: { includeOverdue?: boolean; overdueSince?: Date } = {},
+): AssistantResponse {
+  const base = dueBetweenWork(env, start, end, label, cls, opts);
+  const events = inClass(
+    env,
+    env.ctx.items.filter((i) => i.type === "event" && !i.repeat && !i.repeatId),
+    cls,
+  )
+    .filter((i) => +new Date(i.at) >= +start && +new Date(i.at) < +end)
+    .sort(byAt);
+  if (!events.length) return base;
+  const shown = events.slice(0, 3).map((e) => {
+    const d = new Date(e.at);
+    return `${bold(e.title)} (${dayName(d, env.now)}${e.allDay ? "" : ` at ${fmtTime(d, env.ctx.clock24h)}`})`;
+  });
+  const more = events.length > 3 ? ` and ${events.length - 3} more` : "";
+  const clause = `On your calendar: ${joinNatural(shown)}${more}.`;
+  // "Nothing due" followed by an event is two sentences, not a contradiction.
+  return { ...base, text: `${base.text}\n\n${clause}` };
+}
+
+function dueBetweenWork(
   env: Env,
   start: Date,
   end: Date,
@@ -3407,7 +3440,8 @@ function freeIntent(env: Env): Outcome {
     from = 17;
     to = 22;
   }
-  let windowStart = atTime(day, { h: from, m: 0 });
+  const dayWindowStart = atTime(day, { h: from, m: 0 });
+  let windowStart = dayWindowStart;
   const windowEnd = atTime(day, { h: to, m: 0 });
   if (isSameDay(day, now) && +now > +windowStart) {
     windowStart = new Date(Math.ceil(+now / (15 * 60_000)) * 15 * 60_000);
@@ -3426,9 +3460,16 @@ function freeIntent(env: Env): Outcome {
   }
   if (+cursor < +windowEnd) gaps.push([cursor, windowEnd]);
   const real = gaps.filter(([a, b]) => +b - +a >= 45 * 60_000);
-  const allDayNote = allDay.length
-    ? ` You do have ${joinNatural(allDay.map((a) => bold(a.title)))} on all day.`
-    : "";
+  // Timed events past the edges of the 8–22 window still happen; leaving them
+  // out made a day with a late event read as if nothing were on it.
+  const outside = timed.filter((e) => +e.start >= +windowEnd || +e.end <= +dayWindowStart);
+  const allDayNote =
+    (allDay.length
+      ? ` You do have ${joinNatural(allDay.map((a) => bold(a.title)))} on all day.`
+      : "") +
+    (outside.length
+      ? ` You also have ${joinNatural(outside.map((e) => `${bold(e.item.title)} at ${fmtTime(e.start, ctx.clock24h)}`))}.`
+      : "");
   if (!timed.length)
     return { text: `${cap(label)} is wide open — nothing timed on your calendar.${allDayNote}` };
   if (!real.length)

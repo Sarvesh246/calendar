@@ -516,3 +516,69 @@ describe("local assistant — series guard", () => {
     expect(done.text).toContain("12 events");
   });
 });
+
+describe("local assistant — free time and what is due", () => {
+  // Tuesday, Nov 10 2026, evening. Pinned so "thursday" means the 12th.
+  const TUE = new Date(2026, 10, 10, 20, 0, 0);
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(TUE);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const study = (h: number, m = 0): Item => ({
+    id: `sg${h}`,
+    title: "Study group",
+    type: "event",
+    at: new Date(2026, 10, 12, h, m).toISOString(),
+    categoryId: "c3",
+    createdAt: new Date(2026, 10, 1).toISOString(),
+  });
+  const withItems = (extra: Item[]): AssistantCtx => ({ ...ctx, items: extra });
+  const answer = (q: string, extra: Item[]) =>
+    tryLocalAnswer(q, [], withItems(extra), TUE)?.text ?? null;
+
+  it("never calls a day with a 19:00 event wide open", () => {
+    const r = answer("when am I free on thursday?", [study(19)])!;
+    expect(r).not.toMatch(/wide open|nothing timed/i);
+    expect(r).toMatch(/7:00 PM/); // the gap ends where the event starts
+  });
+
+  it("does not say yes to a slot a 7pm event occupies", () => {
+    const r = answer("am i free thursday at 7pm?", [study(19)])!;
+    expect(r).toMatch(/^Not quite/);
+    expect(r).toContain("Study group");
+  });
+
+  it("still says wide open for a day with nothing at all", () => {
+    expect(answer("when am I free on thursday?", [])).toMatch(/wide open/i);
+  });
+
+  it("mentions an event that falls outside the 8-to-10 window", () => {
+    const r = answer("when am I free on thursday?", [study(23)])!;
+    expect(r).not.toMatch(/wide open/i);
+    expect(r).toContain("Study group");
+  });
+
+  it("lists a one-off event under 'on your calendar', never as due", () => {
+    const hw: Item = {
+      id: "hw",
+      title: "Lab report",
+      type: "assignment",
+      status: "todo",
+      at: new Date(2026, 10, 13, 23, 59).toISOString(),
+      categoryId: "c3",
+      createdAt: new Date(2026, 10, 1).toISOString(),
+    };
+    const r = answer("what's due this week?", [hw, study(19)])!;
+    expect(r).toMatch(/Lab report/);
+    expect(r).toMatch(/On your calendar: \*\*Study group\*\*/);
+    expect(r.split("On your calendar")[0]).not.toContain("Study group");
+  });
+
+  it("an event alone is not 'due'", () => {
+    const r = answer("what's due this week?", [study(19)])!;
+    expect(r).toMatch(/^Nothing due/);
+    expect(r).toMatch(/On your calendar/);
+  });
+});
