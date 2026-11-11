@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
+import { Diagnostics } from "@/components/diagnostics";
 import { AppShell } from "@/components/app-shell";
 import { MotionProvider } from "@/components/motion-provider";
 import { SplashScreenLinks } from "@/components/splash-screen-links";
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Script id="safe-bottom-init" strategy="beforeInteractive">
           {safeBottomInitScript}
         </Script>
+        <Diagnostics />
         <ThemeProvider>
           <MotionProvider>
             <AuthProvider>

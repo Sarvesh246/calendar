@@ -163,7 +163,7 @@ export function safeSecretEqual(actual: string | null, expected: string | undefi
 export async function durableHourlyLimit(
   key: string,
   max: number,
-  opts: { failClosed?: boolean; windowMs?: number } = {},
+  opts: { failClosed?: boolean; windowMs?: number; requireAtomic?: boolean } = {},
 ): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -187,7 +187,7 @@ export async function durableHourlyLimit(
         warnedMissingAtomicRateLimit = true;
         console.warn("[rate-limit] atomic quota migration is not applied");
       }
-      return true;
+      return !opts.requireAtomic;
     }
     if (opts.failClosed) return false;
 

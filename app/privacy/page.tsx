@@ -3,7 +3,7 @@ export default function PrivacyPage() {
     <article className="mx-auto flex w-full max-w-[640px] flex-col gap-6 pb-8">
       <header>
         <h1 className="text-[26px] font-semibold tracking-tight text-ink">Privacy policy</h1>
-        <p className="mt-1 text-[13px] text-ink-soft">Last updated September 9, 2026</p>
+        <p className="mt-1 text-[13px] text-ink-soft">Last updated November 10, 2026</p>
       </header>
 
       <section className="flex flex-col gap-3 text-[14px] leading-relaxed text-ink-soft">
@@ -21,12 +21,19 @@ export default function PrivacyPage() {
           </li>
           <li>Your Google account identifier and email when you sign in for sync.</li>
           <li>Push notification subscription data if you enable reminders and sign in.</li>
+          <li>
+            Performance diagnostics, enabled by default: a random device and session ID, coarse page
+            and interaction types, timing measurements, and error counts. Typed text, calendar
+            details, chat content, URLs and error messages are not collected. Turn this off on each
+            device in Settings.
+          </li>
         </ul>
         <h2 className="text-[15px] font-semibold text-ink">How we use it</h2>
         <p>
           Data is used only to operate Datebook: display your calendar, sync across your devices,
           send reminders you request, and run the optional assistant when you ask a question. We do
-          not sell your data or use it for advertising.
+          not sell your data or use it for advertising. Diagnostics are stored in Supabase for up to
+          30 days and used to investigate reliability and performance.
         </p>
         <h2 className="text-[15px] font-semibold text-ink">Third parties</h2>
         <p>

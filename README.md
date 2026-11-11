@@ -84,3 +84,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Commits follow [Conventional Commits](ht
 ## License
 
 [MIT](LICENSE)
+
+### Performance diagnostics
+
+The per-device **Performance diagnostics** setting defaults on and can be turned off in Settings. The browser batches a bounded, in-memory queue of coarse click and Event Timing measurements, long tasks, layout shifts, same-origin resource timings and error events. It never records field values, calendar or chat content, DOM labels, URLs, network bodies, or error messages. The queue is best-effort: events can be lost when the device is offline, the page closes, the queue fills, or the browser does not support an API. Timing observers are not a complete record of every interaction, and request duration is not a breakdown of all server-side work.
+
+Batches are accepted by `/api/diagnostics` with strict schemas and rate limits, then stored in `public.diagnostic_batches` in the production Supabase project. The table is inaccessible to browser roles. A daily database job deletes batches older than 30 days. The Settings screen shows a random device ID that a user can share voluntarily when requesting support; the session ID rotates each time collection starts. Neither is an account identifier. Use the Supabase SQL editor with project-owner access to investigate, for example:
+
+```sql
+select received_at, session_id, events
+from public.diagnostic_batches
+where device_id = '<device-id>'::uuid
+order by received_at desc
+limit 100;
+```
+
+Keep the server-only `SUPABASE_SERVICE_ROLE_KEY` configured, and apply the diagnostics and atomic rate-limit migrations before deploying collection. Missing configuration or quota infrastructure makes ingestion fail closed; it must never block normal application actions.
