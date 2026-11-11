@@ -9,11 +9,9 @@ import {
   MAX_ASSISTANT_ITEMS,
   MAX_ASSISTANT_MESSAGE,
   authenticationRequired,
-  clientKey,
   durableHourlyLimit,
   getRequestUser,
   isJsonRequest,
-  rateLimit,
   sameOrigin,
   tooMany,
 } from "@/lib/api-guard";
@@ -85,11 +83,8 @@ export async function POST(request: Request) {
   if (!user) return authenticationRequired();
   const limitKey = `assistant:user:${user.id}`;
   if (
-    !rateLimit(limitKey, 60, 60 * 60_000) ||
-    !rateLimit(`${limitKey}:${clientKey(request)}:burst`, 8, 60_000) ||
-    !rateLimit("assistant:global:minute", 240, 60_000) ||
-    // The per-minute limits survive a cold start too: the in-memory ones above
-    // reset with every new instance, these do not.
+    // Every limit is durable: per-instance counters reset on each cold start
+    // and are not shared between instances, so they limited almost nothing.
     !(await durableHourlyLimit(`${limitKey}:burst`, 8, { failClosed: true, windowMs: 60_000 })) ||
     !(await durableHourlyLimit("assistant:global:minute", 240, {
       failClosed: true,
