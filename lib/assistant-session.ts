@@ -6,6 +6,8 @@ import { maybePromptForReminders } from "./reminders";
 import { reminderContext } from "./store-selectors";
 import { remindersFromPresetIds } from "./reminder-defaults";
 import { useDatebookStore } from "./store";
+import { useUIStore } from "./ui-store";
+import { resolveDraftClass } from "./assistant-actions";
 import { useAssistantModelStore } from "./assistant-models";
 import { authHeaders } from "./auth-headers";
 import { supersedeOpenCards, staleReason, type ActionOutcome } from "./assistant-staleness";
@@ -117,7 +119,30 @@ interface AssistantSessionState {
   retry: (messageIndex: number) => void;
   applyAction: (messageIndex: number, actionIndex: number) => void;
   resolveAction: (messageIndex: number, actionIndex: number, outcome: ActionOutcome) => void;
+  /** Change the class a staged "add" will be filed under. */
+  setActionClass: (messageIndex: number, actionIndex: number, categoryId: string) => void;
   reset: () => void;
+}
+
+/** The class implied by where the chat was opened: a single filtered class. */
+function contextClassId(): string | null {
+  const filter = useUIStore.getState().categoryFilter;
+  return filter && filter.length === 1 ? filter[0] : null;
+}
+
+/** Give every staged "add" the class it will actually land in, so the card can
+ *  name it and the apply step cannot disagree. */
+function withResolvedClasses(
+  actions: AssistantAction[] | undefined,
+  categories: { id: string }[],
+): AssistantAction[] | undefined {
+  if (!actions) return actions;
+  const context = contextClassId();
+  return actions.map((a) =>
+    a.kind === "create"
+      ? { ...a, draft: { ...a.draft, categoryId: resolveDraftClass(a.draft, categories, context) } }
+      : a,
+  );
 }
 
 let inFlight = false;
@@ -152,7 +177,8 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       modelId,
       conversationId: conversationId(),
     })
-      .then((res) =>
+      .then((res) => {
+        res = { ...res, actions: withResolvedClasses(res.actions, categories) };
         set((s) => ({
           messages: [
             ...supersedeOpenCards(s.messages, res.actions),
@@ -167,8 +193,8 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               ...(res.actions?.length ? { createdAt: Date.now() } : {}),
             },
           ],
-        })),
-      )
+        }));
+      })
       .catch(() =>
         set((s) => ({
           messages: [
@@ -271,6 +297,20 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       }
       get().resolveAction(mi, ai, "applied");
     },
+
+    setActionClass: (mi, ai, categoryId) =>
+      set((s) => ({
+        messages: s.messages.map((msg, i) =>
+          i === mi && msg.actions
+            ? {
+                ...msg,
+                actions: msg.actions.map((a, j) =>
+                  j === ai && a.kind === "create" ? { ...a, draft: { ...a.draft, categoryId } } : a,
+                ),
+              }
+            : msg,
+        ),
+      })),
 
     resolveAction: (mi, ai, outcome) =>
       set((s) => ({

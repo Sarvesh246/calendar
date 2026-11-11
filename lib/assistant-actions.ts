@@ -2,6 +2,7 @@ import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule, Reminder } fro
 import { wallTimeInZoneToIso } from "./date-utils";
 import { zonedDateKey } from "./ai-assistant";
 import { nanoid } from "./nanoid";
+import { countOccurrences, expandRepeat } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
 
 export interface SlimItem {
@@ -135,7 +136,6 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
   if (!Array.isArray(raw)) return [];
   const byId = new Map(body.items.map((i) => [i.id, i]));
   const catIds = new Set(body.categories.map((c) => c.id));
-  const defaultCat = body.categories[0]?.id ?? "";
   const out: AssistantAction[] = [];
 
   for (const a of raw as RawAction[]) {
@@ -153,7 +153,10 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       const draft: Omit<Item, "id" | "createdAt"> = {
         title,
         type,
-        categoryId: a.categoryId && catIds.has(a.categoryId) ? a.categoryId : defaultCat,
+        // No silent default: an item the model did not file stays unfiled here
+        // and the client resolves it (resolveDraftClass), shows the result on
+        // the card, and lets the user change it.
+        categoryId: a.categoryId && catIds.has(a.categoryId) ? a.categoryId : "",
         at,
       };
       const endAt = validIso(a.endAt);
@@ -278,4 +281,222 @@ export function parseActionReminders(raw: unknown): Reminder[] | undefined {
     out.push({ id: nanoid(), itemId: "", offsetMinutes, label });
   }
   return out.length ? out : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// What a card says
+// ---------------------------------------------------------------------------
+
+/** The bits of an item a card needs to say what is changing. */
+export type DescribableItem = Pick<Item, "id" | "title" | "type" | "at"> &
+  Partial<Pick<Item, "endAt" | "allDay" | "status" | "categoryId" | "location" | "reminders">>;
+
+export interface ActionChange {
+  field: string;
+  from?: string;
+  to: string;
+}
+
+export interface ActionDescription {
+  /** The button label: Add, Delete, Reschedule, Complete… */
+  verb: string;
+  /** The item the card is about. */
+  title: string;
+  /** Create/delete: when it is, e.g. "Thu, Nov 12 at 7:00 PM". */
+  when?: string;
+  /** Create with a repeat: "Adds 12 events · every Monday until Dec 14". */
+  series?: string;
+  /** Update: one row per field, old → new. */
+  changes: ActionChange[];
+  /** Location and reminders, as a quiet line. */
+  facts: string[];
+  /** Create: the class it was given ("" when none exists). */
+  categoryId?: string;
+}
+
+const STATUS_WORD: Record<ItemStatus, string> = {
+  todo: "To do",
+  doing: "In progress",
+  done: "Done",
+};
+
+const SHORT_DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const LONG_DAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function dayWord(d: Date): string {
+  return `${SHORT_DAY[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+function clockWord(d: Date, clock24h: boolean): string {
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  if (clock24h) return `${String(h).padStart(2, "0")}:${m}`;
+  return `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** "Thu, Nov 12 at 7:00 PM"; "Fri, Nov 13" for work due at the end of a day. */
+export function whenWord(
+  iso: string | undefined,
+  opts: { type: ItemType; allDay?: boolean; clock24h?: boolean },
+): string {
+  if (!iso) return "no date";
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return "no date";
+  if (opts.allDay) return `${dayWord(d)} (all day)`;
+  const endOfDay = opts.type !== "event" && d.getHours() === 23 && d.getMinutes() === 59;
+  return endOfDay ? dayWord(d) : `${dayWord(d)} at ${clockWord(d, Boolean(opts.clock24h))}`;
+}
+
+export function actionVerb(a: AssistantAction): string {
+  if (a.kind === "create") return "Add";
+  if (a.kind === "delete") return "Delete";
+  const p = a.patch;
+  if (p.status === "done") return "Complete";
+  if (p.status === "todo" || p.status === "doing") return "Reopen";
+  if (p.at || "endAt" in p) return "Reschedule";
+  if (p.title) return "Rename";
+  if (p.categoryId) return "Recategorize";
+  return "Update";
+}
+
+function weekdayList(days: number[]): string {
+  const names = days.map((d) => LONG_DAY[d]);
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** "every Monday and Wednesday"; the series wording shared by every card. */
+export function repeatWord(rule: RepeatRule): string {
+  if (rule.freq === "daily") return "every day";
+  if (rule.freq === "monthly") return "every month";
+  const days = rule.byDay?.length ? rule.byDay : [];
+  if (days.length === 5 && !days.includes(0) && !days.includes(6)) return "every weekday";
+  return days.length ? `every ${weekdayList(days)}` : "every week";
+}
+
+/**
+ * What a card should say, built from the normalised action and the live items
+ * rather than from whatever string a model wrote. Both engines render through
+ * this, so a reschedule always reads "When: Thu, Nov 12 at 3:00 PM → Fri,
+ * Nov 13 at 3:00 PM" and a series always says how many items it will write.
+ */
+export function describeAction(
+  action: AssistantAction,
+  items: DescribableItem[],
+  clock24h = false,
+  categories: { id: string; name: string }[] = [],
+): ActionDescription {
+  const className = (id: string | undefined) =>
+    (id && categories.find((c) => c.id === id)?.name) || "No class";
+  const verb = actionVerb(action);
+
+  if (action.kind === "create") {
+    const d = action.draft;
+    const facts: string[] = [];
+    if (d.location) facts.push(d.location);
+    const labels = d.reminders?.map((r) => r.label).filter(Boolean);
+    if (labels?.length) facts.push(labels.join(", "));
+    const out: ActionDescription = {
+      verb,
+      title: d.title,
+      when: whenWord(d.at, { type: d.type, allDay: d.allDay, clock24h }),
+      changes: [],
+      facts,
+      categoryId: d.categoryId,
+    };
+    if (d.repeat) {
+      // The first real occurrence, not the anchor the rule was built from:
+      // "every Wednesday" asked on a Tuesday starts tomorrow.
+      const first = expandRepeat(d.at, d.endAt, d.repeat)[0];
+      if (first) out.when = whenWord(first.at, { type: d.type, allDay: d.allDay, clock24h });
+      const count = countOccurrences(d.at, d.endAt, d.repeat);
+      const noun = d.type === "event" ? "events" : "items";
+      const until = d.repeat.until
+        ? ` until ${dayWord(new Date(d.repeat.until))}`
+        : " with no end date";
+      out.series = `Adds ${count} ${noun} · ${repeatWord(d.repeat)}${until}`;
+    }
+    return out;
+  }
+
+  const target = items.find((i) => i.id === action.itemId);
+  const targetWhen = target
+    ? whenWord(target.at, { type: target.type, allDay: target.allDay, clock24h })
+    : undefined;
+  if (action.kind === "delete") {
+    return { verb, title: action.itemTitle, when: targetWhen, changes: [], facts: [] };
+  }
+
+  const p = action.patch;
+  const type = p.type ?? target?.type ?? "event";
+  const changes: ActionChange[] = [];
+  if (p.at) {
+    changes.push({
+      field: type === "event" ? "When" : "Due",
+      from: targetWhen,
+      to: whenWord(p.at, { type, allDay: p.allDay ?? target?.allDay, clock24h }),
+    });
+  }
+  if ("endAt" in p) {
+    changes.push({
+      field: "Ends",
+      from: target?.endAt ? clockWord(new Date(target.endAt), clock24h) : undefined,
+      to: p.endAt ? clockWord(new Date(p.endAt), clock24h) : "no end time",
+    });
+  }
+  if (p.title) changes.push({ field: "Title", from: action.itemTitle, to: p.title });
+  if (p.status) {
+    changes.push({
+      field: "Status",
+      from: target?.status ? STATUS_WORD[target.status] : undefined,
+      to: STATUS_WORD[p.status],
+    });
+  }
+  if (p.categoryId) {
+    changes.push({
+      field: "Class",
+      from: target ? className(target.categoryId) : undefined,
+      to: className(p.categoryId),
+    });
+  }
+  if ("location" in p) {
+    changes.push({ field: "Location", from: target?.location, to: p.location ?? "removed" });
+  }
+  if ("description" in p) {
+    changes.push({ field: "Notes", to: p.description ? "updated" : "cleared" });
+  }
+  if (typeof p.allDay === "boolean") {
+    changes.push({
+      field: "All day",
+      from: target?.allDay ? "yes" : "no",
+      to: p.allDay ? "yes" : "no",
+    });
+  }
+  if (p.type && p.type !== target?.type) {
+    changes.push({ field: "Type", from: target?.type, to: p.type });
+  }
+  if (p.reminders) {
+    const labels = p.reminders.map((r) => r.label).filter(Boolean);
+    changes.push({ field: "Reminders", to: labels.length ? labels.join(", ") : "none" });
+  }
+  return { verb, title: action.itemTitle, changes, facts: [] };
+}
+
+/**
+ * The class a created item will actually be filed under: the one the model
+ * named if it exists, else the class implied by where the chat was opened (a
+ * single filtered class), else the app's fallback — the order the composer
+ * uses, so a card never says "No class" for an item that lands in the first.
+ */
+export function resolveDraftClass(
+  draft: { categoryId?: string },
+  categories: { id: string }[],
+  contextCategoryId?: string | null,
+): string {
+  const valid = (id: string | undefined | null): id is string =>
+    Boolean(id) && categories.some((c) => c.id === id);
+  if (valid(draft.categoryId)) return draft.categoryId;
+  if (valid(contextCategoryId)) return contextCategoryId;
+  return categories[0]?.id ?? "";
 }

@@ -51,7 +51,7 @@ import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import { parseQuickAdd } from "./quick-add-parser";
 import { findOverlapGroups } from "./overlap";
-import { countOccurrences } from "./repeat";
+import { countOccurrences, expandRepeat } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
@@ -2053,7 +2053,12 @@ function addIntent(env: Env): Outcome {
     draft.repeat = parsed.repeat;
     const rep = repeatText(parsed.repeat);
     const time = parsed.allDay ? "" : ` at ${fmtTime(due, ctx.clock24h)}`;
-    const starting = relDay ? ` starting ${day}` : ` starting ${format(due, "MMM d")}`;
+    const firstAt = expandRepeat(draft.at, draft.endAt, parsed.repeat)[0]?.at;
+    const firstDay = firstAt ? new Date(firstAt) : due;
+    const firstName = dayName(firstDay, now);
+    const starting = /^(?:today|tomorrow|yesterday)$/.test(firstName)
+      ? ` starting ${firstName}`
+      : ` starting ${format(firstDay, "MMM d")}`;
     const until = ` until ${format(new Date(parsed.repeat.until), "MMM d")}`;
     const count = countOccurrences(draft.at, draft.endAt, parsed.repeat);
     const noun = type === "event" ? "events" : "items";

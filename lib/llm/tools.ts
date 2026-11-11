@@ -406,13 +406,6 @@ export async function executeDatebookTool(
     );
   const tool = name as DatebookToolName;
   const args = parsed.data as Record<string, unknown>;
-  if (
-    (tool === "add_event" || tool === "add_task") &&
-    !args.categoryId &&
-    ctx.body.categories[0]?.id
-  ) {
-    args.categoryId = ctx.body.categories[0].id;
-  }
   if (tool === "list_events") return { output: await listFromDatabase(ctx, "event", args) };
   if (tool === "list_tasks") return { output: await listFromDatabase(ctx, "task", args) };
   if (!MUTATIONS.has(tool)) throw new MalformedToolArgumentsError(name, "unsupported tool");

@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
-  Check,
   PanelRight,
   PictureInPicture2,
   RotateCw,
   SquarePen,
   Sparkles,
-  Trash2,
   X,
 } from "lucide-react";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
@@ -22,9 +20,9 @@ import { useMediaQuery } from "@/lib/use-media-query";
 import { DOCK_MEDIA_QUERY } from "@/lib/assistant-dock";
 import { navigateTab } from "@/lib/tab-nav";
 import { useAssistantSession } from "@/lib/assistant-session";
-import type { AssistantAction } from "@/lib/ai-assistant";
 import { AssistantMarkdown } from "@/lib/markdown";
-import { OUTCOME_COPY } from "@/lib/assistant-staleness";
+import { AssistantActionCard } from "@/components/assistant-action-card";
+import { useDatebookStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AssistantModelSelector } from "@/components/assistant-model-selector";
 
@@ -53,6 +51,10 @@ export function AssistantConversation({
   const retry = useAssistantSession((s) => s.retry);
   const applyAction = useAssistantSession((s) => s.applyAction);
   const resolveAction = useAssistantSession((s) => s.resolveAction);
+  const setActionClass = useAssistantSession((s) => s.setActionClass);
+  const items = useDatebookStore((s) => s.items);
+  const categories = useDatebookStore((s) => s.categories);
+  const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const reset = useAssistantSession((s) => s.reset);
   const pendingMessage = useUIStore((s) => s.aiDrawerPendingMessage);
   const canDock = useMediaQuery(DOCK_MEDIA_QUERY);
@@ -248,68 +250,20 @@ export function AssistantConversation({
                 <p className="text-[11px] leading-relaxed text-ink-faint">{m.fallbackNotice}</p>
               )}
 
-              {m.actions?.map((action, ai) => {
-                const state = m.resolved?.[ai];
-                const facts = actionFacts(action);
-                return (
-                  <div
-                    key={ai}
-                    className={cn(
-                      "rounded-lg border border-line bg-surface-sunken p-2.5",
-                      !docked && "md:rounded-xl md:p-3",
-                    )}
-                  >
-                    <p className={cn("text-[12px] text-ink-soft", !docked && "md:text-[13px]")}>
-                      {action.summary}
-                    </p>
-                    {facts && (
-                      <p
-                        className={cn(
-                          "mt-0.5 text-[11px] text-ink-faint",
-                          !docked && "md:text-[12px]",
-                        )}
-                      >
-                        {facts}
-                      </p>
-                    )}
-                    {state === "applied" ? (
-                      <motion.p
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={motionTokens.springSnappy}
-                        className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-good"
-                      >
-                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> Done
-                      </motion.p>
-                    ) : state === "dismissed" ? (
-                      <p className="mt-1.5 text-[12px] text-ink-faint">Dismissed</p>
-                    ) : state ? (
-                      <p className="mt-1.5 text-[12px] text-ink-faint">{OUTCOME_COPY[state]}</p>
-                    ) : (
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          onClick={() => resolveAction(mi, ai, "dismissed")}
-                          className="rounded-md px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-surface"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => applyAction(mi, ai)}
-                          className={cn(
-                            "flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90",
-                            action.kind === "delete" ? "bg-warn" : "bg-accent",
-                          )}
-                        >
-                          {action.kind === "delete" && (
-                            <Trash2 className="h-3 w-3" strokeWidth={2} />
-                          )}
-                          {actionVerb(action)}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {m.actions?.map((action, ai) => (
+                <AssistantActionCard
+                  key={ai}
+                  action={action}
+                  outcome={m.resolved?.[ai]}
+                  items={items}
+                  categories={categories}
+                  clock24h={clock24h}
+                  docked={docked}
+                  onApply={() => applyAction(mi, ai)}
+                  onDismiss={() => resolveAction(mi, ai, "dismissed")}
+                  onClassChange={(id) => setActionClass(mi, ai, id)}
+                />
+              ))}
 
               {m.suggestions && m.suggestions.length > 0 && (
                 <div
@@ -462,30 +416,4 @@ export function AssistantConversation({
       </div>
     </>
   );
-}
-
-function actionVerb(a: AssistantAction): string {
-  if (a.kind === "create") return "Add";
-  if (a.kind === "delete") return "Delete";
-  const p = a.patch;
-  if (p.status === "done") return "Complete";
-  if (p.status === "todo" || p.status === "doing") return "Reopen";
-  if (p.at || "endAt" in p) return "Reschedule";
-  if (p.title) return "Rename";
-  if (p.categoryId) return "Recategorize";
-  return "Update";
-}
-
-function actionFacts(a: AssistantAction): string | null {
-  const bits: string[] = [];
-  if (a.kind === "create") {
-    if (a.draft.location) bits.push(a.draft.location);
-    const labels = a.draft.reminders?.map((r) => r.label).filter(Boolean);
-    if (labels?.length) bits.push(labels.join(", "));
-  } else if (a.kind === "update") {
-    if (a.patch.location) bits.push(a.patch.location);
-    const labels = a.patch.reminders?.map((r) => r.label).filter(Boolean);
-    if (labels?.length) bits.push(labels.join(", "));
-  }
-  return bits.length ? bits.join(" · ") : null;
 }
