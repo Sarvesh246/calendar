@@ -20,7 +20,7 @@ export default function Error({
         Datebook hit an unexpected error. Anything already saved on this device is still here.
       </p>
       {process.env.NODE_ENV === "development" && error?.message ? (
-        <pre className="max-w-full overflow-x-auto rounded-lg border border-line bg-surface-sunken px-3 py-2 text-left text-[11px] text-warn">
+        <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-all rounded-lg border border-line bg-surface-sunken px-3 py-2 text-left text-[11px] text-warn">
           {error.message}
         </pre>
       ) : null}

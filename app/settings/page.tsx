@@ -1281,7 +1281,7 @@ function Segmented({
     <div
       ref={containerRef}
       data-segment={segmentId}
-      className="relative flex w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-fit"
+      className="relative flex w-full items-stretch gap-0.5 rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-fit"
     >
       <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
       {options.map((opt) => {
@@ -1296,12 +1296,12 @@ function Segmented({
               onChange(opt.value);
             }}
             className={cn(
-              "press-none relative min-h-10 flex-1 rounded-lg px-3 text-[13px] font-medium transition-colors duration-[var(--motion-micro)] sm:flex-none sm:px-4",
+              "press-none relative min-h-10 min-w-0 flex-1 rounded-lg px-0.5 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:flex-none sm:px-4 sm:text-[13px]",
               "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
             )}
             aria-pressed={active}
           >
-            <span className="relative z-[1] whitespace-nowrap">{opt.label}</span>
+            <span className="relative z-[1] block [overflow-wrap:anywhere]">{opt.label}</span>
           </button>
         );
       })}

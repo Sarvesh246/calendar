@@ -210,7 +210,7 @@ export function NativeIosSection() {
           </button>
           {detailsOpen && (
             <div className="mt-2 rounded-lg bg-surface-sunken px-2.5 py-2">
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-ink-faint">
+              <pre className="max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words text-[11px] leading-relaxed text-ink-faint">
                 {JSON.stringify(liveStatus, null, 2)}
               </pre>
               <button

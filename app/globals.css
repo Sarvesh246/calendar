@@ -604,6 +604,11 @@ html {
      bottom of every page, so scrolling stopped dead like a web page instead of
      bouncing like an app. `contain` keeps the bounce (and Android's stretch)
      while still blocking pull-to-refresh and scroll chaining. */
+  /* Clip at the root as well as the body: the viewport itself is the
+     document scroller on phones, including in standalone WebKit. `clip`
+     leaves vertical document scrolling and sticky positioning intact. */
+  overflow-x: hidden;
+  overflow-x: clip;
   overscroll-behavior-x: none;
   overscroll-behavior-y: contain;
 }
@@ -635,6 +640,17 @@ body {
      `position: sticky` on the desktop sidebar keeps working. */
   overflow-x: clip;
   overscroll-behavior-y: contain;
+}
+
+/* A vertical scroller otherwise gets an implicit horizontal `auto` axis.
+   Suppress sideways panning in sheets and lists; explicitly horizontal
+   carousels, segmented controls, and the week pager retain their own axis. */
+:where(.overflow-y-auto, .overflow-y-scroll):not(
+  .overflow-x-auto,
+  .overflow-x-scroll,
+  .overflow-x-visible
+) {
+  overflow-x: hidden;
 }
 
 /* Mobile PWA: scroll-attached background. iOS Safari paints
