@@ -85,10 +85,20 @@ export function systemPrompt(body: ReqBody): string {
   const snapshot = body.items.slice(0, SNAPSHOT_ITEMS).map(line).join("\n");
   const syllabi = relevantSyllabi(body);
   const hidden = body.items.length - SNAPSHOT_ITEMS;
+  const ctxBits = [
+    body.context?.selectedDay && `the calendar's selected day is ${body.context.selectedDay}`,
+    body.context?.openItemId && `the item the user has open is ${body.context.openItemId}`,
+    body.context?.activeClass &&
+      `the class filter is ${categoryNames.get(body.context.activeClass) ?? body.context.activeClass}`,
+  ].filter(Boolean);
+  const opened = ctxBits.length
+    ? `Where the user opened this chat: ${ctxBits.join("; ")}. Resolve "this", "that one" and "today's view" against it.
+`
+    : "";
 
   return `You are Datebook's calendar and todo assistant. It is ${human}; current instant ${body.now}; user timezone ${tz}. Use a ${body.clock24h ? "24-hour" : "12-hour"} clock.
 
-Calendar categories (classes, id:name): ${body.categories.map((c) => `${c.id}:${c.name}`).join(", ")}
+${opened}Calendar categories (classes, id:name): ${body.categories.map((c) => `${c.id}:${c.name}`).join(", ")}
 Authoritative digest (local times): ${JSON.stringify(compactDigest)}
 Dates (copy the weekday and date from here and from the snapshot; never work them out yourself): ${dateLookupLine(body.now, tz)}
 Calendar snapshot, one item per line as id|type|status|start (local, with weekday)|end|title|class|location|completed (done items only), open work and soonest first${hidden > 0 ? `; ${hidden} more not shown, use list_events/list_tasks for them` : ""}:

@@ -142,7 +142,7 @@ export function AssistantConversation({
   }
 
   const headerButton =
-    "flex h-9 w-9 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink";
+    "flex h-11 w-11 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink md:h-9 md:w-9 md:rounded-md";
 
   return (
     <>
@@ -184,14 +184,16 @@ export function AssistantConversation({
             <p className="hidden text-[12.5px] text-ink-faint md:block">Ask about your calendar</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
-            <AssistantModelSelector />
+            <div className="hidden md:block">
+              <AssistantModelSelector />
+            </div>
             <button
               type="button"
               onClick={reset}
               disabled={thinking}
               aria-label="New conversation"
               title="New conversation"
-              className={cn(headerButton, "hidden disabled:opacity-40 md:flex")}
+              className={cn(headerButton, "disabled:opacity-40")}
             >
               <SquarePen className="h-4 w-4" strokeWidth={1.9} />
             </button>
@@ -220,6 +222,9 @@ export function AssistantConversation({
 
       <div
         ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation"
         className={cn(
           "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-4 py-3.5",
           !docked && "md:space-y-4 md:px-6 md:py-6",
@@ -232,7 +237,7 @@ export function AssistantConversation({
               className={
                 m.role === "user"
                   ? cn(
-                      "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink",
+                      "max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent px-3.5 py-2 text-[15px] leading-relaxed text-accent-ink md:text-[13px]",
                       !docked &&
                         "md:max-w-[78%] md:rounded-2xl md:rounded-br-md md:px-4 md:py-2.5 md:text-[14px]",
                     )
@@ -249,7 +254,7 @@ export function AssistantConversation({
                           className={
                             docked
                               ? "text-[13.5px] leading-[1.5]"
-                              : "md:text-[14.5px] md:leading-[1.55]"
+                              : "text-[15px] leading-[1.5] md:text-[14.5px] md:leading-[1.55]"
                           }
                         />
                       );
@@ -366,7 +371,7 @@ export function AssistantConversation({
                       key={s}
                       onClick={() => send(s)}
                       className={cn(
-                        "rounded-full border border-line px-3 py-1.5 text-left text-[12px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent",
+                        "min-h-11 rounded-full border border-line px-3.5 py-1.5 text-left text-[13px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent",
                         !docked && "text-[11.5px] md:rounded-xl md:px-3.5 md:py-2.5 md:text-[13px]",
                       )}
                     >
@@ -398,6 +403,13 @@ export function AssistantConversation({
           );
         })}
 
+        {messages.length <= 1 && (
+          <div className="flex items-center gap-2 text-[12px] text-ink-faint md:hidden">
+            <span>Model</span>
+            <AssistantModelSelector compact />
+          </div>
+        )}
+
         {queued.map((text, qi) => (
           <div key={`q-${qi}`} className="flex flex-col items-end gap-0.5">
             <div className="max-w-[85%] whitespace-pre-line rounded-lg rounded-br-md bg-accent/55 px-3.5 py-2 text-[13px] leading-relaxed text-accent-ink">
@@ -422,7 +434,11 @@ export function AssistantConversation({
               }}
               className="flex items-center gap-2 px-1"
             >
-              <div className="flex items-center gap-1">
+              <div
+                className="flex items-center gap-1"
+                role="status"
+                aria-label="Assistant is replying"
+              >
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
@@ -462,7 +478,8 @@ export function AssistantConversation({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+              // Enter sends; Shift+Enter is a new line (hardware keyboards).
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send(input);
               }
@@ -478,10 +495,10 @@ export function AssistantConversation({
             // Short enough to stay on one line at 16px in a 375pt sheet; the
             // longer sentence wrapped and doubled the composer's height.
             placeholder="Ask or make a change…"
-            enterKeyHint="enter"
+            enterKeyHint="send"
             aria-label="Message the assistant"
             className={cn(
-              "min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-2 text-[13px] leading-[1.4] text-ink placeholder:text-ink-faint focus:outline-none",
+              "min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-2 text-[16px] leading-[1.4] text-ink placeholder:text-ink-faint focus:outline-none",
               docked ? "min-h-9 max-h-32" : "min-h-11 max-h-32 md:min-h-10 md:text-[14px]",
             )}
           />
@@ -490,8 +507,8 @@ export function AssistantConversation({
             onClick={() => send(input)}
             disabled={!input.trim()}
             aria-label="Send"
-            aria-keyshortcuts="Control+Enter Meta+Enter"
-            title="Send (Ctrl/Command + Enter)"
+            aria-keyshortcuts="Enter"
+            title="Send (Enter)"
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-[opacity,transform] hover:opacity-90 disabled:opacity-30",
               docked ? "h-8 w-8" : "h-11 w-11 md:h-10 md:w-10",

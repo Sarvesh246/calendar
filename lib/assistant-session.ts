@@ -252,6 +252,30 @@ function withResolvedClasses(
   );
 }
 
+/** An hour of silence and the next message starts a fresh conversation. */
+const IDLE_NEW_CHAT_MS = 60 * 60 * 1000;
+let lastActivity = Date.now();
+
+/** Two follow-ups worth tapping, made in code from what was just answered. */
+function followUps(res: { items?: unknown[]; actions?: unknown[]; text: string; error?: string }) {
+  if (res.error || res.actions?.length) return undefined;
+  if (res.items?.length || /\bdue\b|overdue/i.test(res.text)) {
+    return ["What's overdue?", "What's due tomorrow?"];
+  }
+  return ["What's due this week?", "When am I free tomorrow?"];
+}
+
+/** Where the chat was opened from, so "move this to Friday" has a "this". */
+function chatContext() {
+  const ui = useUIStore.getState();
+  const filter = ui.categoryFilter;
+  return {
+    ...(ui.calendarFocusDate ? { selectedDay: ui.calendarFocusDate } : {}),
+    ...(ui.inspectorItemId ? { openItemId: ui.inspectorItemId } : {}),
+    ...(filter && filter.length === 1 ? { activeClass: filter[0] } : {}),
+  };
+}
+
 let inFlight = false;
 let slowTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -283,6 +307,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       weekStartsOn: settings.weekStartsOn,
       modelId,
       conversationId: conversationId(),
+      context: chatContext(),
     })
       .then((res) => {
         res = { ...res, actions: withResolvedClasses(res.actions, categories) };
@@ -292,7 +317,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
             {
               role: "assistant",
               text: res.text,
-              suggestions: res.suggestions,
+              suggestions: res.suggestions ?? followUps(res),
               actions: res.actions,
               parts: buildParts(res),
               ...(res.error ? { error: res.error } : {}),
@@ -343,6 +368,10 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     ask: (query) => {
       const text = query.trim();
       if (!text) return;
+      if (!inFlight && get().messages.length > 1 && Date.now() - lastActivity > IDLE_NEW_CHAT_MS) {
+        get().reset();
+      }
+      lastActivity = Date.now();
       if (inFlight) {
         set((s) => ({ queued: [...s.queued, text] }));
         return;
@@ -471,7 +500,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
 useAssistantSession.subscribe((state, prev) => {
   if (state.messages === prev.messages || state.messages.length <= 1) return;
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.messages.slice(-24)));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state.messages.slice(-60)));
   } catch {
     /* quota / private mode */
   }

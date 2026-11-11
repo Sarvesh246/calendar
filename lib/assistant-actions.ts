@@ -34,6 +34,8 @@ export interface AssistantReqBody {
   timeZone?: string;
   clock24h?: boolean;
   weekStartsOn?: 0 | 1;
+  /** Where the chat was opened from: a selected day, an open item, a filtered class. */
+  context?: { selectedDay?: string; openItemId?: string; activeClass?: string };
   items: SlimItem[];
   categories: { id: string; name: string; syllabus?: unknown }[];
 }

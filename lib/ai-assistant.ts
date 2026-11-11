@@ -70,6 +70,8 @@ export interface AssistantCtx {
   weekStartsOn?: 0 | 1;
   modelId?: string;
   conversationId?: string;
+  /** Where the chat was opened from. */
+  context?: { selectedDay?: string; openItemId?: string; activeClass?: string };
 }
 
 /** Compact facts pre-computed for the model and offline heuristics. */
@@ -428,6 +430,7 @@ export async function askAssistant(
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         clock24h: ctx.clock24h,
         weekStartsOn: ctx.weekStartsOn ?? 0,
+        context: ctx.context,
         items: selectAssistantItems(ctx.items, new Date().toISOString()).map(toAssistantSlimItem),
         categories: ctx.categories.map((c) => ({
           id: c.id,
