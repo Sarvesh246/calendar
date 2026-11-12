@@ -1,6 +1,5 @@
+import { isUndatedAt } from "./undated";
 import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule, Reminder } from "./types";
-import { wallTimeInZoneToIso } from "./date-utils";
-import { zonedDateKey } from "./ai-assistant";
 import { nanoid } from "./nanoid";
 import { countOccurrences, expandRepeat } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
@@ -37,12 +36,16 @@ export interface AssistantReqBody {
   /** Where the chat was opened from: a selected day, an open item, a filtered class. */
   context?: { selectedDay?: string; openItemId?: string; activeClass?: string };
   items: SlimItem[];
+  itemCount?: number;
   categories: { id: string; name: string; syllabus?: unknown }[];
+  pendingCreates?: { ref: string; draft: Omit<Item, "id" | "createdAt"> }[];
 }
 
 interface RawAction {
   serverActionId?: string;
-  kind?: "create" | "update" | "delete";
+  revisionOf?: string;
+  kind?: "create" | "update" | "delete" | "batch";
+  actions?: unknown[];
   summary?: string;
   itemId?: string;
   title?: string;
@@ -61,16 +64,20 @@ interface RawAction {
   /** 0 = Sunday … 6 = Saturday. Weekly class meetings. */
   repeatDays?: number[];
   until?: string;
+  repeatUntil?: string;
   /** Minutes before the start/due. Omitted = app default; [] = none. */
   reminders?: { offsetMinutes?: number; label?: string }[];
+  workFor?: string;
 }
 
 export type AssistantAction =
+  | { kind: "batch"; summary: string; actions: AssistantAction[] }
   | {
       kind: "create";
       summary: string;
       draft: Omit<Item, "id" | "createdAt">;
       serverActionId?: string;
+      revisionOf?: string;
     }
   | {
       kind: "update";
@@ -121,11 +128,6 @@ function parseRepeat(a: RawAction, at: string): RepeatRule | undefined {
   return rule;
 }
 
-function defaultAt(type: ItemType, nowIso: string, timeZone = "UTC"): string {
-  const key = zonedDateKey(nowIso, timeZone);
-  return wallTimeInZoneToIso(key, type === "event" ? 12 : 23, type === "event" ? 0 : 59, timeZone);
-}
-
 /** Exact title match only (case-insensitive). Ambiguous or substring hits are ignored. */
 export function exactFind(items: SlimItem[], q: string): SlimItem | undefined {
   const needle = q.trim().toLowerCase();
@@ -144,6 +146,22 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
     if (!a || typeof a !== "object") continue;
     const summary = typeof a.summary === "string" && a.summary.trim() ? a.summary.trim() : "";
 
+    if (a.kind === "batch") {
+      if (
+        !Array.isArray(a.actions) ||
+        !a.actions.length ||
+        a.actions.length > 50 ||
+        a.actions.some(
+          (child) => !child || typeof child !== "object" || (child as RawAction).kind !== "update",
+        )
+      )
+        continue;
+      const actions = normalizeActions(a.actions, body);
+      if (actions.length !== a.actions.length) continue;
+      out.push({ kind: "batch", summary: summary || "Update series", actions });
+      continue;
+    }
+
     if (a.kind === "create") {
       const title = typeof a.title === "string" ? a.title.trim() : "";
       if (!title) continue;
@@ -151,7 +169,8 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task"
           ? a.itemType
           : "task";
-      const at = validIso(a.at) ?? defaultAt(type, body.now, body.timeZone || "UTC");
+      const at = validIso(a.at);
+      if (!at) continue;
       const draft: Omit<Item, "id" | "createdAt"> = {
         title,
         type,
@@ -164,6 +183,12 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       const endAt = validIso(a.endAt);
       if (endAt && +new Date(endAt) > +new Date(at)) draft.endAt = endAt;
       if (a.allDay === true) draft.allDay = true;
+      if (
+        typeof a.workFor === "string" &&
+        byId.get(a.workFor)?.type !== "event" &&
+        byId.has(a.workFor)
+      )
+        draft.workFor = a.workFor;
       if (typeof a.location === "string" && a.location.trim()) draft.location = a.location.trim();
       if (typeof a.description === "string" && a.description.trim())
         draft.description = a.description.trim();
@@ -177,6 +202,7 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
         summary: summary || `Add “${title}”`,
         draft,
         ...(a.serverActionId ? { serverActionId: a.serverActionId } : {}),
+        ...(a.revisionOf ? { revisionOf: a.revisionOf } : {}),
       });
       continue;
     }
@@ -231,9 +257,25 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       if (
         (a.itemType === "event" || a.itemType === "assignment" || a.itemType === "task") &&
         a.itemType !== target.type
-      )
+      ) {
         patch.type = a.itemType;
+        if (a.itemType === "event") {
+          patch.status = undefined;
+          patch.completedAt = undefined;
+        } else if (target.type === "event") {
+          patch.status = a.status ?? "todo";
+          patch.endAt = undefined;
+          patch.allDay = false;
+        }
+      }
 
+      if (target.repeat && (a.repeatDays || a.repeatUntil)) {
+        patch.repeat = {
+          ...target.repeat,
+          ...(a.repeatDays ? { byDay: a.repeatDays } : {}),
+          ...(a.repeatUntil ? { until: a.repeatUntil } : {}),
+        };
+      }
       const reminders = parseActionReminders(a.reminders);
       if (reminders !== undefined)
         patch.reminders = reminders.map((r) => ({ ...r, itemId: target.id }));
@@ -249,7 +291,7 @@ export function normalizeActions(raw: unknown, body: AssistantReqBody): Assistan
       });
     }
   }
-  return out.slice(0, 8);
+  return out;
 }
 
 const MAX_REMINDER_OFFSET = 14 * 24 * 60;
@@ -342,7 +384,7 @@ export function whenWord(
   iso: string | undefined,
   opts: { type: ItemType; allDay?: boolean; clock24h?: boolean },
 ): string {
-  if (!iso) return "no date";
+  if (!iso || (opts.type !== "event" && isUndatedAt(iso))) return "no due date";
   const d = new Date(iso);
   if (Number.isNaN(+d)) return "no date";
   if (opts.allDay) return `${dayWord(d)} (all day)`;
@@ -351,6 +393,7 @@ export function whenWord(
 }
 
 export function actionVerb(a: AssistantAction): string {
+  if (a.kind === "batch") return "Update";
   if (a.kind === "create") return "Add";
   if (a.kind === "delete") return "Delete";
   const p = a.patch;
@@ -393,6 +436,36 @@ export function describeAction(
     (id && categories.find((c) => c.id === id)?.name) || "No class";
   const verb = actionVerb(action);
 
+  if (action.kind === "batch") {
+    return {
+      verb,
+      title: action.summary,
+      series: `Updates ${action.actions.length} items together`,
+      facts: [],
+      changes: action.actions.flatMap((child) => {
+        if (child.kind !== "update") return [];
+        const target = items.find((item) => item.id === child.itemId);
+        return [
+          {
+            field: child.itemTitle,
+            ...(target
+              ? {
+                  from: whenWord(target.at, { type: target.type, allDay: target.allDay, clock24h }),
+                }
+              : {}),
+            to: child.patch.at
+              ? whenWord(child.patch.at, {
+                  type: child.patch.type ?? target?.type ?? "event",
+                  allDay: child.patch.allDay ?? target?.allDay,
+                  clock24h,
+                })
+              : "Updated",
+          },
+        ];
+      }),
+    };
+  }
+
   if (action.kind === "create") {
     const d = action.draft;
     const facts: string[] = [];
@@ -407,6 +480,17 @@ export function describeAction(
       facts,
       categoryId: d.categoryId,
     };
+    if (d.endAt && d.type === "event" && !d.repeat) {
+      const end = new Date(d.endAt);
+      if (d.allDay) {
+        // All-day end dates are exclusive in the calendar store.
+        end.setDate(end.getDate() - 1);
+        if (end.toDateString() !== new Date(d.at).toDateString())
+          out.when = `${dayWord(new Date(d.at))} – ${dayWord(end)} (all day)`;
+      } else {
+        out.when += ` – ${end.toDateString() === new Date(d.at).toDateString() ? clockWord(end, clock24h) : `${dayWord(end)} at ${clockWord(end, clock24h)}`}`;
+      }
+    }
     if (d.repeat) {
       // The first real occurrence, not the anchor the rule was built from:
       // "every Wednesday" asked on a Tuesday starts tomorrow.
@@ -475,6 +559,7 @@ export function describeAction(
       to: p.allDay ? "yes" : "no",
     });
   }
+  if (p.repeat) changes.push({ field: "Repeat", to: repeatWord(p.repeat) });
   if (p.type && p.type !== target?.type) {
     changes.push({ field: "Type", from: target?.type, to: p.type });
   }

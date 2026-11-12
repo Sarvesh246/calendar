@@ -35,6 +35,21 @@ describe("stale cards", () => {
     expect(staleReason(remove, NOW - 1000, () => false, NOW)).toBe("stale");
   });
 
+  it("invalidates a series card if any target disappeared", () => {
+    const batch: AssistantAction = {
+      kind: "batch",
+      summary: "Move series",
+      actions: [rename, { ...rename, itemId: "other" }],
+    };
+    expect(staleReason(batch, NOW, (id) => id === "gym", NOW)).toBe("stale");
+    expect(
+      supersedeOpenCards(
+        [{ actions: [batch], resolved: undefined as Record<number, "superseded"> | undefined }],
+        [rename],
+      )[0].resolved?.[0],
+    ).toBe("superseded");
+  });
+
   it("a card whose item still exists can be applied", () => {
     expect(staleReason(rename, NOW - 1000, (id) => id === "gym", NOW)).toBeNull();
   });

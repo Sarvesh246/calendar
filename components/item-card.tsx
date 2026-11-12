@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useJustAdded } from "@/lib/just-added";
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -580,7 +582,11 @@ function EventCard({
               showCompleteStyle ? "text-ink-soft" : "cat-text",
             )}
           >
-            {item.allDay ? "All day" : formatTime(item.at, clock24h)}
+            {isUndated(item)
+              ? "No due date"
+              : item.allDay
+                ? "All day"
+                : formatTime(item.at, clock24h)}
           </span>
           {!item.allDay && item.endAt && (
             <span className="text-[11px] tabular-nums text-ink-faint">
@@ -790,7 +796,11 @@ function AssignmentCard({
                 overdueMetaLabel(item, clock24h)
               ) : (
                 <>
-                  {item.allDay ? "All day" : formatTime(item.at, clock24h)}
+                  {isUndated(item)
+                    ? "No due date"
+                    : item.allDay
+                      ? "All day"
+                      : formatTime(item.at, clock24h)}
                   {status === "doing" && " · in progress"}
                   {done && " · done"}
                 </>

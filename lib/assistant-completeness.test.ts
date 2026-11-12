@@ -31,6 +31,11 @@ describe("what the message said", () => {
     ]);
   });
 
+  it("recognizes explicit lowercase and bare room locations", () => {
+    expect(placePhrases("parents weekend location kyle field")).toEqual(["kyle field"]);
+    expect(placePhrases("review thursday 6-8pm ZACH 350")).toEqual(["ZACH 350"]);
+  });
+
   it("finds clock times, but not the time of a reminder", () => {
     expect(clockTimes("dentist tuesday 3pm and call mom at 4:30 pm")).toEqual([900, 990]);
     expect(clockTimes("remind me at 5pm to call mom tomorrow")).toEqual([]);
@@ -97,6 +102,29 @@ describe("findMissingDetails", () => {
         NY,
       ),
     ).toEqual([]);
+  });
+
+  it("requires an explicit date range on one event", () => {
+    const oneDay = { kind: "create", at: "2026-11-14T05:00:00Z", allDay: true };
+    expect(findMissingDetails("add hackathon nov 14-16", [oneDay], NY)).toContain(
+      'date range "nov 14-16" on one event',
+    );
+    expect(
+      findMissingDetails(
+        "add hackathon nov 14-16",
+        [{ ...oneDay, endAt: "2026-11-17T05:00:00Z" }],
+        NY,
+      ),
+    ).toEqual([]);
+  });
+  it("recognizes a lowercase place", () => {
+    expect(
+      findMissingDetails(
+        "meeting tomorrow at zachry",
+        [{ kind: "create", title: "Meeting", at: "2026-11-11T15:00:00Z" }],
+        NY,
+      ),
+    ).toContain('location "zachry"');
   });
 
   it("only judges turns that are all adds", () => {

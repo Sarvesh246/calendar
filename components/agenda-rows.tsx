@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -250,9 +252,11 @@ function AgendaRow({
     : work
       ? formatTime(item.at, clock24h)
       : formatTimeSpan(item.at, item.endAt, clock24h);
-  const whenText = sectionDay
-    ? timeText
-    : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
+  const whenText = isUndated(item)
+    ? "No due date"
+    : sectionDay
+      ? timeText
+      : `${format(at, "EEE, MMM d")}${item.allDay ? "" : ` · ${timeText}`}`;
 
   return (
     <motion.div
@@ -360,7 +364,11 @@ function AgendaRow({
         <button
           type="button"
           aria-haspopup="menu"
-          aria-label={`${work ? "Due" : "When"}: ${format(at, "EEEE, MMMM d")}${item.allDay ? "" : `, ${timeText}`}. Change date`}
+          aria-label={
+            isUndated(item)
+              ? "No due date. Set date"
+              : `${work ? "Due" : "When"}: ${format(at, "EEEE, MMMM d")}${item.allDay ? "" : `, ${timeText}`}. Change date`
+          }
           onClick={(e) =>
             openItemMenuAt(e.currentTarget, item.id, { dayKey: menuDay, section: "reschedule" })
           }

@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated, UNDATED_AT } from "@/lib/undated";
+
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
@@ -218,11 +220,13 @@ export function ItemEditor({
   const start = new Date(item.at);
   const end = item.endAt ? new Date(item.endAt) : null;
   const isEvent = item.type === "event";
-  const timeLabel = item.allDay
-    ? "All day"
-    : isEvent
-      ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
-      : `Due ${formatTime(item.at, clock24h)}`;
+  const timeLabel = isUndated(item)
+    ? "No due date"
+    : item.allDay
+      ? "All day"
+      : isEvent
+        ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
+        : `Due ${formatTime(item.at, clock24h)}`;
 
   const patch = (p: Partial<Item>) => updateItem(item.id, p);
 
@@ -336,7 +340,7 @@ export function ItemEditor({
       {/* The inspector already says this in words at the top. */}
       {!inspector && (
         <p className="mb-1.5 text-ink-faint">
-          {Number.isNaN(start.getTime())
+          {isUndated(item) || Number.isNaN(start.getTime())
             ? ""
             : start.toLocaleDateString(undefined, {
                 weekday: "long",
@@ -344,11 +348,22 @@ export function ItemEditor({
                 day: "numeric",
                 year: "numeric",
               })}
-          <span> · </span>
+          {!isUndated(item) && <span> · </span>}
           {timeLabel}
         </p>
       )}
-      <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
+      {!isUndated(item) && (
+        <AllDayToggle checked={Boolean(item.allDay)} onChange={(v) => patch({ allDay: v })} />
+      )}
+      {!isEvent && !isUndated(item) && !item.repeat && (
+        <button
+          type="button"
+          onClick={() => patch({ at: UNDATED_AT, endAt: undefined, allDay: false, reminders: [] })}
+          className="text-sm text-ink-soft underline"
+        >
+          Remove due date
+        </button>
+      )}
       {item.allDay ? (
         <input
           type="date"
@@ -366,7 +381,7 @@ export function ItemEditor({
             {isEvent && <span className="w-10 shrink-0 text-[11.5px] text-ink-faint">Starts</span>}
             <input
               type="datetime-local"
-              value={toDatetimeLocalValue(item.at)}
+              value={isUndated(item) ? "" : toDatetimeLocalValue(item.at)}
               onChange={(e) => {
                 const iso = datetimeLocalToIso(e.target.value);
                 if (iso) moveStart(iso);
@@ -416,7 +431,9 @@ export function ItemEditor({
         }}
         className={FIELD}
       >
-        <option value="event">Event</option>
+        <option value="event" disabled={isUndated(item)}>
+          Event{isUndated(item) ? " (set a date first)" : ""}
+        </option>
         <option value="assignment">Assignment</option>
         <option value="task">Task</option>
       </select>
@@ -448,7 +465,11 @@ export function ItemEditor({
     </DetailRow>
   );
 
-  const remindersBlock = (
+  const remindersBlock = isUndated(item) ? (
+    <DetailRow icon={<Bell className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Reminders">
+      <p className="text-ink-faint">Set a due date to add reminders.</p>
+    </DetailRow>
+  ) : (
     <DetailRow icon={<Bell className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Reminders">
       <div className="flex flex-col gap-1">
         {reminderPresets.map((rp) => {
@@ -534,7 +555,7 @@ export function ItemEditor({
     </DetailRow>
   );
 
-  const repeatBlock = !item.sourceId && (
+  const repeatBlock = !item.sourceId && !isUndated(item) && (
     <DetailRow icon={<Repeat className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Repeat">
       <select
         value={item.repeat?.freq ?? ""}
@@ -768,7 +789,9 @@ function WorkLinks({ item, clock24h }: { item: Item; clock24h: boolean }) {
           <button type="button" className={linkClass} onClick={() => openInspector(target.id)}>
             <span className="min-w-0 truncate font-medium">{target.title}</span>
             <span className="shrink-0 text-ink-faint">
-              Due {format(new Date(target.at), "EEE, MMM d")}
+              {isUndated(target)
+                ? "No due date"
+                : `Due ${format(new Date(target.at), "EEE, MMM d")}`}
             </span>
           </button>
         ) : (

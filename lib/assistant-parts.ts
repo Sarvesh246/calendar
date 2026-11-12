@@ -1,3 +1,5 @@
+import { isUndated, isUndatedAt } from "./undated";
+
 /**
  * A reply is a list of typed parts rather than one blob of markdown. Lists of
  * the user's own items are rows you can tap (formatted by the same code on
@@ -17,7 +19,7 @@ export type MessagePart =
   | { type: "choice"; options: string[] }
   | { type: "notice"; tone: "info" | "warn"; text: string }
   /** No real answer: signed out (offer sign-in) or unreachable/busy (offer Retry). */
-  | { type: "error"; kind: "signed-out" | "unreachable" | "busy"; text: string }
+  | { type: "error"; kind: "signed-out" | "unreachable" | "busy" | "interpretation"; text: string }
   /** A staged change; `index` points into the message's `actions`. */
   | { type: "action"; index: number };
 
@@ -32,7 +34,7 @@ export interface ReplyShape {
   choices?: string[];
   fallbackNotice?: string;
   actions?: unknown[];
-  error?: "signed-out" | "unreachable" | "busy";
+  error?: "signed-out" | "unreachable" | "busy" | "interpretation";
 }
 
 const MAX_ROWS = 25;
@@ -98,7 +100,7 @@ export function partsOf(message: {
   parts?: MessagePart[];
   actions?: unknown[];
   fallbackNotice?: string;
-  error?: "signed-out" | "unreachable" | "busy";
+  error?: "signed-out" | "unreachable" | "busy" | "interpretation";
 }): MessagePart[] {
   return message.parts ?? buildParts(message);
 }
@@ -109,7 +111,12 @@ export function partsOf(message: {
  * to.
  */
 export function historyText(
-  message: { text: string; parts?: MessagePart[] },
+  message: {
+    text: string;
+    parts?: MessagePart[];
+    actions?: import("./ai-assistant").AssistantAction[];
+    resolved?: Record<number, string>;
+  },
   describe: (id: string) => string | undefined,
 ): string {
   const lines: string[] = [];
@@ -119,6 +126,25 @@ export function historyText(
       const line = describe(id);
       if (line) lines.push(`- ${line}`);
     }
+  }
+  for (const [index, action] of (message.actions ?? []).entries()) {
+    const status = message.resolved?.[index] ?? "pending confirmation";
+    const details =
+      action.kind === "batch"
+        ? { count: action.actions.length, summary: action.summary }
+        : action.kind === "create"
+          ? { ...action.draft, at: isUndated(action.draft) ? "no due date" : action.draft.at }
+          : action.kind === "update"
+            ? {
+                itemId: action.itemId,
+                title: action.itemTitle,
+                patch: {
+                  ...action.patch,
+                  ...(isUndatedAt(action.patch.at) ? { at: "no due date" } : {}),
+                },
+              }
+            : { itemId: action.itemId, title: action.itemTitle };
+    lines.push(`- Card ${index + 1} (${status}): ${action.kind} ${JSON.stringify(details)}`);
   }
   return lines.length ? `${message.text}\n${lines.join("\n")}` : message.text;
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useMemo, useState } from "react";
 import { addDays, format, startOfDay } from "date-fns";
 import { CalendarPlus, GripVertical } from "lucide-react";
@@ -76,20 +78,22 @@ export function PlanningTray({
     const overdue: Item[] = [];
     const soon: Item[] = [];
     const later: Item[] = [];
+    const undated: Item[] = [];
     let beyond = 0;
     for (const i of open) {
       const at = new Date(i.at).getTime();
-      if (isOverdueAt(i, now)) overdue.push(i);
+      if (isUndated(i)) undated.push(i);
+      else if (isOverdueAt(i, now)) overdue.push(i);
       else if (at < week) soon.push(i);
       else if (at < horizon) later.push(i);
       else beyond += 1;
     }
-    return { overdue, soon, later, beyond };
+    return { overdue, soon, later, undated, beyond };
   }, [items, now, query, categories]);
 
   function findTime(item: Item) {
     const due = new Date(item.at);
-    const before = due.getTime() > now.getTime() ? due : undefined;
+    const before = !isUndated(item) && due.getTime() > now.getTime() ? due : undefined;
     // `now` is at most a minute old; the slot rounds up to the next quarter hour.
     const slot = findFreeSlot(allItems, { from: now, minutes, before, days: 14 });
     if (!slot) {
@@ -144,7 +148,8 @@ export function PlanningTray({
     });
   }
 
-  const empty = !groups.overdue.length && !groups.soon.length && !groups.later.length;
+  const empty =
+    !groups.overdue.length && !groups.soon.length && !groups.later.length && !groups.undated.length;
 
   const renderGroup = (title: string, list: Item[], tone?: "warn") =>
     list.length > 0 && (
@@ -168,7 +173,7 @@ export function PlanningTray({
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-label={`${item.title}, due ${format(due, "EEEE, MMMM d")}${canDrop ? ". Drag onto the week to plan time." : ""}`}
+                  aria-label={`${item.title}, ${isUndated(item) ? "no due date" : `due ${format(due, "EEEE, MMMM d")}`}${canDrop ? ". Drag onto the week to plan time." : ""}`}
                   onPointerDown={(e) => startDrag(e, item, category)}
                   onClick={(e) => {
                     if (e.detail === 0 || !canDrop) openInspector(item.id);
@@ -211,9 +216,15 @@ export function PlanningTray({
                     </p>
                     <p className="truncate text-[11.5px] text-ink-faint">
                       <span className={overdue ? "font-medium text-warn" : undefined}>
-                        {overdue ? "Was due " : "Due "}
-                        {format(due, "EEE, MMM d")}
-                        {!item.allDay && ` · ${formatTime(item.at, clock24h)}`}
+                        {isUndated(item) ? (
+                          "No due date"
+                        ) : (
+                          <>
+                            {overdue ? "Was due " : "Due "}
+                            {format(due, "EEE, MMM d")}
+                            {!item.allDay && ` · ${formatTime(item.at, clock24h)}`}
+                          </>
+                        )}
                       </span>
                       {planned > 0 && (
                         <span className="text-good"> · {formatDuration(planned)} planned</span>
@@ -312,6 +323,7 @@ export function PlanningTray({
             {renderGroup("Overdue", groups.overdue, "warn")}
             {renderGroup("Next 7 days", groups.soon)}
             {renderGroup("Later", groups.later)}
+            {renderGroup("No due date", groups.undated)}
             {groups.beyond > 0 && (
               <p className="px-1 pt-1 text-[11.5px] text-ink-faint">
                 {groups.beyond} more due after{" "}

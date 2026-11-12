@@ -58,8 +58,11 @@ export function AssistantActionCard({
 
       {d.changes.length > 0 && (
         <dl className="mt-1.5 space-y-1">
-          {d.changes.map((c) => (
-            <div key={c.field} className="flex flex-wrap items-baseline gap-x-1.5 text-[13px]">
+          {d.changes.map((c, index) => (
+            <div
+              key={`${c.field}-${index}`}
+              className="flex flex-wrap items-baseline gap-x-1.5 text-[13px]"
+            >
               <dt className="w-full text-[11px] font-medium text-ink-faint">{c.field}</dt>
               {c.from !== undefined && (
                 <>

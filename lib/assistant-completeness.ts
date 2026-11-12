@@ -1,3 +1,5 @@
+import { matchDatePhrase } from "./date-phrase";
+
 /**
  * Did the staged changes keep everything the user said? Models drop details
  * ("dentist next tuesday 3pm at the clinic on main st" lost its location in
@@ -16,6 +18,7 @@ export interface StagedAdd {
   title?: unknown;
   at?: unknown;
   endAt?: unknown;
+  allDay?: unknown;
   location?: unknown;
   description?: unknown;
   reminders?: unknown;
@@ -47,7 +50,8 @@ const words = (s: string) =>
 /** "at the clinic on main st" -> "the clinic on main st". */
 export function placePhrases(message: string): string[] {
   const out: string[] = [];
-  const re = /\b(?:at|in)\s+((?:the\s+)?[A-Za-z0-9][\w'.&-]*(?:\s+[A-Za-z0-9][\w'.&-]*){0,5})/g;
+  const re =
+    /\b(?:at|in|location(?: is)?)\s+((?:the\s+)?[A-Za-z0-9][\w'.&-]*(?:\s+[A-Za-z0-9][\w'.&-]*){0,5})/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(message))) {
     let phrase = m[1];
@@ -62,11 +66,18 @@ export function placePhrases(message: string): string[] {
       /\s+(?:and|with|remind|reminder|due|for|then|also|before|after|every|until)\b/i,
     )[0];
     // Only phrases that read as a place: "the …" or Capitalised words.
-    const placeLike = /^the\s+\S/i.test(phrase) || /^[A-Z]/.test(phrase);
+    const placeLike =
+      !/^(?:a |an )?(?:minute|hour|day|week|month|year|progress|advance|time|case|person|total|the morning|the afternoon|the evening)\b/i.test(
+        phrase,
+      );
     // "on Thursday" at the tail is a date, not part of the place.
     phrase = phrase.replace(/\s+on\s+(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*$/i, "");
     if (placeLike && words(phrase).length > 0) out.push(phrase.trim());
   }
+  const room = /\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+([A-Z]{2,}\s+\d{2,4}[A-Z]?)\s*$/i.exec(
+    message,
+  );
+  if (room && !out.some((place) => norm(place) === norm(room[1]))) out.push(room[1]);
   return out;
 }
 
@@ -130,12 +141,12 @@ export function findMissingDetails(
   message: string,
   staged: StagedAdd[],
   timeZone = "UTC",
+  now = new Date(),
 ): string[] {
   if (!staged.length || staged.some((a) => a.kind !== "create")) return [];
   const missing: string[] = [];
 
-  const haystack = (a: StagedAdd) =>
-    norm([a.title, a.location, a.description].filter((v) => typeof v === "string").join(" "));
+  const haystack = (a: StagedAdd) => norm(typeof a.location === "string" ? a.location : "");
   const places = staged.map(haystack);
   for (const phrase of placePhrases(message)) {
     const need = words(phrase);
@@ -156,6 +167,51 @@ export function findMissingDetails(
   }
   for (const t of new Set(clockTimes(message))) {
     if (!have.has(t)) missing.push(`time ${label(t)}`);
+  }
+
+  // Explicit ranges must survive on the same event, not as two separate adds.
+  const first = matchDatePhrase(message, now);
+  const tail = first ? message.slice(first.index + first.text.length) : "";
+  const second =
+    first &&
+    !first.end &&
+    /^\s*(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:to|through|thru|until)\b/i.test(tail)
+      ? matchDatePhrase(tail, now)
+      : null;
+  const phrase =
+    first && second
+      ? {
+          ...first,
+          end: second.start,
+          text: `${first.text}${tail.slice(0, second.index + second.text.length)}`,
+        }
+      : first;
+  if (phrase?.end) {
+    const key = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const zoned = (v: unknown) => {
+      if (typeof v !== "string" || Number.isNaN(+new Date(v))) return "";
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date(v));
+    };
+    const previousDay = (value: string) => {
+      const d = new Date(`${value}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+    const kept = staged.some((a) => {
+      const end = zoned(a.endAt);
+      return (
+        zoned(a.at) === key(phrase.start) &&
+        end &&
+        (a.allDay ? previousDay(end) : end) === key(phrase.end!)
+      );
+    });
+    if (!kept) missing.push(`date range "${phrase.text}" on one event`);
   }
 
   const offsets = new Set<number>();

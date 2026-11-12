@@ -1874,6 +1874,15 @@ function titleIsFaithful(
   cat: Category | undefined,
 ): boolean {
   if (location && /^(?:noon|midnight|\d)/i.test(location.trim())) return false;
+  // Unconsumed scheduling language means the parser did not understand the add.
+  if (
+    /\b(?:from|through|thru|until|location|noon|midnight|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b\d{1,2}(?:st|nd|rd|th)\b|[:,]/i.test(
+      title,
+    )
+  )
+    return false;
+  if (/\b(?:on the|from .+ (?:to|through|thru)|location)\b/i.test(source)) return false;
+  if (/\bin\s+\S/i.test(title) || /\b[A-Z]{2,}\s+\d{2,}\b/.test(title)) return false;
   const kept = new Set([
     ...contentWords(title),
     ...contentWords(location ?? ""),
@@ -2061,11 +2070,21 @@ function addIntent(env: Env): Outcome {
   const endOfDay = type !== "event" && !timed;
   const day = dayName(due, now);
   const relDay = /^(?:today|tomorrow|yesterday)$/.test(day);
-  const whenText = parsed.allDay
+  let whenText = parsed.allDay
     ? `${day} (all day)`
     : endOfDay
       ? day
       : `${day} at ${fmtTime(due, ctx.clock24h)}`;
+  if (parsed.endAt && type === "event" && !parsed.repeat) {
+    const end = new Date(parsed.endAt);
+    if (parsed.allDay) {
+      end.setDate(end.getDate() - 1);
+      if (end.toDateString() !== due.toDateString())
+        whenText = `${day} – ${dayName(end, now)} (all day)`;
+    } else {
+      whenText += ` – ${end.toDateString() === due.toDateString() ? fmtTime(end, ctx.clock24h) : `${dayName(end, now)} at ${fmtTime(end, ctx.clock24h)}`}`;
+    }
+  }
   const spokenLocation =
     parsed.location &&
     /[A-Z]/.test(placeName(parsed.location)) &&

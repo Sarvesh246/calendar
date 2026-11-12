@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useDeferredValue, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Search, Sparkles, X } from "lucide-react";
@@ -189,14 +191,20 @@ export function MobileSearch({ onClose }: { onClose: () => void }) {
                   {/* The year only when it isn't this one, and the clock the
                       user chose — this row used to print "11:59 PM" in an app
                       set to 24-hour time. */}
-                  {format(
-                    new Date(i.at),
-                    new Date(i.at).getFullYear() === new Date().getFullYear()
-                      ? "EEE, MMM d"
-                      : "EEE, MMM d, yyyy",
-                  )}
-                  {!i.allDay && ` · ${formatTime(i.at, chrome.clock24h)}`} ·{" "}
-                  {classLabel(categoriesById.get(i.categoryId ?? ""))} ·{" "}
+                  {isUndated(i) ? (
+                    "No due date"
+                  ) : (
+                    <>
+                      {format(
+                        new Date(i.at),
+                        new Date(i.at).getFullYear() === new Date().getFullYear()
+                          ? "EEE, MMM d"
+                          : "EEE, MMM d, yyyy",
+                      )}
+                      {!i.allDay && ` · ${formatTime(i.at, chrome.clock24h)}`}
+                    </>
+                  )}{" "}
+                  · {classLabel(categoriesById.get(i.categoryId ?? ""))} ·{" "}
                   {i.type === "event"
                     ? "Scheduled"
                     : i.status === "done"

@@ -1,3 +1,4 @@
+import { isUndated } from "./undated";
 import { format } from "date-fns";
 import type { Category, ImportSource, Item } from "./types";
 import { happeningNow, isClassStartingSoon, leftoverOverdue, openWorkDueOnDay } from "./date-utils";
@@ -231,7 +232,7 @@ export function buildNativeSnapshot(opts: {
     );
 
   const upNext = items
-    .filter((i) => i.status !== "done" && new Date(i.at).getTime() > now.getTime())
+    .filter((i) => i.status !== "done" && !isUndated(i) && new Date(i.at).getTime() > now.getTime())
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
     .slice(0, 6)
     .map((i) =>
@@ -246,7 +247,9 @@ export function buildNativeSnapshot(opts: {
     .filter((i) => i.type !== "event" && i.status !== "done")
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
     .slice(0, 6)
-    .map((i) => row(i, categories, `Due ${format(new Date(i.at), "MMM d")}`));
+    .map((i) =>
+      row(i, categories, isUndated(i) ? "No due date" : `Due ${format(new Date(i.at), "MMM d")}`),
+    );
 
   const classes = items
     .filter(
@@ -317,7 +320,10 @@ export function buildNativeSnapshot(opts: {
     .map((i) => ({
       id: i.id,
       title: i.title,
-      subtitle: [catLabel(categories, i.categoryId), format(new Date(i.at), "MMM d")]
+      subtitle: [
+        catLabel(categories, i.categoryId),
+        isUndated(i) ? "No due date" : format(new Date(i.at), "MMM d"),
+      ]
         .filter(Boolean)
         .join(" · "),
       // Both spellings, so Spotlight finds "math 150" and the feed's own code.

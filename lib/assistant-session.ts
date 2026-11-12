@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { isUndated } from "./undated";
 import {
   askAssistant,
   toAssistantSlimItem,
@@ -26,7 +27,7 @@ export interface AssistantMessage {
   actions?: AssistantAction[];
   /** Why there is no real answer. Drawn as a sign-in card or a Retry, never
    *  as a guess. */
-  error?: "signed-out" | "unreachable" | "busy";
+  error?: "signed-out" | "unreachable" | "busy" | "interpretation";
   providerLabel?: string;
   fallbackNotice?: string;
   /** Outcome per action index. Lives on the message so it's saved with the
@@ -71,7 +72,9 @@ function conversationId() {
  * tombstones, sync, reminder scheduling, the save pill, widget refresh and Undo
  * all behave identically whichever engine staged the card.
  */
-async function confirmServerAction(card: AssistantAction): Promise<AssistantAction> {
+async function confirmServerAction(
+  card: Exclude<AssistantAction, { kind: "batch" }>,
+): Promise<AssistantAction> {
   const serverActionId = card.serverActionId;
   if (!serverActionId) throw new Error("Could not apply this change");
   const response = await fetch("/api/assistant/confirm", {
@@ -116,6 +119,7 @@ interface Undoable {
   undo: () => boolean;
 }
 const undoers = new Map<string, Undoable>();
+const applyingActions = new Set<string>();
 let latestUndo: string | null = null;
 
 const UNDO_PHRASE =
@@ -137,12 +141,16 @@ function undoLatest(): string {
 /** Apply one action through the store's own actions, and say how to reverse it. */
 function applyToStore(action: AssistantAction): Undoable {
   const store = useDatebookStore.getState();
+  if (action.kind === "batch") {
+    const applied = action.actions.map(applyToStore);
+    return { label: action.summary, undo: () => applied.reverse().every((entry) => entry.undo()) };
+  }
   const label = `${actionVerb(action).toLowerCase()} “${
     action.kind === "create" ? action.draft.title : action.itemTitle
   }”`;
   if (action.kind === "create") {
     let draft = action.draft;
-    if (draft.reminders === undefined) {
+    if (!isUndated(draft) && draft.reminders === undefined) {
       const defaults = remindersFromPresetIds(
         store.settings.defaultReminderPresetIds,
         store.reminderPresets,
@@ -309,14 +317,56 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
       weekStartsOn: settings.weekStartsOn,
       modelId,
       conversationId: conversationId(),
+      pendingCreates: messages
+        .flatMap((message, mi) =>
+          (message.actions ?? []).flatMap((action, ai) =>
+            action.kind === "create" &&
+            !message.resolved?.[ai] &&
+            !staleReason(action, message.createdAt, () => true, Date.now())
+              ? [{ ref: `${mi}:${ai}`, draft: action.draft }]
+              : [],
+          ),
+        )
+        .slice(-8),
       context: chatContext(),
       onPartial: (text) => set({ streaming: text }),
     })
       .then((res) => {
         res = { ...res, actions: withResolvedClasses(res.actions, categories) };
+        const liveMessages = get().messages;
+        const valid = (res.actions ?? []).filter((action) => {
+          if (action.kind !== "create" || !action.revisionOf) return true;
+          const [mi, ai] = action.revisionOf.split(":").map(Number);
+          const previous = liveMessages[mi];
+          return (
+            previous?.actions?.[ai]?.kind === "create" &&
+            !previous.resolved?.[ai] &&
+            !applyingActions.has(`${mi}:${ai}`) &&
+            !staleReason(previous.actions[ai], previous.createdAt, () => true, Date.now())
+          );
+        });
+        if (valid.length !== (res.actions?.length ?? 0))
+          res = {
+            ...res,
+            actions: valid,
+            text: "That card is no longer pending. Please ask again if you want a new item.",
+          };
         set((s) => ({
           messages: [
-            ...supersedeOpenCards(s.messages, res.actions),
+            ...supersedeOpenCards(s.messages, res.actions).map((message, mi) => {
+              let resolved = message.resolved;
+              for (const action of res.actions ?? []) {
+                if (action.kind !== "create" || !action.revisionOf) continue;
+                const [targetMessage, targetAction] = action.revisionOf.split(":").map(Number);
+                if (
+                  mi === targetMessage &&
+                  message.actions?.[targetAction] &&
+                  !resolved?.[targetAction]
+                )
+                  resolved = { ...resolved, [targetAction]: "superseded" };
+              }
+              return resolved === message.resolved ? message : { ...message, resolved };
+            }),
             {
               role: "assistant",
               text: res.text,
@@ -404,7 +454,7 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
     applyAction: (mi, ai) => {
       const message = get().messages[mi];
       const action = message?.actions?.[ai];
-      if (!action || message.resolved?.[ai]) return;
+      if (!action || message.resolved?.[ai] || applyingActions.has(`${mi}:${ai}`)) return;
       // The card may have outlived what it is about. Say so rather than
       // report "Done" for a change that cannot happen.
       const live = useDatebookStore.getState().items;
@@ -418,7 +468,50 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
         get().resolveAction(mi, ai, stale);
         return;
       }
+      if (action.kind === "batch") {
+        const key = `${mi}:${ai}`;
+        applyingActions.add(key);
+        void Promise.all(
+          action.actions.map((child) =>
+            child.kind === "batch"
+              ? Promise.reject(new Error("Nested batches are not supported"))
+              : child.serverActionId
+                ? confirmServerAction(child)
+                : Promise.resolve(child),
+          ),
+        )
+          .then((confirmed) => {
+            const current = useDatebookStore.getState().items;
+            if (
+              confirmed.some(
+                (child) =>
+                  child.kind !== "update" || !current.some((item) => item.id === child.itemId),
+              )
+            ) {
+              get().resolveAction(mi, ai, "stale");
+              return;
+            }
+            const done = applyToStore({ ...action, actions: confirmed });
+            undoers.set(key, done);
+            latestUndo = key;
+            get().resolveAction(mi, ai, "applied");
+          })
+          .catch(() =>
+            set((state) => ({
+              messages: [
+                ...state.messages,
+                {
+                  role: "assistant",
+                  text: "Could not confirm the whole series. Please ask again.",
+                },
+              ],
+            })),
+          )
+          .finally(() => applyingActions.delete(key));
+        return;
+      }
       if (action.serverActionId) {
+        applyingActions.add(`${mi}:${ai}`);
         void confirmServerAction(action)
           .then((confirmed) => {
             const done = applyToStore(confirmed);
@@ -434,7 +527,8 @@ export const useAssistantSession = create<AssistantSessionState>((set, get) => {
               set((state) => ({
                 messages: [...state.messages, { role: "assistant", text }],
               }));
-          });
+          })
+          .finally(() => applyingActions.delete(`${mi}:${ai}`));
         return;
       }
       const done = applyToStore(action);

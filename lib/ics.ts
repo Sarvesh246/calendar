@@ -1,3 +1,4 @@
+import { isUndated, UNDATED_AT } from "./undated";
 import { safeExternalUrl } from "./safe-url";
 
 // Minimal iCalendar (RFC 5545) reader — enough to import event/assignment feeds
@@ -147,17 +148,17 @@ function parseDate(value: string, params: Record<string, string>): DateResult | 
 type CurEvent = Partial<RawEvent> & { _start?: DateResult; _end?: DateResult };
 
 function pushCur(rawEvents: RawEvent[], cur: CurEvent, kind: "event" | "todo") {
-  if (!cur.uid || !cur.summary || !cur._start) return;
+  if (!cur.uid || !cur.summary || (!cur._start && kind !== "todo")) return;
   rawEvents.push({
     uid: cur.uid,
     summary: cur.summary,
     description: cur.description,
     location: cur.location,
     url: cur.url,
-    start: cur._start.iso,
+    start: cur._start?.iso ?? UNDATED_AT,
     end: cur._end?.iso,
-    allDay: cur._start.allDay,
-    rrule: cur.rrule,
+    allDay: cur._start?.allDay ?? false,
+    rrule: cur._start ? cur.rrule : undefined,
     exdates: cur.exdates ?? [],
     recurrenceId: cur.recurrenceId,
     cancelled: cur.cancelled,
@@ -478,6 +479,8 @@ export function serializeIcs(
   items: {
     id: string;
     title: string;
+    type?: string;
+    status?: string;
     at: string;
     endAt?: string;
     allDay?: boolean;
@@ -497,10 +500,13 @@ export function serializeIcs(
   ];
   const now = utcStamp(new Date());
   for (const item of items) {
-    lines.push("BEGIN:VEVENT");
+    const undated = isUndated({ type: item.type ?? "event", at: item.at });
+    lines.push(undated ? "BEGIN:VTODO" : "BEGIN:VEVENT");
     lines.push(`UID:${(item.sourceUid || item.id).replace(/\s/g, "")}@datebook`);
     lines.push(`DTSTAMP:${now}`);
-    if (item.allDay) {
+    if (undated) {
+      if (item.status === "done") lines.push("STATUS:COMPLETED");
+    } else if (item.allDay) {
       lines.push(`DTSTART;VALUE=DATE:${dateStamp(item.at)}`);
       if (item.endAt) lines.push(`DTEND;VALUE=DATE:${dateStamp(item.endAt)}`);
     } else {
@@ -512,7 +518,7 @@ export function serializeIcs(
     if (item.location) lines.push(`LOCATION:${icsEscape(item.location)}`);
     const safeUrl = safeExternalUrl(item.url);
     if (safeUrl) lines.push(`URL:${safeUrl}`);
-    lines.push("END:VEVENT");
+    lines.push(undated ? "END:VTODO" : "END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");

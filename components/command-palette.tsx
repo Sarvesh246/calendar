@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { MobileSearch } from "@/components/mobile-search";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useEffect, useState } from "react";
@@ -355,7 +357,7 @@ function CommandPaletteDialog({ active }: { active: boolean }) {
                       <CalendarRange className="h-4 w-4 shrink-0" strokeWidth={1.75} />
                       <span className="truncate">{itemDisplayTitle(item, category)}</span>
                       <span className="ml-auto shrink-0 pl-2 text-[11.5px] normal-case tracking-normal text-ink-faint">
-                        {format(new Date(item.at), "MMM d")}
+                        {isUndated(item) ? "No due date" : format(new Date(item.at), "MMM d")}
                       </span>
                       {category && (
                         <span

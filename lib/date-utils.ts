@@ -17,6 +17,7 @@ import {
   type Day,
 } from "date-fns";
 import type { Category, Item } from "./types";
+import { isUndated } from "./undated";
 import { isClassMeeting, isClassScheduleItem } from "./class-schedule";
 import { DEFAULT_CLASS_REMINDER_MINUTES } from "./class-reminder";
 
@@ -137,7 +138,7 @@ export function itemDaySpan(item: Item): { start: Date; last: Date } {
 
 /** True when unfinished work is due on `day`'s local calendar date. */
 export function isDueOnDay(item: Item, day: Date): boolean {
-  if (item.type === "event") return false;
+  if (item.type === "event" || isUndated(item)) return false;
   const at = new Date(item.at);
   if (Number.isNaN(at.getTime())) return false;
   return startOfDay(at).getTime() === startOfDay(day).getTime();
@@ -182,6 +183,7 @@ export function leftoverOverdue(
 }
 
 export function itemOccupiesDay(item: Item, day: Date) {
+  if (isUndated(item)) return false;
   const { start, last } = itemDaySpan(item);
   const key = startOfDay(day).getTime();
   return key >= start.getTime() && key <= last.getTime();
@@ -207,6 +209,7 @@ export function dayKey(date: Date) {
 export function groupItemsByDay(items: Item[]): Map<string, Item[]> {
   const map = new Map<string, Item[]>();
   for (const item of items) {
+    if (isUndated(item)) continue;
     const { start, last } = itemDaySpan(item);
     for (let d = start; d.getTime() <= last.getTime(); d = addDays(d, 1)) {
       const key = dayKey(d);
@@ -536,7 +539,9 @@ export function rankItemsByDay(byDay: Map<string, Item[]>, now = new Date()) {
 /** The soonest open work that is still ahead — overdue work has its own section. */
 export function nextOpenAssignment(items: Item[], now = new Date()): Item | undefined {
   return items
-    .filter((i) => i.type !== "event" && i.status !== "done" && !isOverdueAt(i, now))
+    .filter(
+      (i) => i.type !== "event" && i.status !== "done" && !isUndated(i) && !isOverdueAt(i, now),
+    )
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())[0];
 }
 

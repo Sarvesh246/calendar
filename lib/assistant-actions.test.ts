@@ -165,6 +165,25 @@ describe("describeAction", () => {
     categoryId: "chem",
   };
 
+  it("shows the inclusive end of a multi-day event", () => {
+    const d = describeAction(
+      {
+        kind: "create",
+        summary: "",
+        draft: {
+          title: "Hackathon",
+          type: "event",
+          categoryId: "",
+          at: local(11, 14, 12),
+          endAt: local(11, 17),
+          allDay: true,
+        },
+      },
+      [],
+    );
+    expect(d.when).toBe("Sat, Nov 14 – Mon, Nov 16 (all day)");
+  });
+
   it("a model reschedule shows the old and new date, not just 'Update'", () => {
     const d = describeAction(
       {

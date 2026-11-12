@@ -1,3 +1,4 @@
+import { isUndated, isUndatedAt } from "@/lib/undated";
 import { buildAssistantDigest } from "@/lib/ai-assistant";
 import { dateLookupLine, weekdayStamp } from "@/lib/assistant-dates";
 import type { AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
@@ -61,17 +62,18 @@ export function systemPrompt(body: ReqBody): string {
       item.id,
       item.type,
       item.status ?? "",
-      localStamp(item.at, tz),
+      isUndated(item) ? "no due date" : localStamp(item.at, tz),
       item.endAt ? localStamp(item.endAt, tz) : "",
       item.title.slice(0, 120),
       (item.categoryId && categoryNames.get(item.categoryId)) || "",
       item.location?.slice(0, 60) ?? "",
+      item.repeatId ? `series ${item.repeatId}` : "",
       // When it was finished: "what did I finish last week" cannot be answered
       // from a due date.
       item.status === "done" && item.completedAt ? `done ${localStamp(item.completedAt, tz)}` : "",
     ].join("|");
   const entry = (e: { title: string; at: string; status?: string }) =>
-    `${e.title.slice(0, 80)} @ ${localStamp(e.at, tz)}${e.status && e.status !== "todo" ? ` [${e.status}]` : ""}`;
+    `${e.title.slice(0, 80)} @ ${isUndatedAt(e.at) ? "no due date" : localStamp(e.at, tz)}${e.status && e.status !== "todo" ? ` [${e.status}]` : ""}`;
   const compactDigest = {
     dueToday: digest.dueToday.map(entry),
     dueThisWeek: digest.dueThisWeek
@@ -110,9 +112,15 @@ ${
 
 `
     : ""
-}Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the Dates line above and the timezone above, and always quote a weekday together with its date exactly as the Dates line or the snapshot shows it. For any question of the form "am I free", "can I fit", "do I have a conflict" or "is anything on", call check_availability with the exact window and trust its answer: free is a boolean computed in code, so never override it from the snapshot. Use ISO 8601 with an explicit offset in tool arguments.
+}Answer questions precisely from the user's data. Completed work is never overdue or still due. Events are not assignments. Never invent an item. For anything not in the snapshot, call list_events or list_tasks. Every data-changing request must call the matching add/update/delete tool (several tool calls in one turn are fine for multi-item requests); do not claim it is complete because all mutations wait for the user's confirmation card. History can include confirmation cards and their state. A pending card has not been applied and is not an existing calendar item. When the user asks to revise a pending create, call revise_pending using its ref; this replaces the old card. Pending create cards: ${JSON.stringify((body.pendingCreates ?? []).map((card) => ({ ...card, draft: { ...card.draft, at: isUndated(card.draft) ? "no due date" : card.draft.at } })))}. If a target is ambiguous, ask one concise question instead of calling a mutation tool. For bulk shifts or deletes, use select_items with the requested filters or series id to resolve all affected ids, then use bulk_update, bulk_shift or bulk_delete. Never silently omit matching items; if the full set cannot be established, ask the user to narrow the request. For multiline pasted schedules, blank lines separate entries and a Location line belongs to the event directly above it. Preserve every title, date, time, location, and reminder the user gave. Resolve relative dates against the Dates line above and the timezone above, and always quote a weekday together with its date exactly as the Dates line or the snapshot shows it. For any question of the form "am I free", "can I fit", "do I have a conflict" or "is anything on", call check_availability with the exact window and trust its answer: free is a boolean computed in code, so never override it from the snapshot. For weekly class meeting times, use one add_event per distinct meeting slot with its class categoryId, start and end times, and a weekly repeat with byDay and until. Ask for any missing class, end time, weekdays or ending date; these are class meetings, not syllabus due dates. To plan a work session, create a separate event with workFor set to the existing task or assignment id; never move the deadline. A date range describes ONE event, not one event per date: call add_event once with its start and end. For add_event and update_event, use local startDate/startTime and endDate/endTime; endDate is the inclusive last day. For add_task and update_task use local dueDate and dueTime. When the user explicitly requests a task with no due date, set undated true and do not invent a date or time reminder. For lookup tools use ISO 8601 with an explicit offset.
 
 Style. Keep the final response to one to three plain sentences. When the answer is a list of two or more of the user's items, call show_items with their ids and write ONE framing sentence; the app draws the rows, so do not list them yourself. When a request is ambiguous, call offer_choices with 2-4 short options and ask the question in one line. Never say "based on your digest/data/calendar/snapshot", never include a year, never use italics, headings or tables, and use "- " for any bullet (never "*"). Write dates as "Thu, Nov 12", copied from the Dates line. Use bold only for a title, time or count. Never expose provider internals or tool JSON.
+
+Examples of event adds (dates below are examples, not today's date):
+User: "add TAMUhack November 14 through November 16 at MSC" -> one add_event with title "TAMUhack", startDate "2026-11-14", endDate "2026-11-16", allDay true, location "MSC".
+User: "add offsite October 6 at 9am through October 8 at 5pm at Hilton" -> one add_event with startDate "2026-10-06", startTime "09:00", endDate "2026-10-08", endTime "17:00", location "Hilton".
+User: "add lunch tomorrow at noon at zachry" -> one add_event with tomorrow's startDate, startTime "12:00", location "zachry".
+User: "add CHEM lecture Mondays and Wednesdays 10am to 11am until December 1" -> one add_event with the class categoryId, startDate on the first meeting, startTime "10:00", endTime "11:00", repeat {freq:"weekly", byDay:[1,3], untilDate:"2026-12-01"}.
 
 Example. User: what's due this week? -> call show_items(ids of the open work due this week, heading "Due this week"), then reply: You have 3 things due this week, the earliest on Thu, Nov 12.
 Example. User: am I free thursday at 7pm? -> call check_availability for that moment, then reply: No, you have Study group meeting at 7:00 PM on Thu, Nov 12.`;

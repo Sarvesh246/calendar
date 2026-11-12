@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "./undated";
+
 import { addDays, format } from "date-fns";
 import { useDatebookStore } from "@/lib/store";
 import { offerUndo, useActionUndo } from "@/lib/action-undo";
@@ -35,7 +37,9 @@ export function rescheduledDate(at: string, date: string) {
 }
 export function mobileReschedule(item: Item, date: string, planWork: boolean) {
   const store = useDatebookStore.getState();
-  const at = rescheduledDate(item.at, date);
+  const at = isUndated(item)
+    ? new Date(`${date}T23:59:00`).toISOString()
+    : rescheduledDate(item.at, date);
   if (planWork) {
     haptic("light");
     const planned = store.addItem({
@@ -45,7 +49,9 @@ export function mobileReschedule(item: Item, date: string, planWork: boolean) {
       status: "todo",
       at,
       allDay: true,
-      description: `Work session for ${item.title}. Original deadline: ${format(new Date(item.at), "PPP p")}.`,
+      description: isUndated(item)
+        ? `Work session for ${item.title}.`
+        : `Work session for ${item.title}. Original deadline: ${format(new Date(item.at), "PPP p")}.`,
       url: item.url,
     });
     offerUndo("Work planned · deadline unchanged", () => {

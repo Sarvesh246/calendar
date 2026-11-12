@@ -46,7 +46,10 @@ export async function availableLlmModels(): Promise<PublicLlmModel[]> {
   return configuredProviders().map(publicProvider);
 }
 
-export async function providerCandidates(selectedId?: string): Promise<{
+export async function providerCandidates(
+  selectedId?: string,
+  mutation = false,
+): Promise<{
   providers: LlmProviderConfig[];
   requestedUnavailable: boolean;
 }> {
@@ -55,6 +58,9 @@ export async function providerCandidates(selectedId?: string): Promise<{
   const enabled = configured.filter(
     (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
   );
+  // Prefer already-configured larger models for writes; explicit model choices still win.
+  if (mutation)
+    enabled.sort((a, b) => Number(!/120b/i.test(a.model)) - Number(!/120b/i.test(b.model)));
   if (!selectedId || selectedId === "auto")
     return { providers: enabled, requestedUnavailable: false };
   const selected = enabled.find((provider) => provider.id === selectedId);
@@ -124,6 +130,7 @@ export function logLlmRequest(data: {
 
 export async function callRoutedProvider(opts: {
   selectedId?: string;
+  mutation?: boolean;
   messages: ChatMessage[];
   tools: OpenAiTool[];
   run: (
@@ -138,7 +145,10 @@ export async function callRoutedProvider(opts: {
     choices?: string[];
   }>;
 }) {
-  const { providers, requestedUnavailable } = await providerCandidates(opts.selectedId);
+  const { providers, requestedUnavailable } = await providerCandidates(
+    opts.selectedId,
+    opts.mutation,
+  );
   let lastError: unknown;
   for (const provider of providers) {
     const key = keyFor(provider);

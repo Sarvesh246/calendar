@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -141,7 +143,7 @@ function InspectorPanel({ item }: { item: Item }) {
             Focus on this
           </button>
         )}
-        {pathname !== "/calendar" && (
+        {pathname !== "/calendar" && !isUndated(item) && (
           <button
             type="button"
             onClick={() => {

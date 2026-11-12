@@ -262,7 +262,7 @@ export function parseQuickAdd(
 
   const at = allDay ? setMinutes(setHours(base, 12), 0) : setMinutes(setHours(base, hour), minute);
   // A day range wins over any time range picked out of the leftover text.
-  if (rangeEnd) endAt = setMinutes(setHours(rangeEnd, 12), 0);
+  if (rangeEnd) endAt = addDays(startOfDay(rangeEnd), 1);
 
   const loc = extractLocation(text);
   text = loc.rest;

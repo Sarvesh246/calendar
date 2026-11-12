@@ -1,5 +1,6 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
 import { NumberRoll } from "@/components/ui/number-roll";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -105,7 +106,7 @@ export default function AgendaPage() {
     ];
   }, [items, now]);
 
-  const { groups, later, byDay } = useMemo(() => {
+  const { groups, later, undated, byDay } = useMemo(() => {
     const today = startOfDay(now);
     const cutoff = addDays(today, HORIZON_DAYS);
     const result: { date: Date; items: Item[]; key: string }[] = [];
@@ -118,9 +119,9 @@ export default function AgendaPage() {
       if (dayItems.length > 0) result.push({ date, items: dayItems, key: dayKey(date) });
     }
     const laterItems = items
-      .filter((it) => !isOverdue(it) && new Date(it.at) >= cutoff)
+      .filter((it) => !isUndated(it) && !isOverdue(it) && new Date(it.at) >= cutoff)
       .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-    return { groups: result, later: laterItems, byDay };
+    return { groups: result, later: laterItems, undated: items.filter(isUndated), byDay };
   }, [items, now]);
 
   const week = useMemo(
@@ -168,7 +169,11 @@ export default function AgendaPage() {
   }, [pendingFill, allGroupsVisible, groupLimit, laterLimit, revealMoreGroups, revealMoreLater]);
 
   const isEmpty =
-    overdue.length === 0 && groups.length === 0 && later.length === 0 && todayCount === 0;
+    overdue.length === 0 &&
+    groups.length === 0 &&
+    later.length === 0 &&
+    undated.length === 0 &&
+    todayCount === 0;
 
   // Agenda's scope is everything from today on, so a horizon full of completed
   // work reads as "Everything completed" rather than an empty calendar.
@@ -224,6 +229,15 @@ export default function AgendaPage() {
         dayKey: g.key,
       });
     }
+    if (undated.length) {
+      out.push({
+        id: "undated",
+        label: "No due date",
+        count: undated.length,
+        tone: "faint",
+        items: undated,
+      });
+    }
     if (visibleLater.length) {
       out.push({
         id: "later",
@@ -235,7 +249,16 @@ export default function AgendaPage() {
       });
     }
     return out;
-  }, [rows, overdue.length, later.length, visibleOverdue, visibleGroups, visibleLater, now]);
+  }, [
+    rows,
+    overdue.length,
+    later.length,
+    visibleOverdue,
+    visibleGroups,
+    visibleLater,
+    undated,
+    now,
+  ]);
 
   const todayLink = <AgendaTodayDropdown items={todayRows} />;
 
@@ -408,6 +431,26 @@ export default function AgendaPage() {
                     />
                   )}
 
+                  {undated.length > 0 && (
+                    <section id="agenda-undated" className="agenda-day">
+                      <DayHeading label="No due date" count={undated.length} />
+                      <div className="flex flex-col gap-2">
+                        <AnimatePresence initial={false}>
+                          {undated.map((item) => (
+                            <ItemCard
+                              key={item.id}
+                              item={item}
+                              category={
+                                item.categoryId ? categoriesById.get(item.categoryId) : undefined
+                              }
+                              showQuickActions={false}
+                              {...chrome}
+                            />
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </section>
+                  )}
                   {visibleLater.length > 0 && (
                     <section id="agenda-later" className="agenda-day">
                       <DayHeading label="Later" count={later.length} />

@@ -88,6 +88,31 @@ interface Case {
 
 const cases: Case[] = [
   {
+    prompt: "add a task to read the paper with no due date",
+    check: (actions) =>
+      expect(actions).toMatchObject([
+        { kind: "create", draft: { type: "task", at: "9999-12-31T12:00:00.000Z" } },
+      ]),
+  },
+  {
+    prompt: "add TAMUhack from november 14 to november 16 at the MSC",
+    check: (actions) => {
+      expect(actions).toHaveLength(1);
+      expect(actions[0]).toMatchObject({
+        kind: "create",
+        draft: {
+          title: "TAMUhack",
+          type: "event",
+          allDay: true,
+          at: "2026-11-14T05:00:00.000Z",
+          endAt: "2026-11-17T05:00:00.000Z",
+        },
+      });
+      if (actions[0].kind === "create")
+        expect(actions[0].draft.location?.toLowerCase()).toContain("msc");
+    },
+  },
+  {
     prompt: "am I free thursday at 7pm?",
     noActions: true,
     check: (_, text) => expect(text).not.toMatch(/^yes\b/i),
@@ -150,10 +175,17 @@ const key = (a: ReturnType<typeof normalizeActions>) =>
   JSON.stringify(
     a.map((x) =>
       x.kind === "create"
-        ? { kind: x.kind, title: x.draft.title, at: x.draft.at, location: x.draft.location }
+        ? {
+            kind: x.kind,
+            title: x.draft.title,
+            at: x.draft.at,
+            location: x.draft.location?.toLowerCase().replace(/^the\s+/, ""),
+          }
         : x.kind === "update"
           ? { kind: x.kind, id: x.itemId, patch: x.patch }
-          : { kind: x.kind, id: x.itemId },
+          : x.kind === "batch"
+            ? { kind: x.kind, count: x.actions.length }
+            : { kind: x.kind, id: x.itemId },
     ),
   );
 

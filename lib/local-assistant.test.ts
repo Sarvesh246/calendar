@@ -594,3 +594,27 @@ describe("local assistant — free time and what is due", () => {
     expect(r).toMatch(/On your calendar/);
   });
 });
+
+describe("audit add regressions", () => {
+  it.each([
+    "add TAMUhack from november 14 to november 16 at the MSC",
+    "add team offsite oct 6 9am to oct 8 5pm at Hilton College Station",
+    "Add event: Aggie Ring Day, April 10-11, Clayton Williams Alumni Center",
+    "put Parents weekend on my calendar oct 9-11, location Kyle Field",
+    "add spring break trip march 9 through march 15 in Austin",
+    "add exam on the 14th at 2 in HELD 105",
+    "add midterm review session thursday 6-8pm ZACH 350",
+    "add lunch with sam tomorrow noon",
+  ])("does not stage a partially parsed add: %s", (message) => {
+    expect(tryLocalAnswer(message, [], ctx, NOW)?.actions ?? []).toEqual([]);
+  });
+});
+
+it("shows the full inclusive range on a locally parsed multi-day add", () => {
+  const result = tryLocalAnswer("add hackathon nov 14-16 at Zachry", [], ctx, NOW);
+  expect(result?.actions?.[0]).toMatchObject({
+    kind: "create",
+    draft: { allDay: true, location: "Zachry" },
+  });
+  expect(result?.text).toMatch(/16/);
+});

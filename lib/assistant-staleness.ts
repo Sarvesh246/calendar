@@ -17,7 +17,7 @@ export type OpenOutcomes = Record<number, ActionOutcome> | undefined;
 
 /** The item an update/delete card is about; creates have none. */
 export function actionTargetId(action: AssistantAction): string | null {
-  return action.kind === "create" ? null : action.itemId;
+  return action.kind === "create" || action.kind === "batch" ? null : action.itemId;
 }
 
 /** Why an unresolved card can no longer be applied, or null if it still can. */
@@ -28,9 +28,16 @@ export function staleReason(
   now: number,
 ): "stale" | "expired" | null {
   if (createdAt !== undefined && now - createdAt > ACTION_TTL_MS) return "expired";
-  const target = actionTargetId(action);
-  if (target && !itemExists(target)) return "stale";
+  const targets =
+    action.kind === "batch" ? action.actions.map(actionTargetId) : [actionTargetId(action)];
+  if (targets.some((target) => target && !itemExists(target))) return "stale";
   return null;
+}
+
+function actionTargetIds(action: AssistantAction): string[] {
+  if (action.kind === "batch") return action.actions.flatMap(actionTargetIds);
+  const id = actionTargetId(action);
+  return id ? [id] : [];
 }
 
 export const OUTCOME_COPY: Record<Exclude<ActionOutcome, "applied" | "dismissed">, string> = {
@@ -54,16 +61,13 @@ export function supersedeOpenCards<M extends HasActions>(
   messages: M[],
   incoming: AssistantAction[] | undefined,
 ): M[] {
-  const targets = new Set(
-    (incoming ?? []).map(actionTargetId).filter((id): id is string => Boolean(id)),
-  );
+  const targets = new Set((incoming ?? []).flatMap(actionTargetIds));
   if (targets.size === 0) return messages;
   return messages.map((msg) => {
     if (!msg.actions?.length) return msg;
     let resolved = msg.resolved;
     msg.actions.forEach((action, i) => {
-      const target = actionTargetId(action);
-      if (target && targets.has(target) && !resolved?.[i]) {
+      if (actionTargetIds(action).some((target) => targets.has(target)) && !resolved?.[i]) {
         resolved = { ...resolved, [i]: "superseded" };
       }
     });

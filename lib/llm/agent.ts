@@ -8,9 +8,20 @@ import { createChatCompletion } from "./router";
 import { DATEBOOK_TOOLS, executeDatebookTool, MalformedToolArgumentsError } from "./tools";
 import type { ChatMessage } from "./openai-compatible";
 
-const MAX_AGENT_LOOPS = 3;
+export class AssistantInterpretationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AssistantInterpretationError";
+  }
+}
+
+const MAX_AGENT_LOOPS = 5;
 
 const MUTATION_TOOLS = new Set([
+  "bulk_update",
+  "bulk_shift",
+  "bulk_delete",
+  "revise_pending",
   "add_event",
   "update_event",
   "delete_event",
@@ -45,8 +56,10 @@ export async function runAgent(opts: {
   let choices: string[] | undefined;
   let latencyMs = 0;
   let malformedRetries = 0;
+  let detailRetries = 0;
   for (let loop = 0; loop < MAX_AGENT_LOOPS; loop += 1) {
-    if (opts.budget.left <= 0) throw new Error("Assistant model-call budget exhausted");
+    if (opts.budget.left <= 0)
+      throw new AssistantInterpretationError("Assistant model-call budget exhausted");
     opts.budget.left -= 1;
     const completion = await createChatCompletion({
       provider: opts.provider,
@@ -74,6 +87,8 @@ export async function runAgent(opts: {
     opts.stream?.onReset();
     let allStaged = true;
     const iterationStart = messages.length;
+    const actionStart = actions.length;
+    let hadMalformed = false;
     for (const call of reply.tool_calls) {
       try {
         const result = await executeDatebookTool(call.function.name, call.function.arguments, {
@@ -82,6 +97,7 @@ export async function runAgent(opts: {
           body: opts.body,
         });
         if (result.action) actions.push(result.action);
+        else if (result.actions?.length) actions.push(...result.actions);
         else allStaged = false;
         if (result.display?.items) items.push(result.display.items);
         if (result.display?.choices) choices = result.display.choices;
@@ -93,8 +109,18 @@ export async function runAgent(opts: {
           content: JSON.stringify(result.output),
         });
       } catch (error) {
-        if (!(error instanceof MalformedToolArgumentsError) || malformedRetries >= 1) throw error;
+        if (!(error instanceof MalformedToolArgumentsError)) throw error;
+        if (malformedRetries >= 1) {
+          return {
+            text: "I couldn't interpret that change reliably. Please clarify the date, time, or other details and try again.",
+            actions: [],
+            items,
+            choices,
+            latencyMs,
+          };
+        }
         malformedRetries += 1;
+        hadMalformed = true;
         allStaged = false;
         messages.push({
           role: "tool",
@@ -107,16 +133,43 @@ export async function runAgent(opts: {
         });
       }
     }
+    if (hadMalformed && actions.length > actionStart) {
+      actions.splice(actionStart);
+      for (let i = iterationStart; i < messages.length; i += 1) {
+        if (
+          messages[i].role === "tool" &&
+          String(messages[i].content).includes("awaiting_confirmation")
+        )
+          messages[i] = {
+            ...messages[i],
+            content: JSON.stringify({
+              ok: false,
+              error:
+                "No cards from this batch will be shown. Reissue the full mutation batch with corrected arguments.",
+            }),
+          };
+      }
+    }
     // Did the staged adds keep every time, place and reminder the user gave?
-    // One corrective round, spent from the same slot as malformed arguments.
-    if (allStaged && actions.length && malformedRetries < 1) {
+    // A separate corrective round for details.
+    if (allStaged && actions.length) {
       const missing = findMissingDetails(
         opts.body.message,
         actions as StagedAdd[],
         opts.body.timeZone || "UTC",
+        new Date(opts.body.now),
       );
       if (missing.length) {
-        malformedRetries += 1;
+        if (detailRetries >= 1) {
+          return {
+            text: `I couldn't preserve all the details (${missing.join(", ")}). Please clarify and try again.`,
+            actions: [],
+            items,
+            choices,
+            latencyMs,
+          };
+        }
+        detailRetries += 1;
         // Nothing from this attempt is shown; the model is told, in place of
         // the "ok" it was about to read, exactly what was dropped.
         actions.length = 0;
@@ -143,5 +196,11 @@ export async function runAgent(opts: {
       };
     }
   }
-  throw new Error("Assistant exceeded the maximum tool-call loop count");
+  return {
+    text: "I couldn't finish interpreting that request. Please try a simpler phrasing.",
+    actions: [],
+    items,
+    choices,
+    latencyMs,
+  };
 }

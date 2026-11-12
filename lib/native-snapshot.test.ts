@@ -20,6 +20,9 @@ const due = (over: Partial<Item> = {}): Item => ({
 });
 
 describe("upcomingReminderFires", () => {
+  it("never schedules a reminder for an undated task", () => {
+    expect(upcomingReminderFires([due({ at: "9999-12-31T12:00:00.000Z" })], false, 10)).toEqual([]);
+  });
   it("schedules future time reminders and skips past ones", () => {
     const now = new Date(2026, 8, 11, 10, 0).getTime();
     const fires = upcomingReminderFires([due()], false, 10, now);

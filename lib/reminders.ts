@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "./undated";
+
 import { format, isToday } from "date-fns";
 import type { Item, Reminder } from "./types";
 import { subscribePush } from "./push-client";
@@ -247,6 +249,7 @@ function deliver(key: string, item: Item, label: string, clock24h: boolean): voi
  * next pass — no item writes, no sync round-trip.
  */
 export function effectiveReminders(item: Item, classReminderMinutes: number): Reminder[] {
+  if (isUndated(item)) return [];
   const own = item.reminders ?? [];
   const classReminder = classReminderFor(item, classReminderMinutes);
   return classReminder ? [...own, classReminder] : own;

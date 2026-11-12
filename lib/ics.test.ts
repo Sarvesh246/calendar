@@ -108,3 +108,15 @@ describe("monthly RRULE anchoring", () => {
     expect(occ.map((s) => new Date(s).getDate())).toEqual([31, 31, 31, 31, 30]);
   });
 });
+
+it("round trips a task without a due date as VTODO", () => {
+  const ics = serializeIcs([
+    { id: "u", title: "Read paper", type: "task", at: "9999-12-31T12:00:00.000Z" },
+  ]);
+  expect(ics).toContain("BEGIN:VTODO");
+  expect(ics).not.toContain("DTSTART:");
+  expect(parseIcs(ics).events[0]).toMatchObject({
+    kind: "todo",
+    start: "9999-12-31T12:00:00.000Z",
+  });
+});

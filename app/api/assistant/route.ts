@@ -26,7 +26,7 @@ import {
   storeAssistantMessage,
 } from "@/lib/llm/history";
 import { callRoutedProvider } from "@/lib/llm/router";
-import { runAgent } from "@/lib/llm/agent";
+import { AssistantInterpretationError, runAgent } from "@/lib/llm/agent";
 import { DATEBOOK_TOOLS } from "@/lib/llm/tools";
 import type { ChatMessage } from "@/lib/llm/openai-compatible";
 import { systemPrompt } from "@/lib/llm/prompt";
@@ -36,7 +36,7 @@ export const runtime = "nodejs";
 const uuid = z.string().uuid();
 const modelId = z.string().trim().min(1).max(80);
 // Hard cap on model calls for one user message across every provider it falls back to.
-const MAX_MODEL_CALLS = 4;
+const MAX_MODEL_CALLS = 6;
 const HISTORY_TURNS = 8;
 const HISTORY_TURN_CHARS = 700;
 const LAST_ASSISTANT_TURN_CHARS = 4_000;
@@ -114,6 +114,7 @@ export async function POST(request: Request) {
     ? selectAssistantItems(body.items, body.now, body.timeZone || "UTC", MAX_ASSISTANT_ITEMS)
     : [];
   body.categories = Array.isArray(body.categories) ? body.categories.slice(0, 80) : [];
+  body.pendingCreates = Array.isArray(body.pendingCreates) ? body.pendingCreates.slice(-8) : [];
   const selectedId = modelId.safeParse(body.modelId).success ? body.modelId : "auto";
   const threadId = uuid.safeParse(body.conversationId).success ? body.conversationId! : null;
 
@@ -145,6 +146,10 @@ export async function POST(request: Request) {
   const compute = async (stream?: { onText: (d: string) => void; onReset: () => void }) => {
     const result = await callRoutedProvider({
       selectedId,
+      mutation:
+        /\b(?:add|create|schedule|book|put|remind|move|reschedule|change|edit|rename|delete|remove|cancel|mark|complete|convert|plan|make it|actually)\b/i.test(
+          body.message,
+        ),
       messages,
       tools: DATEBOOK_TOOLS,
       run: (provider, key) => {
@@ -163,8 +168,10 @@ export async function POST(request: Request) {
       },
     });
     let actions = normalizeActions(result.actions, body);
-    if (isPureQuestion(body.message))
-      actions = actions.filter((action) => action.kind !== "create");
+    const droppedActions = result.actions.length - actions.length;
+    const blockedCreates =
+      isPureQuestion(body.message) && actions.some((action) => action.kind === "create");
+    if (blockedCreates) actions = actions.filter((action) => action.kind !== "create");
     if (threadId) {
       try {
         await storeAssistantMessage({
@@ -188,7 +195,11 @@ export async function POST(request: Request) {
     return {
       // Deterministic last line of defence: a "Weekday, Month D" that
       // disagrees with the calendar is corrected rather than shown.
-      text: fixWeekdays(polishReply(result.text), body.now, body.timeZone || "UTC"),
+      text: blockedCreates
+        ? "I did not add anything. Please tell me explicitly if you want to create an item."
+        : droppedActions > 0
+          ? `I couldn't prepare ${droppedActions === 1 ? "one change" : `${droppedActions} changes`}. ${actions.length ? "Review the remaining cards and ask again about the missing changes." : "Please clarify and try again."}`
+          : fixWeekdays(polishReply(result.text), body.now, body.timeZone || "UTC"),
       items: cleanItemsBlocks(result.items),
       choices: cleanChoices(result.choices),
       actions: actions.length ? actions : undefined,
@@ -219,7 +230,12 @@ export async function POST(request: Request) {
           send("done", payload);
         } catch (error) {
           logFailure(error);
-          send("error", { error: "assistant-unreachable" });
+          send("error", {
+            error:
+              error instanceof AssistantInterpretationError
+                ? "assistant-interpretation"
+                : "assistant-unreachable",
+          });
         } finally {
           controller.close();
         }
@@ -238,6 +254,14 @@ export async function POST(request: Request) {
     return NextResponse.json(await compute());
   } catch (error) {
     logFailure(error);
-    return NextResponse.json({ error: "assistant-unreachable" }, { status: 502 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof AssistantInterpretationError
+            ? "assistant-interpretation"
+            : "assistant-unreachable",
+      },
+      { status: 502 },
+    );
   }
 }

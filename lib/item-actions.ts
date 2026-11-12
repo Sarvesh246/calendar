@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "./undated";
+
 import { format } from "date-fns";
 import { useDatebookStore } from "./store";
 import { offerUndo } from "./action-undo";
@@ -89,6 +91,12 @@ export function rescheduleToDay(
   targetKey: string,
   fromKey = dayKey(new Date(item.at)),
 ) {
+  if (isUndated(item)) {
+    const due = new Date(`${targetKey}T23:59:00`);
+    if (!Number.isNaN(+due))
+      applyItemPatch(item, { at: due.toISOString() }, `Scheduled for ${dayLabelFor(targetKey)}`);
+    return;
+  }
   const days = dayDelta(fromKey, targetKey);
   if (!days) return;
   applyItemPatch(item, shiftedByDays(item, days), `Moved to ${dayLabelFor(targetKey)}`);

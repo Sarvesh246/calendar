@@ -1,4 +1,5 @@
 import { differenceInCalendarDays, format, isSameDay } from "date-fns";
+import { isUndated } from "./undated";
 import { formatTime } from "./date-utils";
 import type { Item } from "./types";
 
@@ -31,6 +32,15 @@ function relativeDay(target: Date, now: Date): string {
  * the part you read.
  */
 export function summarizeItemWhen(item: Item, now: Date, clock24h: boolean): ItemWhenSummary {
+  if (isUndated(item))
+    return {
+      date: "No due date",
+      time: "",
+      chip: {
+        label: item.status === "done" ? "Done" : item.status === "doing" ? "In progress" : "To do",
+        tone: item.status === "done" ? "good" : "neutral",
+      },
+    };
   const at = new Date(item.at);
   if (Number.isNaN(at.getTime())) {
     return { date: "", time: "", chip: { label: "No date", tone: "neutral" } };

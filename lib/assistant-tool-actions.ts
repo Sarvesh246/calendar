@@ -34,6 +34,7 @@ export function actionFor(
       description: args.description,
       categoryId: args.categoryId,
       reminders: args.reminders,
+      workFor: args.workFor,
       ...(repeat ? { repeatFreq: repeat.freq, repeatDays: repeat.byDay, until: repeat.until } : {}),
     };
   }
@@ -79,6 +80,9 @@ export function actionFor(
       : {}),
     ...(args.categoryId ? { categoryId: args.categoryId } : {}),
     ...(args.status ? { status: args.status } : {}),
+    ...(args.itemType ? { itemType: args.itemType } : {}),
+    ...(args.repeatDays ? { repeatDays: args.repeatDays } : {}),
+    ...(args.repeatUntil ? { repeatUntil: args.repeatUntil } : {}),
     ...(typeof args.allDay === "boolean" ? { allDay: args.allDay } : {}),
     ...(args.reminders ? { reminders: args.reminders } : {}),
   };

@@ -13,6 +13,7 @@ import {
   setMinutes,
   startOfDay,
 } from "date-fns";
+import { isUndated } from "./undated";
 import { cleanChoices, cleanItemsBlocks } from "./assistant-parts";
 import { thisOrNextWeekday, itemOccupiesDay } from "./date-utils";
 import { WEEKDAYS, parseQuickAdd } from "./quick-add-parser";
@@ -27,11 +28,13 @@ import type { Category, Item, ItemStatus, RepeatRule } from "./types";
 /* ------------------------------------------------------------------ */
 
 export type AssistantAction =
+  | { kind: "batch"; summary: string; actions: AssistantAction[] }
   | {
       kind: "create";
       summary: string;
       draft: Omit<Item, "id" | "createdAt">;
       serverActionId?: string;
+      revisionOf?: string;
     }
   | {
       kind: "update";
@@ -53,7 +56,7 @@ export interface AssistantResponse {
   choices?: string[];
   /** Why there is no real answer: the user is signed out (offer sign-in), the
    *  assistant could not be reached or is busy (offer Retry). Never a guess. */
-  error?: "signed-out" | "unreachable" | "busy";
+  error?: "signed-out" | "unreachable" | "busy" | "interpretation";
   providerLabel?: string;
   fallbackNotice?: string;
 }
@@ -70,6 +73,7 @@ export interface AssistantCtx {
   weekStartsOn?: 0 | 1;
   modelId?: string;
   conversationId?: string;
+  pendingCreates?: { ref: string; draft: Omit<Item, "id" | "createdAt"> }[];
   /** Where the chat was opened from. */
   context?: { selectedDay?: string; openItemId?: string; activeClass?: string };
   /** Called with the reply so far while it is being written. */
@@ -215,8 +219,12 @@ export function selectAssistantItems<T extends RankedItem>(
   const completedSinceKey = addDaysToDateKey(todayKey, -6);
 
   const openWork = items.filter(isOpenWork).sort((a, b) => +new Date(a.at) - +new Date(b.at));
-  const dueBySunday = openWork.filter((i) => zonedDateKey(i.at, timeZone) <= sundayKey);
-  const laterOpen = openWork.filter((i) => zonedDateKey(i.at, timeZone) > sundayKey);
+  const dueBySunday = openWork.filter(
+    (i) => !isUndated(i) && zonedDateKey(i.at, timeZone) <= sundayKey,
+  );
+  const laterOpen = openWork.filter(
+    (i) => isUndated(i) || zonedDateKey(i.at, timeZone) > sundayKey,
+  );
 
   const completed = items
     .filter((i) => {
@@ -250,7 +258,7 @@ export function selectAssistantItems<T extends RankedItem>(
 }
 
 function isOverdueOpen(item: Item, now: Date, timeZone: string): boolean {
-  if (!isOpenWork(item)) return false;
+  if (!isOpenWork(item) || isUndated(item)) return false;
   const at = new Date(item.at);
   if (item.allDay) return zonedDateKey(at, timeZone) < zonedDateKey(now, timeZone);
   return at.getTime() < now.getTime();
@@ -282,12 +290,17 @@ export function buildAssistantDigest(
   const completedSinceKey = addDaysToDateKey(todayKey, -6);
 
   const openWork = items.filter(isOpenWork).sort((a, b) => +new Date(a.at) - +new Date(b.at));
-  const dueToday = openWork.filter((i) => zonedDateKey(i.at, timeZone) === todayKey);
+  const dueToday = openWork.filter(
+    (i) => !isUndated(i) && zonedDateKey(i.at, timeZone) === todayKey,
+  );
   const dueThisWeek = openWork.filter((i) => {
+    if (isUndated(i)) return false;
     const k = zonedDateKey(i.at, timeZone);
     return k >= todayKey && k <= weekEndKey;
   });
-  const dueByNextSunday = openWork.filter((i) => zonedDateKey(i.at, timeZone) <= sundayKey);
+  const dueByNextSunday = openWork.filter(
+    (i) => !isUndated(i) && zonedDateKey(i.at, timeZone) <= sundayKey,
+  );
   const overdue = openWork.filter((i) => isOverdueOpen(i, now, timeZone));
   const inProgress = openWork.filter((i) => i.status === "doing");
 
@@ -404,7 +417,35 @@ export async function askAssistant(
   // device. Answer those here (same voice, same confirm cards) and keep the
   // model for what needs judgement; anything not confidently understood is null.
   try {
-    const local = tryLocalAnswer(message, history, ctx);
+    const undated = ctx.items.filter(isUndated);
+    const lower = message.toLowerCase();
+    const hasUndated =
+      undated.length > 0 &&
+      (undated.some((item) =>
+        item.title
+          .toLowerCase()
+          .split(/\W+/)
+          .some(
+            (word) =>
+              word.length >= 3 &&
+              !["the", "and", "for", "with", "task"].includes(word) &&
+              new RegExp(`\\b${word}\\b`).test(lower),
+          ),
+      ) ||
+        /\b(?:move|reschedule|change|mark|complete|delete)\s+(?:it|that|this)\b/i.test(message) ||
+        /\b(?:undated|no due date|without a date)\b|\b(?:all|list|show)\b.*\b(?:tasks?|assignments?|items?|work)\b|what (?:do i need to do|are my tasks)/i.test(
+          message,
+        ));
+    const revising =
+      ctx.pendingCreates?.length &&
+      /\b(?:actually|instead|change|make it|end|start|move it|reschedule it)\b/i.test(message);
+    const asksUndated =
+      /\b(?:no|without|undated)\b.{0,20}\b(?:due date|deadline|date)\b|\bundated\b/i.test(message);
+    const localCtx = undated.length
+      ? { ...ctx, items: ctx.items.filter((item) => !isUndated(item)) }
+      : ctx;
+    const local =
+      revising || hasUndated || asksUndated ? null : tryLocalAnswer(message, history, localCtx);
     if (local) {
       await new Promise((resolve) => setTimeout(resolve, localReplyDelayMs(local.text, message)));
       return local;
@@ -429,12 +470,14 @@ export async function askAssistant(
         modelId: ctx.modelId,
         conversationId: ctx.conversationId,
         history: history.slice(-10),
+        pendingCreates: ctx.pendingCreates,
         now: new Date().toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         clock24h: ctx.clock24h,
         weekStartsOn: ctx.weekStartsOn ?? 0,
         context: ctx.context,
         items: selectAssistantItems(ctx.items, new Date().toISOString()).map(toAssistantSlimItem),
+        itemCount: ctx.items.length,
         categories: ctx.categories.map((c) => ({
           id: c.id,
           name: c.name,
@@ -463,6 +506,12 @@ export async function askAssistant(
         choices: cleanChoices(data.choices),
         providerLabel: data.providerLabel,
         fallbackNotice: data.fallbackNotice,
+      };
+    }
+    if (data.error === "assistant-interpretation") {
+      return {
+        text: "I couldn't interpret that request reliably. Please clarify the details and try again.",
+        error: "interpretation",
       };
     }
     if (res.status === 429 || data.error === "assistant-busy") {
@@ -496,13 +545,26 @@ function sanitizeActions(
   const out: AssistantAction[] = [];
   for (const a of actions) {
     if (!a || typeof a.summary !== "string") continue;
-    if (a.kind === "create") {
+    if (a.kind === "batch") {
+      const children = sanitizeActions(a.actions, ctx);
+      if (
+        children?.length === a.actions.length &&
+        children.every((child) => child.kind === "update")
+      )
+        out.push({ ...a, actions: children });
+    } else if (a.kind === "create") {
       if (!a.draft?.title || !a.draft?.at || Number.isNaN(+new Date(a.draft.at))) continue;
       const draft = { ...a.draft };
       // No silent default here either: an unclassed add is resolved, shown and
       // editable on its card (see resolveDraftClass).
       if (!draft.categoryId || !catIds.has(draft.categoryId)) draft.categoryId = "";
-      out.push({ kind: "create", summary: a.summary, draft, serverActionId: a.serverActionId });
+      out.push({
+        kind: "create",
+        summary: a.summary,
+        draft,
+        serverActionId: a.serverActionId,
+        revisionOf: a.revisionOf,
+      });
     } else if (a.kind === "update") {
       if (!ids.has(a.itemId) || !a.patch || Object.keys(a.patch).length === 0) continue;
       out.push(a);

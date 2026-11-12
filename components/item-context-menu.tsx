@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -70,7 +72,7 @@ function MenuBody({ request, item }: { request: ContextMenuRequest; item: Item }
   const depth = SECTION_DEPTH[section];
   const [travel, setTravel] = useState({ depth, dir: 1 });
   if (travel.depth !== depth) setTravel({ depth, dir: depth > travel.depth ? 1 : -1 });
-  const [date, setDate] = useState(() => toDateInputValue(item.at));
+  const [date, setDate] = useState(() => (isUndated(item) ? "" : toDateInputValue(item.at)));
   const ref = useRef<HTMLDivElement>(null);
   const fromKey = request.dayKey ?? dayKey(new Date(item.at));
   const work = item.type !== "event";

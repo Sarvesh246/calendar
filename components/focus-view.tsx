@@ -1,5 +1,7 @@
 "use client";
 
+import { isUndated } from "@/lib/undated";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Infinity as InfinityIcon, Pause, Play, Search, X } from "lucide-react";
@@ -412,7 +414,9 @@ function FocusStage({
       ? [active.allDay ? "All day" : formatTime(active.at, clock24h), eventWatch]
           .filter(Boolean)
           .join(" · ")
-      : relativeDueLabel(active.at, { allDay: active.allDay });
+      : isUndated(active)
+        ? "No due date"
+        : relativeDueLabel(active.at, { allDay: active.allDay });
 
   const display =
     active.type === "event" ? (eventWatch ?? due) : face ? formatClockFace(face) : "0:00";

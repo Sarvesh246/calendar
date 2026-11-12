@@ -45,6 +45,14 @@ describe("parseQuickAdd", () => {
     });
   });
 
+  it("stores the exclusive end after an inclusive all-day range", () => {
+    const r = parseQuickAdd("hackathon nov 14-16 2026", cats);
+    expect(r.allDay).toBe(true);
+    expect(r.endAt?.getMonth()).toBe(10);
+    expect(r.endAt?.getDate()).toBe(17);
+    expect(r.endAt?.getHours()).toBe(0);
+  });
+
   it("parses a 2–3pm range", () => {
     const r = parseQuickAdd("lab 2-3pm tomorrow", cats);
     expect(r.at.getHours()).toBe(14);
