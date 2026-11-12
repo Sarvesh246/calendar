@@ -1,3 +1,4 @@
+import { isUndatedAt } from "@/lib/undated";
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
 
   const due: { userId: string; item: Item; reminder: Reminder; key: string }[] = [];
   for (const row of items) {
+    if (row.type !== "event" && isUndatedAt(row.at)) continue;
     const userId = row.user_id as string;
     const stored = (row.reminders as Reminder[] | null) ?? [];
     const classReminder = classReminderFor(

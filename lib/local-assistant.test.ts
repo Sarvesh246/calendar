@@ -618,3 +618,10 @@ it("shows the full inclusive range on a locally parsed multi-day add", () => {
   });
   expect(result?.text).toMatch(/16/);
 });
+
+it.each(["add hackathon this weekend at zachry", "add hackathon 11/14-11/16 zachry"])(
+  "hands uncertain clarification to the model: %s",
+  (message) => {
+    expect(tryLocalAnswer(message, [], ctx, NOW)).toBeNull();
+  },
+);

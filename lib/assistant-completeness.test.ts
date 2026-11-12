@@ -73,6 +73,42 @@ describe("findMissingDetails", () => {
     ).toEqual([]);
   });
 
+  it("accepts words retained in a title or class and ignores check in", () => {
+    expect(
+      findMissingDetails(
+        "add homework 3 in CSCE 221 due friday",
+        [{ kind: "create", title: "Homework 3", categoryId: "cs" }],
+        NY,
+        new Date(),
+        [{ id: "cs", name: "CSCE 221" }],
+      ),
+    ).toEqual([]);
+    expect(
+      findMissingDetails(
+        "schedule a check in with my advisor next tuesday at 3pm",
+        [{ ...dentist, title: "Check in with my advisor" }],
+        NY,
+      ),
+    ).toEqual([]);
+    expect(placePhrases("meeting in person at 3pm")).toEqual([]);
+  });
+
+  it("checks repeat range against until and rejects a months-long occurrence", () => {
+    const msg = "add CHEM 107 lecture mondays and wednesdays 10am to 11am from sep 28 to dec 1";
+    const series = {
+      kind: "create",
+      at: "2026-09-28T14:00:00Z",
+      endAt: "2026-09-28T15:00:00Z",
+      repeatFreq: "weekly",
+      until: "2026-12-02T04:59:00Z",
+    };
+    const now = new Date(2026, 8, 1);
+    expect(findMissingDetails(msg, [series], NY, now)).toEqual([]);
+    expect(
+      findMissingDetails(msg, [{ ...series, endAt: "2026-12-01T16:00:00Z" }], NY, now),
+    ).not.toEqual([]);
+  });
+
   it("flags a time that no staged item has", () => {
     const wrong = { ...dentist, at: "2026-11-17T21:00:00.000Z" }; // 4pm
     expect(findMissingDetails("dentist next tuesday 3pm", [wrong], NY)).toEqual(["time 3:00 PM"]);

@@ -57,9 +57,19 @@ export async function runAgent(opts: {
   let latencyMs = 0;
   let malformedRetries = 0;
   let detailRetries = 0;
+  let previousDetails: { actions: unknown[]; missing: string[] } | undefined;
   for (let loop = 0; loop < MAX_AGENT_LOOPS; loop += 1) {
-    if (opts.budget.left <= 0)
+    if (opts.budget.left <= 0) {
+      if (previousDetails)
+        return {
+          text: `Please check these cards before confirming: ${previousDetails.missing.join(", ")} may be missing or incorrect.`,
+          actions: previousDetails.actions,
+          items,
+          choices,
+          latencyMs,
+        };
       throw new AssistantInterpretationError("Assistant model-call budget exhausted");
+    }
     opts.budget.left -= 1;
     const completion = await createChatCompletion({
       provider: opts.provider,
@@ -72,6 +82,14 @@ export async function runAgent(opts: {
     const reply = completion.message;
     messages.push(reply);
     if (!reply.tool_calls?.length) {
+      if (previousDetails)
+        return {
+          text: `Please check these cards before confirming: ${previousDetails.missing.join(", ")} may be missing or incorrect.`,
+          actions: previousDetails.actions,
+          items,
+          choices,
+          latencyMs,
+        };
       return {
         text:
           reply.content?.trim() ||
@@ -85,6 +103,15 @@ export async function runAgent(opts: {
       };
     }
     opts.stream?.onReset();
+    // The message classifier is only a hint. A read-looking request can still
+    // lead the model to call a write tool, so enforce the boundary here too.
+    if (
+      opts.provider.model &&
+      !/120b/i.test(opts.provider.model) &&
+      reply.tool_calls.some((call) => MUTATION_TOOLS.has(call.function.name))
+    ) {
+      throw new AssistantInterpretationError("Mutation requires a 120B model");
+    }
     let allStaged = true;
     const iterationStart = messages.length;
     const actionStart = actions.length;
@@ -112,8 +139,10 @@ export async function runAgent(opts: {
         if (!(error instanceof MalformedToolArgumentsError)) throw error;
         if (malformedRetries >= 1) {
           return {
-            text: "I couldn't interpret that change reliably. Please clarify the date, time, or other details and try again.",
-            actions: [],
+            text: previousDetails
+              ? `Please check these cards before confirming: ${previousDetails.missing.join(", ")} may be missing or incorrect.`
+              : "I couldn't interpret that change reliably. Please clarify the date, time, or other details and try again.",
+            actions: previousDetails?.actions ?? [],
             items,
             choices,
             latencyMs,
@@ -158,18 +187,20 @@ export async function runAgent(opts: {
         actions as StagedAdd[],
         opts.body.timeZone || "UTC",
         new Date(opts.body.now),
+        opts.body.categories,
       );
       if (missing.length) {
         if (detailRetries >= 1) {
           return {
-            text: `I couldn't preserve all the details (${missing.join(", ")}). Please clarify and try again.`,
-            actions: [],
+            text: `Please check these cards before confirming: ${missing.join(", ")} may be missing or incorrect.`,
+            actions,
             items,
             choices,
             latencyMs,
           };
         }
         detailRetries += 1;
+        previousDetails = { actions: [...actions], missing };
         // Nothing from this attempt is shown; the model is told, in place of
         // the "ok" it was about to read, exactly what was dropped.
         actions.length = 0;
@@ -197,8 +228,10 @@ export async function runAgent(opts: {
     }
   }
   return {
-    text: "I couldn't finish interpreting that request. Please try a simpler phrasing.",
-    actions: [],
+    text: previousDetails
+      ? `Please check these cards before confirming: ${previousDetails.missing.join(", ")} may be missing or incorrect.`
+      : "I couldn't finish interpreting that request. Please try a simpler phrasing.",
+    actions: previousDetails?.actions ?? [],
     items,
     choices,
     latencyMs,

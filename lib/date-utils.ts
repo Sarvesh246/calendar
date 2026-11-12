@@ -276,7 +276,7 @@ export function isOverdueOrJustFinished(item: Item, now: Date, keep?: ReadonlySe
 }
 
 export function isOverdueAt(item: Item, now: Date) {
-  if (item.type === "event" || item.status === "done") return false;
+  if (item.type === "event" || item.status === "done" || isUndated(item)) return false;
   const at = new Date(item.at);
   if (item.allDay) return !isSameDay(at, now) && at.getTime() < now.getTime();
   return at.getTime() < now.getTime();

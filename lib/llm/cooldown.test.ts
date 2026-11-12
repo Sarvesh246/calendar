@@ -42,3 +42,8 @@ describe("provider cooldowns are durable", () => {
     expect(persisted[0][1]).toBeGreaterThan(Date.now());
   });
 });
+
+it("does not route mutations to smaller fallback models", async () => {
+  const { providers } = await providerCandidates("gemini-3.5-flash-lite", true);
+  expect(providers.every((provider) => /120b/i.test(provider.model))).toBe(true);
+});

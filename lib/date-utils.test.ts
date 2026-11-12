@@ -11,6 +11,7 @@ import {
   isEventEnded,
   isHappeningNow,
   isOverdue,
+  isOverdueAt,
   isOverdueOrJustFinished,
   itemDaySpan,
   itemOccupiesDay,
@@ -607,4 +608,10 @@ describe("chipRank", () => {
     expect(chipRank(oneOff, day, now)).toBeLessThan(chipRank(meeting, day, now));
     expect(rankDayItems([meeting, oneOff], day, now).map((i) => i.id)).toEqual(["club", "class"]);
   });
+});
+
+it("never treats an undated task as overdue, even past the storage marker", () => {
+  expect(
+    isOverdueAt(base({ at: "9999-12-31T12:00:00.000Z" }), new Date("+010000-01-01T00:00:00.000Z")),
+  ).toBe(false);
 });

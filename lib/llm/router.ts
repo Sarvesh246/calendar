@@ -56,11 +56,10 @@ export async function providerCandidates(
   await refreshCooldowns();
   const configured = configuredProviders();
   const enabled = configured.filter(
-    (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
+    (provider) =>
+      (cooldownUntil.get(provider.id) ?? 0) <= Date.now() &&
+      (!mutation || /120b/i.test(provider.model)),
   );
-  // Prefer already-configured larger models for writes; explicit model choices still win.
-  if (mutation)
-    enabled.sort((a, b) => Number(!/120b/i.test(a.model)) - Number(!/120b/i.test(b.model)));
   if (!selectedId || selectedId === "auto")
     return { providers: enabled, requestedUnavailable: false };
   const selected = enabled.find((provider) => provider.id === selectedId);
@@ -95,6 +94,7 @@ export function shouldFallbackProvider(error: unknown) {
     return (
       error instanceof Error &&
       (error.name === "MalformedToolArgumentsError" ||
+        error.message.includes("Mutation requires a 120B model") ||
         error.message.includes("maximum tool-call loop"))
     );
   }
@@ -170,7 +170,8 @@ export async function callRoutedProvider(opts: {
       lastError = error;
       logLlmRequest({ provider, latencyMs: Date.now() - started, ok: false, error });
       if (!shouldFallbackProvider(error)) throw error;
-      putProviderOnCooldown(provider, error);
+      if (!(error instanceof Error && error.message.includes("Mutation requires a 120B model")))
+        putProviderOnCooldown(provider, error);
     }
   }
   throw lastError instanceof Error ? lastError : new Error("No healthy LLM provider is available");

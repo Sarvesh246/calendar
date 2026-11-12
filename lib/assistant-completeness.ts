@@ -22,6 +22,9 @@ export interface StagedAdd {
   location?: unknown;
   description?: unknown;
   reminders?: unknown;
+  categoryId?: unknown;
+  repeatFreq?: unknown;
+  until?: unknown;
 }
 
 const NUMBER_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
@@ -55,6 +58,7 @@ export function placePhrases(message: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(message))) {
     let phrase = m[1];
+    if (/\bcheck\s*$/i.test(message.slice(0, m.index)) || /^person\b/i.test(phrase)) continue;
     // A clock time or a day is not a place.
     if (
       /^\d/.test(phrase) ||
@@ -142,11 +146,17 @@ export function findMissingDetails(
   staged: StagedAdd[],
   timeZone = "UTC",
   now = new Date(),
+  categories: { id: string; name: string }[] = [],
 ): string[] {
   if (!staged.length || staged.some((a) => a.kind !== "create")) return [];
   const missing: string[] = [];
 
-  const haystack = (a: StagedAdd) => norm(typeof a.location === "string" ? a.location : "");
+  const haystack = (a: StagedAdd) =>
+    norm(
+      [a.title, a.location, categories.find((c) => c.id === a.categoryId)?.name]
+        .filter((v): v is string => typeof v === "string")
+        .join(" "),
+    );
   const places = staged.map(haystack);
   for (const phrase of placePhrases(message)) {
     const need = words(phrase);
@@ -204,11 +214,17 @@ export function findMissingDetails(
       return d.toISOString().slice(0, 10);
     };
     const kept = staged.some((a) => {
-      const end = zoned(a.endAt);
+      const end = zoned(a.repeatFreq ? a.until : a.endAt);
+      if (
+        a.repeatFreq &&
+        a.endAt &&
+        (a.allDay ? previousDay(zoned(a.endAt)) : zoned(a.endAt)) !== zoned(a.at)
+      )
+        return false;
       return (
         zoned(a.at) === key(phrase.start) &&
         end &&
-        (a.allDay ? previousDay(end) : end) === key(phrase.end!)
+        (a.allDay && !a.repeatFreq ? previousDay(end) : end) === key(phrase.end!)
       );
     });
     if (!kept) missing.push(`date range "${phrase.text}" on one event`);
@@ -233,5 +249,5 @@ export function findMissingDetails(
 
 /** The corrective message handed back to the model, once. */
 export function correctiveMessage(missing: string[]): string {
-  return `These details from the user's message were not included in any staged change: ${missing.join("; ")}. Call the tool again, keeping every title, time, place and reminder the user gave, and invent nothing else.`;
+  return `Check and correct these possible problems: ${missing.map((detail) => (detail.startsWith("date range") ? `${detail}: the start, end, or year looks wrong; for a repeat use the series start and until, with each occurrence ending on its own day` : `${detail} may be missing`)).join("; ")}. Call the tools again for the complete request, preserving all details.`;
 }

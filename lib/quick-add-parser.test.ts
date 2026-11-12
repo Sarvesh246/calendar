@@ -117,3 +117,9 @@ describe("parseQuickAdd", () => {
     expect(parseQuickAdd("coffee at 5:30am", cats).at.getHours()).toBe(5);
   });
 });
+
+it("starts all-day quick adds at local midnight", () => {
+  const parsed = parseQuickAdd("add hackathon november 14-16 at Zachry", cats);
+  expect(parsed.allDay).toBe(true);
+  expect(parsed.at.getHours()).toBe(0);
+});

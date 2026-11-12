@@ -39,6 +39,7 @@ import {
   weekdayShort,
 } from "./class-schedule";
 import { matchDatePhrase } from "./date-phrase";
+import { isUndated } from "./undated";
 import {
   happeningNow,
   isDueOnDay,
@@ -640,6 +641,7 @@ function resolveTarget(env: Env, phraseRaw: string, scope: Scope): Target {
 }
 
 function describeWhen(env: Env, item: Item): string {
+  if (isUndated(item)) return "no due date";
   const d = new Date(item.at);
   const time =
     item.allDay || (item.type !== "event" && d.getHours() === 23 && d.getMinutes() === 59)
@@ -1876,12 +1878,13 @@ function titleIsFaithful(
   if (location && /^(?:noon|midnight|\d)/i.test(location.trim())) return false;
   // Unconsumed scheduling language means the parser did not understand the add.
   if (
-    /\b(?:from|through|thru|until|location|noon|midnight|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b\d{1,2}(?:st|nd|rd|th)\b|[:,]/i.test(
+    /\b(?:from|through|thru|until|location|noon|midnight|today|tomorrow|weekend|weekends|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\b\d{1,2}(?:st|nd|rd|th)\b|[:,]/i.test(
       title,
     )
   )
     return false;
   if (/\b(?:on the|from .+ (?:to|through|thru)|location)\b/i.test(source)) return false;
+  if (/\b\d{1,2}\/\d{1,2}\b/.test(title)) return false;
   if (/\bin\s+\S/i.test(title) || /\b[A-Z]{2,}\s+\d{2,}\b/.test(title)) return false;
   const kept = new Set([
     ...contentWords(title),
@@ -2871,7 +2874,7 @@ function progressIntent(env: Env): Outcome {
   if (!doing.length) return { text: "Nothing is marked in progress right now." };
   if (doing.length <= 3)
     return {
-      text: `You're working on ${joinNatural(doing.map((i) => `${bold(i.title)} (due ${dayName(new Date(i.at), env.now)})`))}.`,
+      text: `You're working on ${joinNatural(doing.map((i) => `${bold(i.title)} (${isUndated(i) ? "no due date" : `due ${dayName(new Date(i.at), env.now)}`})`))}.`,
     };
   return {
     text: `You have ${bold(`${doing.length} items in progress`)}:\n${bullets(
@@ -2982,7 +2985,7 @@ function nextIntent(env: Env): Outcome {
   const upcomingWorkItem = (pred: (i: Item) => boolean) =>
     inClass(
       env,
-      ctx.items.filter((i) => isOpen(i) && pred(i)),
+      ctx.items.filter((i) => isOpen(i) && !isUndated(i) && pred(i)),
       cls,
     )
       .filter((i) => +new Date(i.at) >= +now || !isOverdueAt(i, now))
@@ -3035,7 +3038,7 @@ function nextIntent(env: Env): Outcome {
           re.test(i.title) &&
           (i.type === "event"
             ? +new Date(i.endAt ?? i.at) >= +now
-            : i.status !== "done" && +new Date(i.at) >= +startOfDay(now)),
+            : i.status !== "done" && !isUndated(i) && +new Date(i.at) >= +startOfDay(now)),
       )
       .sort(byAt)[0];
     if (!cand) return null;

@@ -260,7 +260,7 @@ export function parseQuickAdd(
     }
   }
 
-  const at = allDay ? setMinutes(setHours(base, 12), 0) : setMinutes(setHours(base, hour), minute);
+  const at = allDay ? setMinutes(setHours(base, 0), 0) : setMinutes(setHours(base, hour), minute);
   // A day range wins over any time range picked out of the leftover text.
   if (rangeEnd) endAt = addDays(startOfDay(rangeEnd), 1);
 

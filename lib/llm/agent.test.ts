@@ -85,15 +85,25 @@ describe("completeness check", () => {
     });
   });
 
-  it("asks for clarification when a second attempt still misses details", async () => {
+  it("shows cards with a warning when a second attempt still misses details", async () => {
     script.push(
       call("add_event", { title: "dentist", start: "2026-11-17T15:00:00-05:00" }),
       call("add_event", { title: "dentist", start: "2026-11-17T15:00:00-05:00" }),
     );
     const { result } = await run(msg);
     expect(seen).toHaveLength(2);
-    expect(result.actions).toHaveLength(0);
-    expect(result.text).toContain("clarify");
+    expect(result.actions).toHaveLength(1);
+    expect(result.text).toContain("location");
+  });
+
+  it("retains the first cards if the retry asks a question", async () => {
+    script.push(
+      call("add_event", { title: "Dentist", start: "2026-11-17T15:00:00-05:00" }),
+      say("Where is it?"),
+    );
+    const { result } = await run(msg);
+    expect(result.actions).toHaveLength(1);
+    expect(result.text).toContain("location");
   });
 
   it("does not interrupt a complete add", async () => {
@@ -416,4 +426,20 @@ it("stages weekly class meetings with a local series end date", async () => {
       },
     },
   ]);
+});
+
+it("rejects a mutation from a smaller model even when the request looked read-only", async () => {
+  const message = "I need a dentist appointment tomorrow";
+  script.push(call("add_event", { title: "Dentist", start: "2026-11-11T15:00:00-05:00" }));
+  await expect(
+    runAgent({
+      provider: { model: "small-model" } as never,
+      key: "k",
+      messages: [{ role: "user", content: message }],
+      userId: null,
+      threadId: null,
+      body: bodyFor(message),
+      budget: { left: 4 },
+    }),
+  ).rejects.toThrow("Mutation requires a 120B model");
 });
