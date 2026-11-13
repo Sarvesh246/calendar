@@ -91,6 +91,11 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
   },
 ] as const;
 
+/** The larger models are preferred for changes to the calendar. */
+export function isLargeModel(model: string): boolean {
+  return /120b/i.test(model);
+}
+
 export type PublicLlmModel = Pick<LlmProviderConfig, "id" | "label" | "model" | "tier">;
 
 export function publicProvider(provider: LlmProviderConfig): PublicLlmModel {

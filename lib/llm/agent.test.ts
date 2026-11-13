@@ -428,7 +428,26 @@ it("stages weekly class meetings with a local series end date", async () => {
   ]);
 });
 
-it("rejects a mutation from a smaller model even when the request looked read-only", async () => {
+it("lets a smaller model stage a mutation when no larger model is available", async () => {
+  const message = "I need a dentist appointment tomorrow";
+  script.push(call("add_event", { title: "Dentist", start: "2026-11-11T15:00:00-05:00" }));
+  const body = bodyFor(message);
+  const result = await runAgent({
+    provider: { model: "small-model" } as never,
+    key: "k",
+    messages: [{ role: "user", content: message }],
+    userId: null,
+    threadId: null,
+    body,
+    budget: { left: 4 },
+    largerModelAvailable: false,
+  });
+  expect(normalizeActions(result.actions, body)).toMatchObject([
+    { kind: "create", draft: { title: "Dentist" } },
+  ]);
+});
+
+it("hands a mutation from a smaller model to a larger one while one is available", async () => {
   const message = "I need a dentist appointment tomorrow";
   script.push(call("add_event", { title: "Dentist", start: "2026-11-11T15:00:00-05:00" }));
   await expect(
@@ -440,6 +459,7 @@ it("rejects a mutation from a smaller model even when the request looked read-on
       threadId: null,
       body: bodyFor(message),
       budget: { left: 4 },
+      largerModelAvailable: true,
     }),
   ).rejects.toThrow("Mutation requires a 120B model");
 });

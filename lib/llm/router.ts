@@ -8,6 +8,7 @@ import {
 } from "./openai-compatible";
 import {
   LLM_PROVIDERS,
+  isLargeModel,
   publicProvider,
   type LlmProviderConfig,
   type PublicLlmModel,
@@ -56,17 +57,25 @@ export async function providerCandidates(
   await refreshCooldowns();
   const configured = configuredProviders();
   const enabled = configured.filter(
-    (provider) =>
-      (cooldownUntil.get(provider.id) ?? 0) <= Date.now() &&
-      (!mutation || /120b/i.test(provider.model)),
+    (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
   );
+  // Writes go to the larger models first. Smaller ones stay in the list as a
+  // fallback: a card from a smaller model beats no answer while the larger
+  // ones are rate-limited.
+  const largeFirst = (list: LlmProviderConfig[]) =>
+    mutation
+      ? [
+          ...list.filter((provider) => isLargeModel(provider.model)),
+          ...list.filter((provider) => !isLargeModel(provider.model)),
+        ]
+      : list;
   if (!selectedId || selectedId === "auto")
-    return { providers: enabled, requestedUnavailable: false };
+    return { providers: largeFirst(enabled), requestedUnavailable: false };
   const selected = enabled.find((provider) => provider.id === selectedId);
   return {
-    providers: selected
-      ? [selected, ...enabled.filter((provider) => provider.id !== selected.id)]
-      : enabled,
+    providers: largeFirst(
+      selected ? [selected, ...enabled.filter((provider) => provider.id !== selected.id)] : enabled,
+    ),
     requestedUnavailable: !selected,
   };
 }
@@ -136,6 +145,8 @@ export async function callRoutedProvider(opts: {
   run: (
     provider: LlmProviderConfig,
     key: string,
+    /** True while a larger model is still untried for this request. */
+    route: { largerModelAvailable: boolean },
   ) => Promise<{
     text: string;
     actions: unknown[];
@@ -150,12 +161,20 @@ export async function callRoutedProvider(opts: {
     opts.mutation,
   );
   let lastError: unknown;
-  for (const provider of providers) {
+  // A smaller model that tried to stage a change is set aside while a larger
+  // one is untried, then gets a second turn at the end of the queue.
+  const queue = [...providers];
+  const requeued = new Set<string>();
+  for (let i = 0; i < queue.length; i += 1) {
+    const provider = queue[i];
     const key = keyFor(provider);
     if (!key) continue;
     const started = Date.now();
+    const largerModelAvailable = queue
+      .slice(i + 1)
+      .some((next) => isLargeModel(next.model) && Boolean(keyFor(next)));
     try {
-      const result = await opts.run(provider, key);
+      const result = await opts.run(provider, key, { largerModelAvailable });
       logLlmRequest({ provider, latencyMs: result.latencyMs || Date.now() - started, ok: true });
       return {
         ...result,
@@ -170,8 +189,12 @@ export async function callRoutedProvider(opts: {
       lastError = error;
       logLlmRequest({ provider, latencyMs: Date.now() - started, ok: false, error });
       if (!shouldFallbackProvider(error)) throw error;
-      if (!(error instanceof Error && error.message.includes("Mutation requires a 120B model")))
-        putProviderOnCooldown(provider, error);
+      if (error instanceof Error && error.message.includes("Mutation requires a 120B model")) {
+        if (!requeued.has(provider.id)) {
+          requeued.add(provider.id);
+          queue.push(provider);
+        }
+      } else putProviderOnCooldown(provider, error);
     }
   }
   throw lastError instanceof Error ? lastError : new Error("No healthy LLM provider is available");

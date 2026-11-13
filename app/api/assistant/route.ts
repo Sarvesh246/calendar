@@ -152,7 +152,7 @@ export async function POST(request: Request) {
         ),
       messages,
       tools: DATEBOOK_TOOLS,
-      run: (provider, key) => {
+      run: (provider, key, route) => {
         // A fallback provider starts the reply over.
         stream?.onReset();
         return runAgent({
@@ -164,6 +164,7 @@ export async function POST(request: Request) {
           body,
           budget,
           stream,
+          largerModelAvailable: route.largerModelAvailable,
         });
       },
     });

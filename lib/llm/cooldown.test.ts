@@ -43,7 +43,19 @@ describe("provider cooldowns are durable", () => {
   });
 });
 
-it("does not route mutations to smaller fallback models", async () => {
+it("routes mutations to the larger models first and keeps smaller ones as a fallback", async () => {
   const { providers } = await providerCandidates("gemini-3.5-flash-lite", true);
-  expect(providers.every((provider) => /120b/i.test(provider.model))).toBe(true);
+  const large = providers.map((provider) => /120b/i.test(provider.model));
+  expect(large[0]).toBe(true);
+  expect(large.lastIndexOf(true)).toBeLessThan(large.indexOf(false));
+  expect(providers.map((provider) => provider.id)).toContain("gemini-3.5-flash-lite");
+});
+
+it("still offers smaller models for a mutation when every larger model is cooling down", async () => {
+  // Set in this instance directly: the durable store is only re-read every few seconds.
+  for (const p of tools.filter((p) => /120b/i.test(p.model)))
+    putProviderOnCooldown(p, new ProviderRequestError("rate limited", 429, 60_000));
+  const { providers } = await providerCandidates("auto", true);
+  expect(providers.length).toBeGreaterThan(0);
+  expect(providers.some((provider) => /120b/i.test(provider.model))).toBe(false);
 });

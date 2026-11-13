@@ -5,6 +5,7 @@ import {
 } from "@/lib/assistant-completeness";
 import type { AssistantReqBody as ReqBody } from "@/lib/assistant-actions";
 import { createChatCompletion } from "./router";
+import { isLargeModel } from "./providers";
 import { DATEBOOK_TOOLS, executeDatebookTool, MalformedToolArgumentsError } from "./tools";
 import type { ChatMessage } from "./openai-compatible";
 
@@ -46,6 +47,9 @@ export async function runAgent(opts: {
   threadId: string | null;
   body: ReqBody;
   budget: { left: number };
+  /** Set by the router while a larger model is still untried: a smaller model
+   *  then hands a write over instead of staging it. */
+  largerModelAvailable?: boolean;
   /** Streams the reply text as it is written; `reset` fires when a turn that
    *  streamed text goes on to call tools (that text was chatter, not the answer). */
   stream?: { onText: (delta: string) => void; onReset: () => void };
@@ -104,10 +108,12 @@ export async function runAgent(opts: {
     }
     opts.stream?.onReset();
     // The message classifier is only a hint. A read-looking request can still
-    // lead the model to call a write tool, so enforce the boundary here too.
+    // lead the model to call a write tool, so a smaller model hands the write
+    // to a larger one while one is available, and stages it itself otherwise.
     if (
+      opts.largerModelAvailable &&
       opts.provider.model &&
-      !/120b/i.test(opts.provider.model) &&
+      !isLargeModel(opts.provider.model) &&
       reply.tool_calls.some((call) => MUTATION_TOOLS.has(call.function.name))
     ) {
       throw new AssistantInterpretationError("Mutation requires a 120B model");
