@@ -1,30 +1,18 @@
 "use client";
 
-import { classLabel } from "@/lib/course-label";
 import { useAuth } from "@/components/auth-provider";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { CalendarClock, Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
-import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { CalendarClock, ChevronDown, Plus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useAnimatedCollapse } from "@/lib/use-animated-collapse";
 import Link from "next/link";
 import { useDatebookStore } from "@/lib/store";
-import { presetMeta, presetOrder } from "@/lib/theme-presets";
+import { presetOrder } from "@/lib/theme-presets";
 import { paintAppearance } from "@/components/theme-provider";
 import { writeAppearanceSnapshot } from "@/lib/appearance-storage";
-import {
-  buildCustomThemeVars,
-  customThemeColorScheme,
-  DEFAULT_CUSTOM_THEME,
-  normalizeThemeHex,
-  type CustomThemeColors,
-} from "@/lib/custom-theme";
-import { ToggleSwitch } from "@/components/toggle-switch";
+import { DEFAULT_CUSTOM_THEME, type CustomThemeColors } from "@/lib/custom-theme";
 import { ImportCalendar } from "@/components/import-calendar";
-import {
-  CategorySyllabusControl,
-  ImportSyllabus,
-  SyllabusImportProvider,
-} from "@/components/import-syllabus";
+import { ImportSyllabus, SyllabusImportProvider } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
 import { DiagnosticsSettings } from "@/components/diagnostics-settings";
 import { AppLockSection } from "@/components/app-lock-section";
@@ -37,7 +25,6 @@ import { MobileRoomHeader } from "@/components/mobile-room-header";
 import { cn } from "@/lib/utils";
 import { useSlidingPill } from "@/lib/sliding-pill";
 import { motion as motionTokens, prefersReducedMotion } from "@/lib/motion";
-import { CategoryClassTimesControl } from "@/components/category-class-times";
 import { haptic } from "@/lib/haptic";
 import {
   CLASS_REMINDER_OPTIONS,
@@ -45,14 +32,53 @@ import {
   classReminderOptionLabel,
 } from "@/lib/class-reminder";
 import { formatOffsetLabel } from "@/lib/reminder-defaults";
+import type { AppearancePreset, Density, LandingView, MobileDayDetails } from "@/lib/types";
+
+import {
+  CardHeading,
+  Divider,
+  Segmented,
+  SettingBlock,
+  Subheading,
+  ToggleRow,
+} from "@/components/settings/primitives";
+import { lazyComponent } from "@/lib/lazy-component";
+import type { ComponentProps } from "react";
+import type { CategoryEditor as CategoryEditorImpl } from "@/components/settings/category-editor";
 import type {
-  AppearancePreset,
-  Category,
-  Density,
-  LandingView,
-  MobileDayDetails,
-  ReminderPreset,
-} from "@/lib/types";
+  CustomPresetCard as CustomPresetCardImpl,
+  CustomThemeEditor as CustomThemeEditorImpl,
+  PresetCard as PresetCardImpl,
+} from "@/components/settings/look-cards";
+import type {
+  EditReminderRow as EditReminderRowImpl,
+  ReminderPresetRow as ReminderPresetRowImpl,
+} from "@/components/settings/reminder-rows";
+
+// Closed-by-default cards keep their heavy editors in separate chunks. A
+// card only mounts these once opened (see `lazy` on CollapsibleCard), so the
+// Settings route no longer ships every editor up front.
+const CategoryEditor = lazyComponent<ComponentProps<typeof CategoryEditorImpl>>(() =>
+  import("@/components/settings/category-editor").then((m) => m.CategoryEditor),
+);
+const PresetCard = lazyComponent<ComponentProps<typeof PresetCardImpl>>(() =>
+  import("@/components/settings/look-cards").then((m) => m.PresetCard),
+);
+const CustomPresetCard = lazyComponent<ComponentProps<typeof CustomPresetCardImpl>>(() =>
+  import("@/components/settings/look-cards").then((m) => m.CustomPresetCard),
+);
+const CustomThemeEditor = lazyComponent<ComponentProps<typeof CustomThemeEditorImpl>>(() =>
+  import("@/components/settings/look-cards").then((m) => m.CustomThemeEditor),
+);
+const ReminderPresetRow = lazyComponent<ComponentProps<typeof ReminderPresetRowImpl>>(() =>
+  import("@/components/settings/reminder-rows").then((m) => m.ReminderPresetRow),
+);
+const CalendarFeedSection = lazyComponent<object>(() =>
+  import("@/components/settings/calendar-feed").then((m) => m.CalendarFeedSection),
+);
+const EditReminderRow = lazyComponent<ComponentProps<typeof EditReminderRowImpl>>(() =>
+  import("@/components/settings/reminder-rows").then((m) => m.EditReminderRow),
+);
 
 /** `/settings#…` targets: which collapsible section to open, and what to scroll to. */
 const DEEP_LINKS: Record<string, { section: string; anchor: string }> = {
@@ -284,6 +310,7 @@ export default function SettingsPage() {
               sub="Name, color, meeting name, and optional syllabus per class."
               storageKey="classes"
               defaultOpen={false}
+              lazy
             >
               <SyllabusImportProvider>
                 <div className="flex flex-col gap-2">
@@ -380,6 +407,7 @@ export default function SettingsPage() {
               sub="Alerts on this device, class heads-up, and default timing."
               storageKey="reminders"
               defaultOpen={false}
+              lazy
             >
               <NotificationToggle />
               <div className="mt-3">
@@ -483,6 +511,7 @@ export default function SettingsPage() {
               sub="Themes and what shows on cards."
               storageKey="look"
               defaultOpen={false}
+              lazy
             >
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {presetOrder.map((preset) =>
@@ -545,9 +574,10 @@ export default function SettingsPage() {
 
         <CollapsibleCard
           title="Backup & export"
-          sub="Download a full copy or an .ics, or restore from a file."
+          sub="Download a copy, restore from a file, or subscribe from another calendar."
           storageKey="backup"
           defaultOpen={false}
+          lazy
         >
           <div className="flex flex-wrap gap-2">
             <button
@@ -610,6 +640,7 @@ export default function SettingsPage() {
               />
             </label>
           </div>
+          <CalendarFeedSection />
           <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
             <a
               href="/privacy"
@@ -677,371 +708,6 @@ function SettingsCard({
   );
 }
 
-function CategoryEditor({
-  category: cat,
-  categories,
-  confirmDeleteId,
-  onConfirmDeleteId,
-}: {
-  category: Category;
-  categories: Category[];
-  confirmDeleteId: string | null;
-  onConfirmDeleteId: (id: string | null) => void;
-}) {
-  const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const [name, setName] = useState(cat.name);
-  const [classTitle, setClassTitle] = useState(cat.classTitle ?? "");
-  const nameFocus = useRef(false);
-  const titleFocus = useRef(false);
-  const nameRef = useRef(name);
-  const titleRef = useRef(classTitle);
-  const catRef = useRef(cat);
-  // Mirrored after commit for the unmount flush below, which needs the latest
-  // values without re-subscribing.
-  useLayoutEffect(() => {
-    nameRef.current = name;
-    titleRef.current = classTitle;
-    catRef.current = cat;
-  });
-
-  useEffect(() => {
-    if (!nameFocus.current) setName(cat.name);
-  }, [cat.name]);
-  useEffect(() => {
-    if (!titleFocus.current) setClassTitle(cat.classTitle ?? "");
-  }, [cat.classTitle]);
-
-  function commitName(raw = nameRef.current) {
-    const current = catRef.current;
-    const next = raw.trim() || "Uncategorized";
-    setName(next);
-    if (next !== current.name) updateCategory(current.id, { name: next });
-  }
-
-  function commitClassTitle(raw = titleRef.current) {
-    const current = catRef.current;
-    const next = raw.trim();
-    setClassTitle(next);
-    if (next !== (current.classTitle ?? "")) {
-      updateCategory(current.id, { classTitle: next || undefined });
-    }
-  }
-
-  function saveClassFields() {
-    commitName();
-    commitClassTitle();
-  }
-
-  useEffect(
-    () => () => {
-      commitName();
-      commitClassTitle();
-    },
-    // Persist the last draft if the row unmounts without a blur.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  const classDirty =
-    (name.trim() || "Uncategorized") !== cat.name || classTitle.trim() !== (cat.classTitle ?? "");
-
-  return (
-    <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-line/80 bg-surface-sunken/40 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <input
-          type="color"
-          value={cat.color}
-          onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-          className="h-7 w-7 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-          aria-label={`${cat.name} color`}
-        />
-        <input
-          type="text"
-          enterKeyHint="done"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          value={name}
-          onFocus={() => {
-            nameFocus.current = true;
-          }}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            nameFocus.current = false;
-            commitName();
-          }}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            (e.currentTarget as HTMLInputElement).blur();
-          }}
-          aria-label={`${cat.name} name`}
-          className="field-inline min-h-11 min-w-0 flex-1 overflow-hidden bg-transparent text-[14px] text-ink focus:outline-none md:px-2"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            saveClassFields();
-            haptic("success");
-          }}
-          disabled={!classDirty}
-          className="shrink-0 text-[12px] font-medium text-accent disabled:text-ink-faint disabled:opacity-40"
-        >
-          Save
-        </button>
-        {cat.archived && <span className="shrink-0 text-[11px] text-ink-faint">Archived</span>}
-        {/* From `sm` up there is room beside the name. On a phone these two sat
-            in the same row and cut the name to "ENGR-102:204,21", with Delete a
-            12px word one slip away from Archive — so there they get their own
-            footer row with real touch targets (below). */}
-        <div className="hidden shrink-0 items-center gap-2 sm:flex sm:gap-3">
-          <button
-            type="button"
-            onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-            className="text-[12px] font-medium text-ink-faint hover:text-ink"
-          >
-            {cat.archived ? "Restore" : "Archive"}
-          </button>
-          {categories.length > 1 && (
-            <button
-              type="button"
-              onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
-              aria-expanded={confirmDeleteId === cat.id}
-              className="text-[12px] font-medium text-warn"
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      </div>
-      <label className="flex min-w-0 items-center gap-2 pl-10 text-[12px] text-ink-faint">
-        <span className="shrink-0">Meeting name</span>
-        <input
-          type="text"
-          enterKeyHint="done"
-          autoComplete="off"
-          value={classTitle}
-          onFocus={() => {
-            titleFocus.current = true;
-          }}
-          onChange={(e) => setClassTitle(e.target.value)}
-          onBlur={() => {
-            titleFocus.current = false;
-            commitClassTitle();
-          }}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            (e.currentTarget as HTMLInputElement).blur();
-          }}
-          placeholder={name.trim() || cat.name}
-          aria-label={`${cat.name} meeting name`}
-          className="field-inline min-h-11 min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none md:px-2"
-        />
-      </label>
-      {!cat.archived && (
-        <div className="mt-1.5 border-t border-line/60 pt-2 pl-10">
-          <CategoryClassTimesControl category={cat} />
-          <div className="mt-1">
-            <CategorySyllabusControl category={cat} />
-          </div>
-        </div>
-      )}
-      <div className="mt-1 flex items-center justify-between border-t border-line/60 pt-1 sm:hidden">
-        <button
-          type="button"
-          onClick={() => updateCategory(cat.id, { archived: !cat.archived })}
-          className="press-none -ml-1 flex min-h-11 items-center rounded-lg px-2 text-[13px] font-medium text-ink-soft active:bg-surface-sunken"
-        >
-          {cat.archived ? "Restore class" : "Archive class"}
-        </button>
-        {categories.length > 1 && (
-          <button
-            type="button"
-            onClick={() => onConfirmDeleteId(confirmDeleteId === cat.id ? null : cat.id)}
-            aria-expanded={confirmDeleteId === cat.id}
-            className="press-none -mr-1 flex min-h-11 items-center rounded-lg px-2 text-[13px] font-medium text-warn active:bg-warn-soft"
-          >
-            Delete…
-          </button>
-        )}
-      </div>
-      {confirmDeleteId === cat.id && (
-        <CategoryDeleteConfirm
-          category={cat}
-          categories={categories}
-          onConfirm={() => onConfirmDeleteId(null)}
-          onCancel={() => onConfirmDeleteId(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-function CategoryDeleteConfirm({
-  category,
-  categories,
-  onConfirm,
-  onCancel,
-}: {
-  category: Category;
-  categories: Category[];
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const items = useDatebookStore((s) => s.items);
-  const sources = useDatebookStore((s) => s.importSources);
-  const deleteCategory = useDatebookStore((s) => s.deleteCategory);
-  const updateCategory = useDatebookStore((s) => s.updateCategory);
-  const [choice, setChoice] = useState<"delete-items" | "archive" | "move-items" | null>(null);
-  const [targetId, setTargetId] = useState("");
-  const [error, setError] = useState("");
-  const count = items.filter((i) => i.categoryId === category.id).length;
-  const destinations = categories.filter((c) => c.id !== category.id && !c.archived);
-  const validTarget = destinations.some((c) => c.id === targetId);
-  const feedIds = new Set(sources.filter((s) => /^https?:\/\//i.test(s.url)).map((s) => s.id));
-  const hasFeedItems = items.some(
-    (i) => i.categoryId === category.id && i.sourceId && feedIds.has(i.sourceId),
-  );
-  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
-
-  function confirm() {
-    if (!choice || (choice === "move-items" && !validTarget)) return;
-    if (choice === "archive") {
-      updateCategory(category.id, { archived: true });
-      haptic("success");
-    } else {
-      const removed = deleteCategory(
-        category.id,
-        choice === "delete-items"
-          ? { kind: "delete-items" }
-          : { kind: "move-items", targetCategoryId: targetId },
-      );
-      if (!removed) {
-        setError("The class or destination changed. Choose an available class and try again.");
-        return;
-      }
-      haptic("warn");
-    }
-    onConfirm();
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col gap-3 border-t border-line/60 pt-3">
-      <fieldset className="flex min-w-0 flex-col gap-2">
-        <legend className="mb-2 text-[13px] font-medium text-ink">
-          What should happen to {classLabel(category)}?
-        </legend>
-        <p className="mb-1 text-[12px] leading-snug text-ink-soft">
-          {itemLabel} {count === 1 ? "belongs" : "belong"} to this class, including past and
-          completed items.
-        </p>
-        {(
-          [
-            [
-              "delete-items",
-              "Delete class and its items",
-              `Permanently remove this class and all ${itemLabel}.`,
-            ],
-            [
-              "archive",
-              "Archive class",
-              "Keep the class and its items, hidden from active views. You can restore it later.",
-            ],
-            [
-              "move-items",
-              "Move items to another class",
-              "Keep the items in a class you choose, then delete this class.",
-            ],
-          ] as const
-        ).map(([value, label, description]) => (
-          <label
-            key={value}
-            className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 px-3 py-2.5 has-checked:border-accent/60 has-checked:bg-accent/5"
-          >
-            <input
-              type="radio"
-              name={`remove-class-${category.id}`}
-              value={value}
-              checked={choice === value}
-              onChange={() => {
-                setChoice(value);
-                setError("");
-              }}
-              className="mt-0.5 shrink-0 accent-accent"
-            />
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-ink">{label}</span>
-              <span className="block text-[12px] leading-snug text-ink-soft">{description}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      {choice === "move-items" && (
-        <label className="flex min-w-0 flex-col gap-1 text-[12px] font-medium text-ink-soft">
-          Destination class
-          <select
-            aria-label="Destination class"
-            value={validTarget ? targetId : ""}
-            onChange={(e) => {
-              setTargetId(e.target.value);
-              setError("");
-            }}
-            className="min-h-11 w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-[13px] text-ink"
-          >
-            <option value="">Choose a class</option>
-            {destinations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {classLabel(c)}
-              </option>
-            ))}
-          </select>
-          {destinations.length === 0 && (
-            <span className="font-normal">Restore or add another class before moving items.</span>
-          )}
-        </label>
-      )}
-      {choice === "delete-items" && hasFeedItems && (
-        <p className="text-[12px] leading-snug text-ink-soft">
-          A connected calendar feed can import these items again. Archive the class to keep them
-          hidden.
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-[12px] text-warn">
-          {error}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={confirm}
-          disabled={!choice || (choice === "move-items" && !validTarget)}
-          className={cn(
-            "min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40",
-            choice === "archive" ? "bg-accent" : "bg-warn",
-          )}
-        >
-          {choice === "archive"
-            ? "Archive class"
-            : choice === "move-items"
-              ? "Move items and delete class"
-              : choice === "delete-items"
-                ? `Delete class and ${itemLabel}`
-                : "Choose an action"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="min-h-11 rounded-lg px-3 text-[12.5px] font-medium text-ink-soft hover:text-ink"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function CollapsibleCard({
   id,
   title,
@@ -1049,6 +715,7 @@ function CollapsibleCard({
   children,
   storageKey,
   defaultOpen = false,
+  lazy = false,
 }: {
   id?: string;
   title: string;
@@ -1056,8 +723,14 @@ function CollapsibleCard({
   children: React.ReactNode;
   storageKey: string;
   defaultOpen?: boolean;
+  /** Don't mount the body until the card has been opened once. */
+  lazy?: boolean;
 }) {
   const [open, toggle] = useSectionOpen(storageKey, defaultOpen);
+  // Derived during render (not an effect) so the body mounts in the same commit
+  // as the open; it then stays mounted so reopening never remounts it.
+  const [seen, setSeen] = useState(false);
+  if (open && !seen) setSeen(true);
   const bodyRef = useAnimatedCollapse<HTMLDivElement>(open);
 
   // A measured spring on the body's height, not CSS grid rows: `0fr` ↔
@@ -1106,7 +779,7 @@ function CollapsibleCard({
             page: overflow:hidden alone still lets it count toward scroll height. */}
         <div className="min-h-0 overflow-hidden [contain:paint]">
           <div className="flex flex-col gap-4 border-t border-line/60 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
-            {children}
+            {lazy && !open && !seen ? null : children}
           </div>
         </div>
       </div>
@@ -1193,122 +866,6 @@ function openSection(storageKey: string): boolean {
   return false;
 }
 
-function CardHeading({
-  title,
-  sub,
-  subMinLines,
-}: {
-  title: string;
-  sub?: string;
-  /** Reserve this many subtitle lines so desktop tiles in a row match height. */
-  subMinLines?: number;
-}) {
-  return (
-    <div className="min-w-0">
-      <h2 className="text-[16px] font-semibold tracking-tight text-ink">{title}</h2>
-      {sub && (
-        <p
-          className={cn(
-            "mt-1 text-[13px] leading-relaxed text-ink-soft",
-            subMinLines === 2 && "lg:min-h-[calc(2*1.625em)]",
-          )}
-        >
-          {sub}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Subheading({ title }: { title: string }) {
-  return <p className="text-[13px] font-medium text-ink">{title}</p>;
-}
-
-function Divider() {
-  return <div className="my-1 h-px bg-line/60" role="separator" />;
-}
-
-function SettingBlock({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div>
-        <p className="text-[14px] font-medium text-ink">{label}</p>
-        {hint && <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-faint">{hint}</p>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-xl bg-surface-sunken/30 px-3 py-2.5">
-      <span className="text-[14px] text-ink">{label}</span>
-      <ToggleSwitch checked={checked} onChange={onChange} label={label} />
-    </div>
-  );
-}
-
-function Segmented({
-  segmentId,
-  value,
-  options,
-  onChange,
-}: {
-  segmentId: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}) {
-  const { containerRef, pillRef, moveTo } = useSlidingPill(value);
-  return (
-    <div
-      ref={containerRef}
-      data-segment={segmentId}
-      className="relative flex w-full items-stretch gap-0.5 rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-fit"
-    >
-      <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
-      {options.map((opt) => {
-        const active = value === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            data-pill-key={opt.value}
-            onClick={(e) => {
-              if (!active) moveTo(e.currentTarget);
-              onChange(opt.value);
-            }}
-            className={cn(
-              "press-none relative min-h-10 min-w-0 flex-1 rounded-lg px-0.5 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:flex-none sm:px-4 sm:text-[13px]",
-              "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
-            )}
-            aria-pressed={active}
-          >
-            <span className="relative z-[1] block [overflow-wrap:anywhere]">{opt.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
  * The one control behind both halves of "your class is about to start": the
  * Today countdown card and the reminder notification. A fixed four-column grid
@@ -1386,464 +943,5 @@ function ClassReminderPicker({
         </motion.p>
       </AnimatePresence>
     </div>
-  );
-}
-
-function PresetCard({
-  preset,
-  active,
-  onSelect,
-}: {
-  preset: AppearancePreset;
-  active: boolean;
-  onSelect: () => void;
-}) {
-  const meta = presetMeta[preset];
-  return (
-    <motion.button
-      type="button"
-      onClick={() => {
-        haptic("light");
-        onSelect();
-      }}
-      aria-pressed={active}
-      whileTap={{ scale: 0.975 }}
-      transition={motionTokens.springSnappy}
-      className={cn(
-        "press-none group relative flex flex-col gap-2 rounded-xl border p-3 text-left",
-        "transition-[border-color,box-shadow] duration-[var(--motion-standard)]",
-        active ? "border-accent" : "border-line/80 hover:border-line-strong",
-      )}
-    >
-      <div className="flex overflow-hidden rounded-lg border border-line/60">
-        {meta.swatch.map((c, i) => (
-          <motion.span
-            key={i}
-            initial={false}
-            animate={{ flexGrow: active && i === 2 ? 1.6 : 1 }}
-            transition={motionTokens.spring}
-            className="h-7 flex-1"
-            style={{ background: c }}
-          />
-        ))}
-      </div>
-      <div>
-        <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-          {meta.label}
-          <motion.span
-            aria-hidden
-            initial={false}
-            animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
-            transition={motionTokens.springSnappy}
-            className="flex h-3.5 w-3.5 items-center justify-center"
-          >
-            <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
-          </motion.span>
-        </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-ink-soft">{meta.description}</p>
-      </div>
-    </motion.button>
-  );
-}
-
-function CustomPresetCard({
-  colors,
-  active,
-  onSelect,
-}: {
-  colors: CustomThemeColors;
-  active: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={() => {
-        haptic("light");
-        onSelect();
-      }}
-      aria-pressed={active}
-      whileTap={{ scale: 0.975 }}
-      transition={motionTokens.springSnappy}
-      className={cn(
-        "press-none group relative flex flex-col gap-2 rounded-xl border p-3 text-left",
-        "transition-[border-color,box-shadow] duration-[var(--motion-standard)]",
-        active ? "border-accent" : "border-line/80 hover:border-line-strong",
-      )}
-    >
-      <div className="flex overflow-hidden rounded-lg border border-line/60">
-        {[colors.background, colors.surface, colors.accent].map((c, i) => (
-          <motion.span
-            key={i}
-            initial={false}
-            animate={{ flexGrow: active && i === 2 ? 1.6 : 1 }}
-            transition={motionTokens.spring}
-            className="h-7 flex-1"
-            style={{ background: c }}
-          />
-        ))}
-      </div>
-      <div>
-        <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-          Custom
-          <motion.span
-            aria-hidden
-            initial={false}
-            animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }}
-            transition={motionTokens.springSnappy}
-            className="flex h-3.5 w-3.5 items-center justify-center"
-          >
-            <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.5} />
-          </motion.span>
-        </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-ink-soft">Pick your own three colors.</p>
-      </div>
-    </motion.button>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  // A new value from outside (a preset, a reset) replaces whatever was typed.
-  const [shownValue, setShownValue] = useState(value);
-  if (shownValue !== value) {
-    setShownValue(value);
-    setDraft(value);
-  }
-
-  function emit(raw: string) {
-    const next = normalizeThemeHex(raw);
-    if (!next) return;
-    setDraft(next);
-    onChange(next);
-  }
-
-  function commit() {
-    const next = normalizeThemeHex(draft);
-    if (next) onChange(next);
-    else setDraft(value);
-  }
-
-  return (
-    <label className="field-shell flex items-center gap-2.5 rounded-xl border border-line/80 bg-surface px-3 py-2.5">
-      <input
-        type="color"
-        value={normalizeThemeHex(value) ?? value}
-        onInput={(e) => emit(e.currentTarget.value)}
-        onChange={(e) => emit(e.currentTarget.value)}
-        className="h-8 w-8 shrink-0 cursor-pointer rounded-full border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
-        aria-label={`${label} color`}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[10.5px] font-medium uppercase tracking-wide text-ink-faint">
-          {label}
-        </span>
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && commit()}
-          spellCheck={false}
-          aria-label={`${label} hex value`}
-          className="block w-full bg-transparent font-mono text-[13px] text-ink focus:outline-none"
-        />
-      </span>
-    </label>
-  );
-}
-
-function CustomThemeEditor({
-  colors,
-  onChange,
-}: {
-  colors: CustomThemeColors;
-  onChange: (colors: CustomThemeColors) => void;
-}) {
-  const vars = useMemo(() => buildCustomThemeVars(colors), [colors]);
-  const scheme = useMemo(() => customThemeColorScheme(colors), [colors]);
-
-  return (
-    <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-surface-sunken/30 p-3.5">
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        <ColorField
-          label="Background"
-          value={colors.background}
-          onChange={(v) => onChange({ ...colors, background: v })}
-        />
-        <ColorField
-          label="Surface"
-          value={colors.surface}
-          onChange={(v) => onChange({ ...colors, surface: v })}
-        />
-        <ColorField
-          label="Accent"
-          value={colors.accent}
-          onChange={(v) => onChange({ ...colors, accent: v })}
-        />
-      </div>
-
-      {/* Live demo — scoped to these exact derived tokens, not just the three
-          raw picks, so it shows what the app will actually look like. */}
-      <div
-        style={{
-          background: vars["--surface-base"],
-          borderColor: vars["--line"],
-          colorScheme: scheme,
-        }}
-        className="overflow-hidden rounded-xl border p-3 transition-colors duration-200"
-      >
-        <div className="flex items-center justify-between">
-          <span
-            style={{ color: vars["--ink"] }}
-            className="text-[11.5px] font-semibold tracking-tight transition-colors duration-200"
-          >
-            Preview
-          </span>
-          <span
-            style={{ color: vars["--ink-faint"] }}
-            className="text-[10.5px] transition-colors duration-200"
-          >
-            Today
-          </span>
-        </div>
-
-        <div
-          style={{ background: vars["--surface"], borderColor: vars["--line"] }}
-          className="mt-2.5 rounded-lg border p-2.5 transition-colors duration-200"
-        >
-          <div className="flex items-center gap-2">
-            <span
-              style={{ background: vars["--accent"] }}
-              className="h-2 w-2 shrink-0 rounded-full transition-colors duration-200"
-            />
-            <span
-              style={{ color: vars["--ink"] }}
-              className="text-[12.5px] font-medium transition-colors duration-200"
-            >
-              Team sync
-            </span>
-          </div>
-          <p
-            style={{ color: vars["--ink-soft"] }}
-            className="mt-0.5 text-[11px] transition-colors duration-200"
-          >
-            10:00 AM · Studio
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span
-              style={{ background: vars["--accent"], color: vars["--accent-ink"] }}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-200"
-            >
-              Accent
-            </span>
-            <span
-              style={{ background: vars["--good-soft"], color: vars["--good"] }}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-200"
-            >
-              Done
-            </span>
-            <span
-              style={{ background: vars["--warn-soft"], color: vars["--warn"] }}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-200"
-            >
-              Overdue
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const REMINDER_REVEAL = 76;
-
-/**
- * A settings row that taps to toggle default, with always-visible Edit /
- * Delete. On touch, swipe still reveals the same actions as a shortcut.
- */
-function ReminderPresetRow({
-  preset,
-  active,
-  onToggle,
-  onEdit,
-  onDelete,
-}: {
-  preset: ReminderPreset;
-  active: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const x = useMotionValue(0);
-  const [open, setOpen] = useState<"none" | "edit" | "delete">("none");
-
-  function snapTo(target: number, next: "none" | "edit" | "delete") {
-    animate(x, target, { type: "spring", stiffness: 460, damping: 40 });
-    setOpen(next);
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-xl">
-      <div
-        className="absolute inset-0 flex items-stretch justify-between md:hidden"
-        aria-hidden={open === "none"}
-      >
-        <button
-          type="button"
-          tabIndex={open === "edit" ? 0 : -1}
-          onClick={() => {
-            snapTo(0, "none");
-            onEdit();
-          }}
-          className="flex w-[76px] items-center justify-center gap-1 bg-accent text-[12.5px] font-medium text-accent-ink"
-          aria-label={`Rename ${preset.label}`}
-        >
-          <Pencil className="h-3.5 w-3.5" strokeWidth={2} /> Edit
-        </button>
-        <button
-          type="button"
-          tabIndex={open === "delete" ? 0 : -1}
-          onClick={() => {
-            setOpen("none");
-            onDelete();
-          }}
-          className="flex w-[76px] items-center justify-center gap-1 bg-warn text-[12.5px] font-medium text-white"
-          aria-label={`Delete ${preset.label}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} /> Delete
-        </button>
-      </div>
-
-      <motion.div
-        drag="x"
-        style={{ x }}
-        dragConstraints={{ left: -REMINDER_REVEAL, right: REMINDER_REVEAL }}
-        dragElastic={0.04}
-        onDragEnd={(_, info) => {
-          if (info.offset.x <= -REMINDER_REVEAL / 2) snapTo(-REMINDER_REVEAL, "delete");
-          else if (info.offset.x >= REMINDER_REVEAL / 2) snapTo(REMINDER_REVEAL, "edit");
-          else snapTo(0, "none");
-        }}
-        className={cn(
-          "relative z-[1] flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[14px] transition-colors",
-          active
-            ? "border-accent/40 bg-accent-soft text-ink"
-            : "border-line/80 bg-surface text-ink-soft hover:border-line-strong",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            if (open !== "none") {
-              snapTo(0, "none");
-              return;
-            }
-            onToggle();
-          }}
-          className="flex min-h-9 min-w-0 flex-1 items-center justify-between gap-2 text-left"
-        >
-          <span className="truncate">{preset.label}</span>
-          {active && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.5} />}
-        </button>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-ink-soft hover:bg-surface-sunken hover:text-ink"
-            aria-label={`Edit ${preset.label}`}
-          >
-            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-medium text-warn hover:bg-warn-soft"
-            aria-label={`Delete ${preset.label}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-            Delete
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function EditReminderRow({
-  preset,
-  onSave,
-  onCancel,
-}: {
-  preset: ReminderPreset;
-  onSave: (patch: { label: string; offsetMinutes: number }) => void;
-  onCancel: () => void;
-}) {
-  const [label, setLabel] = useState(preset.label);
-  const [minutes, setMinutes] = useState(String(preset.offsetMinutes));
-
-  function save() {
-    const n = parseInt(minutes, 10);
-    if (!Number.isFinite(n) || n < 1) return;
-    onSave({ label: label.trim() || formatOffsetLabel(n), offsetMinutes: n });
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={motionTokens.springSnappy}
-      className="field-shell flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2"
-    >
-      <input
-        autoFocus
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Label"
-        aria-label="Reminder label"
-        className="min-w-0 flex-1 bg-transparent text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
-      />
-      <input
-        type="number"
-        min={1}
-        value={minutes}
-        onChange={(e) => setMinutes(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") onCancel();
-        }}
-        aria-label="Minutes before"
-        className="w-14 shrink-0 bg-transparent text-[14px] text-ink focus:outline-none"
-      />
-      <span className="shrink-0 text-[11px] text-ink-faint">min</span>
-      <button
-        type="button"
-        onClick={save}
-        aria-label="Save reminder"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink"
-      >
-        <Check className="h-4 w-4" strokeWidth={2.5} />
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        aria-label="Cancel"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface hover:text-ink"
-      >
-        <X className="h-4 w-4" strokeWidth={2} />
-      </button>
-    </motion.div>
   );
 }
