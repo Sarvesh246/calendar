@@ -31,7 +31,7 @@ import { searchItems } from "@/lib/search";
 import { navigateTab } from "@/lib/tab-nav";
 import { focusOnThis, openFocusRoom } from "@/lib/focus-session-store";
 import { useAllViews } from "@/components/saved-views";
-import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
+import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/assistant-intent";
 import { useModKeyLabel } from "@/components/keyboard-shortcuts";
 import { motion as motionTokens } from "@/lib/motion";
 import { itemDisplayTitle } from "@/lib/course-label";

@@ -11,7 +11,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { useItemCardChrome } from "@/lib/card-chrome";
 import { searchItems } from "@/lib/search";
 import { dayKey, formatTime } from "@/lib/date-utils";
-import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/ai-assistant";
+import { looksLikeRichCreate, shouldAskAssistant } from "@/lib/assistant-intent";
 import { MobileItemSheet } from "@/components/mobile-item-sheet";
 import { ItemCard } from "@/components/item-card";
 import { Reveal } from "@/components/ui/reveal";

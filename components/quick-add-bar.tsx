@@ -9,7 +9,7 @@ import { useUIStore } from "@/lib/ui-store";
 import { parseQuickAdd, type ParsedQuickAdd } from "@/lib/quick-add-parser";
 import { looksLikeBulkPaste, parseBulk, toNewItem, type BulkDraft } from "@/lib/bulk-parse";
 import { BulkAddPreview } from "@/components/bulk-add-preview";
-import { shouldAskAssistant, shouldHandOffToAssistant } from "@/lib/ai-assistant";
+import { shouldAskAssistant, shouldHandOffToAssistant } from "@/lib/assistant-intent";
 import { remindersFromPresetIds } from "@/lib/reminder-defaults";
 import { nanoid } from "@/lib/nanoid";
 import { maybePromptForReminders } from "@/lib/reminders";
