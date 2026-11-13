@@ -2,14 +2,27 @@ import type { SyllabusInfo } from "./syllabus-info";
 
 export type ItemType = "event" | "assignment" | "task";
 export type ItemStatus = "todo" | "doing" | "done";
-export type RepeatFreq = "daily" | "weekly" | "monthly";
+/** Absent means normal — only the two ends are worth recording. */
+export type ItemPriority = "low" | "normal" | "high";
+
+/** One checklist line inside an assignment or task. */
+export interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+export type RepeatFreq = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface RepeatRule {
   freq: RepeatFreq;
   /** 1 = every period. Capped at 30 when expanding. */
   interval?: number;
-  /** 0 = Sunday … 6 = Saturday. Weekly only. */
+  /** 0 = Sunday … 6 = Saturday. Weekly: every listed day. Monthly with `bySetPos`:
+   *  the single weekday of an "nth weekday" rule. */
   byDay?: number[];
+  /** Monthly only, with one `byDay`: which one in the month — 1…4 for the
+   *  first…fourth, -1 for the last ("first Monday", "last Friday"). */
+  bySetPos?: number;
   /** ISO datetime — last occurrence is on or before this instant. */
   until?: string;
 }
@@ -67,6 +80,12 @@ export interface Item {
   endAt?: string;
   allDay?: boolean;
   status?: ItemStatus; // assignments/tasks only
+  /** assignments/tasks only. Omitted means normal. */
+  priority?: ItemPriority;
+  /** Rough effort in minutes — feeds "Plan a work session". */
+  estimateMinutes?: number;
+  /** Checklist steps. Order is display order. */
+  subtasks?: Subtask[];
   /** Set when the item was marked done (not the due date). */
   completedAt?: string;
   /** When `status` last changed. Merged independently of `updatedAt` so a feed

@@ -151,6 +151,9 @@ export function duplicateItem(item: Item): Item {
   }
   const draft = copy as Omit<Item, "id" | "createdAt">;
   if (item.type !== "event") draft.status = "todo";
+  if (item.subtasks?.length) {
+    draft.subtasks = item.subtasks.map((t) => ({ ...t, id: nanoid(), done: false }));
+  }
   if (item.reminders?.length) {
     draft.reminders = item.reminders.map((r) => ({ ...r, id: nanoid(), itemId: "" }));
   }

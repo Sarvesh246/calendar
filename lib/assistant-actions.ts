@@ -1,7 +1,7 @@
 import { isUndatedAt } from "./undated";
 import type { Item, ItemStatus, ItemType, RepeatFreq, RepeatRule, Reminder } from "./types";
 import { nanoid } from "./nanoid";
-import { countOccurrences, expandRepeat } from "./repeat";
+import { countOccurrences, expandRepeat, nthWeekdayLabel } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
 
 export interface SlimItem {
@@ -111,7 +111,8 @@ function validIso(v: unknown): string | undefined {
 
 function parseRepeat(a: RawAction, at: string): RepeatRule | undefined {
   const freq = a.repeatFreq;
-  if (freq !== "daily" && freq !== "weekly" && freq !== "monthly") return undefined;
+  if (freq !== "daily" && freq !== "weekly" && freq !== "monthly" && freq !== "yearly")
+    return undefined;
   const days = Array.isArray(a.repeatDays)
     ? [
         ...new Set(
@@ -414,7 +415,9 @@ function weekdayList(days: number[]): string {
 /** "every Monday and Wednesday"; the series wording shared by every card. */
 export function repeatWord(rule: RepeatRule): string {
   if (rule.freq === "daily") return "every day";
-  if (rule.freq === "monthly") return "every month";
+  if (rule.freq === "yearly") return "every year";
+  const nth = nthWeekdayLabel(rule);
+  if (rule.freq === "monthly") return nth ? `the ${nth} of every month` : "every month";
   const days = rule.byDay?.length ? rule.byDay : [];
   if (days.length === 5 && !days.includes(0) && !days.includes(6)) return "every weekday";
   return days.length ? `every ${weekdayList(days)}` : "every week";

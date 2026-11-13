@@ -25,7 +25,7 @@ const reminders = z
 /** A repeating add must say when it ends: a series with no end is hundreds of items. */
 const repeat = z
   .object({
-    freq: z.enum(["daily", "weekly", "monthly"]),
+    freq: z.enum(["daily", "weekly", "monthly", "yearly"]),
     byDay: z.array(z.number().int().min(0).max(6)).max(7).optional(),
     until: iso.optional(),
     untilDate: z.iso.date().optional(),
@@ -398,7 +398,7 @@ export const DATEBOOK_TOOLS: OpenAiTool[] = [
           reminders: reminderSchema,
           repeat: object(
             {
-              freq: { type: "string", enum: ["daily", "weekly", "monthly"] },
+              freq: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] },
               byDay: {
                 type: "array",
                 items: { type: "integer", minimum: 0, maximum: 6 },

@@ -19,6 +19,19 @@ export function plannedMinutes(sessions: Item[]): number {
   return total;
 }
 
+/**
+ * How long the next session for `item` should be. With an effort estimate it is
+ * what's still unplanned (rounded up to a quarter hour, 15m–4h); without one it
+ * is the person's usual session length.
+ */
+export function sessionMinutesFor(item: Item, plannedAlready: number, fallback: number): number {
+  const estimate = item.estimateMinutes;
+  if (!estimate || estimate <= 0) return fallback;
+  const left = estimate - plannedAlready;
+  if (left <= 0) return fallback;
+  return Math.max(15, Math.min(240, Math.ceil(left / 15) * 15));
+}
+
 /** "45m", "1h", "1h 30m". */
 export function formatDuration(minutes: number): string {
   const m = Math.max(0, Math.round(minutes));

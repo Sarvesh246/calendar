@@ -1,8 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import { createDebouncedStorage } from "./debounced-storage";
+import { persist } from "zustand/middleware";
+import { createDebouncedJSONStorage } from "./debounced-storage";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { nanoid } from "./nanoid";
 import { createDefaultCategories, defaultItems, defaultReminderPresets } from "./mock-data";
@@ -54,7 +54,8 @@ import {
   type EntityKind,
   type TombstoneMap,
 } from "./tombstones";
-import { expandRepeat } from "./repeat";
+import { differenceInCalendarDays } from "date-fns";
+import { expandRepeat, spanMs } from "./repeat";
 import { DEFAULT_CLASS_REMINDER_MINUTES } from "./class-reminder";
 import {
   collapseBySourceUid,
@@ -161,6 +162,11 @@ interface DatebookState {
   markImportError: (url: string, message: string) => void;
   removeImportSource: (id: string, deleteItems: boolean) => void;
   deleteSeries: (repeatId: string) => void;
+  /** Delete this occurrence and every later one in its series; earlier ones stay. */
+  deleteSeriesFrom: (id: string) => void;
+  /** Apply an edit to this occurrence and every later one in its series. A
+   *  change of start time moves each one by the same clock/day shift. */
+  updateSeriesFollowing: (id: string, patch: Partial<Item>) => void;
   snoozeItem: (id: string, minutes?: number) => void;
   resetAllData: () => void;
   replaceFromBackup: (backup: DatebookBackup) => void;
@@ -680,6 +686,61 @@ export const useDatebookStore = create<DatebookState>()(
             "item",
             gone.map((i) => i.id),
           ),
+        });
+      },
+
+      deleteSeriesFrom: (id) => {
+        const anchor = get().items.find((i) => i.id === id);
+        if (!anchor?.repeatId) {
+          get().deleteItem(id);
+          return;
+        }
+        const from = +new Date(anchor.at);
+        const gone = get().items.filter(
+          (i) => i.repeatId === anchor.repeatId && +new Date(i.at) >= from,
+        );
+        const goneIds = new Set(gone.map((i) => i.id));
+        set({
+          items: get().items.filter((i) => !goneIds.has(i.id)),
+          lastDeleted: { key: `series:${anchor.repeatId}:${id}`, label: anchor.title, items: gone },
+          deletions: addTombstones(get().deletions, "item", [...goneIds]),
+        });
+      },
+
+      updateSeriesFollowing: (id, patch) => {
+        const anchor = get().items.find((i) => i.id === id);
+        if (!anchor?.repeatId) {
+          get().updateItem(id, patch);
+          return;
+        }
+        const from = +new Date(anchor.at);
+        const timeChanged = "at" in patch || "endAt" in patch;
+        const newAnchorAt = new Date(patch.at ?? anchor.at);
+        const newAnchorEnd = "endAt" in patch ? patch.endAt : anchor.endAt;
+        const duration = newAnchorEnd ? spanMs(newAnchorAt.toISOString(), newAnchorEnd) : 0;
+        const dayDelta = differenceInCalendarDays(newAnchorAt, new Date(anchor.at));
+        const { at: _at, endAt: _endAt, ...rest } = patch;
+        void _at;
+        void _endAt;
+        set({
+          items: get().items.map((i) => {
+            if (i.repeatId !== anchor.repeatId) return i;
+            if (i.id !== id && +new Date(i.at) < from) return i;
+            const p: Partial<Item> = { ...rest };
+            if (patch.reminders) {
+              p.reminders = patch.reminders.map((r) => ({ ...r, itemId: i.id }));
+            }
+            if (timeChanged) {
+              const moved = new Date(i.at);
+              moved.setDate(moved.getDate() + dayDelta);
+              moved.setHours(newAnchorAt.getHours(), newAnchorAt.getMinutes(), 0, 0);
+              p.at = moved.toISOString();
+              p.endAt = duration ? new Date(moved.getTime() + duration).toISOString() : undefined;
+            }
+            const next = mergeItem(i, p);
+            noteLocalWrite(i.id, next.updatedAt ?? nowIso());
+            return next;
+          }),
         });
       },
 
@@ -1232,7 +1293,7 @@ export const useDatebookStore = create<DatebookState>()(
     {
       name: "datebook-store",
       version: 8,
-      storage: createJSONStorage(() => createDebouncedStorage(250)),
+      storage: createDebouncedJSONStorage(250),
       partialize: (s) => ({
         categories: s.categories,
         items: s.items,
@@ -1376,6 +1437,9 @@ function mergeItem(item: Item, patch: Partial<Item>): Item {
   if ("location" in patch && !patch.location) delete next.location;
   if ("description" in patch && !patch.description) delete next.description;
   if ("reminders" in patch && !patch.reminders?.length) delete next.reminders;
+  if ("priority" in patch && (!patch.priority || patch.priority === "normal")) delete next.priority;
+  if ("estimateMinutes" in patch && !patch.estimateMinutes) delete next.estimateMinutes;
+  if ("subtasks" in patch && !patch.subtasks?.length) delete next.subtasks;
   if (patch.status !== undefined && item.type !== "event") {
     if (patch.status !== (item.status ?? "todo")) {
       // Status keeps its own clock. `updatedAt` moves for any edit — including a

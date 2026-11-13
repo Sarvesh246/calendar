@@ -41,7 +41,8 @@ import { haptic } from "@/lib/haptic";
 import { nanoid } from "@/lib/nanoid";
 import { cn } from "@/lib/utils";
 import type { Category, Item, ItemStatus, ItemType, Reminder, RepeatFreq } from "@/lib/types";
-import { repeatLabel } from "@/lib/repeat";
+import { nthWeekdayLabel, nthWeekdayRuleFor, repeatLabel } from "@/lib/repeat";
+import { ItemPlanning } from "@/components/item-planning";
 import { formatOffsetLabel } from "@/lib/reminder-defaults";
 import { duplicateItem } from "@/lib/item-actions";
 import { formatDuration, plannedMinutes, workSessionsFor } from "@/lib/work-sessions";
@@ -186,6 +187,7 @@ export function ItemEditor({
   variant?: "inline" | "inspector";
 }) {
   const updateItem = useDatebookStore((s) => s.updateItem);
+  const updateSeriesFollowing = useDatebookStore((s) => s.updateSeriesFollowing);
   const setItemStatus = useDatebookStore((s) => s.setItemStatus);
   const setItemRepeat = useDatebookStore((s) => s.setItemRepeat);
   const allCategories = useDatebookStore((s) => s.categories);
@@ -197,6 +199,8 @@ export function ItemEditor({
   const [customOffset, setCustomOffset] = useState("30");
   const inspector = variant === "inspector";
   const [moreOpen, setMoreOpen] = useState(false);
+  // For a repeating item: edit just this occurrence, or this one and every later one.
+  const [seriesScope, setSeriesScope] = useState<"one" | "following">("one");
   const now = useNow();
   const summary = summarizeItemWhen(item, now, clock24h);
 
@@ -228,7 +232,11 @@ export function ItemEditor({
         ? `${formatTime(item.at, clock24h)}${end ? ` – ${formatTime(item.endAt!, clock24h)}` : ""}`
         : `Due ${formatTime(item.at, clock24h)}`;
 
-  const patch = (p: Partial<Item>) => updateItem(item.id, p);
+  // Checklist ticks belong to one occurrence — they never fan out to the series.
+  const patch = (p: Partial<Item>) =>
+    seriesScope === "following" && item.repeatId && !("subtasks" in p)
+      ? updateSeriesFollowing(item.id, p)
+      : updateItem(item.id, p);
 
   // Moving the start carries the end with it, so a rescheduled event keeps its
   // length instead of ending before it begins.
@@ -558,11 +566,17 @@ export function ItemEditor({
   const repeatBlock = !item.sourceId && !isUndated(item) && (
     <DetailRow icon={<Repeat className="h-3.5 w-3.5" strokeWidth={1.75} />} label="Repeat">
       <select
-        value={item.repeat?.freq ?? ""}
+        value={
+          item.repeat?.freq === "monthly" && item.repeat.bySetPos
+            ? "monthly-nth"
+            : (item.repeat?.freq ?? "")
+        }
         onChange={(e) => {
-          const v = e.target.value as RepeatFreq | "";
+          const v = e.target.value as RepeatFreq | "monthly-nth" | "";
           if (!v) setItemRepeat(item.id, undefined);
-          else {
+          else if (v === "monthly-nth") {
+            setItemRepeat(item.id, { freq: "monthly", ...nthWeekdayRuleFor(new Date(item.at)) });
+          } else {
             setItemRepeat(item.id, {
               freq: v,
               ...(v === "weekly" ? { byDay: [new Date(item.at).getDay()] } : {}),
@@ -575,7 +589,38 @@ export function ItemEditor({
         <option value="daily">Every day</option>
         <option value="weekly">Every week</option>
         <option value="monthly">Every month</option>
+        <option value="monthly-nth">
+          Monthly on the{" "}
+          {nthWeekdayLabel({ freq: "monthly", ...nthWeekdayRuleFor(new Date(item.at)) })}
+        </option>
+        <option value="yearly">Every year</option>
       </select>
+      {item.repeatId && (
+        <div role="radiogroup" aria-label="Apply edits to" className="mt-2 inline-flex gap-1">
+          {(
+            [
+              ["one", "Edit this one"],
+              ["following", "This & following"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={seriesScope === value}
+              onClick={() => setSeriesScope(value)}
+              className={cn(
+                "min-h-9 rounded-md border px-2.5 text-[12px] font-medium transition-colors duration-[var(--motion-micro)]",
+                seriesScope === value
+                  ? "border-accent/50 bg-accent-soft text-ink"
+                  : "border-line text-ink-soft hover:text-ink",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {item.repeat?.freq === "weekly" && (
         <div className="mt-2">
           <WeekdayChips
@@ -592,6 +637,8 @@ export function ItemEditor({
       )}
     </DetailRow>
   );
+
+  const planningBlock = !isEvent && !item.workFor && <ItemPlanning item={item} patch={patch} />;
 
   const detailsBlock = (
     <DetailRow
@@ -730,6 +777,7 @@ export function ItemEditor({
             {(isEvent || item.location) && locationBlock}
           </div>
           {workBlock}
+          {planningBlock}
           <div>
             {moreToggle}
             <Reveal open={moreOpen}>
@@ -752,6 +800,7 @@ export function ItemEditor({
           {locationBlock}
           {statusBlock}
           {workBlock}
+          {planningBlock}
           {remindersBlock}
           {repeatBlock}
           {detailsBlock}
@@ -870,6 +919,7 @@ function AllDayToggle({ checked, onChange }: { checked: boolean; onChange: (v: b
 function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void }) {
   const deleteItem = useDatebookStore((s) => s.deleteItem);
   const deleteSeries = useDatebookStore((s) => s.deleteSeries);
+  const deleteSeriesFrom = useDatebookStore((s) => s.deleteSeriesFrom);
   // Every delete lands in the undo toast, so a single item goes in one tap. A
   // repeating one asks which — that's a real choice, not a confirmation.
   const [choosing, setChoosing] = useState(false);
@@ -900,6 +950,16 @@ function ItemActions({ item, onCollapse }: { item: Item; onCollapse?: () => void
             className="min-h-11 rounded-lg bg-warn px-3 text-[12.5px] font-medium text-white"
           >
             This one
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("warn");
+              deleteSeriesFrom(item.id);
+            }}
+            className="min-h-11 rounded-lg border border-warn px-3 text-[12.5px] font-medium text-warn"
+          >
+            This &amp; following
           </button>
           <button
             type="button"

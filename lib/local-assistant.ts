@@ -52,7 +52,7 @@ import { parseMultiAdd } from "./multi-add";
 import { nanoid } from "./nanoid";
 import { parseQuickAdd } from "./quick-add-parser";
 import { findOverlapGroups } from "./overlap";
-import { countOccurrences, expandRepeat } from "./repeat";
+import { countOccurrences, expandRepeat, nthWeekdayLabel } from "./repeat";
 import { formatOffsetLabel } from "./reminder-defaults";
 import { answerHelpQuestion } from "./local-help";
 import { answerSyllabusQuestion } from "./local-syllabus";
@@ -1938,7 +1938,9 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 function repeatText(rule: RepeatRule): string {
   if (rule.freq === "daily") return "every day";
-  if (rule.freq === "monthly") return "every month";
+  if (rule.freq === "yearly") return "every year";
+  const nth = nthWeekdayLabel(rule);
+  if (rule.freq === "monthly") return nth ? `the ${nth} of every month` : "every month";
   const days = rule.byDay?.length ? rule.byDay.map((d) => DAY_NAMES[d]) : [];
   if (days.length === 5 && !rule.byDay!.includes(0) && !rule.byDay!.includes(6))
     return "every weekday";

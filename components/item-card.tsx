@@ -22,6 +22,7 @@ import {
 import { useDatebookStore } from "@/lib/store";
 import { useUIStore } from "@/lib/ui-store";
 import { itemDisplayTitle } from "@/lib/course-label";
+import { formatDuration } from "@/lib/work-sessions";
 import { registerItemExpander } from "@/lib/item-focus";
 import { dayKey } from "@/lib/date-utils";
 import { handleItemMenuKey, itemMenuProps, openItemMenuAt } from "@/lib/item-menu";
@@ -635,6 +636,20 @@ function EventCard({
               {item.location}
             </p>
           )}
+          {item.type !== "event" &&
+            (item.priority === "high" || item.subtasks?.length || item.estimateMinutes) && (
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
+                {item.priority === "high" && (
+                  <span className="font-medium text-warn">High priority</span>
+                )}
+                {item.subtasks?.length ? (
+                  <span className="tabular-nums">
+                    {item.subtasks.filter((t) => t.done).length}/{item.subtasks.length} steps
+                  </span>
+                ) : null}
+                {item.estimateMinutes ? <span>~{formatDuration(item.estimateMinutes)}</span> : null}
+              </p>
+            )}
           {!mobile && <CollapsedDescription show={!expanded} text={item.description} />}
         </div>
         {ended && (

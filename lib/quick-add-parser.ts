@@ -128,13 +128,14 @@ export function parseQuickAdd(
     text = compactDays.rest;
   }
   const everyMatch = text.match(
-    /\bevery\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i,
+    /\bevery\s+(day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i,
   );
   if (everyMatch) {
     const token = everyMatch[1].toLowerCase();
     if (token === "day") repeat = { freq: "daily" };
     else if (token === "week") repeat = { freq: "weekly" };
     else if (token === "month") repeat = { freq: "monthly" };
+    else if (token === "year") repeat = { freq: "yearly" };
     else if (WEEKDAYS[token] !== undefined) {
       const day = WEEKDAYS[token];
       const existing = repeat?.byDay ?? [];
@@ -354,5 +355,5 @@ function capitalize(s: string) {
 }
 
 export function parseRepeatFreq(v: string): RepeatFreq | null {
-  return v === "daily" || v === "weekly" || v === "monthly" ? v : null;
+  return v === "daily" || v === "weekly" || v === "monthly" || v === "yearly" ? v : null;
 }

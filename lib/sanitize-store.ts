@@ -183,6 +183,19 @@ export function sanitizeItems(items: Item[] | undefined): Item[] {
     if (reminders?.length) next.reminders = reminders;
     else delete next.reminders;
     if (typeof i.workFor !== "string" || !i.workFor) delete next.workFor;
+    if (i.priority !== "low" && i.priority !== "high") delete next.priority;
+    if (typeof i.estimateMinutes !== "number" || !(i.estimateMinutes > 0)) {
+      delete next.estimateMinutes;
+    }
+    const subtasks = Array.isArray(i.subtasks)
+      ? i.subtasks.filter(
+          (t) =>
+            t && typeof t === "object" && typeof t.id === "string" && typeof t.title === "string",
+        )
+      : [];
+    if (subtasks.length)
+      next.subtasks = subtasks.map((t) => ({ id: t.id, title: t.title, done: t.done === true }));
+    else delete next.subtasks;
     for (const key of ["completedAt", "statusAt", "updatedAt"] as const) {
       const v = isoOrUndefined(i[key]);
       if (v) next[key] = v;

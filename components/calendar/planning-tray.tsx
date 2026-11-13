@@ -15,7 +15,12 @@ import { dayAtMinute, snapMinutes } from "@/lib/calendar-drag-math";
 import { slotLabel } from "@/lib/slot-label";
 import { planWorkSession } from "@/lib/item-actions";
 import { handleItemMenuKey, itemMenuProps } from "@/lib/item-menu";
-import { findFreeSlot, formatDuration, plannedMinutes } from "@/lib/work-sessions";
+import {
+  findFreeSlot,
+  formatDuration,
+  plannedMinutes,
+  sessionMinutesFor,
+} from "@/lib/work-sessions";
 import { SESSION_LENGTHS, useWorkspacePrefs, type CalendarMode } from "@/lib/workspace-prefs";
 import { EmptyState } from "@/components/empty-state";
 import { haptic } from "@/lib/haptic";
@@ -42,7 +47,7 @@ export function PlanningTray({
   const allItems = useDatebookStore((s) => s.items);
   const clock24h = useDatebookStore((s) => s.settings.clock24h);
   const categories = useCategoriesById();
-  const minutes = useWorkspacePrefs((s) => s.sessionMinutes);
+  const usualMinutes = useWorkspacePrefs((s) => s.sessionMinutes);
   const setMinutes = useWorkspacePrefs((s) => s.setSessionMinutes);
   const openInspector = useUIStore((s) => s.openInspector);
   const now = useNow();
@@ -91,7 +96,12 @@ export function PlanningTray({
     return { overdue, soon, later, undated, beyond };
   }, [items, now, query, categories]);
 
+  // An effort estimate sets the session length; otherwise the usual length does.
+  const minutesFor = (item: Item) =>
+    sessionMinutesFor(item, plannedMinutes(sessionsByItem.get(item.id) ?? []), usualMinutes);
+
   function findTime(item: Item) {
+    const minutes = minutesFor(item);
     const due = new Date(item.at);
     const before = !isUndated(item) && due.getTime() > now.getTime() ? due : undefined;
     // `now` is at most a minute old; the slot rounds up to the next quarter hour.
@@ -117,7 +127,7 @@ export function PlanningTray({
     category: Category | undefined,
   ) {
     if (!canDrop || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
-    const length = minutes;
+    const length = minutesFor(item);
     const color = category?.color ?? "#8a8a94";
     // The pointer holds the block near its top, the way you'd pick up a card.
     const startFor = (m: number) => Math.max(0, Math.min(24 * 60 - length, snapMinutes(m - 15)));
@@ -226,6 +236,9 @@ export function PlanningTray({
                           </>
                         )}
                       </span>
+                      {item.estimateMinutes ? (
+                        <span> · ~{formatDuration(item.estimateMinutes)}</span>
+                      ) : null}
                       {planned > 0 && (
                         <span className="text-good"> · {formatDuration(planned)} planned</span>
                       )}
@@ -239,8 +252,8 @@ export function PlanningTray({
                   <button
                     type="button"
                     onClick={() => findTime(item)}
-                    aria-label={`Find ${formatDuration(minutes)} for ${item.title}`}
-                    title={`Find the next free ${formatDuration(minutes)}`}
+                    aria-label={`Find ${formatDuration(minutesFor(item))} for ${item.title}`}
+                    title={`Find the next free ${formatDuration(minutesFor(item))}`}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-accent-soft hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <CalendarPlus className="h-4 w-4" strokeWidth={1.9} />
@@ -273,11 +286,11 @@ export function PlanningTray({
                 key={m}
                 type="button"
                 role="radio"
-                aria-checked={minutes === m}
+                aria-checked={usualMinutes === m}
                 onClick={() => setMinutes(m)}
                 className={cn(
                   "h-7 rounded-md px-2 text-[11.5px] font-medium tabular-nums transition-colors duration-[var(--motion-micro)]",
-                  minutes === m
+                  usualMinutes === m
                     ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]"
                     : "text-ink-soft hover:text-ink",
                 )}
