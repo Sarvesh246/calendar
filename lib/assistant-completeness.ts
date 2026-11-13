@@ -54,7 +54,7 @@ const words = (s: string) =>
 export function placePhrases(message: string): string[] {
   const out: string[] = [];
   const re =
-    /\b(?:at|in|location(?: is)?)\s+((?:the\s+)?[A-Za-z0-9][\w'.&-]*(?:\s+[A-Za-z0-9][\w'.&-]*){0,5})/gi;
+    /\b(?:at|in|location(?: is)?)\s+((?:the\s+)?[A-Za-z0-9][\w'.&-]*(?:\s+[A-Za-z0-9][\w'.&-]*){0,12})/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(message))) {
     let phrase = m[1];
@@ -69,6 +69,20 @@ export function placePhrases(message: string): string[] {
     phrase = phrase.split(
       /\s+(?:and|with|remind|reminder|due|for|then|also|before|after|every|until)\b/i,
     )[0];
+    // A date following a place or class is not part of its name. Keep "on
+    // Main St" intact while cutting "on Oct 5", "by Friday", and similar.
+    phrase = phrase.replace(
+      /\s+(?:on|by)\s+(?:(?:this|next)\s+)?(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|today|tomorrow|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?|\d{1,2}\/\d{1,2})\b.*$/i,
+      "",
+    );
+    // Seasons and academic terms are time expressions, not locations. A
+    // longer place name such as "Spring Street" is still treated as a place.
+    if (
+      /^(?:the\s+)?(?:spring|summer|fall|autumn|winter)(?:\s+(?:semester|term|\d{4}))*$/i.test(
+        phrase.trim(),
+      )
+    )
+      continue;
     // Only phrases that read as a place: "the …" or Capitalised words.
     const placeLike =
       !/^(?:a |an )?(?:minute|hour|day|week|month|year|progress|advance|time|case|person|total|the morning|the afternoon|the evening)\b/i.test(

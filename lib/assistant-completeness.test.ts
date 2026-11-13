@@ -93,6 +93,36 @@ describe("findMissingDetails", () => {
     expect(placePhrases("meeting in person at 3pm")).toEqual([]);
   });
 
+  it("does not mistake class nicknames or seasons for missing locations", () => {
+    const categories = [{ id: "chem", name: "CHEM 107" }];
+    expect(
+      findMissingDetails(
+        "add a quiz in chem on oct 5",
+        [{ kind: "create", title: "Quiz", categoryId: "chem" }],
+        NY,
+        new Date(),
+        categories,
+      ),
+    ).toEqual([]);
+    expect(
+      findMissingDetails(
+        "sign up for intramurals in the spring by oct 1",
+        [{ kind: "create", title: "Sign up for intramurals" }],
+        NY,
+      ),
+    ).toEqual([]);
+    expect(placePhrases("meet in the fall semester by october 1")).toEqual([]);
+    expect(placePhrases("meet at Spring Street on october 5")).toEqual(["Spring Street"]);
+    expect(placePhrases("meet at the clinic on May Street")).toEqual(["the clinic on May Street"]);
+    expect(
+      findMissingDetails(
+        "meet at the clinic on main st by oct 5",
+        [{ kind: "create", title: "Meeting" }],
+        NY,
+      ),
+    ).toEqual(['location "the clinic on main st"']);
+  });
+
   it("checks repeat range against until and rejects a months-long occurrence", () => {
     const msg = "add CHEM 107 lecture mondays and wednesdays 10am to 11am from sep 28 to dec 1";
     const series = {
