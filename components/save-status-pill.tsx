@@ -10,6 +10,11 @@ import {
   subscribeLocalWrites,
   useDatebookStore,
 } from "@/lib/store";
+import {
+  getServerStorageWriteFailed,
+  getStorageWriteFailed,
+  subscribeStorageHealth,
+} from "@/lib/debounced-storage";
 import { describeSaveStatus, type SaveStatusView } from "@/lib/save-status";
 import { motion as motionTokens } from "@/lib/motion";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -38,7 +43,20 @@ export function SaveStatusPill() {
   const cloudError = useDatebookStore((s) => s.cloudError);
   const retrySync = useDatebookStore((s) => s.retrySync);
 
-  const view = describeSaveStatus({ mode, syncStatus, online, queued, error: cloudError });
+  const storageFailed = useSyncExternalStore(
+    subscribeStorageHealth,
+    getStorageWriteFailed,
+    getServerStorageWriteFailed,
+  );
+
+  const view = describeSaveStatus({
+    mode,
+    syncStatus,
+    online,
+    queued,
+    error: cloudError,
+    storageFailed,
+  });
   const [visible, setVisible] = useState(false);
   // The pill is phone-only (`md:hidden`). Mounting its draggable motion card on
   // desktop anyway made framer measure the page on every save, for nothing.
@@ -110,7 +128,10 @@ export function SaveStatusPill() {
     // the network comes back, and it must not sit on top of Add for that long.
     <div
       className={cn(
-        "save-status-pill flex w-full justify-center md:hidden",
+        "save-status-pill flex w-full justify-center",
+        // The pill is a phone thing, except when storage is full: that has to
+        // reach desktop users too, since their edits are at risk as well.
+        !storageFailed && "md:hidden",
         // Only a status that sticks around needs to dodge the add button. A
         // "Saved" that fades in two seconds can sit dead centre, which is
         // where the eye expects it — the permanent right gutter was making
@@ -119,7 +140,7 @@ export function SaveStatusPill() {
       )}
     >
       <AnimatePresence>
-        {phone && visible && current && (
+        {(phone || storageFailed) && visible && current && (
           <motion.div
             key="save-status"
             role="status"

@@ -75,10 +75,23 @@ export interface SaveStatusInput {
   /** Writes sitting in the outbound queue. */
   queued: number;
   error?: string | null;
+  /** The last write to this device's storage failed (usually: it's full). */
+  storageFailed?: boolean;
 }
 
 export function describeSaveStatus(input: SaveStatusInput): SaveStatusView {
-  const { mode, syncStatus, online, queued, error } = input;
+  const { mode, syncStatus, online, queued, error, storageFailed } = input;
+
+  // Outranks everything: if this device can't hold the data, "Saved" is a lie.
+  if (storageFailed) {
+    return {
+      tone: "error",
+      title: "Storage full",
+      detail: "Recent edits can't be kept on this device. Remove old feeds or free up space.",
+      retry: false,
+      transient: false,
+    };
+  }
 
   if (mode !== "cloud") {
     return {
