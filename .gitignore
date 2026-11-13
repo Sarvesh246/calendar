@@ -57,3 +57,10 @@ graphify-out/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local agent tooling state (ruflo / claude-flow, Supabase CLI cache)
+.claude-flow/
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
+supabase/.temp/
