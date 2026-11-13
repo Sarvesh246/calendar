@@ -47,6 +47,8 @@ export async function availableLlmModels(): Promise<PublicLlmModel[]> {
   return configuredProviders().map(publicProvider);
 }
 
+const isAuto = (selectedId?: string) => !selectedId || selectedId === "auto";
+
 export async function providerCandidates(
   selectedId?: string,
   mutation = false,
@@ -59,9 +61,11 @@ export async function providerCandidates(
   const enabled = configured.filter(
     (provider) => (cooldownUntil.get(provider.id) ?? 0) <= Date.now(),
   );
-  // Writes go to the larger models first. Smaller ones stay in the list as a
-  // fallback: a card from a smaller model beats no answer while the larger
-  // ones are rate-limited.
+  // Auto keeps the registry order for every message, writes included, so the
+  // provider with room for the full prompt answers. With an explicitly picked
+  // model, writes still go to the larger models first; smaller ones stay in the
+  // list as a fallback, since a card from a smaller model beats no answer.
+  if (isAuto(selectedId)) return { providers: enabled, requestedUnavailable: false };
   const largeFirst = (list: LlmProviderConfig[]) =>
     mutation
       ? [
@@ -69,8 +73,6 @@ export async function providerCandidates(
           ...list.filter((provider) => !isLargeModel(provider.model)),
         ]
       : list;
-  if (!selectedId || selectedId === "auto")
-    return { providers: largeFirst(enabled), requestedUnavailable: false };
   const selected = enabled.find((provider) => provider.id === selectedId);
   return {
     providers: largeFirst(
@@ -170,9 +172,11 @@ export async function callRoutedProvider(opts: {
     const key = keyFor(provider);
     if (!key) continue;
     const started = Date.now();
-    const largerModelAvailable = queue
-      .slice(i + 1)
-      .some((next) => isLargeModel(next.model) && Boolean(keyFor(next)));
+    // Only an explicit model choice hands writes up to a larger model; in Auto
+    // the first healthy provider stages them itself.
+    const largerModelAvailable =
+      !isAuto(opts.selectedId) &&
+      queue.slice(i + 1).some((next) => isLargeModel(next.model) && Boolean(keyFor(next)));
     try {
       const result = await opts.run(provider, key, { largerModelAvailable });
       logLlmRequest({ provider, latencyMs: result.latencyMs || Date.now() - started, ok: true });
@@ -180,10 +184,7 @@ export async function callRoutedProvider(opts: {
         ...result,
         provider: publicProvider(provider),
         fellBack:
-          requestedUnavailable ||
-          (Boolean(opts.selectedId) &&
-            opts.selectedId !== "auto" &&
-            provider.id !== opts.selectedId),
+          requestedUnavailable || (!isAuto(opts.selectedId) && provider.id !== opts.selectedId),
       };
     } catch (error) {
       lastError = error;

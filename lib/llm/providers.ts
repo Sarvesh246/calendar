@@ -20,18 +20,9 @@ export type LlmProviderConfig = {
  * `/models` plus a real tool call as the authority before enabling an entry.
  */
 export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
-  {
-    id: "groq-gpt-oss-120b",
-    label: "Groq · GPT-OSS 120B",
-    baseURL: "https://api.groq.com/openai/v1",
-    keyEnv: "GROQ_API_KEY",
-    model: "openai/gpt-oss-120b",
-    supportsTools: true,
-    reasoningEffort: "low",
-    tier: 1,
-  },
-  // Flash-Lite has the highest free-tier RPM and daily caps of the Gemini models,
-  // so it is the first fallback behind Groq.
+  // Auto tries providers in this order. Gemini Flash-Lite leads: its 250K
+  // tokens-per-minute free tier fits the full calendar prompt, while Groq's
+  // 8K TPM rejects a large calendar outright and allows ~1 message a minute.
   {
     id: "gemini-3.5-flash-lite",
     label: "Gemini 3.5 Flash Lite",
@@ -48,6 +39,16 @@ export const LLM_PROVIDERS: readonly LlmProviderConfig[] = [
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
     keyEnv: "GEMINI_API_KEY",
     model: "gemini-3.1-flash-lite",
+    supportsTools: true,
+    reasoningEffort: "low",
+    tier: 1,
+  },
+  {
+    id: "groq-gpt-oss-120b",
+    label: "Groq · GPT-OSS 120B",
+    baseURL: "https://api.groq.com/openai/v1",
+    keyEnv: "GROQ_API_KEY",
+    model: "openai/gpt-oss-120b",
     supportsTools: true,
     reasoningEffort: "low",
     tier: 1,
