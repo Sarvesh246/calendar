@@ -48,13 +48,11 @@ export async function persistDurableCooldown(providerId: string, untilMs: number
   const sb = client();
   if (!sb) return;
   try {
-    await sb
-      .from("rate_limits")
-      .upsert({
-        key: `${PREFIX}${providerId}`,
-        window_start: new Date(untilMs).toISOString(),
-        count: 1,
-      });
+    await sb.from("rate_limits").upsert({
+      key: `${PREFIX}${providerId}`,
+      window_start: new Date(untilMs).toISOString(),
+      count: 1,
+    });
   } catch {
     /* best effort */
   }

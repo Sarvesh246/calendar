@@ -14,6 +14,7 @@ import { DEFAULT_CUSTOM_THEME, type CustomThemeColors } from "@/lib/custom-theme
 import { ImportCalendar } from "@/components/import-calendar";
 import { ImportSyllabus, SyllabusImportProvider } from "@/components/import-syllabus";
 import { AccountSection } from "@/components/account-section";
+import { GarminWatchSection } from "@/components/settings/garmin-watch";
 import { DiagnosticsSettings } from "@/components/diagnostics-settings";
 import { AppLockSection } from "@/components/app-lock-section";
 import { NativeIosSection } from "@/components/native-ios-section";
@@ -292,6 +293,7 @@ export default function SettingsPage() {
               defaultOpen
             >
               <AccountSection />
+              <GarminWatchSection />
               <AppLockSection />
               <NativeIosSection />
               <Divider />

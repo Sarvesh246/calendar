@@ -15,3 +15,7 @@ supabase/migrations/
 *.tsbuildinfo
 AGENTS.md
 CLAUDE.md
+watch/bin/
+watch/source/Secrets.mc
+watch/source/Seed.mc
+watch/secrets.local.json

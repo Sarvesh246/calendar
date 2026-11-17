@@ -213,9 +213,10 @@ function PhoneAssistantSheet({ onClosed }: { onClosed: () => void }) {
         style={{
           ...dragProps.style,
           top: typing && band ? `${band.top}px` : "var(--viewport-pan, 0px)",
-          height: typing && band
-            ? `${band.height}px`
-            : "var(--assistant-room-height, var(--visible-height, 100dvh))",
+          height:
+            typing && band
+              ? `${band.height}px`
+              : "var(--assistant-room-height, var(--visible-height, 100dvh))",
         }}
         className="assistant-room absolute inset-x-0 flex flex-col overflow-hidden rounded-t-[22px] border border-b-0 border-line bg-surface pt-[env(safe-area-inset-top)] shadow-[0_-12px_40px_-12px_rgb(0_0_0_/_0.28)]"
       >
