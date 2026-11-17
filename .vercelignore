@@ -1,3 +1,3 @@
 # The Garmin project is built and installed locally; never upload watch keys,
 # signing material or personally provisioned snapshots to a web deployment.
-watch/
+/watch/
