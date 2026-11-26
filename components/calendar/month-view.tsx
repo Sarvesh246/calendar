@@ -189,7 +189,7 @@ function DayCellChips({
             data-chip-id={item.id}
             {...itemMenuProps(item.id, dayKey(date))}
             className={cn(
-              "cal-chip flex shrink-0 cursor-grab items-baseline gap-1 rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px] transition-opacity duration-[var(--motion-micro)]",
+              "cal-chip flex shrink-0 cursor-grab items-baseline gap-[3px] rounded-[4px] pl-[6px] pr-1 py-[3px] text-[12px] font-medium leading-[17px] transition-opacity duration-[var(--motion-micro)]",
               task && "cal-chip-task",
               done && "opacity-45",
               isOverdue(item) && "cal-chip-overdue",

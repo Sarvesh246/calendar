@@ -328,7 +328,10 @@ export default function AgendaPage() {
           {!isEmpty && <FeedHealthBanner />}
 
           {!isEmpty && (
-            <div className={cn("relative w-full", !rows && "max-w-[920px]")}>
+            // Same width as the week strip above it. Capped at 920px the cards
+            // stopped short of the strip's right edge and left a dead gutter
+            // under it on every desk-sized screen.
+            <div className="relative w-full">
               {sections.length > 0 && (
                 <AgendaSticky sections={sections} now={now} layout={rows ? "rows" : "cards"} />
               )}

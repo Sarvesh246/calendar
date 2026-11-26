@@ -89,12 +89,15 @@ export function Segmented({
               onChange(opt.value);
             }}
             className={cn(
-              "press-none relative min-h-10 min-w-0 flex-1 rounded-lg px-0.5 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:text-[13px]",
+              // At least as wide as its label, so a long option ("Comfortable")
+              // takes room from its shorter neighbours instead of hitting the
+              // pill's edges.
+              "press-none relative min-h-10 min-w-fit flex-1 whitespace-nowrap rounded-lg px-2 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:text-[13px]",
               "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
             )}
             aria-pressed={active}
           >
-            <span className="relative z-[1] block [overflow-wrap:anywhere]">{opt.label}</span>
+            <span className="relative z-[1] block">{opt.label}</span>
           </button>
         );
       })}

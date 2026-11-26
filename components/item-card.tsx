@@ -339,7 +339,10 @@ function useCompleteStyle(done: boolean) {
 
 /**
  * Hover (or keyboard focus) reveals the same few actions the right-click menu
- * leads with: open the inspector, reschedule, and everything else.
+ * leads with: open the inspector, reschedule, and everything else. With a
+ * mouse they stay hidden until the card is hovered (see `.card-quick-actions`
+ * in globals.css) — a toolbar on every row made a list of ten cards read as
+ * forty buttons. Touch-first screens keep them visible.
  */
 function CardQuickActions({ item, day }: { item: Item; day?: Date }) {
   const openInspector = useUIStore((s) => s.openInspector);
@@ -596,7 +599,7 @@ function EventCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium [text-wrap:pretty]",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink",
             )}
@@ -722,7 +725,10 @@ function AssignmentCard({
   // Named Start/Reschedule on Today are the primary path — swipe competed with
   // tab swipe and sheet dismiss, so it stays off when those buttons are shown.
   const allowSwipe = mobile && !showQuickActions && !onMobileOpen;
-  const dotInMeta = showCategoryDot && mobile && showQuickActions;
+  // The class dot labels the meta line on every layout. Parked at the far
+  // right it floated on its own between the title and the actions, far from
+  // the text it describes.
+  const dotInMeta = showCategoryDot;
 
   const openDetails = () => {
     if (mobile) {
@@ -778,7 +784,7 @@ function AssignmentCard({
         <div className="min-w-0 flex-1">
           <p
             className={cn(
-              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium",
+              "relative line-clamp-2 w-fit min-w-0 max-w-full break-words text-[14px] font-medium [text-wrap:pretty]",
               "transition-colors duration-[var(--motion-standard)]",
               showCompleteStyle ? "text-ink-soft" : "text-ink",
             )}
@@ -823,16 +829,6 @@ function AssignmentCard({
           {!mobile && <CollapsedDescription show={!expanded} text={item.description} />}
         </div>
 
-        {showCategoryDot && !dotInMeta && (
-          <span
-            aria-hidden
-            style={{ "--cat": color } as React.CSSProperties}
-            className={cn(
-              "cat-dot h-1.5 w-1.5 shrink-0 rounded-full transition-[opacity,transform] duration-[var(--motion-micro)]",
-              !mobile && expanded && "scale-50 opacity-0",
-            )}
-          />
-        )}
         {/* Named controls for exactly what the swipes used to do, so the
             actions stay discoverable on Today. Agenda keeps a calmer row. */}
         {mobile && showQuickActions && (

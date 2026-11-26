@@ -1249,27 +1249,42 @@ label {
   }
 }
 
-/* Calendar chips — adopt in month-view via .cal-chip */
+/* Calendar chips — adopt in month-view via .cal-chip.
+   A class-coloured edge instead of a full outline: a month of outlined boxes
+   read as a grid of buttons, and the border plus its padding cost the text the
+   few pixels a ~100px cell has. Meetings and events keep a soft tint; due
+   items are bare text on the same edge, so the two still read apart. The
+   border stays (transparent) so chip height — and the fit maths — is unchanged. */
 .cal-chip {
-  background: color-mix(in srgb, var(--cat) 11%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--line));
+  background: color-mix(in srgb, var(--cat) 12%, var(--surface));
+  border: 1px solid transparent;
+  box-shadow: inset 2.5px 0 0 var(--cat);
   color: var(--ink);
 }
 
 .cal-chip-task {
   background: transparent;
-  border-style: dashed;
+  box-shadow: inset 2.5px 0 0 color-mix(in srgb, var(--cat) 70%, transparent);
 }
 
 .cal-chip-overdue {
   color: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+  box-shadow: inset 2.5px 0 0 var(--warn);
 }
 
 :root[data-preset="mono"] .cal-chip,
 :root[data-preset="mono"] .cat-surface {
   background: color-mix(in srgb, var(--ink) 5%, var(--surface));
   border-color: var(--line);
+}
+
+:root[data-preset="mono"] .cal-chip {
+  border-color: transparent;
+  box-shadow: inset 2.5px 0 0 var(--ink-soft);
+}
+
+:root[data-preset="mono"] .cal-chip-task {
+  background: transparent;
 }
 
 :root[data-preset="mono"] .cat-text {
@@ -1280,13 +1295,12 @@ label {
   background: var(--ink-soft);
 }
 
-:root[data-preset="sakura"] .cal-chip,
-:root[data-preset="frost"] .cal-chip,
-:root[data-preset="slate"] .cal-chip,
-:root[data-preset="aurora"] .cal-chip,
-:root[data-preset="minimal"] .cal-chip {
-  background: color-mix(in srgb, var(--cat) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--cat) 16%, var(--line));
+:root[data-preset="sakura"] .cal-chip:not(.cal-chip-task),
+:root[data-preset="frost"] .cal-chip:not(.cal-chip-task),
+:root[data-preset="slate"] .cal-chip:not(.cal-chip-task),
+:root[data-preset="aurora"] .cal-chip:not(.cal-chip-task),
+:root[data-preset="minimal"] .cal-chip:not(.cal-chip-task) {
+  background: color-mix(in srgb, var(--cat) 9%, var(--surface));
 }
 
 /* In-progress status control */
@@ -1907,6 +1921,21 @@ html.calendar-dragging * {
 
 .item-card {
   contain: layout paint;
+}
+
+/* With a mouse, a card's quick actions wait for the card to be hovered,
+   focused or opened: a toolbar on every resting row turned a ten-item list
+   into a wall of icons. The slot keeps its width, so nothing shifts when they
+   appear. Touch screens (no hover) keep them showing. */
+@media (hover: hover) and (pointer: fine) {
+  .item-card .card-quick-actions {
+    opacity: 0;
+  }
+  .item-card:hover .card-quick-actions,
+  .item-card:focus-within .card-quick-actions,
+  .item-card[aria-expanded="true"] .card-quick-actions {
+    opacity: 1;
+  }
 }
 
 /* Completion strike-through, drawn left to right on every wrapped line of a
