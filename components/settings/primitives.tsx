@@ -4,29 +4,11 @@ import { ToggleSwitch } from "@/components/toggle-switch";
 import { cn } from "@/lib/utils";
 import { useSlidingPill } from "@/lib/sliding-pill";
 
-export function CardHeading({
-  title,
-  sub,
-  subMinLines,
-}: {
-  title: string;
-  sub?: string;
-  /** Reserve this many subtitle lines so desktop tiles in a row match height. */
-  subMinLines?: number;
-}) {
+export function CardHeading({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="min-w-0">
       <h2 className="text-[16px] font-semibold tracking-tight text-ink">{title}</h2>
-      {sub && (
-        <p
-          className={cn(
-            "mt-1 text-[13px] leading-relaxed text-ink-soft",
-            subMinLines === 2 && "lg:min-h-[calc(2*1.625em)]",
-          )}
-        >
-          {sub}
-        </p>
-      )}
+      {sub && <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">{sub}</p>}
     </div>
   );
 }
@@ -92,7 +74,7 @@ export function Segmented({
     <div
       ref={containerRef}
       data-segment={segmentId}
-      className="relative flex w-full items-stretch gap-0.5 rounded-xl border border-line/80 bg-surface-sunken/40 p-1 sm:w-fit"
+      className="relative flex w-full items-stretch gap-0.5 rounded-xl border border-line/80 bg-surface-sunken/40 p-1"
     >
       <span ref={pillRef} aria-hidden className="sliding-pill rounded-lg bg-accent" />
       {options.map((opt) => {
@@ -107,7 +89,7 @@ export function Segmented({
               onChange(opt.value);
             }}
             className={cn(
-              "press-none relative min-h-10 min-w-0 flex-1 rounded-lg px-0.5 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:flex-none sm:px-4 sm:text-[13px]",
+              "press-none relative min-h-10 min-w-0 flex-1 rounded-lg px-0.5 text-[12px] font-medium leading-tight transition-colors duration-[var(--motion-micro)] sm:text-[13px]",
               "text-ink-soft hover:text-ink data-[pill-on]:text-accent-ink",
             )}
             aria-pressed={active}

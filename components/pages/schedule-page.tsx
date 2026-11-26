@@ -77,38 +77,45 @@ export default function SchedulePage() {
   const empty = schedule.blocks.length === 0;
 
   return (
-    <div className="mx-auto flex h-auto min-h-0 w-full max-w-[1120px] flex-col gap-5">
+    <div className="mx-auto flex h-auto min-h-0 w-full max-w-[1240px] flex-col gap-4 md:gap-5">
       <MobileRoomHeader
         title="Schedule"
         trailing={
-          <button
-            type="button"
-            onClick={openTimes}
-            className="press-none flex min-h-11 items-center gap-1 rounded-lg px-2 text-[13px] font-semibold text-accent"
-          >
-            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
-            Class times
-          </button>
+          !empty && (
+            <button
+              type="button"
+              onClick={openTimes}
+              className="press-none flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[13px] font-semibold text-accent"
+            >
+              <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+              Class times
+            </button>
+          )
         }
       />
       <header className="hidden flex-wrap items-start justify-between gap-3 md:flex">
         <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold tracking-tight text-ink">Schedule</h1>
+          <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-ink">
+            Schedule
+          </h1>
           <p className="mt-1 max-w-[52ch] text-[13px] text-ink-soft">
             Your week as it actually repeats — every class, lab and standing commitment in one
             place.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={openTimes}>
-          <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
-          Class times
-        </Button>
+        {!empty && (
+          <Button variant="secondary" size="sm" onClick={openTimes}>
+            <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+            Class times
+          </Button>
+        )}
       </header>
 
       {empty ? (
         <EmptyState
-          title="No repeating schedule yet."
-          sub="Add your class times — or import a calendar — and anything that lands on the same day each week will lay itself out here."
+          title="No weekly meetings yet"
+          sub="Add class times or import a calendar with recurring meetings."
+          className="bg-surface"
           action={
             <Button variant="primary" size="sm" onClick={openTimes}>
               Add class times
@@ -196,10 +203,8 @@ function SummaryStrip({
             stat.wide && "col-span-2 sm:col-span-1",
           )}
         >
-          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-            {stat.label}
-          </p>
-          <p className="mt-1 truncate text-[15px] font-semibold tabular-nums text-ink">
+          <p className="text-[12px] font-medium text-ink-faint">{stat.label}</p>
+          <p className="mt-1 break-words text-[15px] font-semibold leading-snug tabular-nums text-ink">
             {stat.value}
           </p>
         </div>
@@ -304,12 +309,17 @@ function TimetableGrid({
             {hours.map((minute) => (
               <span
                 key={minute}
-                className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-[10.5px] tabular-nums text-ink-faint"
+                className={cn(
+                  "absolute right-2 whitespace-nowrap text-[11px] tabular-nums text-ink-faint",
+                  minute === gridStart
+                    ? "translate-y-1"
+                    : minute === gridEnd
+                      ? "-translate-y-[calc(100%+0.25rem)]"
+                      : "-translate-y-1/2",
+                )}
                 style={{ top: (minute - gridStart) * ppm }}
               >
-                {minute === gridStart || minute === gridEnd
-                  ? ""
-                  : formatClock(minute / 60, 0, clock24h)}
+                {formatClock((minute / 60) % 24, 0, clock24h)}
               </span>
             ))}
           </div>
@@ -340,7 +350,7 @@ function TimetableGrid({
                 </div>
               )}
               {(byDay.get(day) ?? []).map((block) => {
-                const minutes = block.endMin - block.startMin;
+                const blockHeight = (block.endMin - block.startMin) * ppm;
                 const color = colorOf(block.categoryId);
                 return (
                   <div
@@ -348,7 +358,7 @@ function TimetableGrid({
                     className="absolute p-[3px]"
                     style={{
                       top: (block.startMin - gridStart) * ppm,
-                      height: minutes * ppm,
+                      height: blockHeight,
                       left: `${(block.lane / block.lanes) * 100}%`,
                       width: `${100 / block.lanes}%`,
                     }}
@@ -363,12 +373,12 @@ function TimetableGrid({
                       <p className="truncate text-[12px] font-semibold leading-tight text-ink">
                         {block.title}
                       </p>
-                      {minutes >= 40 && (
+                      {blockHeight >= 38 && (
                         <p className="truncate text-[10.5px] tabular-nums text-ink-soft">
                           {formatRange(block, clock24h)}
                         </p>
                       )}
-                      {minutes >= 70 && block.location && (
+                      {blockHeight >= 58 && block.location && (
                         <p className="mt-auto truncate text-[10.5px] text-ink-faint">
                           {block.location}
                         </p>

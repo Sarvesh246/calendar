@@ -176,8 +176,6 @@ function WeekStrip({
               moveTo(e.currentTarget);
               onSelect(day);
             }}
-            // Spelled out because the visible label is a single letter, which a
-            // screen reader would otherwise read as "T" twice a week.
             aria-label={
               `${weekdayLong(day)}${day === today ? ", today" : ""}, ` +
               (blocks.length === 0
@@ -193,7 +191,7 @@ function WeekStrip({
                 isSelected ? "text-accent" : day === today ? "text-ink" : "text-ink-soft",
               )}
             >
-              {weekdayShort(day).slice(0, 1)}
+              {weekdayShort(day).slice(0, 2)}
             </span>
             <span
               aria-hidden
@@ -209,15 +207,13 @@ function WeekStrip({
                 />
               )}
             </span>
-            {day === today && (
-              <span
-                aria-hidden
-                className={cn(
-                  "relative z-[1] h-1 w-1 rounded-full",
-                  isSelected ? "bg-accent" : "bg-ink-faint",
-                )}
-              />
-            )}
+            <span
+              aria-hidden
+              className={cn(
+                "relative z-[1] h-1 w-1 rounded-full",
+                day !== today ? "invisible" : isSelected ? "bg-accent" : "bg-ink-faint",
+              )}
+            />
           </button>
         );
       })}
@@ -346,10 +342,15 @@ function DayTimeline({
                   className="cat-surface flex h-full flex-col justify-center overflow-hidden rounded-lg px-2 py-1"
                   style={{ ["--cat" as string]: color }}
                 >
-                  <p className="truncate text-[12.5px] font-semibold leading-tight text-ink">
+                  <p
+                    className={cn(
+                      "shrink-0 text-[12.5px] font-semibold leading-[14px] text-ink",
+                      boxHeight >= 50 ? "line-clamp-2 break-words" : "truncate",
+                    )}
+                  >
                     {block.title}
                   </p>
-                  <p className="truncate text-[10.5px] tabular-nums text-ink-soft">
+                  <p className="shrink-0 truncate text-[10.5px] leading-3 tabular-nums text-ink-soft">
                     {formatTimeRange(
                       Math.floor(block.startMin / 60),
                       block.startMin % 60,
@@ -358,7 +359,7 @@ function DayTimeline({
                       clock24h,
                     )}
                   </p>
-                  {boxHeight >= 62 && (category || block.location) && (
+                  {boxHeight >= 66 && (category || block.location) && (
                     <p className="flex items-center gap-1 truncate text-[10.5px] text-ink-faint">
                       {block.location && (
                         <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.9} aria-hidden />

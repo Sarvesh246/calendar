@@ -399,7 +399,7 @@
   /* Geometry of the floating glass header cluster (components/mobile-header-actions.tsx).
      Kept here so the space a page reserves for it can never drift from where
      the cluster actually sits. */
-  --mobile-header-top: 1.375rem;
+  --mobile-header-top: 1rem;
   --mobile-header-cluster: 3rem; /* 44px button + 2 × 2px padding */
   /* Space reserved so titles — and any right-aligned header control, like
      Agenda's Schedule button — clear the floating cluster entirely. The page
@@ -1085,6 +1085,11 @@ label {
   background: color-mix(in srgb, var(--cat) 11%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--cat) 28%, transparent);
   color: var(--ink);
+}
+
+.item-card.cat-surface[data-completed] {
+  background: color-mix(in srgb, var(--cat) 5%, var(--surface));
+  border-color: var(--line);
 }
 
 .cat-dot {
@@ -1975,37 +1980,52 @@ html.calendar-dragging * {
   margin-bottom: -2px;
 }
 
-/* Cell density follows available height, including landscape and split view.
-   A compact cell exposes a count instead of clipping part of an event chip. */
+/* Cell density follows available space, including landscape and split view. */
 .month-day-cell {
   container-type: size;
 }
 
-@container (max-height: 64px) {
-  .month-day-chips {
+@container (max-width: 82px) {
+  .month-chip-time,
+  .month-chip-overflow-label {
     display: none;
   }
-  /* The same dots a phone shows, set beside the date they belong to. A bare
-     "+1" pinned to the cell's far edge only appeared on busy days and read as
-     belonging to the next day's number. */
-  .month-day-preview {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    margin: 0;
-    position: absolute;
-    left: 34px;
-    top: 9px;
-    max-width: calc(100% - 38px);
-    overflow: hidden;
-  }
+}
+
+@container (max-height: 64px) {
   .month-day-date-wrap,
   .month-day-date {
     height: 22px;
     width: 22px;
     min-width: 22px;
     font-size: 12px;
+  }
+}
+
+@media (width < 40rem) {
+  @container (max-height: 64px) {
+    .month-day-date-wrap {
+      margin-bottom: -2px;
+    }
+  }
+
+  @container (max-height: 40px) {
+    .month-day-preview {
+      flex-direction: row;
+    }
+  }
+}
+
+@media (width >= 40rem) {
+  @container (max-height: 64px) {
+    .month-day-chips {
+      display: none;
+    }
+    .month-day-preview {
+      display: flex;
+      flex-direction: row;
+      align-self: flex-start;
+    }
   }
 }
 

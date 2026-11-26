@@ -443,12 +443,12 @@ function CollapsedDescription({ show, text }: { show: boolean; text?: string }) 
 
 function CardFrame({
   itemId,
-  dimmed,
+  completed,
   children,
   ...rest
 }: {
   itemId: string;
-  dimmed: boolean;
+  completed: boolean;
   children: React.ReactNode;
 } & React.HTMLAttributes<HTMLDivElement>) {
   // A card you just created washes with the accent once, so you can see where
@@ -465,10 +465,10 @@ function CardFrame({
       <div className="item-card-presence-inner">
         <div
           {...rest}
+          data-completed={completed || undefined}
           className={cn(
             "item-card group/card @container/card press-none press-surface relative shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line",
             "transition-[opacity,border-color,background-color] duration-[var(--motion-standard)]",
-            dimmed && "opacity-[0.62]",
             arrived && "item-card-arrived",
             rest.className,
           )}
@@ -538,7 +538,7 @@ function EventCard({
   return (
     <CardFrame
       itemId={item.id}
-      dimmed={showCompleteStyle}
+      completed={showCompleteStyle}
       style={{ "--cat": color } as React.CSSProperties}
       role="button"
       tabIndex={0}
@@ -568,13 +568,11 @@ function EventCard({
         !mobile && expanded && "border-line-strong",
       )}
     >
-      <div className="relative flex items-center gap-3">
-        {/* 74px fits "12:30 PM"; "18:00" needs far less, and on a phone the
-            spare 24px belongs to the title. */}
+      <div className="relative flex items-center gap-2.5 md:gap-3">
         <div
           className={cn(
             "flex shrink-0 flex-col leading-tight",
-            clock24h && !item.allDay ? "w-[50px] md:w-[74px]" : "w-[74px]",
+            clock24h && !item.allDay ? "w-[46px] md:w-[60px]" : "w-[60px] md:w-[74px]",
           )}
         >
           <span
@@ -633,7 +631,7 @@ function EventCard({
           {showLocation && item.location && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-ink-soft">
               <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
-              {item.location}
+              <span className="min-w-0 truncate">{item.location}</span>
             </p>
           )}
           {item.type !== "event" &&
@@ -738,7 +736,7 @@ function AssignmentCard({
   return (
     <CardFrame
       itemId={item.id}
-      dimmed={showCompleteStyle}
+      completed={showCompleteStyle}
       role="button"
       tabIndex={0}
       aria-expanded={mobile ? undefined : expanded}

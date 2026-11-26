@@ -190,92 +190,94 @@ export default function SettingsPage() {
   };
 
   return (
-    // Full-width intro, then a two-column grid on desktop so collapsed
-    // section tiles share a row baseline instead of drifting out of line.
-    <div className="mx-auto h-auto min-h-0 w-full max-w-[1120px] pb-2">
-      <div className="flex flex-col gap-5">
+    <div className="mx-auto h-auto min-h-0 w-full max-w-[1240px] pb-2">
+      <div className="flex flex-col gap-4 md:gap-5">
         <MobileRoomHeader title="Settings" />
         <header className="hidden pt-1 md:block">
-          <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
+          <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-ink">
+            Settings
+          </h1>
           <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
             Tune how Datebook opens, looks, and keeps your calendar in sync.
           </p>
         </header>
 
-        <CollapsibleCard
-          title="Everyday preferences"
-          sub="What you see first and how the calendar feels day to day."
-          storageKey="everyday"
-          defaultOpen
-        >
-          <div className="flex flex-col gap-5">
-            <SettingBlock label="Open Datebook to">
-              <Segmented
-                segmentId="landing-view"
-                value={settings.landingView}
-                options={[
-                  { value: "today", label: "Today" },
-                  { value: "calendar", label: "Calendar" },
-                  { value: "agenda", label: "Agenda" },
-                ]}
-                onChange={(v) => updateSettings({ landingView: v as LandingView })}
-              />
-            </SettingBlock>
+        <div className="grid items-start gap-4 md:gap-5 lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-4 md:gap-5">
+            <CollapsibleCard
+              title="Everyday preferences"
+              sub="What you see first and how the calendar feels day to day."
+              storageKey="everyday"
+              defaultOpen
+            >
+              <div className="@container">
+                <div className="grid gap-4 @min-[31rem]:grid-cols-2 @min-[31rem]:items-end">
+                  <SettingBlock label="Open Datebook to">
+                    <Segmented
+                      segmentId="landing-view"
+                      value={settings.landingView}
+                      options={[
+                        { value: "today", label: "Today" },
+                        { value: "calendar", label: "Calendar" },
+                        { value: "agenda", label: "Agenda" },
+                      ]}
+                      onChange={(v) => updateSettings({ landingView: v as LandingView })}
+                    />
+                  </SettingBlock>
 
-            <SettingBlock label="Calendar density">
-              <Segmented
-                segmentId="density"
-                value={settings.density}
-                options={[
-                  { value: "compact", label: "Compact" },
-                  { value: "comfortable", label: "Comfortable" },
-                  { value: "spacious", label: "Spacious" },
-                ]}
-                onChange={(v) => {
-                  document.documentElement.setAttribute("data-density", v);
-                  updateSettings({ density: v as Density });
-                }}
-              />
-            </SettingBlock>
+                  <SettingBlock label="Calendar density">
+                    <Segmented
+                      segmentId="density"
+                      value={settings.density}
+                      options={[
+                        { value: "compact", label: "Compact" },
+                        { value: "comfortable", label: "Comfortable" },
+                        { value: "spacious", label: "Spacious" },
+                      ]}
+                      onChange={(v) => {
+                        document.documentElement.setAttribute("data-density", v);
+                        updateSettings({ density: v as Density });
+                      }}
+                    />
+                  </SettingBlock>
 
-            <SettingBlock label="Week starts on">
-              <Segmented
-                segmentId="week-starts"
-                value={String(settings.weekStartsOn)}
-                options={[
-                  { value: "0", label: "Sunday" },
-                  { value: "1", label: "Monday" },
-                ]}
-                onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
-              />
-            </SettingBlock>
+                  <SettingBlock label="Week starts on">
+                    <Segmented
+                      segmentId="week-starts"
+                      value={String(settings.weekStartsOn)}
+                      options={[
+                        { value: "0", label: "Sunday" },
+                        { value: "1", label: "Monday" },
+                      ]}
+                      onChange={(v) => updateSettings({ weekStartsOn: Number(v) as 0 | 1 })}
+                    />
+                  </SettingBlock>
 
-            <ToggleRow
-              label="24-hour clock"
-              checked={settings.clock24h}
-              onChange={(v) => updateSettings({ clock24h: v })}
-            />
+                  <ToggleRow
+                    label="24-hour clock"
+                    checked={settings.clock24h}
+                    onChange={(v) => updateSettings({ clock24h: v })}
+                  />
 
-            <div className="md:hidden">
-              <SettingBlock label="When you tap a day on mobile">
-                <Segmented
-                  segmentId="mobile-day-details"
-                  value={settings.mobileDayDetails}
-                  options={[
-                    { value: "sheet", label: "Slide-up panel" },
-                    { value: "inline", label: "List below calendar" },
-                  ]}
-                  onChange={(v) => updateSettings({ mobileDayDetails: v as MobileDayDetails })}
-                />
-              </SettingBlock>
-            </div>
-          </div>
-        </CollapsibleCard>
+                  <div className="md:hidden">
+                    <SettingBlock label="When you tap a day on mobile">
+                      <Segmented
+                        segmentId="mobile-day-details"
+                        value={settings.mobileDayDetails}
+                        options={[
+                          { value: "sheet", label: "Slide-up panel" },
+                          { value: "inline", label: "List below calendar" },
+                        ]}
+                        onChange={(v) =>
+                          updateSettings({ mobileDayDetails: v as MobileDayDetails })
+                        }
+                      />
+                    </SettingBlock>
+                  </div>
+                </div>
+              </div>
+            </CollapsibleCard>
 
-        {/* Phone stack: Account → Classes → Import → Meetings → Reminders → Look.
-          Desktop grid keeps columns independent. */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
-          <div className="order-1 min-w-0">
             <CollapsibleCard
               title="Account & sync"
               // Says where things stand, not what to do — "Sign in to back up" read
@@ -306,7 +308,7 @@ export default function SettingsPage() {
               <PwaInstallButton />
             </CollapsibleCard>
           </div>
-          <div className="order-2 min-w-0">
+          <div className="flex min-w-0 flex-col gap-4 md:gap-5">
             <CollapsibleCard
               title="Classes"
               sub="Name, color, meeting name, and optional syllabus per class."
@@ -360,8 +362,7 @@ export default function SettingsPage() {
                 </div>
               </SyllabusImportProvider>
             </CollapsibleCard>
-          </div>
-          <div className="order-3 min-w-0">
+
             <CollapsibleCard
               id="import"
               title="Import"
@@ -382,8 +383,7 @@ export default function SettingsPage() {
                 </p>
               </SyllabusImportProvider>
             </CollapsibleCard>
-          </div>
-          <div className="order-4 min-w-0">
+
             <CollapsibleCard
               title="Weekly meetings"
               sub="Lectures and labs — open a class to edit the times already on it."
@@ -401,8 +401,7 @@ export default function SettingsPage() {
                 Edit on Schedule
               </Link>
             </CollapsibleCard>
-          </div>
-          <div className="order-5 min-w-0">
+
             <CollapsibleCard
               id="reminders"
               title="Reminders"
@@ -506,8 +505,7 @@ export default function SettingsPage() {
                 </button>
               </div>
             </CollapsibleCard>
-          </div>
-          <div className="order-6 min-w-0">
+
             <CollapsibleCard
               title="Look"
               sub="Themes and what shows on cards."
@@ -571,118 +569,118 @@ export default function SettingsPage() {
                 />
               </div>
             </CollapsibleCard>
+
+            <CollapsibleCard
+              title="Backup & export"
+              sub="Download a copy, restore from a file, or subscribe from another calendar."
+              storageKey="backup"
+              defaultOpen={false}
+              lazy
+            >
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const s = useDatebookStore.getState();
+                    downloadFile(
+                      "datebook-backup.json",
+                      new Blob(
+                        [
+                          serializeBackup({
+                            categories: s.categories,
+                            items: s.items,
+                            reminderPresets: s.reminderPresets,
+                            settings: s.settings,
+                            importSources: s.importSources,
+                          }),
+                        ],
+                        { type: "application/json" },
+                      ),
+                    );
+                  }}
+                  className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
+                >
+                  Download backup
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadFile(
+                      "datebook.ics",
+                      new Blob([serializeIcs(useDatebookStore.getState().items)], {
+                        type: "text/calendar;charset=utf-8",
+                      }),
+                    )
+                  }
+                  title="For Google Calendar, Outlook, or Apple Calendar"
+                  className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
+                >
+                  Export .ics
+                </button>
+                <label className="cursor-pointer rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink">
+                  Restore backup
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="sr-only"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const backup = parseBackup(await file.text());
+                        if (!confirm("Replace everything on this device with this backup?")) return;
+                        replaceFromBackup(backup);
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : "Couldn't read that file.");
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <CalendarFeedSection />
+              <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
+                <a
+                  href="/privacy"
+                  className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft"
+                >
+                  Privacy policy
+                </a>
+                {" · "}
+                <a
+                  href="/terms"
+                  className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft"
+                >
+                  Terms of use
+                </a>
+              </p>
+            </CollapsibleCard>
+
+            <SettingsCard variant="danger">
+              <CardHeading
+                title="Reset calendar data"
+                sub="Delete all items and imported feeds on this device. This cannot be undone."
+              />
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      !confirm(
+                        "Delete all items and imported feeds on this device? This cannot be undone.",
+                      )
+                    )
+                      return;
+                    resetAllData();
+                  }}
+                  className="rounded-xl border border-warn/40 px-4 py-2.5 text-[13px] font-medium text-warn"
+                >
+                  Reset calendar data
+                </button>
+              </div>
+            </SettingsCard>
           </div>
         </div>
-
-        <CollapsibleCard
-          title="Backup & export"
-          sub="Download a copy, restore from a file, or subscribe from another calendar."
-          storageKey="backup"
-          defaultOpen={false}
-          lazy
-        >
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const s = useDatebookStore.getState();
-                downloadFile(
-                  "datebook-backup.json",
-                  new Blob(
-                    [
-                      serializeBackup({
-                        categories: s.categories,
-                        items: s.items,
-                        reminderPresets: s.reminderPresets,
-                        settings: s.settings,
-                        importSources: s.importSources,
-                      }),
-                    ],
-                    { type: "application/json" },
-                  ),
-                );
-              }}
-              className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
-            >
-              Download backup
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                downloadFile(
-                  "datebook.ics",
-                  new Blob([serializeIcs(useDatebookStore.getState().items)], {
-                    type: "text/calendar;charset=utf-8",
-                  }),
-                )
-              }
-              title="For Google Calendar, Outlook, or Apple Calendar"
-              className="rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
-            >
-              Export .ics
-            </button>
-            <label className="cursor-pointer rounded-xl border border-line px-4 py-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink">
-              Restore backup
-              <input
-                type="file"
-                accept="application/json"
-                className="sr-only"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  try {
-                    const backup = parseBackup(await file.text());
-                    if (!confirm("Replace everything on this device with this backup?")) return;
-                    replaceFromBackup(backup);
-                  } catch (err) {
-                    alert(err instanceof Error ? err.message : "Couldn't read that file.");
-                  }
-                }}
-              />
-            </label>
-          </div>
-          <CalendarFeedSection />
-          <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
-            <a
-              href="/privacy"
-              className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft"
-            >
-              Privacy policy
-            </a>
-            {" · "}
-            <a
-              href="/terms"
-              className="underline decoration-line-strong underline-offset-2 hover:text-ink-soft"
-            >
-              Terms of use
-            </a>
-          </p>
-        </CollapsibleCard>
-
-        <SettingsCard variant="danger">
-          <CardHeading
-            title="Reset calendar data"
-            sub="Delete all items and imported feeds on this device. This cannot be undone."
-          />
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  !confirm(
-                    "Delete all items and imported feeds on this device? This cannot be undone.",
-                  )
-                )
-                  return;
-                resetAllData();
-              }}
-              className="rounded-xl border border-warn/40 px-4 py-2.5 text-[13px] font-medium text-warn"
-            >
-              Reset calendar data
-            </button>
-          </div>
-        </SettingsCard>
       </div>
     </div>
   );
@@ -746,7 +744,7 @@ function CollapsibleCard({
       className={cn(
         // `self-start` + content-sized height so the open body cannot resolve
         // against a stretched min-height ancestor and pad a blank region.
-        "h-auto min-h-0 w-full self-start overflow-hidden rounded-lg border border-line/80 bg-surface",
+        "h-auto min-h-0 w-full self-start overflow-hidden rounded-xl border border-line/80 bg-surface",
         ANCHOR_OFFSET,
       )}
     >
@@ -754,9 +752,9 @@ function CollapsibleCard({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="press-none group flex w-full items-start justify-between gap-3 p-4 text-left transition-colors duration-[var(--motion-micro)] active:bg-surface-sunken sm:p-5"
+        className="press-none group flex w-full items-start justify-between gap-3 p-4 text-left transition-colors duration-[var(--motion-micro)] hover:bg-surface-sunken/35 active:bg-surface-sunken sm:px-5"
       >
-        <CardHeading title={title} sub={sub} subMinLines={2} />
+        <CardHeading title={title} sub={sub} />
         <motion.span
           aria-hidden
           animate={{ rotate: open ? 0 : -90 }}

@@ -294,7 +294,7 @@ export default function CalendarPage() {
           an 8px gutter); the title keeps the 16px every other tab's title has. */}
       <header className="flex shrink-0 flex-col gap-2 px-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between md:px-0">
         <DateJump anchor={anchor} open={jumpOpen} onOpenChange={setJumpOpen} onJump={jumpTo}>
-          <h1 className="flex items-baseline overflow-hidden text-[22px] font-semibold leading-tight tracking-tight text-ink sm:text-[26px]">
+          <h1 className="flex items-baseline overflow-hidden text-[24px] font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">
             {/* The title travels with the grid rather than swapping a frame early,
                 so the header and the days read as one movement. */}
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
@@ -327,7 +327,7 @@ export default function CalendarPage() {
               onClick={() => step(-1)}
               aria-label={mode === "month" ? "Previous month" : "Previous week"}
               title="Previous (←)"
-              className="h-[30px] w-[30px] rounded-[7px]"
+              className="h-[38px] w-[38px] rounded-[7px] sm:h-[30px] sm:w-[30px]"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -335,7 +335,7 @@ export default function CalendarPage() {
               type="button"
               onClick={goToday}
               title="Today (T)"
-              className="h-[30px] rounded-[7px] px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
+              className="h-[38px] rounded-[7px] px-2.5 text-[13px] sm:h-[30px] font-medium text-ink-soft transition-colors hover:bg-surface-sunken hover:text-ink"
             >
               Today
             </button>
@@ -345,7 +345,7 @@ export default function CalendarPage() {
               onClick={() => step(1)}
               aria-label={mode === "month" ? "Next month" : "Next week"}
               title="Next (→)"
-              className="h-[30px] w-[30px] rounded-[7px]"
+              className="h-[38px] w-[38px] rounded-[7px] sm:h-[30px] sm:w-[30px]"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -354,6 +354,7 @@ export default function CalendarPage() {
           <div className="flex items-center gap-2">
             <Segmented
               label="Calendar view"
+              className="max-sm:[&_button]:h-[38px]"
               value={mode}
               onChange={changeMode}
               options={[

@@ -21,8 +21,7 @@ export function resolveRoomExit(): TabRoute {
  * "room" does not depend on guessing the tab bar (whose pill may still sit on
  * Today while you are elsewhere).
  *
- * Optional `trailing` sits opposite Done (replacing the invisible balance spacer)
- * for a primary room action such as Class times on Schedule.
+ * Equal side columns keep the title centered when a room has a trailing action.
  */
 export function MobileRoomHeader({
   title,
@@ -34,28 +33,19 @@ export function MobileRoomHeader({
   const router = useRouter();
 
   return (
-    <header className="mb-1 flex items-center gap-2 md:hidden">
+    <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:hidden">
       <button
         type="button"
         onClick={() => {
           haptic("light");
           navigateTab(router, resolveRoomExit());
         }}
-        className="press-none -ml-1.5 flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2.5 text-[15px] font-semibold text-accent"
+        className="press-none -ml-2 flex min-h-11 items-center justify-self-start rounded-lg px-2 text-[15px] font-semibold text-accent"
       >
         Done
       </button>
-      <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold tracking-tight text-ink">
-        {title}
-      </h1>
-      {trailing ? (
-        <div className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">{trailing}</div>
-      ) : (
-        /* Balance the Done control so the title stays visually centered. */
-        <span className="pointer-events-none min-h-11 min-w-11 opacity-0" aria-hidden>
-          Done
-        </span>
-      )}
+      <h1 className="text-center text-[19px] font-semibold tracking-tight text-ink">{title}</h1>
+      {trailing && <div className="-mr-2 flex items-center justify-self-end">{trailing}</div>}
     </header>
   );
 }

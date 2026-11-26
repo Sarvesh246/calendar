@@ -50,7 +50,7 @@ import { useHasMounted } from "@/lib/use-has-mounted";
 import { itemDisplayTitle, classLabel } from "@/lib/course-label";
 
 /** From here up Today splits into a main column and a supporting one. */
-const WIDE_QUERY = "(min-width: 1280px)";
+const WIDE_QUERY = "(min-width: 1024px)";
 const COMING_UP_DAYS = 7;
 const COMING_UP_ROWS = 8;
 /** Overdue cards shown up front on a desk before "Show n more". */
@@ -124,28 +124,28 @@ function TodayDashboard() {
   const overlaps = useMemo(() => findOverlapGroups(todayList, day), [todayList, day]);
 
   const header = (
-    <header className="flex items-start justify-between gap-3 md:justify-start md:gap-5">
-      <div>
-        <p className="text-[13px] font-medium text-ink-faint">{greeting.label}</p>
-        <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">
-          {format(day, "EEEE, MMMM d")}
-        </h1>
-        <p className="mt-1 text-[14px] text-ink-soft">
-          {formatDaySummary(
-            eventsCount,
-            dueTodayCount,
-            // The attention strip right below says this, in more detail and with
-            // a way to act on it. Saying it twice makes the headline noise.
-            mobile ? 0 : overdue.length,
-            todayBreakdown.hiddenByCategory +
-              todayBreakdown.hiddenByCompletion +
-              todayBreakdown.hiddenByView,
-            doneTodayCount,
-          )}
-        </p>
-      </div>
+    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 md:grid-cols-[auto_1fr] md:gap-x-4">
+      <p className="col-span-2 text-[13px] font-medium text-ink-faint md:col-span-1">
+        {greeting.label}
+      </p>
+      <h1 className="col-span-2 row-start-2 text-balance text-[clamp(1.375rem,6.4vw,1.75rem)] font-semibold leading-tight tracking-tight text-ink md:col-span-1 md:text-[30px]">
+        {format(day, "EEEE, MMMM d")}
+      </h1>
+      <p className="col-start-1 row-start-3 text-[13px] leading-snug text-ink-soft md:text-[14px]">
+        {formatDaySummary(
+          eventsCount,
+          dueTodayCount,
+          // The attention strip right below says this, in more detail and with
+          // a way to act on it. Saying it twice makes the headline noise.
+          mobile ? 0 : overdue.length,
+          todayBreakdown.hiddenByCategory +
+            todayBreakdown.hiddenByCompletion +
+            todayBreakdown.hiddenByView,
+          doneTodayCount,
+        )}
+      </p>
       {liveSession ? (
-        <FocusSessionChip className="md:hidden" />
+        <FocusSessionChip className="col-start-2 row-start-3 justify-self-end md:hidden" />
       ) : (
         <Button
           variant="secondary"
@@ -155,7 +155,7 @@ function TodayDashboard() {
             openFocusRoom(undefined, router);
           }}
           aria-label="Focus"
-          className="shrink-0 gap-1.5 md:mt-5"
+          className="col-start-2 row-start-3 justify-self-end gap-1.5 md:row-start-2 md:justify-self-start"
         >
           <FocusIcon className="h-3.5 w-3.5" strokeWidth={1.9} />
           <span className="hidden min-[340px]:inline">Focus</span>
@@ -315,7 +315,8 @@ function TodayDashboard() {
                 key={item.id}
                 item={item}
                 category={item.categoryId ? categoriesById.get(item.categoryId) : undefined}
-                trailing={`${dayLabel}${item.allDay ? "" : ` ${formatTime(item.at, clock24h)}`}`}
+                day={dayLabel}
+                time={item.allDay ? undefined : formatTime(item.at, clock24h)}
               />
             );
           })}
@@ -339,7 +340,7 @@ function TodayDashboard() {
         <OnboardingCard />
         <FeedHealthBanner />
         {header}
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(300px,368px)] items-start gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)_clamp(17rem,29%,23rem)] items-start gap-6">
           <div className="flex min-w-0 flex-col gap-6">
             {overdueSection}
             {todaySection}
@@ -535,15 +536,17 @@ function TodayNextStepTips() {
   );
 }
 
-/** One line per item; opens the shared inspector, right-click for actions. */
+/** A brief item preview that opens the shared inspector. */
 function CompactRow({
   item,
   category,
-  trailing,
+  day,
+  time,
 }: {
   item: Item;
   category: Category | undefined;
-  trailing: string;
+  day: string;
+  time?: string;
 }) {
   const openInspector = useUIStore((s) => s.openInspector);
   const status = item.type === "event" ? undefined : (item.status ?? "todo");
@@ -553,7 +556,7 @@ function CompactRow({
       onClick={() => openInspector(item.id)}
       onKeyDown={(e) => handleItemMenuKey(e, item.id)}
       {...itemMenuProps(item.id)}
-      className="flex items-center gap-3 border-t border-line px-4 py-2.5 text-left transition-colors duration-[var(--motion-micro)] first:border-t-0 hover:bg-surface-sunken/50 focus-visible:bg-surface-sunken/50 focus-visible:outline-none"
+      className="flex min-h-11 items-center gap-2.5 border-t border-line px-3.5 py-2.5 text-left transition-colors duration-[var(--motion-micro)] first:border-t-0 hover:bg-surface-sunken/50 focus-visible:bg-surface-sunken/50 focus-visible:outline-none"
     >
       <span
         aria-hidden
@@ -563,7 +566,7 @@ function CompactRow({
       <span className="min-w-0 flex-1">
         <span
           className={cn(
-            "block truncate text-[13px] font-medium",
+            "line-clamp-2 break-words text-[13px] font-medium leading-snug",
             status === "done" ? "text-ink-soft line-through decoration-ink-faint" : "text-ink",
           )}
         >
@@ -571,7 +574,10 @@ function CompactRow({
         </span>
         {status === "doing" && <span className="block text-[11.5px] text-accent">In progress</span>}
       </span>
-      <span className="shrink-0 text-[12px] tabular-nums text-ink-faint">{trailing}</span>
+      <span className="flex shrink-0 flex-col text-right text-[12px] leading-snug tabular-nums text-ink-faint">
+        <span className="font-medium text-ink-soft">{day}</span>
+        {time && <span>{time}</span>}
+      </span>
     </button>
   );
 }

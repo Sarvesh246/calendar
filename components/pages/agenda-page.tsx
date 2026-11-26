@@ -263,17 +263,10 @@ export default function AgendaPage() {
   const todayLink = <AgendaTodayDropdown items={todayRows} />;
 
   return (
-    <div
-      className={cn(
-        "mx-auto flex w-full flex-col gap-6",
-        // Same measure as Today's wide layout, so the page title doesn't jump
-        // sideways when you switch tabs.
-        rows ? "max-w-[1240px]" : "max-w-[880px]",
-      )}
-    >
+    <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 md:gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.015em] text-ink">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-ink md:text-[30px]">
             Agenda
           </h1>
           <p className="mt-1 text-[13.5px] text-ink-soft">
@@ -305,11 +298,11 @@ export default function AgendaPage() {
       </header>
 
       {view === "history" ? (
-        <div key="history" className="route-enter">
+        <div key="history" className="route-enter w-full max-w-[920px]">
           <HistoryList />
         </div>
       ) : (
-        <div key="upcoming" className="route-enter flex flex-col gap-6">
+        <div key="upcoming" className="route-enter flex flex-col gap-5 md:gap-6">
           <AgendaWeek
             days={week}
             onOpenDay={(d) => {
@@ -335,7 +328,7 @@ export default function AgendaPage() {
           {!isEmpty && <FeedHealthBanner />}
 
           {!isEmpty && (
-            <div className="relative">
+            <div className={cn("relative w-full", !rows && "max-w-[920px]")}>
               {sections.length > 0 && (
                 <AgendaSticky sections={sections} now={now} layout={rows ? "rows" : "cards"} />
               )}

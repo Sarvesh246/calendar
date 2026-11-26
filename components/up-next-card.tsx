@@ -545,20 +545,22 @@ function UpNextFace({
         e.preventDefault();
         open();
       }}
-      className="press-surface cursor-pointer rounded-lg border border-line bg-surface p-5"
+      className="press-none cursor-pointer rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-sunken/40"
     >
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
-        {started && <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-accent" />}
-        {eyebrow}
-      </p>
-      <div className="mt-2 flex items-baseline justify-between gap-3">
-        <h3 className="line-clamp-2 break-words text-[17px] font-semibold text-ink">
-          {itemDisplayTitle(item, category)}
-        </h3>
-        <span className="shrink-0 text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
-          {aside}
-        </span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-soft">
+          {started && <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-accent" />}
+          {eyebrow}
+        </p>
+        {aside && (
+          <span className="text-[12px] tabular-nums text-ink-soft" suppressHydrationWarning>
+            {aside}
+          </span>
+        )}
       </div>
+      <h3 className="mt-1.5 line-clamp-2 break-words text-[17px] font-semibold leading-snug text-ink">
+        {itemDisplayTitle(item, category)}
+      </h3>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
         <span className="tabular-nums font-medium text-ink-soft">
           {item.allDay ? "All day" : formatTime(item.at, clock24h)}

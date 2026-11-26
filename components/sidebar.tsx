@@ -74,11 +74,11 @@ export function Sidebar({ pathname }: { pathname: string }) {
   const categories = useDatebookStore((s) => s.categories);
   const storedCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const setStoredCollapsed = useUIStore((s) => s.setSidebarCollapsed);
-  // Between a phone and a laptop (768–1023px) a 220px rail leaves the month
-  // grid so narrow every chip truncates to "10a …". There the rail starts
+  // On tablets and small laptops (768–1199px), a 220px rail competes
+  // with the calendar and its day pane. There the rail starts
   // folded; expanding it lasts for the session without touching the saved
   // desktop preference.
-  const narrow = useMediaQuery("(max-width: 1023px)");
+  const narrow = useMediaQuery("(max-width: 1199px)");
   const [narrowExpanded, setNarrowExpanded] = useState(false);
   const collapsed = narrow ? !narrowExpanded : storedCollapsed;
   const setSidebarCollapsed = (next: boolean) =>
@@ -717,15 +717,17 @@ function RailButton({
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       title={collapsed ? label : undefined}
       className={cn(
-        "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium",
+        "press-none relative flex items-center h-9 gap-2.5 overflow-hidden rounded-lg px-2.5 text-left text-[13.5px] font-medium",
+        collapsed && "justify-center gap-0",
         "transition-colors duration-[var(--motion-standard)]",
         "text-ink-soft hover:bg-surface-sunken hover:text-ink",
       )}
     >
       <Icon className="relative z-[1] h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
-      <span className="relative z-[1] flex min-w-0">
+      <span className={cn("relative z-[1] flex min-w-0", collapsed && "w-0 overflow-hidden")}>
         <RailLabel collapsed={collapsed}>{label}</RailLabel>
       </span>
     </button>
@@ -752,6 +754,7 @@ function RailLink({
   return (
     <Link
       href={href}
+      aria-label={label}
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       onClick={(e) => {
@@ -774,7 +777,8 @@ function RailLink({
         setTimeout(go, 50);
       }}
       className={cn(
-        "press-none relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-2 text-[13.5px] font-medium",
+        "press-none relative flex h-9 items-center gap-2.5 overflow-hidden rounded-lg px-2.5 text-[13.5px] font-medium",
+        collapsed && "justify-center gap-0",
         "transition-colors duration-[var(--motion-standard)]",
         "text-ink-soft hover:bg-surface-sunken hover:text-ink",
         "data-[rail-on]:text-accent-ink data-[rail-on]:hover:bg-transparent data-[rail-on]:hover:text-accent-ink",
@@ -782,7 +786,7 @@ function RailLink({
       )}
     >
       <Icon className="relative z-[1] h-4 w-4 shrink-0" strokeWidth={1.9} />
-      <span className="relative z-[1] flex min-w-0">
+      <span className={cn("relative z-[1] flex min-w-0", collapsed && "w-0 overflow-hidden")}>
         <RailLabel collapsed={collapsed}>{label}</RailLabel>
       </span>
     </Link>
@@ -822,13 +826,14 @@ function SyncChip({ collapsed }: { collapsed: boolean }) {
   const chipClass = cn(
     "press-none flex items-center gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium",
     "transition-colors duration-[var(--motion-standard)]",
+    collapsed && "justify-center gap-0",
     cls,
   );
 
   const inner = (
     <>
       {icon}
-      <span className="flex min-w-0">
+      <span className={cn("flex min-w-0", collapsed && "w-0 overflow-hidden")}>
         <RailLabel collapsed={collapsed}>{label}</RailLabel>
       </span>
     </>

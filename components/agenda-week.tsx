@@ -37,9 +37,7 @@ export function AgendaWeek({
   return (
     <section aria-label="This week" className="@container">
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-          This week
-        </h2>
+        <h2 className="text-[13px] font-semibold text-ink">This week</h2>
         <p className="hidden text-[12px] tabular-nums text-ink-faint @2xl:block">{summary}</p>
         <WeekLegend />
       </div>
@@ -83,7 +81,7 @@ function WeekDayButton({ day, onOpen }: { day: WeekDaySummary; onOpen: () => voi
             day.isToday ? "text-accent" : "text-ink-faint",
           )}
         >
-          <span className="@2xl:hidden">{format(day.date, "EEEEE")}</span>
+          <span className="@2xl:hidden">{format(day.date, "EEE").slice(0, 2)}</span>
           <span className="hidden @2xl:inline">{format(day.date, "EEE")}</span>
         </span>
         <span

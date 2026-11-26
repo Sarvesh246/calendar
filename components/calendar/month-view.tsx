@@ -36,14 +36,13 @@ const CHIP_HEIGHT = 23;
 const CHIP_GAP = 4;
 const MORE_LINE_HEIGHT = 16;
 
-function chipLabel(item: Item, clock24h: boolean) {
-  if (item.allDay) return item.title;
-  const d = new Date(item.at);
-  if (Number.isNaN(d.getTime())) return item.title;
-  if (clock24h) return `${format(d, "H:mm")} ${itemDisplayTitle(item)}`;
-  const h = d.getHours();
-  const hour12 = h % 12 || 12;
-  return `${hour12}${h >= 12 ? "p" : "a"} ${itemDisplayTitle(item)}`;
+function chipTime(item: Item, clock24h: boolean) {
+  if (item.allDay) return null;
+  const date = new Date(item.at);
+  if (Number.isNaN(date.getTime())) return null;
+  if (clock24h) return format(date, "H:mm");
+  const hour = date.getHours();
+  return `${hour % 12 || 12}${hour >= 12 ? "p" : "a"}`;
 }
 
 function fitCountVertical(
@@ -180,15 +179,17 @@ function DayCellChips({
         const done =
           (item.type !== "event" && item.status === "done") || isEventEnded(item, now, date);
         const task = item.type !== "event";
+        const time = chipTime(item, clock24h);
+        const title = itemDisplayTitle(item);
         return (
           <span
             key={item.id}
             ref={index === 0 ? chipRef : undefined}
-            title={item.title}
+            title={time ? `${time} · ${title}` : title}
             data-chip-id={item.id}
             {...itemMenuProps(item.id, dayKey(date))}
             className={cn(
-              "cal-chip shrink-0 cursor-grab truncate rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px] transition-opacity duration-[var(--motion-micro)]",
+              "cal-chip flex shrink-0 cursor-grab items-baseline gap-1 rounded-[5px] px-1.5 py-[3px] text-[12px] font-medium leading-[17px] transition-opacity duration-[var(--motion-micro)]",
               task && "cal-chip-task",
               done && "opacity-45",
               isOverdue(item) && "cal-chip-overdue",
@@ -196,16 +197,18 @@ function DayCellChips({
             )}
             style={{ "--cat": color } as React.CSSProperties}
           >
-            {chipLabel(item, clock24h)}
+            {time && <span className="month-chip-time shrink-0 tabular-nums">{time}</span>}
+            <span className="min-w-0 truncate">{title}</span>
           </span>
         );
       })}
       {hidden.length > 0 && (
         <span
-          className="shrink-0 px-1 pt-px text-[11.5px] font-medium leading-none text-ink-soft"
+          className="shrink-0 truncate px-1 pt-px text-[11.5px] font-medium leading-none text-ink-soft"
           title={hiddenTitles}
         >
-          +{hidden.length} more
+          +{hidden.length}
+          <span className="month-chip-overflow-label"> more</span>
         </span>
       )}
     </div>
@@ -231,16 +234,16 @@ function DayCellMobilePreview({
   ].slice(0, 3);
 
   return (
-    <div className="month-day-preview mt-1 flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
+    <div className="month-day-preview flex shrink-0 flex-col items-center gap-0.5 sm:hidden">
       <div
-        className="flex items-center gap-1"
+        className="flex items-center gap-[3px]"
         aria-label={`${open.filter((i) => i.type === "event").length} scheduled, ${open.filter((i) => i.type !== "event").length} due`}
       >
         {markers.map((i) => (
           <span
             key={i.id}
             className={cn(
-              "h-1.5 w-1.5",
+              "h-[5px] w-[5px]",
               i.type === "event" ? "rounded-full" : "rounded-[1px] rotate-45",
             )}
             style={{ background: colorOf(i.categoryId) }}
@@ -363,7 +366,7 @@ function MonthGridPanel({
             }
             style={undefined}
             className={cn(
-              "month-day-cell press-none group relative flex min-h-0 flex-col items-center justify-start gap-1 overflow-hidden rounded-lg border px-0.5 py-1 text-center sm:items-stretch sm:justify-start sm:gap-1 sm:p-1.5 sm:text-left",
+              "month-day-cell press-none group relative flex min-h-0 flex-col items-center gap-1 overflow-hidden rounded-lg border px-0.5 py-1 text-center sm:items-stretch sm:p-1.5 sm:text-left",
               "transition-[background-color,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
               "active:bg-surface-sunken",
               // Today reads as a tinted cell plus a filled date badge; the ring
@@ -371,8 +374,8 @@ function MonthGridPanel({
               // outline.
               today
                 ? "border-transparent bg-accent-soft/60"
-                : "border-transparent hover:bg-surface-sunken/60",
-              !inMonth && "opacity-55",
+                : "border-transparent hover:bg-surface-sunken/60 sm:border-line/45",
+              !inMonth && "bg-surface-sunken/25",
             )}
           >
             <span
@@ -631,13 +634,13 @@ export function MonthView({
       style={{ touchAction: "pan-y" }}
       className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 sm:p-3"
     >
-      <div className="grid shrink-0 grid-cols-7 gap-1 px-0.5 pb-1.5 sm:gap-1.5 sm:px-1 sm:pb-2">
+      <div className="mb-1 grid shrink-0 grid-cols-7 gap-1 border-b border-line/70 pb-2 sm:gap-1.5">
         {labels.map((l) => (
           <div
             key={l}
-            className="text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft sm:text-left sm:text-[11.5px]"
+            className="text-center text-[11px] font-semibold text-ink-soft sm:px-2 sm:text-left sm:text-[12px]"
           >
-            <span className="sm:hidden">{l.slice(0, 1)}</span>
+            <span className="sm:hidden">{l.slice(0, 2)}</span>
             <span className="hidden sm:inline">{l}</span>
           </div>
         ))}
